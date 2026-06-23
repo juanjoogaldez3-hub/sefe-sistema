@@ -1645,25 +1645,10 @@ function verFacturaPDF(id){
 window.verFacturaPDF=verFacturaPDF;
 
 // ---- Factura Exenta de IVA ----
+// Escenarios de exención que usa SEFE (códigos OFICIALES de SAT, Frase tipo 4)
+// Solo Maquila por ahora. Para agregar más, usar los códigos oficiales de la tabla SAT.
 const ESCENARIOS_EXENTA=[
-  {cod:1, desc:'Exportaciones (cuando el vendedor exporta bienes o servicios)'},
-  {cod:2, desc:'Servicios de instituciones fiscalizadas por la Superintendencia de Bancos y bolsas de valores'},
-  {cod:3, desc:'Ventas de cooperativas a sus asociados, federaciones y confederaciones'},
-  {cod:4, desc:'Aportes y donaciones a asociaciones, fundaciones e instituciones educativas, culturales o religiosas no lucrativas'},
-  {cod:5, desc:'Cuotas y membresías a asociaciones gremiales, culturales, científicas, educativas, deportivas, colegios de profesionales y partidos políticos'},
-  {cod:6, desc:'Servicios exentos de asociaciones, fundaciones e instituciones educativas, de asistencia social o religiosas'},
-  {cod:7, desc:'Venta de activos de Bancos o Sociedades Financieras a la Superintendencia de Bancos'},
-  {cod:8, desc:'Enajenación de bienes inmuebles'},
-  {cod:9, desc:'Aportaciones de bienes inmuebles a personas jurídicas (art. 7 núm. 14 Ley del IVA)'},
-  {cod:10,desc:'Importaciones de personas exentas (embajadas, organismos internacionales, etc.)'},
-  {cod:11,desc:'Transferencias de bienes y derechos de empresas en fusión, absorción o transformación'},
-  {cod:12,desc:'Servicios financieros por intereses de créditos y préstamos de entidades bancarias'},
-  {cod:13,desc:'Servicios de enseñanza prestados por entidades privadas'},
-  {cod:14,desc:'Suministro de energía eléctrica para uso residencial hasta 300 kWh'},
-  {cod:15,desc:'Combustibles derivados del petróleo para consumo nacional'},
-  {cod:16,desc:'Medicamentos y productos farmacéuticos'},
-  {cod:17,desc:'Artículos de primera necesidad (arroz, maíz, frijol, sal, huevos, etc.)'},
-  {cod:18,desc:'Servicios públicos de transporte de pasajeros'},
+  {cod:11, desc:'Ventas a Maquila — No afecta al IVA (Decreto 29-89, Ley de Maquila)'},
 ];
 function abrirFacturarExenta(id){
   const f=documentos.find(d=>d.id===id);
@@ -1689,17 +1674,60 @@ function abrirFacturarExenta(id){
   $('#m-save').style.background='var(--warn)';
 }
 window.abrirFacturarExenta=abrirFacturarExenta;
-function facturarPedidoExento(id,dias,escenario){
+async function facturarPedidoExento(id,dias,escenario){
   const f=documentos.find(d=>d.id===id);
-  const uuid='SIM-'+Math.random().toString(36).slice(2,10).toUpperCase();
-  Object.assign(f,{tipoDoc:'cambiaria',estado:'certificada',autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+f.id),
-    diasCredito:dias,vencimiento:new Date(Date.now()+dias*86400000).toISOString(),abonos:[],estadoPago:'pendiente',
-    esExenta:true,escExenta:escenario,
-    totales:{...f.totales,iva:0,baseSinIva:f.totales.total}});
-  closeMod();renderDocs();
-  const esc=ESCENARIOS_EXENTA.find(e=>e.cod===escenario);
-  logAudit('Factura Exenta emitida',`${uuid.slice(4)}-${String(1000000000+f.id)} · ${f.clienteComercial||f.clienteNombre} · ${money(f.totales.total)} · Esc.${escenario}`);
-  toast('✓ Factura Exenta generada','Esc.'+escenario+' — '+money(f.totales.total)+' (IVA Q0.00)');
+  if(!f){toast('Pedido no encontrado',null,true);return;}
+
+  // Modo simulado si no hay backend configurado
+  if(typeof FEL_BACKEND_URL==='undefined' || FEL_BACKEND_URL.includes('TU-BACKEND')){
+    const uuid='SIM-'+Math.random().toString(36).slice(2,10).toUpperCase();
+    Object.assign(f,{tipoDoc:'cambiaria',estado:'certificada',autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+f.id),
+      diasCredito:dias,vencimiento:new Date(Date.now()+dias*86400000).toISOString(),abonos:[],estadoPago:'pendiente',
+      esExenta:true,escExenta:escenario,totales:{...f.totales,iva:0,baseSinIva:f.totales.total}});
+    closeMod();renderDocs();
+    toast('✓ Factura Exenta SIMULADA','Configurá el backend para emitir de verdad');
+    if(typeof guardarDocumento==='function')guardarDocumento(f);
+    return;
+  }
+
+  // Modo real: llamar al backend con los datos de exención
+  toast('⏳ Emitiendo factura exenta...','Conectando con EcoFactura');
+  const hoy=new Date().toISOString().slice(0,10);
+  const venc=new Date(Date.now()+dias*86400000).toISOString().slice(0,10);
+  const payload={
+    numero:f.numero, fecha:hoy,
+    cliente:{nit:f.clienteNit||'CF', nombre:f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:f.clienteDireccion||'Ciudad', email:f.clienteEmail||''},
+    items:(f.items||[]).map(it=>({codigo:it.codigo||'GEN', nombre:it.nombre, cantidad:it.cantidad, precio:it.precio, descuento:it.descuento||0, unidad:it.unidad||'UNI', tipo:'B'})),
+    total:f.totales.total, vencimiento:venc, observaciones:f.observaciones||('Pedido PED-'+padn(f.numero)),
+    // Datos de exención
+    exenta:true, fraseTipo:4, escenario:escenario,
+  };
+
+  try{
+    const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/certificar',{
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload),
+    });
+    const data=await r.json();
+    if(r.ok && data.ok){
+      Object.assign(f,{tipoDoc:'cambiaria',estado:'certificada',
+        autorizacion:data.uuid, serie:data.serie, numeroDte:data.numeroDTE,
+        fechaCertificacion:data.fechaCert, pdfBase64:data.pdfBase64, xmlBase64:data.xmlBase64,
+        diasCredito:dias, vencimiento:new Date(Date.now()+dias*86400000).toISOString(),
+        abonos:[], estadoPago:'pendiente',
+        esExenta:true, escExenta:escenario, totales:{...f.totales,iva:0,baseSinIva:f.totales.total}});
+      closeMod();renderDocs();
+      toast('✓ Factura Exenta CERTIFICADA','Autorización SAT: '+data.uuid);
+      logAudit('Factura Exenta emitida (FEL real)',f.serie+'-'+f.numeroDte+' · Esc.'+escenario+' · '+money(f.totales.total));
+      if(typeof guardarDocumento==='function')guardarDocumento(f);
+      if(f.pdfBase64)descargarFacturaPDF(f.id);
+    }else{
+      const msg=data.mensaje||data.error||'Error desconocido';
+      toast('✗ EcoFactura rechazó la factura exenta',msg,true);
+      logAudit('Error al facturar exenta','PED-'+padn(f.numero)+' · '+msg);
+    }
+  }catch(err){
+    toast('✗ No se pudo conectar con el servidor FEL','¿Está el backend andando? '+err.message,true);
+  }
 }
 window.facturarPedidoExento=facturarPedidoExento;
 function generarNota(id,type){
