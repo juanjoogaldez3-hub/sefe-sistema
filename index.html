@@ -994,6 +994,42 @@ let documentos=[
   {id:3,numero:3,tipoDoc:'cambiaria',clienteId:2,clienteNombre:'Restaurante Bella Vista',clienteNit:'39201842',items:[{id:3,codigo:'PAP-009',nombre:'Papel higiénico jumbo (caja 12)',precio:145,unidad:'CAJ',cantidad:8,descuento:0}],totales:{total:1160,baseSinIva:1035.71,iva:124.29},estado:'certificada',inventarioRebajado:true,autorizacion:'SIM-B72KQW19',serie:'B72KQW19',numeroDte:'1000000003',creada:new Date(Date.now()-45*86400000).toISOString(),ordenCompra:'',diasCredito:30,vencimiento:new Date(Date.now()-15*86400000).toISOString(),abonos:[],estadoPago:'pendiente'},
 ];
 let cart=[],corr=4,cliN=4,prodN=6;
+
+// ===== Borrador automático del pedido (se guarda en el navegador) =====
+const BORRADOR_KEY='sefe_borrador_pedido';
+function guardarBorrador(){
+  try{
+    // No guardar borrador si estamos editando un pedido existente
+    if(editId)return;
+    if(!cart.length){localStorage.removeItem(BORRADOR_KEY);return;}
+    const cliSel=$('#f-cli')?.value||'';
+    const cliSearch=$('#f-cli-search')?.value||'';
+    const oc=$('#f-oc')?.value||'';
+    const obs=$('#f-obs')?.value||'';
+    localStorage.setItem(BORRADOR_KEY,JSON.stringify({cart,cliSel,cliSearch,oc,obs,ts:Date.now()}));
+  }catch(e){/* si el navegador no permite, no pasa nada */}
+}
+function recuperarBorrador(){
+  try{
+    const raw=localStorage.getItem(BORRADOR_KEY);
+    if(!raw)return false;
+    const b=JSON.parse(raw);
+    if(!b.cart||!b.cart.length)return false;
+    cart=b.cart;
+    initForm();
+    if(b.cliSel&&$('#f-cli')){$('#f-cli').value=b.cliSel;}
+    if(b.cliSearch&&$('#f-cli-search')){$('#f-cli-search').value=b.cliSearch;}
+    if(b.oc&&$('#f-oc'))$('#f-oc').value=b.oc;
+    if(b.obs&&$('#f-obs'))$('#f-obs').value=b.obs;
+    const cli=clientes.find(c=>String(c.id)===String(b.cliSel));
+    if(cli)actualizarVendedorInfo(cli);
+    render();
+    toast('📝 Borrador recuperado','Tenías un pedido sin guardar');
+    return true;
+  }catch(e){return false;}
+}
+function limpiarBorrador(){try{localStorage.removeItem(BORRADOR_KEY);}catch(e){}}
+window.limpiarBorrador=limpiarBorrador;
 // Ventas históricas de ejemplo (solo para que los reportes tengan datos)
 (function seedHistorico(){
   const M=[{m:5,c:1,it:[[1,6],[2,4]]},{m:5,c:2,it:[[3,3]]},{m:4,c:1,it:[[5,10]]},{m:4,c:2,it:[[2,8],[4,5]]},
@@ -1094,6 +1130,7 @@ async function doLoginAuth(){
     $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
     aplicarPermisosUI();
     go('panel');
+    setTimeout(recuperarBorrador,300);
     btn.disabled=false;btn.textContent='Ingresar';
   }catch(e){
     errBox.textContent='Error al ingresar: '+e.message;
@@ -1373,6 +1410,7 @@ window.setModoVenta=(i,modo)=>{cart[i].modoVenta=modo;render();};
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement.id==='f-add')addPedidoProducto();});
 
 function render(){
+  guardarBorrador();
   $('#f-empty').style.display=cart.length?'none':'block';
   // Disponibilidad según el modo de venta de la línea
   const avail=it=>{
@@ -1440,7 +1478,7 @@ $('#f-go').onclick=()=>{
     if(typeof guardarDocumento==='function')guardarDocumento(doc);
     toast('✓ Pedido ingresado','PED-'+padn(doc.numero)+' · inventario rebajado. Facturalo o convertilo en Documentos.');
   }
-  cart=[];$('#f-oc').value='';$('#f-obs').value='';initForm();render();go('documentos');
+  cart=[];$('#f-oc').value='';$('#f-obs').value='';limpiarBorrador();initForm();render();go('documentos');
 };
 
 function rowDoc(withActions){
@@ -4570,6 +4608,7 @@ async function verificarSesion(){
         $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
         aplicarPermisosUI();
         go('panel');
+        setTimeout(recuperarBorrador,300);
       }
     }
   }catch(e){ /* si falla, se queda en el login normal */ }
