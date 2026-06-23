@@ -1476,7 +1476,7 @@ function rowDoc(withActions){
       if(f.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(f.estado)){
         items.push('<div class="act-sep"></div>');
         if(canAnular())items.push(`<button onclick="openNotaCD(${f.id})">Nota de crédito</button>`);
-        if(canAnular())items.push(`<button class="act-danger" onclick="confirmar('Anular Factura Cambiaria','Vas a anular la factura ${f.serie||''}-${f.numeroDte||''} por ${money(f.totales.total)}. El inventario se reintegrará. Esta acción no se puede deshacer.','Anular factura',()=>anular(${f.id}))">Anular</button>`);
+        if(canAnular())items.push(`<button class="act-danger" onclick="abrirAnular(${f.id})">Anular</button>`);
       }
       if(f.tipoDoc==='notaCredito'&&f.estado==='certificada'&&canAnular()){
         items.push('<div class="act-sep"></div>');
@@ -1721,6 +1721,65 @@ window.cancelarPedido=cancelarPedido;
 
 window.devolver=id=>{const f=documentos.find(d=>d.id===id);if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p){p.stock+=it.cantidad;if(typeof guardarProducto==='function')guardarProducto(p);}});f.inventarioRebajado=false;}
   f.estado='devuelto';closeMod();renderDocs();toast('✓ Préstamo devuelto','Inventario reingresado');logAudit('Préstamo devuelto','PED-'+padn(f.numero));if(typeof guardarDocumento==='function')guardarDocumento(f);};
+// Abre un diálogo que pide el motivo y luego anula ante EcoFactura
+function abrirAnular(id){
+  const f=documentos.find(d=>d.id===id);
+  if(!f){toast('Documento no encontrado',null,true);return;}
+  // Si es una factura ya certificada ante SAT (tiene UUID real), hay que anular en EcoFactura
+  const esRealFEL=f.autorizacion && !String(f.autorizacion).startsWith('SIM-');
+  openMod('Anular '+(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero)),
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:6px">Vas a anular esta factura por <b style="color:var(--ink)">${money(f.totales.total)}</b>.</p>
+     ${esRealFEL?'<p style="font-size:12px;color:var(--danger);margin-bottom:12px">⚠️ Esta factura está certificada ante SAT. Se anulará también en EcoFactura. Esta acción no se puede deshacer.</p>':'<p style="font-size:12px;color:var(--muted);margin-bottom:12px">El inventario se reintegrará.</p>'}
+     <label>Motivo de la anulación</label>
+     <input id="anular-motivo" type="text" maxlength="255" placeholder="Ej: Error en datos del cliente" style="width:100%;box-sizing:border-box">`,
+    ()=>{
+      const motivo=($('#anular-motivo')?.value||'').trim();
+      if(!motivo){toast('Escribí el motivo de la anulación',null,true);return false;}
+      anularFacturaReal(id,motivo);
+    });
+}
+window.abrirAnular=abrirAnular;
+
+// Anula la factura: primero en EcoFactura (si es real), luego en el sistema
+async function anularFacturaReal(id,motivo){
+  const f=documentos.find(d=>d.id===id);
+  if(!f)return;
+  const esRealFEL=f.autorizacion && !String(f.autorizacion).startsWith('SIM-');
+
+  // Si es factura real certificada, anular primero en EcoFactura
+  if(esRealFEL && typeof FEL_BACKEND_URL!=='undefined' && !FEL_BACKEND_URL.includes('TU-BACKEND')){
+    toast('⏳ Anulando en EcoFactura...','Conectando con SAT (puede tardar un momento)');
+    try{
+      const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/anular',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({uuid:f.autorizacion,motivo})
+      });
+      const data=await r.json();
+      if(!(r.ok && data.ok)){
+        const msg=data.mensaje||data.error||'No se pudo anular';
+        toast('✗ EcoFactura no anuló la factura',msg,true);
+        logAudit('Error al anular','('+(f.serie||'')+'-'+(f.numeroDte||'')+') '+msg);
+        return; // NO cambiamos nada si EcoFactura rechazó
+      }
+    }catch(err){
+      toast('✗ No se pudo conectar con el servidor FEL','¿Está el backend andando? '+err.message,true);
+      return;
+    }
+  }
+
+  // EcoFactura confirmó (o era simulada): anular en el sistema y reintegrar inventario
+  if(f.inventarioRebajado){
+    f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p){p.stock+=it.cantidad;if(typeof guardarProducto==='function')guardarProducto(p);}});
+    f.inventarioRebajado=false;
+  }
+  f.estado='anulada';f.motivo=motivo;f.anuladoFecha=new Date().toISOString();
+  closeMod();renderDocs();
+  toast('✓ Factura anulada',esRealFEL?'Anulada ante SAT · '+(f.serie||''):'Inventario reingresado');
+  logAudit('Factura anulada',(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero))+' · '+motivo);
+  if(typeof guardarDocumento==='function')guardarDocumento(f);
+}
+window.anularFacturaReal=anularFacturaReal;
+
 window.anular=id=>{const f=documentos.find(d=>d.id===id);if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p){p.stock+=it.cantidad;if(typeof guardarProducto==='function')guardarProducto(p);}});f.inventarioRebajado=false;}
   f.estado='anulada';closeMod();renderDocs();toast('✓ Anulado','Inventario reingresado');logAudit('Documento anulado',(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero)));if(typeof guardarDocumento==='function')guardarDocumento(f);};
 window.editarPedido=id=>{const f=documentos.find(d=>d.id===id);if(f.tipoDoc!=='pedido'||f.estado!=='abierto')return;
