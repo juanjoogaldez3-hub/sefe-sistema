@@ -4556,7 +4556,27 @@ async function arrancarApp(){
     badge.style.color=conectado?'#7FBF4D':'#C9A227';
   }
 }
-arrancarApp();
+
+// Al arrancar: si ya hay una sesión activa de Supabase Auth, entrar directo
+async function verificarSesion(){
+  try{
+    if(typeof sb==='undefined'||!sb.auth)return;
+    const {data}=await sb.auth.getSession();
+    if(data && data.session && data.session.user){
+      const email=(data.session.user.email||'').toLowerCase();
+      const u=usuarios.find(x=>(x.correo||'').toLowerCase()===email && x.activo);
+      if(u){
+        currentUser=u.nombre;currentRole=u.rol;
+        $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
+        aplicarPermisosUI();
+        go('panel');
+      }
+    }
+  }catch(e){ /* si falla, se queda en el login normal */ }
+}
+
+// Arrancar y luego verificar sesión
+arrancarApp().then(verificarSesion);
 </script>
 </body>
 </html>
