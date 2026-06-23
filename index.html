@@ -1789,6 +1789,21 @@ async function anularFacturaReal(id,motivo){
         logAudit('Error al anular','('+(f.serie||'')+'-'+(f.numeroDte||'')+') '+msg);
         return; // NO cambiamos nada si EcoFactura rechazó
       }
+      // Descargar el PDF de anulación que devuelve EcoFactura (si vino)
+      if(data.pdfBase64){
+        try{
+          const bytes=atob(data.pdfBase64);
+          const arr=new Uint8Array(bytes.length);
+          for(let i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
+          const blob=new Blob([arr],{type:'application/pdf'});
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement('a');
+          a.href=url;
+          a.download='Anulacion-'+(f.serie||'')+'-'+(f.numeroDte||f.numero)+'.pdf';
+          document.body.appendChild(a);a.click();document.body.removeChild(a);
+          setTimeout(()=>URL.revokeObjectURL(url),1000);
+        }catch(e){console.error('No se pudo descargar el PDF de anulación:',e);}
+      }
     }catch(err){
       toast('✗ No se pudo conectar con el servidor FEL','¿Está el backend andando? '+err.message,true);
       return;
