@@ -440,7 +440,7 @@
   <div class="main">
     <header class="topbar">
       <div><h1 id="ttl">Panel</h1><div class="sub" id="sub">Resumen de operación</div></div>
-      <div style="display:flex;align-items:center;gap:12px"><div class="mode">Prototipo · datos de ejemplo</div><span class="role-badge" id="role-badge" style="background:var(--ok-bg);color:var(--ok)">Administrador</span>
+      <div style="display:flex;align-items:center;gap:12px"><span class="role-badge" id="role-badge" style="background:var(--ok-bg);color:var(--ok)">Administrador</span>
         <button class="btn btn-ghost btn-sm topbar-logout" title="Cerrar sesión" onclick="logout()" style="display:none;padding:6px 9px"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" style="width:15px;height:15px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg></button>
       </div>
     </header>
@@ -908,27 +908,12 @@ function applyTableFilter(table){
 }
 
 let clientes=[
-  {id:1,nit:'5849213K',nombre:'Hotel Maya Internacional',razonSocial:'Inversiones Hoteleras Maya, S.A.',direccion:'7 Av. Zona 9, Guatemala',email:'admin@hotelmaya.gt',tiempoCredito:30,vendedorId:1,sedesDe:null,
-   contactoPagos:{nombre:'María López',telefono:'2412-8801',correo:'pagos@hotelmaya.gt'},
-   contactoCompras:{nombre:'Carlos Pérez',telefono:'2412-8802',correo:'compras@hotelmaya.gt'},precios:{1:80}},
-  {id:2,nit:'39201842',nombre:'Restaurante Bella Vista',razonSocial:'Gastronomía Bella Vista, S.A.',direccion:'Antigua Guatemala',email:'admin@bellavista.gt',tiempoCredito:30,vendedorId:2,sedesDe:null,
-   contactoPagos:{nombre:'Ana Gómez',telefono:'7832-1141',correo:'pagos@bellavista.gt'},
-   contactoCompras:{nombre:'Luis Marroquín',telefono:'7832-1142',correo:'compras@bellavista.gt'},precios:{}},
   {id:3,nit:'CF',nombre:'Consumidor Final',razonSocial:'Consumidor Final',direccion:'Ciudad',email:'',tiempoCredito:0,vendedorId:null,sedesDe:null,
    contactoPagos:{nombre:'',telefono:'',correo:''},contactoCompras:{nombre:'',telefono:'',correo:''},precios:{}},
-  {id:4,nit:'5849213K',nombre:'Hotel Maya — Sede Zona 10',razonSocial:'Inversiones Hoteleras Maya, S.A.',direccion:'15 Calle Zona 10, Guatemala',email:'z10@hotelmaya.gt',tiempoCredito:30,vendedorId:1,sedesDe:1,
-   contactoPagos:{nombre:'Pedro Alvarado',telefono:'2511-3300',correo:'pagos.z10@hotelmaya.gt'},
-   contactoCompras:{nombre:'Carmen López',telefono:'2511-3301',correo:'compras.z10@hotelmaya.gt'},precios:{1:80}},
 ];
-let productos=[
-  {id:1,codigo:'DES-001',nombre:'Desinfectante multiusos 1 GL',precio:85,costo:55,unidad:'UNI',stock:142,proveedorIds:[1,3],skuProveedor:'QV-DES-1GL',nombreProveedor:'Desinfectante multiusos galón'},
-  {id:2,codigo:'JAB-004',nombre:'Jabón líquido para manos 1 GL',precio:62,costo:40,unidad:'UNI',stock:89,proveedorIds:[1,2],skuProveedor:'DH-JL-001',nombreProveedor:'Jabón líquido manos galón'},
-  {id:3,codigo:'PAP-009',nombre:'Papel higiénico jumbo (caja 12)',precio:145,costo:98,unidad:'CAJ',stock:18,proveedorIds:[3],skuProveedor:'IM-PJ-12',nombreProveedor:'Jumbo toilet paper x12'},
-  {id:4,codigo:'CLO-002',nombre:'Cloro concentrado 1 GL',precio:48,costo:31,unidad:'UNI',stock:7,proveedorIds:[1],skuProveedor:'QV-CLO-1GL',nombreProveedor:'Cloro concentrado galón'},
-  {id:5,codigo:'GEL-008',nombre:'Gel antibacterial 1 GL',precio:72,costo:47,unidad:'UNI',stock:110,proveedorIds:[2,3],skuProveedor:'IM-GEL-1GL',nombreProveedor:'Antibacterial gel galón'},
-];
-let vendedores=[{id:1,nombre:'Ana Ramírez'},{id:2,nombre:'Luis Méndez'},{id:3,nombre:'Sofía Castillo'}];
-let pilotos=[{id:1,nombre:'José Coc'},{id:2,nombre:'Mynor Tzún'}];
+let productos=[];
+let vendedores=[];
+let pilotos=[];
 let pilN=3;
 // Cobros en ruta — ciclo: depositado(piloto) → recibido(logística) → procesado(contabilidad)
 // {id, docId, monto, modo:'efectivo'|'cheque', noBoleta, noRecibo, cheque, banco, piloto, fecha,
@@ -982,17 +967,9 @@ function miPilotoId(){
 function esPiloto(){return currentRole==='piloto';}
 function canAsignarPiloto(){return currentRole==='admin'||ROLES[currentRole]?.asignarPiloto===true;}
 function canConvertir(){return currentRole==='admin'||ROLES[currentRole]?.convertirCajas===true;}
-let proveedores=[
-  {id:1,nombre:'Químicos del Valle',razonSocial:'Químicos del Valle, S.A.',nit:'4471002-3',telefono:'2245-1100',correo:'ventas@quimicosdelvalle.gt',diasCredito:30},
-  {id:2,nombre:'Distribuidora Higiénica',razonSocial:'Distribuidora Higiénica, S.A.',nit:'7782013-9',telefono:'2333-7788',correo:'pedidos@higienica.gt',diasCredito:15},
-  {id:3,nombre:'Insumos Maya',razonSocial:'Insumos Maya, S.A.',nit:'5590184-1',telefono:'7955-2200',correo:'compras@insumosmaya.gt',diasCredito:0},
-];
+let proveedores=[];
 let compras=[];
-let documentos=[
-  {id:1,numero:1,tipoDoc:'cambiaria',clienteId:1,clienteNombre:'Hotel Maya Internacional',clienteNit:'5849213K',items:[{id:1,codigo:'DES-001',nombre:'Desinfectante multiusos 1 GL',precio:85,unidad:'UNI',cantidad:6,descuento:0}],totales:{total:510,baseSinIva:455.36,iva:54.64},estado:'certificada',inventarioRebajado:true,autorizacion:'SIM-A91X7K2P',serie:'A91X7K2P',numeroDte:'1000000001',creada:new Date(Date.now()-5*86400000).toISOString(),ordenCompra:'OC-2026-0142',diasCredito:30,vencimiento:new Date(Date.now()+25*86400000).toISOString(),abonos:[{fecha:new Date(Date.now()-2*86400000).toISOString().slice(0,10),monto:200,metodo:'Transferencia',referencia:'TRF-8841'}],estadoPago:'parcial'},
-  {id:2,numero:2,tipoDoc:'pedido',clienteId:2,clienteNombre:'Restaurante Bella Vista',clienteNit:'39201842',items:[{id:2,codigo:'JAB-004',nombre:'Jabón líquido para manos 1 GL',precio:62,unidad:'UNI',cantidad:4,descuento:0}],totales:{total:248,baseSinIva:221.43,iva:26.57},estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:''},
-  {id:3,numero:3,tipoDoc:'cambiaria',clienteId:2,clienteNombre:'Restaurante Bella Vista',clienteNit:'39201842',items:[{id:3,codigo:'PAP-009',nombre:'Papel higiénico jumbo (caja 12)',precio:145,unidad:'CAJ',cantidad:8,descuento:0}],totales:{total:1160,baseSinIva:1035.71,iva:124.29},estado:'certificada',inventarioRebajado:true,autorizacion:'SIM-B72KQW19',serie:'B72KQW19',numeroDte:'1000000003',creada:new Date(Date.now()-45*86400000).toISOString(),ordenCompra:'',diasCredito:30,vencimiento:new Date(Date.now()-15*86400000).toISOString(),abonos:[],estadoPago:'pendiente'},
-];
+let documentos=[];
 let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====
@@ -1030,36 +1007,7 @@ function recuperarBorrador(){
 }
 function limpiarBorrador(){try{localStorage.removeItem(BORRADOR_KEY);}catch(e){}}
 window.limpiarBorrador=limpiarBorrador;
-// Ventas históricas de ejemplo (solo para que los reportes tengan datos)
-(function seedHistorico(){
-  const M=[{m:5,c:1,it:[[1,6],[2,4]]},{m:5,c:2,it:[[3,3]]},{m:4,c:1,it:[[5,10]]},{m:4,c:2,it:[[2,8],[4,5]]},
-    {m:3,c:1,it:[[1,12]]},{m:3,c:2,it:[[3,4],[5,6]]},{m:2,c:1,it:[[2,15]]},{m:2,c:2,it:[[1,8]]},
-    {m:1,c:1,it:[[4,20],[5,10]]},{m:1,c:2,it:[[3,6]]},{m:0,c:1,it:[[1,5],[2,5]]}];
-  M.forEach((s,i)=>{const cli=clientes.find(c=>c.id===s.c);
-    const items=s.it.map(([pid,q])=>{const p=productos.find(x=>x.id===pid);return {id:p.id,codigo:p.codigo,nombre:p.nombre,precio:p.precio,unidad:p.unidad,cantidad:q,descuento:0};});
-    const total=items.reduce((a,it)=>a+it.cantidad*it.precio,0);
-    const f=new Date();f.setMonth(f.getMonth()-s.m);f.setDate(8+(i%18));
-    const vend=vendedores[i%vendedores.length];
-    documentos.push({id:1000+i,numero:1000+i,tipoDoc:'cambiaria',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,
-      vendedorId:vend.id,vendedorNombre:vend.nombre,diasCredito:30,vencimiento:new Date(f.getTime()+30*86400000).toISOString(),abonos:[{fecha:f.toISOString().slice(0,10),monto:total,metodo:'Histórico'}],
-      items,totales:{total,baseSinIva:total/1.12,iva:total-total/1.12},estado:'certificada',inventarioRebajado:false,
-      autorizacion:'SIM-H'+(1000+i),serie:'H'+(1000+i),numeroDte:String(1100000000+i),creada:f.toISOString()});});
-})();
-// Compras de ejemplo (para reportes de compras)
-(function seedCompras(){
-  const C=[{m:5,p:1,it:[[1,100],[4,80]]},{m:5,p:2,it:[[2,120]]},{m:4,p:1,it:[[1,60]]},{m:4,p:3,it:[[3,40],[5,90]]},
-    {m:3,p:2,it:[[2,150],[5,60]]},{m:2,p:1,it:[[4,100]]},{m:2,p:3,it:[[3,30]]},{m:1,p:1,it:[[1,80],[2,70]]},
-    {m:1,p:2,it:[[5,120]]},{m:0,p:3,it:[[3,50],[1,40]]}];
-  C.forEach((s,i)=>{const prov=proveedores.find(x=>x.id===s.p);
-    const items=s.it.map(([pid,q])=>{const p=productos.find(x=>x.id===pid);return {id:p.id,codigo:p.codigo,nombre:p.nombre,costo:p.costo,cantidad:q,recibido:q};});
-    const total=items.reduce((a,it)=>a+it.cantidad*it.costo,0);
-    const f=new Date();f.setMonth(f.getMonth()-s.m);f.setDate(5+(i%20));
-    const credito=prov.diasCredito>0;
-    const venc=credito?new Date(new Date(f).getTime()+prov.diasCredito*86400000).toISOString():null;
-    const abonos=credito&&i%2===0?[]:[{fecha:f.toISOString(),monto:total,metodo:credito?'Transferencia':'Contado'}];
-    compras.push({id:i+1,proveedorId:prov.id,proveedorNombre:prov.nombre,items,total,fecha:f.toISOString(),
-      estadoRecepcion:'recibida',facturada:true,docProv:'FACT-'+(4500+i),tipoPago:credito?'credito':'contado',diasCredito:prov.diasCredito,vencimiento:venc,abonos});});
-})();
+// (Datos de ejemplo eliminados — sistema en producción)
 let compN=11,provN=4;
 let editId=null,editOldMap={};
 
@@ -1634,7 +1582,7 @@ async function facturarPedido(id,dias){
     })),
     total:f.totales.total,
     vencimiento:venc,
-    observaciones:f.observaciones||('Pedido PED-'+padn(f.numero)),
+    observaciones:f.observaciones||'',
   };
 
   try{
@@ -1736,7 +1684,7 @@ async function facturarPedidoExento(id,dias,escenario){
     numero:f.numero, fecha:hoy,
     cliente:{nit:f.clienteNit||'CF', nombre:f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:f.clienteDireccion||'Ciudad', email:f.clienteEmail||''},
     items:(f.items||[]).map(it=>({codigo:it.codigo||'GEN', nombre:it.nombre, cantidad:it.cantidad, precio:it.precio, descuento:it.descuento||0, unidad:it.unidad||'UNI', tipo:'B'})),
-    total:f.totales.total, vencimiento:venc, observaciones:f.observaciones||('Pedido PED-'+padn(f.numero)),
+    total:f.totales.total, vencimiento:venc, observaciones:f.observaciones||'',
     // Datos de exención
     exenta:true, fraseTipo:4, escenario:escenario,
   };
