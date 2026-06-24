@@ -916,6 +916,7 @@ let productos=[];
 let vendedores=[];
 let pilotos=[];
 let pilN=3;
+let vendN=1;
 // Cobros en ruta — ciclo: depositado(piloto) → recibido(logística) → procesado(contabilidad)
 // {id, docId, monto, modo:'efectivo'|'cheque', noBoleta, noRecibo, cheque, banco, piloto, fecha,
 //  estado:'depositado'|'recibido'|'procesado', recibidoPor, recibidoFecha, procesadoPor, procesadoFecha}
@@ -3279,10 +3280,39 @@ function openUsuario(id){const u=id?usuarios.find(x=>x.id===id):null;
   <div class="row"><div><label>Piloto asignado <span style="color:var(--muted-2);font-weight:400">(solo rol Piloto)</span></label><select id="u-pil">${pilOpts}</select></div></div>
   <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El rol define qué módulos puede ver. Para Ventas asigná el vendedor; para Piloto asigná el piloto, así solo ve sus entregas.</span></div>`,()=>{
     const nom=$('#u-nom').value.trim();if(!nom)return;
-    const vendedorId=$('#u-vend').value?Number($('#u-vend').value):null;
-    const pilotoId=$('#u-pil').value?Number($('#u-pil').value):null;
-    const datos={nombre:nom,correo:$('#u-mail').value,rol:$('#u-rol').value,vendedorId,pilotoId};
-    if(u){Object.assign(u,datos);if(typeof guardarUsuario==='function')guardarUsuario(u);logAudit('Usuario editado',nom+' · Rol: '+ROLES[$('#u-rol').value]?.label);toast('✓ Usuario actualizado');}else{const nuevo={id:usrN++,...datos,activo:true,_nuevo:true};usuarios.push(nuevo);if(typeof guardarUsuario==='function')guardarUsuario(nuevo);logAudit('Usuario creado',nom+' · Rol: '+ROLES[$('#u-rol').value]?.label);toast('✓ Usuario agregado','Recordá crear su acceso en Supabase Auth');}
+    const rol=$('#u-rol').value;
+    let vendedorId=$('#u-vend').value?Number($('#u-vend').value):null;
+    let pilotoId=$('#u-pil').value?Number($('#u-pil').value):null;
+
+    // Si el rol es Ventas y no tiene vendedor asignado, crear su ficha de vendedor automáticamente
+    if(rol==='ventas' && !vendedorId){
+      const nv={id:vendN++,nombre:nom,_nuevo:true};
+      vendedores.push(nv);
+      if(typeof guardarVendedor==='function')guardarVendedor(nv);
+      vendedorId=nv.id;
+    }
+    // Si el rol es Piloto y no tiene piloto asignado, crear su ficha de piloto automáticamente
+    if(rol==='piloto' && !pilotoId){
+      const np={id:pilN++,nombre:nom,_nuevo:true};
+      pilotos.push(np);
+      if(typeof guardarPiloto==='function')guardarPiloto(np);
+      pilotoId=np.id;
+    }
+
+    const datos={nombre:nom,correo:$('#u-mail').value,rol,vendedorId,pilotoId};
+    if(u){
+      Object.assign(u,datos);
+      // Sincronizar el nombre del vendedor/piloto vinculado
+      if(u.vendedorId){const v=vendedores.find(x=>x.id===u.vendedorId);if(v&&v.nombre!==nom){v.nombre=nom;if(typeof guardarVendedor==='function')guardarVendedor(v);}}
+      if(u.pilotoId){const p=pilotos.find(x=>x.id===u.pilotoId);if(p&&p.nombre!==nom){p.nombre=nom;if(typeof guardarPiloto==='function')guardarPiloto(p);}}
+      if(typeof guardarUsuario==='function')guardarUsuario(u);
+      logAudit('Usuario editado',nom+' · Rol: '+ROLES[rol]?.label);toast('✓ Usuario actualizado');
+    }else{
+      const nuevo={id:usrN++,...datos,activo:true,_nuevo:true};
+      usuarios.push(nuevo);
+      if(typeof guardarUsuario==='function')guardarUsuario(nuevo);
+      logAudit('Usuario creado',nom+' · Rol: '+ROLES[rol]?.label);toast('✓ Usuario agregado','Recordá crear su acceso en Supabase Auth');
+    }
     closeMod();renderUsuarios();renderUserGrid();});}
 window.openUsuario=openUsuario;
 function toggleUsuario(id){const u=usuarios.find(x=>x.id===id);if(!u)return;u.activo=!u.activo;if(typeof guardarUsuario==='function')guardarUsuario(u);renderUsuarios();renderUserGrid();toast(u.activo?'✓ Usuario activado':'✓ Usuario desactivado');}
@@ -4526,6 +4556,7 @@ async function arrancarApp(){
         compN=(compras.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
         usrN=(usuarios.reduce((m,u)=>Math.max(m,u.id),0)||0)+1;
         pilN=(pilotos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+        vendN=(vendedores.reduce((m,v)=>Math.max(m,v.id),0)||0)+1;
         cobroRutaN=(cobrosRuta.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
         provN=(proveedores.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
       }

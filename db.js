@@ -353,3 +353,31 @@ async function guardarUsuario(u){
     if(error)console.error('Error actualizando usuario:',error);
   }
 }
+
+// Guardar/actualizar un vendedor
+async function guardarVendedor(v){
+  const row = {nombre:v.nombre};
+  if (v._nuevo) {
+    delete v._nuevo;
+    const {data,error} = await sb.from('vendedores').insert(row).select().single();
+    if(error){console.error('Error guardando vendedor:',error); v._nuevo=true;}
+    else v.id = data.id;
+  } else {
+    const {error} = await sb.from('vendedores').update(row).eq('id', v.id);
+    if(error)console.error('Error actualizando vendedor:',error);
+  }
+}
+
+// Guardar/actualizar un piloto
+async function guardarPiloto(p){
+  const row = {nombre:p.nombre};
+  if (p._nuevo) {
+    delete p._nuevo;
+    const {data,error} = await sb.from('pilotos').insert(row).select().single();
+    if(error){console.error('Error guardando piloto:',error); p._nuevo=true;}
+    else p.id = data.id;
+  } else {
+    const {error} = await sb.from('pilotos').update(row).eq('id', p.id);
+    if(error)console.error('Error actualizando piloto:',error);
+  }
+}
