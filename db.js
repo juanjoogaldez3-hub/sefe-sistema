@@ -336,3 +336,20 @@ async function anularPagoProveedorDB(pago){
   }).eq('id', pago._id);
   if(error)console.error('Error anulando pago a proveedor:',error);
 }
+
+// Guardar/actualizar un usuario en la tabla usuarios
+async function guardarUsuario(u){
+  const row = {
+    nombre:u.nombre, correo:u.correo, rol:u.rol, activo:u.activo,
+    vendedor_id:u.vendedorId, piloto_id:u.pilotoId
+  };
+  if (u._nuevo) {
+    delete u._nuevo;
+    const {data,error} = await sb.from('usuarios').insert(row).select().single();
+    if(error){console.error('Error guardando usuario:',error); u._nuevo=true;}
+    else u.id = data.id;
+  } else {
+    const {error} = await sb.from('usuarios').update(row).eq('id', u.id);
+    if(error)console.error('Error actualizando usuario:',error);
+  }
+}

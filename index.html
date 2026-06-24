@@ -3282,10 +3282,10 @@ function openUsuario(id){const u=id?usuarios.find(x=>x.id===id):null;
     const vendedorId=$('#u-vend').value?Number($('#u-vend').value):null;
     const pilotoId=$('#u-pil').value?Number($('#u-pil').value):null;
     const datos={nombre:nom,correo:$('#u-mail').value,rol:$('#u-rol').value,vendedorId,pilotoId};
-    if(u){Object.assign(u,datos);logAudit('Usuario editado',nom+' · Rol: '+ROLES[$('#u-rol').value]?.label);toast('✓ Usuario actualizado');}else{usuarios.push({id:usrN++,...datos,activo:true});logAudit('Usuario creado',nom+' · Rol: '+ROLES[$('#u-rol').value]?.label);toast('✓ Usuario agregado');}
+    if(u){Object.assign(u,datos);if(typeof guardarUsuario==='function')guardarUsuario(u);logAudit('Usuario editado',nom+' · Rol: '+ROLES[$('#u-rol').value]?.label);toast('✓ Usuario actualizado');}else{const nuevo={id:usrN++,...datos,activo:true,_nuevo:true};usuarios.push(nuevo);if(typeof guardarUsuario==='function')guardarUsuario(nuevo);logAudit('Usuario creado',nom+' · Rol: '+ROLES[$('#u-rol').value]?.label);toast('✓ Usuario agregado','Recordá crear su acceso en Supabase Auth');}
     closeMod();renderUsuarios();renderUserGrid();});}
 window.openUsuario=openUsuario;
-function toggleUsuario(id){const u=usuarios.find(x=>x.id===id);if(!u)return;u.activo=!u.activo;renderUsuarios();renderUserGrid();toast(u.activo?'✓ Usuario activado':'✓ Usuario desactivado');}
+function toggleUsuario(id){const u=usuarios.find(x=>x.id===id);if(!u)return;u.activo=!u.activo;if(typeof guardarUsuario==='function')guardarUsuario(u);renderUsuarios();renderUserGrid();toast(u.activo?'✓ Usuario activado':'✓ Usuario desactivado');}
 window.toggleUsuario=toggleUsuario;
 
 function renderProd(){
