@@ -469,6 +469,10 @@
             <table><thead><tr><th>Pedido</th><th>Cliente</th><th>Total</th></tr></thead><tbody id="panel-pedidos"></tbody></table>
           </div>
         </div>
+        <div class="panel" style="margin-top:16px" id="panel-bloque-seguimiento">
+          <div class="panel-head"><h3 id="panel-seg-title">Seguimiento de clientes</h3><span style="font-size:11.5px;color:var(--muted)">Frecuencia de compra y días sin facturar</span></div>
+          <table><thead><tr><th>Cliente</th><th>Vendedor</th><th>Compra cada</th><th>Última factura</th><th>Días sin comprar</th></tr></thead><tbody id="panel-seguimiento"></tbody></table>
+        </div>
       </section>
 
       <!-- AUDITORÍA -->
@@ -1263,6 +1267,78 @@ function renderPanel(){
     $('#panel-pedidos').innerHTML=rows;
     document.getElementById('panel-bloque-ped').style.display='';
   }else document.getElementById('panel-bloque-ped').style.display='none';
+
+  renderSeguimiento();
+}
+
+// Reporte de seguimiento: frecuencia de compra y días sin facturar, por cliente
+function renderSeguimiento(){
+  const cont=document.getElementById('panel-seguimiento');
+  if(!cont)return;
+  const bloque=document.getElementById('panel-bloque-seguimiento');
+  const esVentasRol=currentRole==='ventas';
+  const miVend=miVendedorId();
+
+  // Solo facturas certificadas/cambiarias (ventas reales)
+  const facturas=documentos.filter(d=>(d.tipoDoc==='cambiaria'||d.estado==='certificada') && d.estado!=='anulada');
+
+  // Agrupar por cliente
+  const porCliente={};
+  facturas.forEach(f=>{
+    const cid=f.clienteId;
+    if(cid==null)return;
+    if(!porCliente[cid])porCliente[cid]={fechas:[],nombre:f.clienteComercial||f.clienteNombre,vendedorId:null};
+    const fch=f.fechaCertificacion||f.creada;
+    if(fch)porCliente[cid].fechas.push(new Date(fch).getTime());
+  });
+
+  const hoy=Date.now();
+  let filas=[];
+  Object.entries(porCliente).forEach(([cid,info])=>{
+    const cli=clientes.find(c=>String(c.id)===String(cid));
+    const vendId=cli?cli.vendedorId:null;
+    // Si es vendedor, solo sus clientes
+    if(esVentasRol && vendId!==miVend)return;
+
+    const fechas=info.fechas.sort((a,b)=>a-b);
+    const ultima=fechas[fechas.length-1];
+    const diasSinComprar=Math.floor((hoy-ultima)/86400000);
+
+    // Frecuencia: promedio de días entre compras (si hay 2+ facturas)
+    let frecuencia='—';
+    if(fechas.length>=2){
+      let suma=0;
+      for(let i=1;i<fechas.length;i++)suma+=(fechas[i]-fechas[i-1]);
+      const prom=Math.round(suma/(fechas.length-1)/86400000);
+      frecuencia=prom+' días';
+    }
+
+    const vend=vendedores.find(v=>v.id===vendId);
+    const vendNom=vend?vend.nombre:'—';
+
+    // Color de alerta según días sin comprar
+    let colorDias='var(--muted)';
+    if(diasSinComprar>=60)colorDias='var(--danger)';
+    else if(diasSinComprar>=30)colorDias='#C9A227';
+
+    filas.push({nombre:info.nombre,vendNom,frecuencia,ultima,diasSinComprar,colorDias,nFacturas:fechas.length});
+  });
+
+  // Ordenar por días sin comprar (los más urgentes primero)
+  filas.sort((a,b)=>b.diasSinComprar-a.diasSinComprar);
+
+  if(!filas.length){
+    cont.innerHTML='<tr><td colspan="5" class="empty">Aún no hay facturas para mostrar seguimiento</td></tr>';
+    return;
+  }
+
+  cont.innerHTML=filas.map(f=>`<tr>
+    <td style="font-weight:600">${f.nombre}</td>
+    <td style="font-size:12px;color:var(--muted)">${f.vendNom}</td>
+    <td style="font-size:12px">${f.frecuencia}</td>
+    <td style="font-size:12px;color:var(--muted)">${fdate(new Date(f.ultima).toISOString())}</td>
+    <td style="font-weight:700;color:${f.colorDias}">${f.diasSinComprar} días</td>
+  </tr>`).join('');
 }
 
 function initForm(){
