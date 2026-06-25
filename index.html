@@ -645,7 +645,7 @@
       <section class="view" id="v-inventario">
         <div class="panel">
           <div class="panel-head"><h3>Inventario</h3><div id="inv-acciones"></div></div>
-          <table><thead><tr><th>Código</th><th>Producto</th><th>Proveedor(es)</th><th>Costo</th><th>Precio</th><th>Unidad</th><th>Existencias</th><th></th></tr></thead><tbody id="t-prod"></tbody></table>
+          <table><thead><tr><th>Código</th><th>Producto</th><th>Marca</th><th>Proveedor(es)</th><th>Costo</th><th>Precio</th><th>Unidad</th><th>Existencias</th><th></th></tr></thead><tbody id="t-prod"></tbody></table>
         </div>
       </section>
 
@@ -3428,7 +3428,7 @@ function renderProd(){
     }
   }
   const tipoBadge=p.tipoEmpaque==='caja'?' <span class="badge b-muted" style="font-size:9px">Caja</span>':(p.tipoEmpaque==='caja_unidad'?` <span class="badge b-info" style="font-size:9px">Caja×${p.unidadesPorCaja}</span>`:'');
-  return `<tr style="${inactivo?'opacity:.5':''}"><td class="num">${p.codigo}<div style="font-size:10px;color:var(--muted-2)">${p.skuProveedor||''}</div></td><td style="font-weight:600">${p.nombre}${tipoBadge}${inactivo?' <span class="badge b-muted" style="font-size:9.5px">Inactivo</span>':''}</td><td style="font-size:12.5px;color:var(--muted)">${provTxt}</td><td class="num" style="color:var(--muted)">${money(p.costo||0)}</td><td class="num">${money(p.precio)}</td><td>${p.unidad}</td><td>${stockCell}</td><td style="white-space:nowrap">${acts}</td></tr>`;}).join('');enhanceTable('t-prod');}
+  return `<tr style="${inactivo?'opacity:.5':''}"><td class="num">${p.codigo}<div style="font-size:10px;color:var(--muted-2)">${p.skuProveedor||''}</div></td><td style="font-weight:600">${p.nombre}${tipoBadge}${inactivo?' <span class="badge b-muted" style="font-size:9.5px">Inactivo</span>':''}</td><td style="font-size:12.5px;color:var(--muted)">${p.marca||'<span style="color:var(--muted-2)">—</span>'}</td><td style="font-size:12.5px;color:var(--muted)">${provTxt}</td><td class="num" style="color:var(--muted)">${money(p.costo||0)}</td><td class="num">${money(p.precio)}</td><td>${p.unidad}</td><td>${stockCell}</td><td style="white-space:nowrap">${acts}</td></tr>`;}).join('');enhanceTable('t-prod');}
 
 let _verInactivos=false;
 function toggleVerInactivos(){_verInactivos=!_verInactivos;renderProd();}
@@ -3886,6 +3886,7 @@ function openProd(id){
   const tipoEmp=p?(p.tipoEmpaque||'unidad'):'unidad';
   openMod(p?'Editar producto':'Nuevo producto',`
   <div class="row"><div style="flex:2"><label>Nombre interno</label><input id="p-nom" value="${p?p.nombre:''}"></div><div><label>SKU interno</label><input id="p-cod" value="${p?p.codigo:''}"></div></div>
+  <div class="row"><div style="flex:1"><label>Marca</label><input id="p-marca" placeholder="Opcional" value="${p?(p.marca||''):''}"></div></div>
   <div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin:2px 0 8px">Nomenclatura del proveedor</div>
   <div class="row"><div style="flex:2"><label>Nombre del proveedor</label><input id="p-nom-prov" placeholder="Opcional" value="${p?(p.nombreProveedor||''):''}"></div><div><label>SKU del proveedor</label><input id="p-sku-prov" placeholder="Ej. QV-DES-1GL" value="${p?(p.skuProveedor||''):''}"></div></div>
   <div class="row"><div><label>Precio de venta (IVA incl.)</label><input id="p-pre" type="number" step="0.01" value="${p?p.precio:0}"></div><div><label>Costo</label><input id="p-cos" type="number" step="0.01" value="${p?(p.costo||0):0}"></div></div>
@@ -3914,7 +3915,7 @@ function openProd(id){
     const tipoEmpaque=$('#p-tipo').value;
     const unidadesPorCaja=tipoEmpaque==='caja_unidad'?(Number($('#p-upc').value)||0):null;
     if(tipoEmpaque==='caja_unidad'&&!(unidadesPorCaja>0)){toast('Faltan unidades por caja','Indicá cuántas unidades trae una caja',true);return;}
-    const datos={codigo:$('#p-cod').value,nombre:nom,skuProveedor:$('#p-sku-prov').value.trim(),nombreProveedor:$('#p-nom-prov').value.trim(),precio:Number($('#p-pre').value)||0,costo:Number($('#p-cos').value)||0,unidad:$('#p-uni').value,proveedorIds,tipoEmpaque,unidadesPorCaja};
+    const datos={codigo:$('#p-cod').value,nombre:nom,marca:$('#p-marca').value.trim(),skuProveedor:$('#p-sku-prov').value.trim(),nombreProveedor:$('#p-nom-prov').value.trim(),precio:Number($('#p-pre').value)||0,costo:Number($('#p-cos').value)||0,unidad:$('#p-uni').value,proveedorIds,tipoEmpaque,unidadesPorCaja};
     if(p){
       const tipoViejo=p.tipoEmpaque||'unidad';
       // Si cambió el tipo de empaque y hay stock, reacomodar (o bloquear)
