@@ -4813,6 +4813,26 @@ async function verificarSesion(){
     if(typeof sb==='undefined'||!sb.auth)return;
     const {data}=await sb.auth.getSession();
     if(data && data.session && data.session.user){
+      // Red de seguridad: si por timing los datos no cargaron (usuarios vacío),
+      // reintentar cargarTodo una vez y redibujar antes de entrar.
+      if((!usuarios || usuarios.length===0) && typeof cargarTodo==='function'){
+        try{
+          const ok=await cargarTodo();
+          if(ok){
+            window._sefeConectado=true;
+            cliN=(clientes.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+            prodN=(productos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+            corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;
+            compN=(compras.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+            usrN=(usuarios.reduce((m,u)=>Math.max(m,u.id),0)||0)+1;
+            pilN=(pilotos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+            vendN=(vendedores.reduce((m,v)=>Math.max(m,v.id),0)||0)+1;
+            cobroRutaN=(cobrosRuta.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+            provN=(proveedores.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+            initForm();initCompra();render();renderPanel();renderUserGrid();
+          }
+        }catch(e2){ /* si vuelve a fallar, sigue al login */ }
+      }
       const email=(data.session.user.email||'').toLowerCase();
       const u=usuarios.find(x=>(x.correo||'').toLowerCase()===email && x.activo);
       if(u){
@@ -4820,14 +4840,34 @@ async function verificarSesion(){
         $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
         aplicarPermisosUI();
         go('panel');
+        // Redibujo extra por si algo quedó a medio cargar
+        setTimeout(()=>{try{renderPanel();render();}catch(e){}}, 400);
         setTimeout(recuperarBorrador,300);
       }
     }
   }catch(e){ /* si falla, se queda en el login normal */ }
 }
 
-// Arrancar y luego verificar sesión
-arrancarApp().then(verificarSesion);
+// Arrancar y luego verificar sesión.
+// Espera a que la librería de Supabase (CDN) y db.js estén realmente
+// listos antes de arrancar, para que la primera visita no salga en blanco
+// si el CDN tarda en cargar. Reintenta hasta ~6 segundos.
+function esperarDependencias(intentos){
+  intentos = intentos||0;
+  const supaListo = (typeof supabase!=='undefined') || (typeof sb!=='undefined');
+  const dbListo   = (typeof cargarTodo==='function');
+  if((supaListo && dbListo) || intentos>=60){
+    // listo, o nos rendimos tras ~6s y arrancamos igual (modo prueba)
+    arrancarApp().then(verificarSesion);
+  } else {
+    setTimeout(()=>esperarDependencias(intentos+1), 100);
+  }
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', ()=>esperarDependencias(0));
+} else {
+  esperarDependencias(0);
+}
 </script>
 </body>
 </html>
