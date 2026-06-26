@@ -524,7 +524,10 @@
                 <div id="f-saldo-alert" style="display:none;margin-bottom:13px"></div>
                 <div class="row">
                   <div><label>Orden de compra</label><input id="f-oc" placeholder="OC-2026-…"></div>
-                  <div><label>Observaciones</label><input id="f-obs" placeholder="Opcional"></div>
+                  <div><label>Observaciones <span style="color:var(--muted);font-weight:400">(sale en factura)</span></label><input id="f-obs" placeholder="Opcional"></div>
+                </div>
+                <div class="row">
+                  <div style="grid-column:1/-1"><label>Nota interna <span style="color:var(--muted);font-weight:400">(NO sale en factura)</span></label><input id="f-nota" placeholder="Uso interno: bodega, despacho, etc."></div>
                 </div>
               </div>
             </div>
@@ -989,7 +992,8 @@ function guardarBorrador(){
     const cliSearch=$('#f-cli-search')?.value||'';
     const oc=$('#f-oc')?.value||'';
     const obs=$('#f-obs')?.value||'';
-    localStorage.setItem(BORRADOR_KEY,JSON.stringify({cart,cliSel,cliSearch,oc,obs,ts:Date.now()}));
+    const nota=$('#f-nota')?.value||'';
+    localStorage.setItem(BORRADOR_KEY,JSON.stringify({cart,cliSel,cliSearch,oc,obs,nota,ts:Date.now()}));
   }catch(e){/* si el navegador no permite, no pasa nada */}
 }
 function recuperarBorrador(){
@@ -1004,6 +1008,7 @@ function recuperarBorrador(){
     if(b.cliSearch&&$('#f-cli-search')){$('#f-cli-search').value=b.cliSearch;}
     if(b.oc&&$('#f-oc'))$('#f-oc').value=b.oc;
     if(b.obs&&$('#f-obs'))$('#f-obs').value=b.obs;
+    if(b.nota&&$('#f-nota'))$('#f-nota').value=b.nota;
     const cli=clientes.find(c=>String(c.id)===String(b.cliSel));
     if(cli)actualizarVendedorInfo(cli);
     render();
@@ -1490,9 +1495,9 @@ function render(){
     const unidadTxt=it.modoVenta==='caja'?'caja':(it.unidad||'und');
     return `<div class="li">
     <div><div class="nm">${it.nombre}</div><div class="sk">${it.codigo} · <span class="${ex?'stk low':''}">disp. ${a} ${unidadTxt}${a!==1?'s':''}</span>${selModo}</div></div>
-    <input type="number" min="1" value="${it.cantidad}" style="${ex?'border-color:var(--danger)':''}" oninput="upd(${i},'cantidad',this.value)">
-    <input type="number" min="0" step="0.01" value="${it.precio}" oninput="upd(${i},'precio',this.value)">
-    <input type="number" min="0" step="0.01" value="${it.descuento}" oninput="upd(${i},'descuento',this.value)">
+    <input type="number" min="1" value="${it.cantidad}" style="${ex?'border-color:var(--danger)':''}" oninput="updLive(${i},'cantidad',this.value)" onblur="render()">
+    <input type="number" min="0" step="0.01" value="${it.precio}" oninput="updLive(${i},'precio',this.value)" onblur="render()">
+    <input type="number" min="0" step="0.01" value="${it.descuento}" oninput="updLive(${i},'descuento',this.value)" onblur="render()">
     <div style="text-align:right;font-weight:600" class="num">${money(it.cantidad*it.precio-it.descuento)}</div>
     <button class="x" onclick="rm(${i})">×</button></div>`;}).join('');
   const total=cart.reduce((s,it)=>s+(it.cantidad*it.precio-it.descuento),0);
@@ -1506,6 +1511,17 @@ function render(){
   toggleBtnPrecios();
 }
 window.upd=(i,k,v)=>{cart[i][k]=Number(v)||0;render();};
+window.updLive=(i,k,v)=>{
+  cart[i][k]=Number(v)||0;
+  // Recalcula solo los totales y el subtotal de la fila, sin redibujar inputs
+  const total=cart.reduce((s,it)=>s+(it.cantidad*it.precio-it.descuento),0);
+  if($('#s-base'))$('#s-base').textContent=money(total/1.12);
+  if($('#s-iva'))$('#s-iva').textContent=money(total-total/1.12);
+  if($('#s-tot'))$('#s-tot').textContent=money(total);
+  // Actualiza el subtotal visible de la fila editada
+  const fila=document.querySelectorAll('.li')[i];
+  if(fila){const sub=fila.querySelector('.num');if(sub)sub.textContent=money(cart[i].cantidad*cart[i].precio-cart[i].descuento);}
+};
 window.rm=i=>{cart.splice(i,1);render();};
 
 $('#f-go').onclick=()=>{
@@ -1519,7 +1535,7 @@ $('#f-go').onclick=()=>{
     const ids=new Set([...Object.keys(editOldMap).map(Number),...cart.map(it=>it.id)]);
     ids.forEach(id=>{const oldQ=editOldMap[id]||0;const ci=cart.find(it=>it.id===id);const newQ=ci?ci.cantidad:0;const p=productos.find(x=>x.id===id);if(p)p.stock-=(newQ-oldQ);});
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
-    Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,items:cart.map(it=>({...it})),totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value});
+    Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,items:cart.map(it=>({...it})),totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||''});
     toast('✓ Pedido actualizado','PED-'+padn(f.numero)+' · inventario ajustado');
     logAudit('Pedido editado','PED-'+padn(f.numero)+' · '+cli.nombre+' · '+money(totales.total));
     if(typeof guardarDocumento==='function')guardarDocumento(f);
@@ -1532,13 +1548,13 @@ $('#f-go').onclick=()=>{
     });
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
     const doc={id:corr,numero:corr,tipoDoc:'pedido',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend?.id,vendedorNombre:vend?.nombre,
-      items:cart.map(it=>({...it})),totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,_nuevo:true};
+      items:cart.map(it=>({...it})),totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',_nuevo:true};
     documentos.push(doc);corr++;
     logAudit('Pedido creado','PED-'+padn(doc.numero)+' · '+cli.nombre+' · '+money(totales.total));
     if(typeof guardarDocumento==='function')guardarDocumento(doc);
     toast('✓ Pedido ingresado','PED-'+padn(doc.numero)+' · inventario rebajado. Facturalo o convertilo en Documentos.');
   }
-  cart=[];$('#f-oc').value='';$('#f-obs').value='';limpiarBorrador();initForm();render();go('documentos');
+  cart=[];$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';limpiarBorrador();initForm();render();go('documentos');
 };
 
 function rowDoc(withActions){
@@ -1648,7 +1664,7 @@ function abrirFacturar(id){
   if(esCF&&f.totales.total>=2500){toast('No se puede facturar como Consumidor Final por '+money(f.totales.total),'A partir de Q2,500 se requiere NIT, CUI o Pasaporte.',true);return;}
   // Los días de crédito se toman del cliente (ya configurados en su ficha)
   const cli=clientes.find(c=>c.id===f.clienteId);
-  const dias=(cli&&typeof cli.diasCredito==='number')?cli.diasCredito:30;
+  const dias=(cli&&typeof cli.tiempoCredito==='number')?cli.tiempoCredito:0;
   const creditoTxt=dias>0?(dias+' días de crédito'):'Contado (sin crédito)';
   openMod('Facturar PED-'+padn(f.numero),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Se generará la Factura Cambiaria por <b style="color:var(--ink)">${money(f.totales.total)}</b>.</p>
@@ -1929,9 +1945,9 @@ window.editarPedido=id=>{const f=documentos.find(d=>d.id===id);if(f.tipoDoc!=='p
   initForm();
   const cli=clientes.find(c=>c.id===f.clienteId);
   if(cli){$('#f-cli').value=String(cli.id);$('#f-cli-search').value=`${cli.nombre} · ${cli.nit}`;actualizarVendedorInfo(cli);}
-  $('#f-oc').value=f.ordenCompra||'';$('#f-obs').value=f.observaciones||'';
+  $('#f-oc').value=f.ordenCompra||'';$('#f-obs').value=f.observaciones||'';if($('#f-nota'))$('#f-nota').value=f.notaInterna||'';
   go('pedido');render();toast('Editando PED-'+padn(f.numero),'Ajustá productos o cliente y guardá');};
-window.cancelarEdicion=()=>{editId=null;editOldMap={};cart=[];$('#f-oc').value='';$('#f-obs').value='';render();go('documentos');};
+window.cancelarEdicion=()=>{editId=null;editOldMap={};cart=[];$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';render();go('documentos');};
 window.regresar=id=>{const f=documentos.find(d=>d.id===id);if(!['envio','prestamo'].includes(f.tipoDoc)||f.estado!=='pendiente')return;
   Object.assign(f,{tipoDoc:'pedido',estado:'abierto'});delete f.autorizacion;delete f.serie;delete f.numeroDte;
   closeMod();renderDocs();
@@ -2041,7 +2057,8 @@ function verDoc(id){
       <div class="r"><span>IVA (12%)</span><span class="num">${money(f.totales.iva)}</span></div>`}
       <div class="r big"><span>TOTAL</span><b class="num">${money(f.totales.total)}</b></div>
     </div>
-    ${reciboEntregaHTML(f)}${felBox}`;
+    ${reciboEntregaHTML(f)}${f.notaInterna?`<div class="ds-internal" style="margin-top:12px;background:#FFF8E1;border:1px dashed #C9A227;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#7A5C00"><b>📌 Nota interna</b> (no aparece en factura): ${f.notaInterna}</div>`:''}
+    ${felBox}`;
   $('#docov').classList.add('show');
 }
 window.verDoc=verDoc;
@@ -2535,7 +2552,7 @@ function openPagoGlobal(){
 window.openPagoGlobal=openPagoGlobal;
 function closePagoGlobal(){$('#ov-pago').classList.remove('show');}
 window.closePagoGlobal=closePagoGlobal;
-$('#ov-pago').onclick=e=>{if(e.target.id==='ov-pago')closePagoGlobal();};
+/* cierre por clic afuera desactivado en pago global */
 function pgGetCliId(){
   const v=($('#pg-cli-search').value||'').trim();
   const c=clientes.find(x=>`${x.nombre} · ${x.nit}`===v||x.nit.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase()===v.toLowerCase());
@@ -3456,10 +3473,10 @@ function renderProd(){
   }
   let acts='';
   if(canEditInventario()){
-    if(inactivo)acts=`<button class="btn btn-ghost btn-sm" style="color:var(--green)" onclick="reactivarProducto(${p.id})">Reactivar</button>`;
+    if(inactivo)acts=`<button class="btn btn-ghost btn-sm" style="color:var(--blue)" onclick="verTrazabilidad(${p.id})">Historial</button> <button class="btn btn-ghost btn-sm" style="color:var(--green)" onclick="reactivarProducto(${p.id})">Reactivar</button>`;
     else{
       if(p.tipoEmpaque==='caja_unidad'&&canConvertir())acts+=`<button class="btn btn-ghost btn-sm" style="color:var(--blue)" onclick="convertirCajas(${p.id})">Convertir a unidades</button> `;
-      acts+=`<button class="btn btn-ghost btn-sm" onclick="openProd(${p.id})">Editar</button> <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="desactivarProducto(${p.id})">Desactivar</button>`;
+      acts+=`<button class="btn btn-ghost btn-sm" style="color:var(--blue)" onclick="verTrazabilidad(${p.id})">Historial</button> <button class="btn btn-ghost btn-sm" onclick="openProd(${p.id})">Editar</button> <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="desactivarProducto(${p.id})">Desactivar</button>`;
     }
   }
   const tipoBadge=p.tipoEmpaque==='caja'?' <span class="badge b-muted" style="font-size:9px">Caja</span>':(p.tipoEmpaque==='caja_unidad'?` <span class="badge b-info" style="font-size:9px">Caja×${p.unidadesPorCaja}</span>`:'');
@@ -3468,6 +3485,106 @@ function renderProd(){
 let _verInactivos=false;
 function toggleVerInactivos(){_verInactivos=!_verInactivos;renderProd();}
 window.toggleVerInactivos=toggleVerInactivos;
+
+// ── TRAZABILIDAD DE PRODUCTO ────────────────────────────────
+// Recorre documentos (salidas) y compras (entradas) para mostrar
+// el historial de movimientos de un producto: a qué factura/pedido
+// se fue y de qué compra entró.
+function trazabilidadProducto(prod){
+  const cod=prod.codigo;
+  const movs=[];
+  // SALIDAS: documentos (pedidos, facturas, notas) que contienen el producto
+  documentos.forEach(d=>{
+    if(d.estado==='anulada'||d.anulado)return;
+    (d.items||[]).forEach(it=>{
+      if(it.codigo!==cod)return;
+      const docRef=d.serie&&d.numeroDte?`${d.serie}-${d.numeroDte}`:`PED-${padn(d.numero)}`;
+      const tipo=(TIPO_LBL[d.tipoDoc]?TIPO_LBL[d.tipoDoc][0]:d.tipoDoc)||'Documento';
+      movs.push({
+        fecha:d.creada,
+        tipo:'salida',
+        doc:docRef,
+        detalle:tipo+(d.clienteComercial?' · '+d.clienteComercial:''),
+        cant:Number(it.cantidad)||0
+      });
+    });
+  });
+  // ENTRADAS: compras recibidas que contienen el producto
+  compras.forEach(c=>{
+    if(c.anulado)return;
+    (c.items||[]).forEach(it=>{
+      if(it.codigo!==cod)return;
+      const recibido=Number(it.recibido||0);
+      if(recibido<=0)return;
+      movs.push({
+        fecha:c.fecha,
+        tipo:'entrada',
+        doc:c.docProv||('Compra #'+c.id),
+        detalle:'Compra · '+(c.proveedorNombre||'Proveedor'),
+        cant:recibido
+      });
+    });
+  });
+  movs.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const totalEntra=movs.filter(m=>m.tipo==='entrada').reduce((s,m)=>s+m.cant,0);
+  const totalSale=movs.filter(m=>m.tipo==='salida').reduce((s,m)=>s+m.cant,0);
+  return {movs,totalEntra,totalSale};
+}
+
+window.verTrazabilidad=function(id){
+  const p=productos.find(x=>x.id===id);
+  if(!p)return;
+  const {movs,totalEntra,totalSale}=trazabilidadProducto(p);
+  const filas=movs.length?movs.map(m=>{
+    const fecha=new Date(m.fecha).toLocaleDateString('es-GT',{day:'2-digit',month:'short',year:'numeric'});
+    const esEntrada=m.tipo==='entrada';
+    const signo=esEntrada?'+':'−';
+    const color=esEntrada?'var(--ok,#1a7f37)':'var(--danger,#c0392b)';
+    const badge=esEntrada
+      ?'<span class="badge b-ok" style="font-size:9.5px">Entrada</span>'
+      :'<span class="badge b-muted" style="font-size:9.5px">Salida</span>';
+    return `<tr>
+      <td style="font-size:12px;color:var(--muted)">${fecha}</td>
+      <td>${badge}</td>
+      <td style="font-weight:600">${m.doc}</td>
+      <td style="font-size:12px;color:var(--muted)">${m.detalle}</td>
+      <td class="num" style="font-weight:700;color:${color}">${signo}${m.cant}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="5" class="empty">Sin movimientos registrados para este producto</td></tr>';
+
+  openMod('Trazabilidad · '+p.nombre,
+    `<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+       <div style="flex:1;min-width:90px;background:var(--surface-2);border-radius:8px;padding:10px 12px">
+         <div style="font-size:11px;color:var(--muted)">Código</div>
+         <div style="font-weight:700">${p.codigo}</div></div>
+       <div style="flex:1;min-width:90px;background:#E8F5E9;border-radius:8px;padding:10px 12px">
+         <div style="font-size:11px;color:#1a7f37">Total entradas</div>
+         <div style="font-weight:700;color:#1a7f37">+${totalEntra}</div></div>
+       <div style="flex:1;min-width:90px;background:#FDECEA;border-radius:8px;padding:10px 12px">
+         <div style="font-size:11px;color:#c0392b">Total salidas</div>
+         <div style="font-weight:700;color:#c0392b">−${totalSale}</div></div>
+       <div style="flex:1;min-width:90px;background:var(--surface-2);border-radius:8px;padding:10px 12px">
+         <div style="font-size:11px;color:var(--muted)">Stock actual</div>
+         <div style="font-weight:700">${p.stock}</div></div>
+     </div>
+     <div style="max-height:48vh;overflow-y:auto;border:1px solid var(--line);border-radius:8px">
+       <table style="width:100%;border-collapse:collapse;font-size:13px">
+         <thead><tr style="background:var(--surface-2);position:sticky;top:0">
+           <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted)">FECHA</th>
+           <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted)">TIPO</th>
+           <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted)">DOCUMENTO</th>
+           <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted)">DETALLE</th>
+           <th style="text-align:right;padding:8px 10px;font-size:11px;color:var(--muted)">UNIDADES</th>
+         </tr></thead>
+         <tbody>${filas}</tbody>
+       </table>
+     </div>
+     <div class="note n-ok" style="margin-top:12px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Entradas = compras recibidas. Salidas = pedidos y facturas. Los documentos anulados no se cuentan.</span></div>`,
+    null);
+  // Modal solo de lectura: ocultar botón Guardar
+  const sv=$('#m-save');if(sv)sv.style.display='none';
+};
+
 
 // Desactivar producto (lo oculta pero conserva todo su historial)
 function desactivarProducto(id){
@@ -3832,11 +3949,11 @@ function exportarPDF(){
 window.exportarPDF=exportarPDF;
 
 let saveFn=null;
-function openMod(title,html,fn){$('#m-title').textContent=title;$('#m-body').innerHTML=html;saveFn=fn;$('#m-save').disabled=false;$('#m-save').textContent='Guardar';$('#ov').classList.add('show');}
+function openMod(title,html,fn){$('#m-title').textContent=title;$('#m-body').innerHTML=html;saveFn=fn;$('#m-save').disabled=false;$('#m-save').textContent='Guardar';$('#m-save').style.display='';$('#ov').classList.add('show');}
 function closeMod(){$('#ov').classList.remove('show');}
 window.closeMod=closeMod;
 $('#m-save').onclick=()=>{if(saveFn)saveFn();};
-$('#ov').onclick=e=>{if(e.target.id==='ov')closeMod();};
+/* cierre por clic afuera desactivado: el modal solo se cierra con × o Cancelar para no perder datos */
 function openCli(id){
   if(!id&&!canCrearCliente()){toast('Sin permiso','Solo Admin y Gerencia pueden crear clientes',true);return;}
   const c=id?clientes.find(x=>x.id===id):null;
