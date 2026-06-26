@@ -108,7 +108,7 @@ function mapProductoFromDB(p){
     id:p.id, codigo:p.codigo, nombre:p.nombre, precio:Number(p.precio),
     costo:Number(p.costo), unidad:p.unidad, stock:Number(p.stock),
     proveedorIds:p.proveedor_ids||[], skuProveedor:p.sku_proveedor, nombreProveedor:p.nombre_proveedor,
-    activo:p.activo!==false,
+    marca:p.marca||'', activo:p.activo!==false,
     tipoEmpaque:p.tipo_empaque||'unidad', unidadesPorCaja:p.unidades_por_caja, stockCajas:Number(p.stock_cajas||0)
   };
 }
@@ -288,7 +288,7 @@ async function guardarProducto(p){
     codigo:p.codigo, nombre:p.nombre, precio:p.precio, costo:p.costo,
     unidad:p.unidad, stock:p.stock, proveedor_ids:p.proveedorIds,
     sku_proveedor:p.skuProveedor, nombre_proveedor:p.nombreProveedor,
-    activo:p.activo!==false,
+    marca:p.marca||null, activo:p.activo!==false,
     tipo_empaque:p.tipoEmpaque||'unidad', unidades_por_caja:p.unidadesPorCaja, stock_cajas:p.stockCajas||0
   };
   if (p._nuevo) {
