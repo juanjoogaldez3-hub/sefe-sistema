@@ -3203,7 +3203,7 @@ function renderProveedorDet(){
   }else if(provTab==='movimiento'){
     const rval=c=>{const v=(c.items||[]).reduce((s,it)=>s+(it.recibido||0)*(it.costo||it.precio||0),0);return v>0?v:Number(c.total||0);};
     const meses=mesesSerie(st.todas,c=>c.fecha,rval);
-    const porP={};st.todas.forEach(c=>c.items.forEach(it=>{const q=it.recibido||0;if(q<=0)return;if(!porP[it.id])porP[it.id]={nombre:it.nombre,q:0,v:0};porP[it.id].q+=q;porP[it.id].v+=q*it.costo;}));
+    const porP={};st.todas.forEach(c=>(c.items||[]).forEach(it=>{const q=it.recibido||0;if(q<=0)return;const k=it.codigo||it.id||it.nombre;if(!porP[k])porP[k]={nombre:it.nombre,q:0,v:0};porP[k].q+=q;porP[k].v+=q*(it.costo||it.precio||0);}));
     const topP=Object.values(porP).sort((a,b)=>b.v-a.v);
     body=`<div class="panel"><div class="panel-head"><h3>Compras recibidas por mes</h3><span style="font-size:12px;color:var(--muted)">Últimos 6 meses</span></div><div class="panel-body">${barsHTML(meses)}</div></div>
       <div class="panel"><div class="panel-head"><h3>Productos comprados (acumulado)</h3></div>
@@ -3703,7 +3703,7 @@ function renderReportes(){
       ${arr.length?arr.map(([n,o])=>`<tr><td style="font-weight:600">${n}</td><td class="num">${o.n}</td><td class="num" style="font-weight:600">${money(o.v)}</td></tr>`).join(''):'<tr><td colspan="3" class="empty">Sin compras</td></tr>'}</tbody></table></div>`;
   }
   else if(repType==='cprod'){
-    const porP={};comprasR.forEach(c=>c.items.forEach(it=>{const q=it.recibido||0;if(q<=0)return;if(!porP[it.id])porP[it.id]={nombre:it.nombre,codigo:it.codigo,q:0,v:0};porP[it.id].q+=q;porP[it.id].v+=q*it.costo;}));
+    const porP={};comprasR.forEach(c=>(c.items||[]).forEach(it=>{const q=it.recibido||0;if(q<=0)return;const k=it.codigo||it.id||it.nombre;if(!porP[k])porP[k]={nombre:it.nombre,codigo:it.codigo,q:0,v:0};porP[k].q+=q;porP[k].v+=q*(it.costo||it.precio||0);}));
     const arr=Object.values(porP).sort((a,b)=>b.v-a.v);
     exportData=arr.map(p=>({Código:p.codigo,Producto:p.nombre,'Unidades compradas':p.q,'Costo total':p.v}));
     html+=`<div class="panel"><div class="panel-head"><h3>Compras por producto</h3></div>
