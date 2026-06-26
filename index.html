@@ -1156,8 +1156,15 @@ function renderPanel(){
   const porCobrar=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+arInfo(d).saldo,0);
   const vencidos=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&arInfo(d).vencido);
   const pedAbiertos=misDocsBase.filter(d=>d.tipoDoc==='pedido'&&d.estado==='abierto');
-  const stockBajo=productos.filter(p=>p.stock<=10&&p.stock>0);
-  const sinStock=productos.filter(p=>p.stock===0);
+  // Stock efectivo: para caja_unidad cuenta las unidades sueltas + las que hay en cajas cerradas
+  const stockEfectivo=p=>{
+    if(p.tipoEmpaque==='caja_unidad')return (Number(p.stock)||0)+(Number(p.stockCajas)||0)*(Number(p.unidadesPorCaja)||0);
+    if(p.tipoEmpaque==='caja')return Number(p.stockCajas)||Number(p.stock)||0;
+    return Number(p.stock)||0;
+  };
+  const activos=productos.filter(p=>p.activo!==false);
+  const stockBajo=activos.filter(p=>{const s=stockEfectivo(p);return s<=10&&s>0;});
+  const sinStock=activos.filter(p=>stockEfectivo(p)===0);
   const ocPend=compras.filter(c=>!c.anulada&&c.estadoRecepcion!=='recibida');
   const espPend=compras.filter(c=>c.especial&&!c.oficializada&&!c.anulada);
   const porVencer=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&!arInfo(d).vencido&&new Date(d.vencimiento)<=semana&&arInfo(d).saldo>0);
@@ -1243,7 +1250,7 @@ function renderPanel(){
   // ── Panel 3: Stock bajo ──────────────────────────────────
   if(dbConf('panel_stocktbl')){
     const rows=[...sinStock,...stockBajo].slice(0,6);
-    $('#panel-stock').innerHTML=rows.length?rows.map(p=>`<tr><td style="font-weight:600;font-size:12px">${p.nombre}</td><td class="num" style="font-size:12px;color:var(--muted)">${p.codigo}</td><td><span class="stk ${p.stock===0?'low':'mid'} num">${p.stock}</span></td></tr>`).join(''):'<tr><td colspan="3" class="empty" style="font-size:12px">Stock en orden</td></tr>';
+    $('#panel-stock').innerHTML=rows.length?rows.map(p=>{const se=stockEfectivo(p);return `<tr><td style="font-weight:600;font-size:12px">${p.nombre}</td><td class="num" style="font-size:12px;color:var(--muted)">${p.codigo}</td><td><span class="stk ${se===0?'low':'mid'} num">${se}</span></td></tr>`;}).join(''):'<tr><td colspan="3" class="empty" style="font-size:12px">Stock en orden</td></tr>';
     document.getElementById('panel-bloque-stock').style.display='';
   }else document.getElementById('panel-bloque-stock').style.display='none';
 
