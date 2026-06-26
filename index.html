@@ -534,6 +534,7 @@
                   <input id="f-add" list="f-add-list" placeholder="Buscar por SKU o nombre…" autocomplete="off" style="max-width:260px;padding:7px 10px;font-size:12.5px">
                   <datalist id="f-add-list"></datalist>
                   <button class="btn btn-primary btn-sm" onclick="addPedidoProducto()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
+                  <button class="btn btn-ghost btn-sm" id="btn-guardar-precios" onclick="guardarPreciosAlCliente()" style="display:none" title="Guarda los precios de este pedido en la ficha del cliente"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Guardar precios al cliente</button>
                 </div>
               </div>
               <div class="panel-body">
@@ -1156,15 +1157,8 @@ function renderPanel(){
   const porCobrar=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+arInfo(d).saldo,0);
   const vencidos=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&arInfo(d).vencido);
   const pedAbiertos=misDocsBase.filter(d=>d.tipoDoc==='pedido'&&d.estado==='abierto');
-  // Stock efectivo: para caja_unidad cuenta las unidades sueltas + las que hay en cajas cerradas
-  const stockEfectivo=p=>{
-    if(p.tipoEmpaque==='caja_unidad')return (Number(p.stock)||0)+(Number(p.stockCajas)||0)*(Number(p.unidadesPorCaja)||0);
-    if(p.tipoEmpaque==='caja')return Number(p.stockCajas)||Number(p.stock)||0;
-    return Number(p.stock)||0;
-  };
-  const activos=productos.filter(p=>p.activo!==false);
-  const stockBajo=activos.filter(p=>{const s=stockEfectivo(p);return s<=10&&s>0;});
-  const sinStock=activos.filter(p=>stockEfectivo(p)===0);
+  const stockBajo=productos.filter(p=>p.stock<=10&&p.stock>0);
+  const sinStock=productos.filter(p=>p.stock===0);
   const ocPend=compras.filter(c=>!c.anulada&&c.estadoRecepcion!=='recibida');
   const espPend=compras.filter(c=>c.especial&&!c.oficializada&&!c.anulada);
   const porVencer=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&!arInfo(d).vencido&&new Date(d.vencimiento)<=semana&&arInfo(d).saldo>0);
@@ -1250,7 +1244,7 @@ function renderPanel(){
   // ── Panel 3: Stock bajo ──────────────────────────────────
   if(dbConf('panel_stocktbl')){
     const rows=[...sinStock,...stockBajo].slice(0,6);
-    $('#panel-stock').innerHTML=rows.length?rows.map(p=>{const se=stockEfectivo(p);return `<tr><td style="font-weight:600;font-size:12px">${p.nombre}</td><td class="num" style="font-size:12px;color:var(--muted)">${p.codigo}</td><td><span class="stk ${se===0?'low':'mid'} num">${se}</span></td></tr>`;}).join(''):'<tr><td colspan="3" class="empty" style="font-size:12px">Stock en orden</td></tr>';
+    $('#panel-stock').innerHTML=rows.length?rows.map(p=>`<tr><td style="font-weight:600;font-size:12px">${p.nombre}</td><td class="num" style="font-size:12px;color:var(--muted)">${p.codigo}</td><td><span class="stk ${p.stock===0?'low':'mid'} num">${p.stock}</span></td></tr>`).join(''):'<tr><td colspan="3" class="empty" style="font-size:12px">Stock en orden</td></tr>';
     document.getElementById('panel-bloque-stock').style.display='';
   }else document.getElementById('panel-bloque-stock').style.display='none';
 
@@ -1401,6 +1395,32 @@ $('#f-cli-search').oninput=()=>{
   else{$('#f-cli').value='';actualizarVendedorInfo(null);}
 };
 function precioCliente(cli,prod){return (cli&&cli.precios&&cli.precios[prod.id]!=null)?cli.precios[prod.id]:prod.precio;}
+// Guarda los precios del pedido actual en la ficha del cliente (lista de precios por cliente)
+function guardarPreciosAlCliente(){
+  const cli=clienteSel();
+  if(!cli){toast('✗ Seleccioná un cliente','Elegí el cliente antes de guardar precios',true);return;}
+  if(!cart.length){toast('✗ Pedido vacío','Agregá productos al pedido primero',true);return;}
+  if(!cli.precios)cli.precios={};
+  let nuevos=0,cambiados=0;
+  cart.forEach(it=>{
+    const prod=productos.find(p=>p.id===it.id);
+    const base=prod?prod.precio:null;
+    const actual=cli.precios[it.id];
+    const nuevo=Number(it.precio)||0;
+    // Solo guardamos si el precio difiere del precio de lista, o si ya tenía uno especial
+    if(actual==null){ if(base==null||nuevo!==base){cli.precios[it.id]=nuevo;nuevos++;} }
+    else if(actual!==nuevo){cli.precios[it.id]=nuevo;cambiados++;}
+  });
+  if(nuevos+cambiados===0){toast('Sin cambios','Los precios ya coinciden con la ficha del cliente');return;}
+  if(typeof guardarCliente==='function')guardarCliente(cli);
+  logAudit('Precios guardados a cliente',`${cli.nombre}: ${nuevos} nuevo(s), ${cambiados} actualizado(s)`);
+  toast('✓ Precios guardados',`${cli.nombre}: ${nuevos} nuevo(s), ${cambiados} actualizado(s)`);
+}
+// Muestra/oculta el botón según haya cliente y productos
+function toggleBtnPrecios(){
+  const b=$('#btn-guardar-precios');if(!b)return;
+  b.style.display=(clienteSel()&&cart.length)?'':'none';
+}
 // ---- Búsqueda flexible de productos ----
 // Acepta: "CLO-002", "Cloro", "CLO-002 — Cloro concentrado", "CLO-002 — Cloro concer (stock: 7)", etc.
 function buscarProducto(v){
@@ -1476,6 +1496,7 @@ function render(){
   $('#f-go').textContent=editId?'Guardar cambios':'Ingresar pedido';
   $('#f-cancel').style.display=editId?'block':'none';
   $('#f-go').disabled=!cart.length||sin.length>0;
+  toggleBtnPrecios();
 }
 window.upd=(i,k,v)=>{cart[i][k]=Number(v)||0;render();};
 window.rm=i=>{cart.splice(i,1);render();};
