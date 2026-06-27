@@ -234,6 +234,7 @@
   .overlay{position:fixed;inset:0;background:rgba(22,24,17,.5);backdrop-filter:blur(3px);z-index:90;display:none;align-items:center;justify-content:center;padding:24px}
   .overlay.show{display:flex;animation:fade .25s}
   .modal{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-lg);width:100%;max-width:470px;max-height:90vh;display:flex;flex-direction:column;animation:pop .3s cubic-bezier(.2,.9,.3,1)}
+  .overlay.modal-wide .modal{max-width:760px}
   @keyframes pop{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:none}}
   .modal-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
   .modal-head h3{font-family:var(--disp);font-size:16px;font-weight:600}
@@ -3552,6 +3553,7 @@ window.verTrazabilidad=function(id){
     </tr>`;
   }).join(''):'<tr><td colspan="5" class="empty">Sin movimientos registrados para este producto</td></tr>';
 
+  if($('#ov'))$('#ov').classList.add('modal-wide');
   openMod('Trazabilidad · '+p.nombre,
     `<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
        <div style="flex:1;min-width:90px;background:var(--surface-2);border-radius:8px;padding:10px 12px">
@@ -3950,7 +3952,7 @@ window.exportarPDF=exportarPDF;
 
 let saveFn=null;
 function openMod(title,html,fn){$('#m-title').textContent=title;$('#m-body').innerHTML=html;saveFn=fn;$('#m-save').disabled=false;$('#m-save').textContent='Guardar';$('#m-save').style.display='';$('#ov').classList.add('show');}
-function closeMod(){$('#ov').classList.remove('show');}
+function closeMod(){$('#ov').classList.remove('show');$('#ov').classList.remove('modal-wide');}
 window.closeMod=closeMod;
 $('#m-save').onclick=()=>{if(saveFn)saveFn();};
 /* cierre por clic afuera desactivado: el modal solo se cierra con × o Cancelar para no perder datos */
