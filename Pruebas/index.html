@@ -426,6 +426,7 @@
       <div class="lbl">Finanzas</div>
       <button data-view="cobros"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9.5a2.5 2.5 0 0 0-2.5-2h-1a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 1 0 5h-1A2.5 2.5 0 0 1 9 14.5"/></svg><span>Cobros</span></button>
       <button data-view="porpagar"><svg viewBox="0 0 24 24"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg><span>Por pagar</span></button>
+      <button data-view="talonarios"><svg viewBox="0 0 24 24"><path d="M9 2h6a2 2 0 0 1 2 2v16l-3-2-2 2-2-2-3 2V4a2 2 0 0 1 2-2z"/><path d="M9 7h6M9 11h6"/></svg><span>Talonarios</span></button>
       <div class="lbl">Bodega</div>
       <button data-view="inventario"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg><span>Inventario</span></button>
       <button data-view="compras"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg><span>Compras</span></button>
@@ -804,6 +805,14 @@
 
       <section class="view" id="v-proveedordet"></section>
 
+      <section class="view" id="v-talonarios">
+        <div class="panel">
+          <div class="panel-head"><h3>Talonarios de recibos</h3><div id="tal-acciones"></div></div>
+          <div id="tal-resumen" style="padding:0 18px 14px"></div>
+          <table><thead><tr><th>Talonario</th><th>Rango</th><th>Asignado a</th><th>Usados</th><th>Libres</th><th>Estado</th><th></th></tr></thead><tbody id="t-talonarios"></tbody></table>
+        </div>
+      </section>
+
     </div>
   </div>
 </div>
@@ -985,6 +994,7 @@ function canConvertir(){return currentRole==='admin'||ROLES[currentRole]?.conver
 let proveedores=[];
 let compras=[];
 let documentos=[];
+let talonarios=[];
 let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====
@@ -1041,9 +1051,9 @@ function go(v){
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   $('#v-'+v).classList.add('active');
-  const t={panel:['Dashboard','Resumen de operación'],pedido:['Nuevo pedido','Generá el pedido; después lo facturás o convertís'],documentos:['Documentos','Pedidos, notas y facturas'],cobros:['Cobros','Cuentas por cobrar de las facturas a crédito'],clientes:['Clientes','Catálogo de clientes'],inventario:['Inventario','Existencias de productos'],reportes:['Reportes','Análisis de ventas'],compras:['Compras','Registro de compras a proveedores'],nuevacompra:['Nueva compra','Registrá la entrada de mercadería'],porpagar:['Por pagar','Cuentas por pagar a proveedores'],proveedores:['Proveedores','Catálogo de proveedores'],usuarios:['Usuarios','Usuarios y roles del sistema'],auditoria:['Auditoría','Registro de todas las acciones del sistema'],despachos:['Despachos','Asignación de entregas y rutas'],misentregas:['Mis entregas','Documentos asignados para entregar']};
+  const t={panel:['Dashboard','Resumen de operación'],pedido:['Nuevo pedido','Generá el pedido; después lo facturás o convertís'],documentos:['Documentos','Pedidos, notas y facturas'],cobros:['Cobros','Cuentas por cobrar de las facturas a crédito'],clientes:['Clientes','Catálogo de clientes'],inventario:['Inventario','Existencias de productos'],reportes:['Reportes','Análisis de ventas'],compras:['Compras','Registro de compras a proveedores'],nuevacompra:['Nueva compra','Registrá la entrada de mercadería'],porpagar:['Por pagar','Cuentas por pagar a proveedores'],talonarios:['Talonarios','Control de talonarios de recibos y su cuadre'],proveedores:['Proveedores','Catálogo de proveedores'],usuarios:['Usuarios','Usuarios y roles del sistema'],auditoria:['Auditoría','Registro de todas las acciones del sistema'],despachos:['Despachos','Asignación de entregas y rutas'],misentregas:['Mis entregas','Documentos asignados para entregar']};
   $('#ttl').textContent=t[v][0];$('#sub').textContent=t[v][1];
-  if(v==='panel')renderPanel();if(v==='documentos')renderDocs();if(v==='cobros')renderCobros();if(v==='clientes')renderCli();if(v==='inventario')renderProd();if(v==='reportes')renderReportes();if(v==='compras')renderCompras();if(v==='nuevacompra')renderCompraForm();if(v==='porpagar')renderPorPagar();if(v==='proveedores')renderProveedores();if(v==='usuarios')renderUsuarios();if(v==='auditoria')renderAuditoria();if(v==='despachos')renderDespachos();if(v==='misentregas')renderMisEntregas();
+  if(v==='panel')renderPanel();if(v==='documentos')renderDocs();if(v==='cobros')renderCobros();if(v==='clientes')renderCli();if(v==='inventario')renderProd();if(v==='reportes')renderReportes();if(v==='compras')renderCompras();if(v==='nuevacompra')renderCompraForm();if(v==='porpagar')renderPorPagar();if(v==='proveedores')renderProveedores();if(v==='talonarios')renderTalonarios();if(v==='usuarios')renderUsuarios();if(v==='auditoria')renderAuditoria();if(v==='despachos')renderDespachos();if(v==='misentregas')renderMisEntregas();
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.view));
 window.go=go;
@@ -3280,6 +3290,147 @@ function openProveedor(id){const p=id?proveedores.find(x=>x.id===id):null;
     closeMod();renderProveedores();initCompra();});}
 window.openProveedor=openProveedor;
 
+// ══════════ TALONARIOS DE RECIBOS ══════════
+// Devuelve los números de recibo realmente usados (de abonos y cobros en ruta).
+function recibosUsados(){
+  const usados=new Set();
+  documentos.forEach(d=>{
+    (d.abonos||[]).forEach(a=>{
+      if(a.anulado)return;
+      const n=parseInt(String(a.noRecibo||'').replace(/\D/g,''),10);
+      if(!isNaN(n))usados.add(n);
+    });
+  });
+  // Cobros en ruta (si tienen número de recibo)
+  if(typeof cobrosRuta!=='undefined'){
+    cobrosRuta.forEach(c=>{
+      const n=parseInt(String(c.noRecibo||'').replace(/\D/g,''),10);
+      if(!isNaN(n))usados.add(n);
+    });
+  }
+  return usados;
+}
+
+// Calcula el cuadre de un talonario: qué recibos están usados y cuáles faltan.
+function cuadreTalonario(t, usadosSet){
+  const usados=[],faltantes=[];
+  for(let n=t.numeroInicial;n<=t.numeroFinal;n++){
+    if(usadosSet.has(n))usados.push(n); else faltantes.push(n);
+  }
+  return {usados,faltantes,totalUsados:usados.length,totalFaltantes:faltantes.length};
+}
+
+function renderTalonarios(){
+  const acc=$('#tal-acciones');
+  if(acc)acc.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="openTalonario()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo talonario</button>`;
+
+  const usadosSet=recibosUsados();
+  const tbody=$('#t-talonarios');
+  if(!talonarios.length){
+    if(tbody)tbody.innerHTML='<tr><td colspan="7" class="empty">No hay talonarios registrados. Creá uno con el botón de arriba.</td></tr>';
+    $('#tal-resumen').innerHTML='';
+    return;
+  }
+
+  // Resumen general
+  let totalEsperado=0,totalUsados=0,totalFaltantes=0;
+  talonarios.forEach(t=>{
+    const c=cuadreTalonario(t,usadosSet);
+    totalEsperado+=(t.numeroFinal-t.numeroInicial+1);
+    totalUsados+=c.totalUsados;totalFaltantes+=c.totalFaltantes;
+  });
+  $('#tal-resumen').innerHTML=`<div style="display:flex;gap:12px;flex-wrap:wrap">
+    <div style="flex:1;min-width:110px;background:var(--surface-2);border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:var(--muted)">Talonarios</div><div style="font-weight:700;font-size:18px">${talonarios.length}</div></div>
+    <div style="flex:1;min-width:110px;background:#E8F5E9;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#1a7f37">Recibos usados</div><div style="font-weight:700;font-size:18px;color:#1a7f37">${totalUsados}</div></div>
+    <div style="flex:1;min-width:110px;background:#FDECEA;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#c0392b">Sin procesar</div><div style="font-weight:700;font-size:18px;color:#c0392b">${totalFaltantes}</div></div>
+    <div style="flex:1;min-width:110px;background:var(--surface-2);border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:var(--muted)">Total recibos</div><div style="font-weight:700;font-size:18px">${totalEsperado}</div></div>
+  </div>`;
+
+  tbody.innerHTML=talonarios.map(t=>{
+    const c=cuadreTalonario(t,usadosSet);
+    const estadoBadge=t.estado==='cerrado'
+      ?'<span class="badge b-muted">Cerrado</span>'
+      :'<span class="badge b-ok">Activo</span>';
+    const faltanBadge=c.totalFaltantes>0
+      ?`<span style="color:var(--danger);font-weight:700">${c.totalFaltantes}</span>`
+      :`<span style="color:var(--ok,#1a7f37);font-weight:700">0</span>`;
+    return `<tr>
+      <td style="font-weight:600">${t.descripcion||('Talón '+t.numeroInicial)}</td>
+      <td style="font-family:monospace">${t.numeroInicial} – ${t.numeroFinal}</td>
+      <td>${t.asignadoA||'<span style="color:var(--muted)">—</span>'}</td>
+      <td class="num" style="color:var(--ok,#1a7f37);font-weight:600">${c.totalUsados}</td>
+      <td class="num">${faltanBadge}</td>
+      <td>${estadoBadge}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" style="color:var(--blue)" onclick="verCuadreTalonario(${t.id})">Ver cuadre</button>
+        <button class="btn btn-ghost btn-sm" onclick="openTalonario(${t.id})">Editar</button>
+      </td></tr>`;
+  }).join('');
+}
+window.renderTalonarios=renderTalonarios;
+
+// Crear/editar un talonario
+function openTalonario(id){
+  const t=id?talonarios.find(x=>x.id===id):null;
+  const vendOpts=['<option value="">— Sin asignar —</option>']
+    .concat(vendedores.map(v=>`<option value="${v.nombre}"${t&&t.asignadoA===v.nombre?' selected':''}>${v.nombre}</option>`))
+    .concat((typeof pilotos!=='undefined'?pilotos:[]).map(p=>`<option value="${p.nombre}"${t&&t.asignadoA===p.nombre?' selected':''}>${p.nombre} (piloto)</option>`))
+    .join('');
+  openMod(id?'Editar talonario':'Nuevo talonario',
+    `<div class="row"><div><label>Número inicial</label><input id="tal-ini" type="number" value="${t?t.numeroInicial:''}" placeholder="28001" oninput="talCalcFin()"></div>
+      <div><label>Número final <span style="color:var(--muted);font-weight:400">(automático)</span></label><input id="tal-fin" type="number" value="${t?t.numeroFinal:''}" readonly style="background:var(--surface-2)"></div></div>
+     <div class="row"><div><label>Asignado a</label><select id="tal-asig">${vendOpts}</select></div>
+      <div><label>Fecha de entrega</label><input id="tal-fecha" type="date" value="${t&&t.fechaEntrega?String(t.fechaEntrega).slice(0,10):new Date().toISOString().slice(0,10)}"></div></div>
+     <div class="row"><div><label>Descripción <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="tal-desc" value="${t?(t.descripcion||''):''}" placeholder="Ej. Talón Oficina 1"></div></div>
+     <div class="row"><div><label>Estado</label><select id="tal-estado"><option value="activo"${!t||t.estado==='activo'?' selected':''}>Activo</option><option value="cerrado"${t&&t.estado==='cerrado'?' selected':''}>Cerrado</option></select></div></div>
+     ${id?`<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="eliminarTalonarioUI(${id})">Eliminar talonario</button></div>`:''}
+     <div class="note n-ok" style="margin-top:6px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El talonario es de 50 recibos. El número final se calcula solo a partir del inicial.</span></div>`,
+    async()=>{
+      const ini=parseInt($('#tal-ini').value,10);
+      if(isNaN(ini)||ini<=0){toast('Número inválido','Escribí el número inicial del talonario',true);return;}
+      const fin=ini+49;
+      const datos={numeroInicial:ini,numeroFinal:fin,cantidad:50,
+        asignadoA:$('#tal-asig').value||null,
+        descripcion:$('#tal-desc').value.trim()||null,
+        estado:$('#tal-estado').value,
+        fechaEntrega:$('#tal-fecha').value||null};
+      let ok;
+      if(id){Object.assign(t,datos);ok=await guardarTalonario(t);}
+      else{const nuevo={...datos,_nuevo:true};ok=await guardarTalonario(nuevo);if(ok)talonarios.push(nuevo);}
+      if(ok){toast('✓ Talonario guardado',`Recibos ${ini} al ${fin}`);cerrarTodo();renderTalonarios();}
+      else{toast('Error al guardar','No se pudo guardar el talonario',true);}
+    });
+}
+window.openTalonario=openTalonario;
+window.talCalcFin=function(){const ini=parseInt($('#tal-ini').value,10);if(!isNaN(ini)&&$('#tal-fin'))$('#tal-fin').value=ini+49;};
+
+window.eliminarTalonarioUI=async function(id){
+  if(!confirm('¿Eliminar este talonario? Esto no borra los recibos ya registrados, solo el control del talonario.'))return;
+  const ok=await eliminarTalonario(id);
+  if(ok){talonarios=talonarios.filter(t=>t.id!==id);cerrarTodo();renderTalonarios();toast('Talonario eliminado','');}
+  else toast('Error','No se pudo eliminar',true);
+};
+
+// Ver el cuadre detallado de un talonario (qué recibos faltan)
+window.verCuadreTalonario=function(id){
+  const t=talonarios.find(x=>x.id===id);if(!t)return;
+  const c=cuadreTalonario(t,recibosUsados());
+  const chips=n=>`<span style="display:inline-block;margin:2px;padding:3px 8px;border-radius:6px;font-family:monospace;font-size:12px;background:#FDECEA;color:#c0392b;font-weight:700">${n}</span>`;
+  const okChip=n=>`<span style="display:inline-block;margin:2px;padding:3px 8px;border-radius:6px;font-family:monospace;font-size:11.5px;background:#E8F5E9;color:#1a7f37">${n}</span>`;
+  openMod('Cuadre · '+(t.descripcion||('Talón '+t.numeroInicial)),
+    `<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+       <div style="flex:1;min-width:90px;background:var(--surface-2);border-radius:8px;padding:10px 12px"><div style="font-size:11px;color:var(--muted)">Rango</div><div style="font-weight:700;font-family:monospace">${t.numeroInicial}–${t.numeroFinal}</div></div>
+       <div style="flex:1;min-width:90px;background:#E8F5E9;border-radius:8px;padding:10px 12px"><div style="font-size:11px;color:#1a7f37">Usados</div><div style="font-weight:700;color:#1a7f37">${c.totalUsados}</div></div>
+       <div style="flex:1;min-width:90px;background:#FDECEA;border-radius:8px;padding:10px 12px"><div style="font-size:11px;color:#c0392b">Faltantes</div><div style="font-weight:700;color:#c0392b">${c.totalFaltantes}</div></div>
+     </div>
+     ${t.asignadoA?`<p style="font-size:13px;margin-bottom:12px">Responsable: <b>${t.asignadoA}</b></p>`:''}
+     ${c.totalFaltantes>0?`<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#c0392b;margin-bottom:6px">⚠ Recibos sin procesar (${c.totalFaltantes}):</div><div>${c.faltantes.map(chips).join('')}</div><div style="font-size:11.5px;color:var(--muted);margin-top:8px">Estos recibos están en el rango del talonario pero no se registraron en el sistema. Verificá con el responsable.</div></div>`:'<div class="note n-ok" style="margin-bottom:14px"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>¡Talonario cuadrado! Todos los recibos están procesados.</span></div>'}
+     <div><div style="font-size:12px;font-weight:700;color:#1a7f37;margin-bottom:6px">Recibos procesados (${c.totalUsados}):</div><div style="max-height:180px;overflow-y:auto">${c.usados.length?c.usados.map(okChip).join(''):'<span style="color:var(--muted);font-size:12px">Ninguno todavía</span>'}</div></div>`,
+    null);
+  const sv=$('#m-save');if(sv)sv.style.display='none';
+};
+
+
 // ---- Usuarios (Administración) ----
 function renderUsuarios(){
   $('#t-usr').innerHTML=usuarios.map(u=>`<tr><td style="font-weight:600">${u.nombre}</td><td style="color:var(--muted)">${u.correo||'—'}</td><td><span class="badge b-info">${ROLES[u.rol]?.label||u.rol}</span></td><td><span class="badge ${u.activo?'b-ok':'b-muted'}">${u.activo?'Activo':'Inactivo'}</span></td><td><div class="acts"><button class="btn btn-ghost btn-sm" onclick="openUsuario(${u.id})">Editar</button>${u.nombre!==currentUser?`<button class="btn btn-ghost btn-sm" onclick="toggleUsuario(${u.id})">${u.activo?'Desactivar':'Activar'}</button>`:''}</div></td></tr>`).join('');
@@ -3295,6 +3446,7 @@ const MODULOS_PERMISOS=[
   {key:'clientes',lbl:'Clientes',grp:'Módulos'},
   {key:'cobros',lbl:'Cobros',grp:'Módulos'},
   {key:'porpagar',lbl:'Por pagar',grp:'Módulos'},
+  {key:'talonarios',lbl:'Talonarios',grp:'Módulos'},
   {key:'inventario',lbl:'Inventario',grp:'Módulos'},
   {key:'compras',lbl:'Compras',grp:'Módulos'},
   {key:'nuevacompra',lbl:'Nueva compra',grp:'Módulos'},

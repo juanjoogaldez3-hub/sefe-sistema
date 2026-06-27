@@ -27,7 +27,7 @@ async function cargarTodo() {
   try {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
-      rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard
+      rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -43,6 +43,7 @@ async function cargarTodo() {
       sb.from('usuarios').select('*').order('id'),
       sb.from('auditoria').select('*').order('seq'),
       sb.from('dashboard_config').select('*'),
+      sb.from('talonarios').select('*').order('numero_inicial'),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -90,6 +91,15 @@ async function cargarTodo() {
         if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch(e) { cfg = {}; } }
         dashboardConfig[d.rol] = cfg || {};
       });
+    }
+
+    // Talonarios de recibos
+    if (typeof talonarios !== 'undefined') {
+      talonarios = (rTalonarios.data||[]).map(t=>({
+        id:t.id, numeroInicial:t.numero_inicial, numeroFinal:t.numero_final,
+        cantidad:t.cantidad, asignadoA:t.asignado_a, asignadoId:t.asignado_id,
+        descripcion:t.descripcion, estado:t.estado, fechaEntrega:t.fecha_entrega, creado:t.creado
+      }));
     }
 
     console.log('✓ Datos cargados desde Supabase');
@@ -423,4 +433,35 @@ async function guardarDashboardConfig(rolKey, config){
     .upsert({rol: rolKey, config: config}, {onConflict: 'rol'});
   if(error) console.error('Error guardando dashboard_config '+rolKey+':', error);
   return !error;
+}
+
+// ── Guardar/actualizar un TALONARIO de recibos ──────────────
+async function guardarTalonario(t){
+  const row = {
+    numero_inicial: t.numeroInicial,
+    numero_final: t.numeroFinal,
+    cantidad: t.cantidad||50,
+    asignado_a: t.asignadoA||null,
+    asignado_id: t.asignadoId||null,
+    descripcion: t.descripcion||null,
+    estado: t.estado||'activo',
+    fecha_entrega: t.fechaEntrega||null
+  };
+  if (t._nuevo) {
+    delete t._nuevo;
+    const {data,error} = await sb.from('talonarios').insert(row).select().single();
+    if(error){console.error('Error guardando talonario:',error); t._nuevo=true; return false;}
+    else { t.id = data.id; return true; }
+  } else {
+    const {error} = await sb.from('talonarios').update(row).eq('id', t.id);
+    if(error){console.error('Error actualizando talonario:',error); return false;}
+    return true;
+  }
+}
+
+// ── Eliminar un talonario ────────────────────────────────────
+async function eliminarTalonario(id){
+  const {error} = await sb.from('talonarios').delete().eq('id', id);
+  if(error){console.error('Error eliminando talonario:',error); return false;}
+  return true;
 }
