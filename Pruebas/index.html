@@ -3868,6 +3868,18 @@ function renderRepFilters(){
     const provOpts=proveedores.map(p=>({v:String(p.id),l:p.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-prov','Proveedor',provOpts,repFiltros.proveedor,'proveedor')}</div>`;
   }
+  else if(repType==='cliprod'){
+    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    html=`<div class="rep-filter-bar">
+      ${sel('rf-vend-cp','Vendedor',vendOpts,repFiltros.vendedores[0]||'','vendedor_simple')}
+      ${sel('rf-cli-cp','Cliente',cliOpts,repFiltros.cliente,'cliente')}
+      <div style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(true)" title="Expandir todo">⊞ Expandir</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(false)" title="Colapsar todo">⊟ Colapsar</button>
+      </div>
+    </div>`;
+  }
   else if(repType==='cxc'){
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     const tcOpts=[{v:'0',l:'Contado'},{v:'15',l:'15 días'},{v:'30',l:'30 días'},{v:'45',l:'45 días'},{v:'60',l:'60 días'}];
@@ -3889,7 +3901,7 @@ function renderRepFilters(){
 }
 function bindRep(){
   document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.onclick=()=>setRepPeriod(b.dataset.p));
-  document.querySelectorAll('#rep-types .ct-tab').forEach(b=>b.onclick=()=>{repType=b.dataset.r;repFiltros={cliente:'',vendedores:[],montoMin:'',montoMax:'',proveedor:'',soloVencidos:false,tiempoCredito:''};document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x===b));renderRepFilters();renderReportes();});
+  document.querySelectorAll('#rep-types .ct-tab').forEach(b=>b.onclick=()=>{repType=b.dataset.r;repFiltros={cliente:'',vendedores:[],montoMin:'',montoMax:'',proveedor:'',soloVencidos:false,tiempoCredito:''};gruposColapsados={};document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x===b));renderRepFilters();renderReportes();});
   ['rep-desde','rep-hasta'].forEach(id=>{const e=$('#'+id);if(e)e.onchange=()=>{document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.classList.remove('on'));renderReportes();};});
 }
 const kpiHTML=k=>k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub||''}</div></div>`).join('');
@@ -3902,6 +3914,42 @@ const barsHTML=(meses,fmt)=>{const max=Math.max(1,...meses.map(m=>m.v));return `
 // colores por vendedor
 const VEND_COLORS=['#173916','#446084','#7f9a26','#7A4A9E','#9A6B07','#BE4326'];
 let repLastData=[];// para exportación
+let gruposColapsados={};// estado de grupos colapsados en cliprod (key -> true si colapsado)
+
+// Colapsar/expandir un grupo del reporte cliente/producto
+window.toggleGrupo=function(key){
+  gruposColapsados[key]=!gruposColapsados[key];
+  aplicarColapso();
+};
+// Expandir o colapsar todos los grupos
+window.toggleTodosGrupos=function(expandir){
+  // Recolectar todas las keys de grupo presentes
+  document.querySelectorAll('#rep-body [data-grupo-key]').forEach(el=>{
+    const k=el.getAttribute('data-grupo-key');
+    gruposColapsados[k]=!expandir;
+  });
+  aplicarColapso();
+};
+// Aplica el estado de colapso a las filas (muestra/oculta)
+function aplicarColapso(){
+  // Vendedores: ocultan todo lo que tenga data-vend=ese vendedor
+  document.querySelectorAll('#rep-body tr[data-pertenece]').forEach(tr=>{
+    const vend=tr.getAttribute('data-vend');
+    const cli=tr.getAttribute('data-cli');
+    const vendColapsado=vend&&gruposColapsados['V:'+vend];
+    const cliColapsado=cli&&gruposColapsados['C:'+vend+'|'+cli];
+    // Una fila se oculta si su vendedor está colapsado, o si es fila de cliente/producto y su cliente está colapsado
+    tr.style.display=(vendColapsado||cliColapsado)?'none':'';
+  });
+  // Actualizar los íconos de flecha
+  document.querySelectorAll('#rep-body [data-grupo-key]').forEach(el=>{
+    const k=el.getAttribute('data-grupo-key');
+    const flecha=el.querySelector('.flecha-grupo');
+    if(flecha)flecha.textContent=gruposColapsados[k]?'▸':'▾';
+  });
+}
+window.aplicarColapso=aplicarColapso;
+
 
 function renderReportes(){
   bindRep();renderRepFilters();
@@ -3996,6 +4044,10 @@ function renderReportes(){
     // VENTAS POR CLIENTE Y PRODUCTO — jerarquía Vendedor → Cliente → Productos
     // Construir estructura agrupada
     const grupos={}; // vendedor -> cliente -> {productos, subtotales}
+    // Para volúmenes grandes: si es la primera vez que se ve este reporte,
+    // colapsar los clientes por defecto (mostrar solo vendedores y sus clientes,
+    // sin los productos). El usuario expande lo que quiera ver.
+    const primeraVez=!gruposColapsados.__inicializado;
     ventas.forEach(d=>{
       const vend=d.vendedorNombre||'Sin vendedor';
       const cli=d.clienteComercial||d.clienteNombre||'Sin cliente';
@@ -4036,7 +4088,7 @@ function renderReportes(){
           const margenQ=p.ventaTotal-p.costoTotal;
           const margenPct=p.ventaTotal?(margenQ/p.ventaTotal*100):0;
           cVenta+=p.ventaTotal;cCosto+=p.costoTotal;
-          filasCli+=`<tr>
+          filasCli+=`<tr data-pertenece="1" data-vend="${vend}" data-cli="${cli}">
             <td style="padding-left:24px;font-size:12px">${p.codigo?`<span style="color:var(--muted);font-size:11px">${p.codigo}</span> `:''}${p.nombre}</td>
             <td class="num">${p.cant}</td>
             <td class="num">${money(p.vUnit)}</td>
@@ -4050,19 +4102,24 @@ function renderReportes(){
         vVenta+=cVenta;vCosto+=cCosto;
         const cMargen=cVenta-cCosto;
         const cPct=cVenta?(cMargen/cVenta*100):0;
-        // Encabezado de cliente + sus productos + subtotal
-        filasVend+=`<tr style="background:var(--surface-2)"><td colspan="8" style="font-weight:700;font-size:12.5px;padding:7px 10px;color:var(--ink)">${cli}</td></tr>`+filasCli+
-          `<tr style="border-bottom:1px solid var(--line)"><td style="text-align:right;font-size:11px;color:var(--muted);font-style:italic">Subtotal ${cli}:</td><td></td><td></td><td class="num" style="font-weight:600;font-size:11.5px">${money(cVenta)}</td><td></td><td class="num" style="font-size:11.5px;color:var(--muted)">${money(cCosto)}</td><td class="num" style="font-weight:600;font-size:11.5px;color:var(--green)">${money(cMargen)}</td><td class="num" style="font-size:11.5px;color:var(--green)">${cPct.toFixed(1)}%</td></tr>`;
+        const cliKey='C:'+vend+'|'+cli;
+        // Primera vez: colapsar clientes por defecto (para no saturar con miles de productos)
+        if(primeraVez&&gruposColapsados[cliKey]===undefined)gruposColapsados[cliKey]=true;
+        // Encabezado de cliente (clickeable para colapsar) + sus productos + subtotal
+        filasVend+=`<tr data-pertenece="1" data-vend="${vend}" data-grupo-key="${cliKey}" style="background:var(--surface-2);cursor:pointer" onclick="toggleGrupo('${cliKey.replace(/'/g,"\\'")}')"><td colspan="8" style="font-weight:700;font-size:12.5px;padding:7px 10px;color:var(--ink)"><span class="flecha-grupo" style="display:inline-block;width:14px;color:var(--muted)">▾</span>${cli}</td></tr>`+filasCli+
+          `<tr data-pertenece="1" data-vend="${vend}" data-cli="${cli}" style="border-bottom:1px solid var(--line)"><td style="text-align:right;font-size:11px;color:var(--muted);font-style:italic">Subtotal ${cli}:</td><td></td><td></td><td class="num" style="font-weight:600;font-size:11.5px">${money(cVenta)}</td><td></td><td class="num" style="font-size:11.5px;color:var(--muted)">${money(cCosto)}</td><td class="num" style="font-weight:600;font-size:11.5px;color:var(--green)">${money(cMargen)}</td><td class="num" style="font-size:11.5px;color:var(--green)">${cPct.toFixed(1)}%</td></tr>`;
       });
       gVenta+=vVenta;gCosto+=vCosto;
       const vMargen=vVenta-vCosto;
       const vPct=vVenta?(vMargen/vVenta*100):0;
-      // Encabezado de vendedor (banda verde) + clientes + subtotal vendedor
-      cuerpo+=`<tr style="background:var(--green)"><td colspan="8" style="color:#fff;font-weight:700;font-size:13px;padding:8px 10px">▸ ${vend}</td></tr>`+filasVend+
-        `<tr style="border-bottom:2px solid var(--line-strong);background:#f0f5e8"><td style="text-align:right;font-weight:700;font-size:12px">TOTAL ${vend}:</td><td></td><td></td><td class="num" style="font-weight:700">${money(vVenta)}</td><td></td><td class="num" style="font-weight:700;color:var(--muted)">${money(vCosto)}</td><td class="num" style="font-weight:700;color:var(--green)">${money(vMargen)}</td><td class="num" style="font-weight:700;color:var(--green)">${vPct.toFixed(1)}%</td></tr>
+      const vendKey='V:'+vend;
+      // Encabezado de vendedor (banda verde, clickeable) + clientes + subtotal vendedor
+      cuerpo+=`<tr data-grupo-key="${vendKey}" style="background:var(--green);cursor:pointer" onclick="toggleGrupo('${vendKey.replace(/'/g,"\\'")}')"><td colspan="8" style="color:#fff;font-weight:700;font-size:13px;padding:8px 10px"><span class="flecha-grupo" style="display:inline-block;width:14px">▾</span>${vend}</td></tr>`+filasVend+
+        `<tr data-pertenece="1" data-vend="${vend}" style="border-bottom:2px solid var(--line-strong);background:#f0f5e8"><td style="text-align:right;font-weight:700;font-size:12px">TOTAL ${vend}:</td><td></td><td></td><td class="num" style="font-weight:700">${money(vVenta)}</td><td></td><td class="num" style="font-weight:700;color:var(--muted)">${money(vCosto)}</td><td class="num" style="font-weight:700;color:var(--green)">${money(vMargen)}</td><td class="num" style="font-weight:700;color:var(--green)">${vPct.toFixed(1)}%</td></tr>
         <tr><td colspan="8" style="height:8px"></td></tr>`;
     });
     exportData=expFilas;
+    gruposColapsados.__inicializado=true;
     const gMargen=gVenta-gCosto;
     const gPct=gVenta?(gMargen/gVenta*100):0;
     html+=`<div class="kpis stagger">${kpiHTML([
@@ -4179,6 +4236,8 @@ function renderReportes(){
   }
   repLastData=exportData;
   $('#rep-body').innerHTML=html;
+  // Si es el reporte cliente/producto, aplicar el estado de colapso guardado
+  if(repType==='cliprod')aplicarColapso();
 }
 
 // ---- Exportación Excel ----
