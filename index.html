@@ -4826,11 +4826,18 @@ function logAudit(accion,detalle){
 function verificarIntegridadAuditoria(){
   // Reconstruir en orden cronológico (auditLog está en orden inverso)
   const ordenado=auditLog.slice().reverse();
+  // Normaliza la fecha al mismo formato ISO con que se generó el hash original.
+  // Supabase devuelve '2026-06-24 02:28:34.56+00' pero el hash se creó con
+  // new Date().toISOString() => '2026-06-24T02:28:34.560Z'. Sin esto, da falso positivo.
+  const isoFecha=f=>{try{const d=new Date(f);return isNaN(d)?f:d.toISOString();}catch(_){return f;}};
   for(let i=0;i<ordenado.length;i++){
     const e=ordenado[i];
     const prevHash=i===0?'GENESIS':ordenado[i-1].hash;
-    const base=e.seq+'|'+e.fecha+'|'+e.usuario+'|'+e.accion+'|'+e.detalle+'|'+prevHash;
-    if(_hashAudit(base)!==e.hash||e.prevHash!==prevHash){
+    // Prueba primero con la fecha tal cual; si no cuadra, prueba con la fecha normalizada.
+    const baseRaw=e.seq+'|'+e.fecha+'|'+e.usuario+'|'+e.accion+'|'+e.detalle+'|'+prevHash;
+    const baseIso=e.seq+'|'+isoFecha(e.fecha)+'|'+e.usuario+'|'+e.accion+'|'+e.detalle+'|'+prevHash;
+    const hashOk=(_hashAudit(baseRaw)===e.hash)||(_hashAudit(baseIso)===e.hash);
+    if(!hashOk||e.prevHash!==prevHash){
       return {ok:false,seq:e.seq,fecha:e.fecha};
     }
   }
