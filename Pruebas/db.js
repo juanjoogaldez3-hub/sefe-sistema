@@ -27,7 +27,7 @@ async function cargarTodo() {
   try {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
-      rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios
+      rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -44,6 +44,7 @@ async function cargarTodo() {
       sb.from('auditoria').select('*').order('seq'),
       sb.from('dashboard_config').select('*'),
       sb.from('talonarios').select('*').order('numero_inicial'),
+      sb.from('recibos_anulados').select('*'),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -99,6 +100,14 @@ async function cargarTodo() {
         id:t.id, numeroInicial:t.numero_inicial, numeroFinal:t.numero_final,
         cantidad:t.cantidad, asignadoA:t.asignado_a, asignadoId:t.asignado_id,
         descripcion:t.descripcion, estado:t.estado, fechaEntrega:t.fecha_entrega, creado:t.creado
+      }));
+    }
+
+    // Recibos anulados
+    if (typeof recibosAnulados !== 'undefined') {
+      recibosAnulados = (rRecAnul.data||[]).map(r=>({
+        id:r.id, numero:r.numero, talonarioId:r.talonario_id,
+        motivo:r.motivo, anuladoPor:r.anulado_por, fecha:r.fecha
       }));
     }
 
@@ -463,5 +472,26 @@ async function guardarTalonario(t){
 async function eliminarTalonario(id){
   const {error} = await sb.from('talonarios').delete().eq('id', id);
   if(error){console.error('Error eliminando talonario:',error); return false;}
+  return true;
+}
+
+// ── Anular un recibo (marcarlo como dañado/no usado) ─────────
+async function guardarReciboAnulado(r){
+  const row = {
+    numero: r.numero,
+    talonario_id: r.talonarioId||null,
+    motivo: r.motivo||null,
+    anulado_por: r.anuladoPor||null
+  };
+  const {data,error} = await sb.from('recibos_anulados').insert(row).select().single();
+  if(error){console.error('Error anulando recibo:',error); return false;}
+  r.id = data.id;
+  return true;
+}
+
+// ── Quitar la anulación de un recibo ─────────────────────────
+async function eliminarReciboAnulado(id){
+  const {error} = await sb.from('recibos_anulados').delete().eq('id', id);
+  if(error){console.error('Error quitando anulación:',error); return false;}
   return true;
 }

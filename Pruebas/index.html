@@ -995,6 +995,7 @@ let proveedores=[];
 let compras=[];
 let documentos=[];
 let talonarios=[];
+let recibosAnulados=[];
 let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====
@@ -3311,13 +3312,16 @@ function recibosUsados(){
   return usados;
 }
 
-// Calcula el cuadre de un talonario: qué recibos están usados y cuáles faltan.
+// Calcula el cuadre de un talonario: usados, faltantes y anulados.
 function cuadreTalonario(t, usadosSet){
-  const usados=[],faltantes=[];
+  const anuladosSet=new Set(recibosAnulados.map(r=>r.numero));
+  const usados=[],faltantes=[],anulados=[];
   for(let n=t.numeroInicial;n<=t.numeroFinal;n++){
-    if(usadosSet.has(n))usados.push(n); else faltantes.push(n);
+    if(usadosSet.has(n))usados.push(n);
+    else if(anuladosSet.has(n))anulados.push(n);
+    else faltantes.push(n);
   }
-  return {usados,faltantes,totalUsados:usados.length,totalFaltantes:faltantes.length};
+  return {usados,faltantes,anulados,totalUsados:usados.length,totalFaltantes:faltantes.length,totalAnulados:anulados.length};
 }
 
 function renderTalonarios(){
@@ -3333,17 +3337,18 @@ function renderTalonarios(){
   }
 
   // Resumen general
-  let totalEsperado=0,totalUsados=0,totalFaltantes=0;
+  let totalEsperado=0,totalUsados=0,totalFaltantes=0,totalAnulados=0;
   talonarios.forEach(t=>{
     const c=cuadreTalonario(t,usadosSet);
     totalEsperado+=(t.numeroFinal-t.numeroInicial+1);
-    totalUsados+=c.totalUsados;totalFaltantes+=c.totalFaltantes;
+    totalUsados+=c.totalUsados;totalFaltantes+=c.totalFaltantes;totalAnulados+=c.totalAnulados;
   });
   $('#tal-resumen').innerHTML=`<div style="display:flex;gap:12px;flex-wrap:wrap">
-    <div style="flex:1;min-width:110px;background:var(--surface-2);border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:var(--muted)">Talonarios</div><div style="font-weight:700;font-size:18px">${talonarios.length}</div></div>
-    <div style="flex:1;min-width:110px;background:#E8F5E9;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#1a7f37">Recibos usados</div><div style="font-weight:700;font-size:18px;color:#1a7f37">${totalUsados}</div></div>
-    <div style="flex:1;min-width:110px;background:#FDECEA;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#c0392b">Sin procesar</div><div style="font-weight:700;font-size:18px;color:#c0392b">${totalFaltantes}</div></div>
-    <div style="flex:1;min-width:110px;background:var(--surface-2);border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:var(--muted)">Total recibos</div><div style="font-weight:700;font-size:18px">${totalEsperado}</div></div>
+    <div style="flex:1;min-width:100px;background:var(--surface-2);border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:var(--muted)">Talonarios</div><div style="font-weight:700;font-size:18px">${talonarios.length}</div></div>
+    <div style="flex:1;min-width:100px;background:#E8F5E9;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#1a7f37">Recibos usados</div><div style="font-weight:700;font-size:18px;color:#1a7f37">${totalUsados}</div></div>
+    <div style="flex:1;min-width:100px;background:#FDECEA;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#c0392b">Sin procesar</div><div style="font-weight:700;font-size:18px;color:#c0392b">${totalFaltantes}</div></div>
+    <div style="flex:1;min-width:100px;background:#ECEFF1;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#78909C">Anulados</div><div style="font-weight:700;font-size:18px;color:#78909C">${totalAnulados}</div></div>
+    <div style="flex:1;min-width:100px;background:var(--surface-2);border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:var(--muted)">Total recibos</div><div style="font-weight:700;font-size:18px">${totalEsperado}</div></div>
   </div>`;
 
   tbody.innerHTML=talonarios.map(t=>{
@@ -3415,19 +3420,76 @@ window.eliminarTalonarioUI=async function(id){
 window.verCuadreTalonario=function(id){
   const t=talonarios.find(x=>x.id===id);if(!t)return;
   const c=cuadreTalonario(t,recibosUsados());
-  const chips=n=>`<span style="display:inline-block;margin:2px;padding:3px 8px;border-radius:6px;font-family:monospace;font-size:12px;background:#FDECEA;color:#c0392b;font-weight:700">${n}</span>`;
+  // Chip rojo (faltante) — clickeable para anular
+  const chips=n=>`<span onclick="anularReciboUI(${n},${t.id})" title="Clic para anular este recibo" style="cursor:pointer;display:inline-block;margin:2px;padding:3px 8px;border-radius:6px;font-family:monospace;font-size:12px;background:#FDECEA;color:#c0392b;font-weight:700;transition:background .15s" onmouseover="this.style.background='#f5c6cb'" onmouseout="this.style.background='#FDECEA'">${n}</span>`;
+  // Chip verde (usado) — clickeable para ver el abono
   const okChip=n=>`<span onclick="verAbonoPorRecibo(${n})" title="Ver detalle del abono" style="cursor:pointer;display:inline-block;margin:2px;padding:3px 8px;border-radius:6px;font-family:monospace;font-size:11.5px;background:#E8F5E9;color:#1a7f37;transition:background .15s" onmouseover="this.style.background='#c8e6c9'" onmouseout="this.style.background='#E8F5E9'">${n}</span>`;
+  // Chip gris (anulado) — clickeable para ver motivo / reactivar
+  const anulChip=n=>{const ra=recibosAnulados.find(r=>r.numero===n);return `<span onclick="verReciboAnulado(${n})" title="${ra&&ra.motivo?('Motivo: '+ra.motivo.replace(/"/g,'')):'Recibo anulado'} — clic para ver" style="cursor:pointer;display:inline-block;margin:2px;padding:3px 8px;border-radius:6px;font-family:monospace;font-size:11.5px;background:#ECEFF1;color:#78909C;font-weight:600;text-decoration:line-through;transition:background .15s" onmouseover="this.style.background='#cfd8dc'" onmouseout="this.style.background='#ECEFF1'">${n}</span>`;};
   openMod('Cuadre · '+(t.descripcion||('Talón '+t.numeroInicial)),
-    `<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-       <div style="flex:1;min-width:90px;background:var(--surface-2);border-radius:8px;padding:10px 12px"><div style="font-size:11px;color:var(--muted)">Rango</div><div style="font-weight:700;font-family:monospace">${t.numeroInicial}–${t.numeroFinal}</div></div>
-       <div style="flex:1;min-width:90px;background:#E8F5E9;border-radius:8px;padding:10px 12px"><div style="font-size:11px;color:#1a7f37">Usados</div><div style="font-weight:700;color:#1a7f37">${c.totalUsados}</div></div>
-       <div style="flex:1;min-width:90px;background:#FDECEA;border-radius:8px;padding:10px 12px"><div style="font-size:11px;color:#c0392b">Faltantes</div><div style="font-weight:700;color:#c0392b">${c.totalFaltantes}</div></div>
+    `<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+       <div style="flex:1;min-width:80px;background:var(--surface-2);border-radius:8px;padding:9px 11px"><div style="font-size:11px;color:var(--muted)">Rango</div><div style="font-weight:700;font-family:monospace;font-size:13px">${t.numeroInicial}–${t.numeroFinal}</div></div>
+       <div style="flex:1;min-width:70px;background:#E8F5E9;border-radius:8px;padding:9px 11px"><div style="font-size:11px;color:#1a7f37">Usados</div><div style="font-weight:700;color:#1a7f37">${c.totalUsados}</div></div>
+       <div style="flex:1;min-width:70px;background:#FDECEA;border-radius:8px;padding:9px 11px"><div style="font-size:11px;color:#c0392b">Faltantes</div><div style="font-weight:700;color:#c0392b">${c.totalFaltantes}</div></div>
+       <div style="flex:1;min-width:70px;background:#ECEFF1;border-radius:8px;padding:9px 11px"><div style="font-size:11px;color:#78909C">Anulados</div><div style="font-weight:700;color:#78909C">${c.totalAnulados}</div></div>
      </div>
      ${t.asignadoA?`<p style="font-size:13px;margin-bottom:12px">Responsable: <b>${t.asignadoA}</b></p>`:''}
-     ${c.totalFaltantes>0?`<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#c0392b;margin-bottom:6px">⚠ Recibos sin procesar (${c.totalFaltantes}):</div><div>${c.faltantes.map(chips).join('')}</div><div style="font-size:11.5px;color:var(--muted);margin-top:8px">Estos recibos están en el rango del talonario pero no se registraron en el sistema. Verificá con el responsable.</div></div>`:'<div class="note n-ok" style="margin-bottom:14px"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>¡Talonario cuadrado! Todos los recibos están procesados.</span></div>'}
-     <div><div style="font-size:12px;font-weight:700;color:#1a7f37;margin-bottom:6px">Recibos procesados (${c.totalUsados}):</div><div style="max-height:180px;overflow-y:auto">${c.usados.length?c.usados.map(okChip).join(''):'<span style="color:var(--muted);font-size:12px">Ninguno todavía</span>'}</div></div>`,
+     ${c.totalFaltantes>0?`<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#c0392b;margin-bottom:6px">⚠ Recibos sin procesar (${c.totalFaltantes}):</div><div>${c.faltantes.map(chips).join('')}</div><div style="font-size:11.5px;color:var(--muted);margin-top:8px">Hacé clic en un recibo para <b>anularlo</b> (si se dañó o no se usó) y que deje de contar como faltante.</div></div>`:'<div class="note n-ok" style="margin-bottom:14px"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>¡Talonario cuadrado! No hay recibos sin procesar.</span></div>'}
+     ${c.totalAnulados>0?`<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#78909C;margin-bottom:6px">Recibos anulados (${c.totalAnulados}):</div><div>${c.anulados.map(anulChip).join('')}</div></div>`:''}
+     <div><div style="font-size:12px;font-weight:700;color:#1a7f37;margin-bottom:6px">Recibos procesados (${c.totalUsados}):</div><div style="max-height:160px;overflow-y:auto">${c.usados.length?c.usados.map(okChip).join(''):'<span style="color:var(--muted);font-size:12px">Ninguno todavía</span>'}</div></div>`,
     null);
   const sv=$('#m-save');if(sv)sv.style.display='none';
+};
+
+// Anular un recibo (pedir motivo)
+window.anularReciboUI=function(num,talId){
+  openMod('Anular recibo '+num,
+    `<p style="font-size:13px;margin-bottom:12px">Vas a anular el recibo <b style="font-family:monospace">${num}</b>. Esto lo marca como dañado o no usado, para que el cuadre no lo cuente como faltante. <b>No afecta ningún saldo ni abono.</b></p>
+     <div><label>Motivo de la anulación</label><textarea id="anul-motivo" rows="2" placeholder="Ej. Recibo dañado al imprimir / anulado en papel" style="width:100%;margin-top:4px"></textarea></div>`,
+    async()=>{
+      const motivo=$('#anul-motivo').value.trim();
+      if(!motivo){toast('Falta el motivo','Escribí por qué se anula el recibo',true);return;}
+      const r={numero:num,talonarioId:talId,motivo:motivo,anuladoPor:currentUser};
+      const ok=await guardarReciboAnulado(r);
+      if(ok){
+        recibosAnulados.push(r);
+        logAudit('Recibo anulado','Recibo '+num+' · '+motivo);
+        toast('✓ Recibo anulado','Recibo '+num+' marcado como anulado');
+        cerrarTodo();
+        verCuadreTalonario(talId);
+      }else{toast('Error','No se pudo anular el recibo',true);}
+    });
+};
+
+// Ver/quitar la anulación de un recibo
+window.verReciboAnulado=function(num){
+  const ra=recibosAnulados.find(r=>r.numero===num);if(!ra)return;
+  const talId=ra.talonarioId;
+  openMod('Recibo anulado '+num,
+    `<div style="background:var(--surface-2);border-radius:10px;padding:14px 16px">
+       <div style="font-family:monospace;font-weight:700;font-size:15px;color:#78909C;text-decoration:line-through;margin-bottom:10px">Recibo ${num}</div>
+       <table style="width:100%;font-size:13px">
+         <tr><td style="color:var(--muted);padding:3px 0">Motivo</td><td style="text-align:right;font-weight:600">${ra.motivo||'—'}</td></tr>
+         <tr><td style="color:var(--muted);padding:3px 0">Anulado por</td><td style="text-align:right">${ra.anuladoPor||'—'}</td></tr>
+         <tr><td style="color:var(--muted);padding:3px 0">Fecha</td><td style="text-align:right">${ra.fecha?fdate(ra.fecha):'—'}</td></tr>
+       </table>
+     </div>
+     <div style="margin-top:14px;text-align:right"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="reactivarRecibo(${num},${ra.id},${talId})">Quitar anulación</button></div>`,
+    null);
+  const sv=$('#m-save');if(sv)sv.style.display='none';
+};
+
+// Reactivar un recibo anulado (quitar la anulación)
+window.reactivarRecibo=async function(num,id,talId){
+  if(!confirm('¿Quitar la anulación del recibo '+num+'? Volverá a contar como faltante si no tiene abono.'))return;
+  const ok=await eliminarReciboAnulado(id);
+  if(ok){
+    recibosAnulados=recibosAnulados.filter(r=>r.id!==id);
+    logAudit('Anulación de recibo revertida','Recibo '+num);
+    toast('Anulación quitada','Recibo '+num);
+    cerrarTodo();
+    if(talId)verCuadreTalonario(talId);
+  }else{toast('Error','No se pudo quitar la anulación',true);}
 };
 
 // Muestra el detalle del abono asociado a un número de recibo (desde el cuadre)
