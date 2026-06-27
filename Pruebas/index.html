@@ -3802,10 +3802,14 @@ function renderReportes(){
     const activos=repFiltros.vendedores.length?repFiltros.vendedores:vendedores.map(v=>v.nombre);
     const colores={};activos.forEach((n,i)=>colores[n]=VEND_COLORS[i%VEND_COLORS.length]);
     // por vendedor: monto total y por mes
-    const datos={};activos.forEach(n=>{datos[n]={v:0,n:0,meses:mesesSerie(ventas.filter(d=>d.vendedorNombre===n),d=>d.creada,d=>d.totales.total)};});
-    ventas.filter(d=>activos.includes(d.vendedorNombre||'Sin asignar')).forEach(d=>{const k=d.vendedorNombre||'Sin asignar';if(datos[k]){datos[k].v+=d.totales.total;datos[k].n++;}});
+    const datos={};activos.forEach(n=>{datos[n]={v:0,c:0,n:0,meses:mesesSerie(ventas.filter(d=>d.vendedorNombre===n),d=>d.creada,d=>d.totales.total)};});
+    ventas.filter(d=>activos.includes(d.vendedorNombre||'Sin asignar')).forEach(d=>{const k=d.vendedorNombre||'Sin asignar';if(datos[k]){datos[k].v+=d.totales.total;datos[k].n++;
+      // costo de lo vendido por este vendedor
+      d.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);datos[k].c+=(p?p.costo:0)*it.cantidad;});
+    }});
     const arr=Object.entries(datos).sort((a,b)=>b[1].v-a[1].v);
-    exportData=arr.map(([n,o])=>({Vendedor:n,Documentos:o.n,Total:o.v,'Ticket Prom.':o.n?o.v/o.n:0}));
+    // Export estilo Crystal: Vendedor | Ventas | Costos | Ganancia
+    exportData=arr.map(([n,o])=>({Vendedor:n,Ventas:o.v,Costos:o.c,Ganancia:o.v-o.c}));
     // barras comparativas por mes
     const mesesLbl=datos[activos[0]]?.meses.map(m=>m.lbl)||[];
     const maxComp=Math.max(1,...activos.flatMap(n=>datos[n]?.meses.map(m=>m.v)||[]));
@@ -3817,8 +3821,9 @@ function renderReportes(){
     html+=compBarras;
     html+=`<div class="panel"><div class="panel-head"><h3>Resumen por vendedor</h3></div>
       <div class="panel-body">${hbars(arr.map(([n,o])=>({n,v:o.v,c:colores[n]})))}</div></div>
-      <div class="panel"><table><thead><tr><th>Vendedor</th><th>Documentos</th><th>Total</th><th>Ticket prom.</th></tr></thead><tbody>
-      ${arr.map(([n,o])=>`<tr><td style="font-weight:600;display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:3px;background:${colores[n]};flex-shrink:0"></span>${n}</td><td class="num">${o.n}</td><td class="num" style="font-weight:600">${money(o.v)}</td><td class="num" style="color:var(--muted)">${money(o.n?o.v/o.n:0)}</td></tr>`).join('')}</tbody></table></div>`;
+      <div class="panel"><table><thead><tr><th>Vendedor</th><th>Ventas</th><th>Costos</th><th>Ganancia</th></tr></thead><tbody>
+      ${arr.map(([n,o])=>`<tr><td style="font-weight:600;display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:3px;background:${colores[n]};flex-shrink:0"></span>${n}</td><td class="num">${money(o.v)}</td><td class="num" style="color:var(--muted)">${money(o.c)}</td><td class="num" style="font-weight:700;color:var(--green)">${money(o.v-o.c)}</td></tr>`).join('')}
+      <tr style="border-top:2px solid var(--line-strong);font-weight:700"><td>Total</td><td class="num">${money(arr.reduce((s,[,o])=>s+o.v,0))}</td><td class="num">${money(arr.reduce((s,[,o])=>s+o.c,0))}</td><td class="num" style="color:var(--green)">${money(arr.reduce((s,[,o])=>s+(o.v-o.c),0))}</td></tr></tbody></table></div>`;
   }
   else if(repType==='producto'){
     const porP={};ventas.forEach(d=>d.items.forEach(it=>{const v=it.cantidad*it.precio-(it.descuento||0);if(!porP[it.id])porP[it.id]={nombre:it.nombre,codigo:it.codigo,q:0,v:0};porP[it.id].q+=it.cantidad;porP[it.id].v+=v;}));
@@ -3939,7 +3944,7 @@ function renderReportes(){
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'Ventas por Vendedor',producto:'Ventas por Producto',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],['Período:',repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
@@ -3952,10 +3957,10 @@ window.exportarExcel=exportarExcel;
 // ---- Exportación PDF ----
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'Ventas por Vendedor',producto:'Ventas por Producto',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const ths=cols.map(c=>`<th style="padding:7px 10px;background:#f4f7ef;font-size:10px;text-transform:uppercase;letter-spacing:.4px">${c}</th>`).join('');
-  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Margen','Ingresos','Total comprado'].includes(c);
+  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Margen','Ingresos','Total comprado'].includes(c);
   const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="padding:6px 10px;border-bottom:1px solid #e7ebdf;font-size:12px;${esNum(c)?'text-align:right':''}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
   let old=document.getElementById('rep-print-area');if(old)old.remove();
   const div=document.createElement('div');div.id='rep-print-area';
