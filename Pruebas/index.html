@@ -680,6 +680,7 @@
           <button class="ct-tab" data-r="costos">Costos vs ventas</button>
           <button class="ct-tab" data-r="vendedor">Ventas por vendedor</button>
           <button class="ct-tab" data-r="producto">Ventas por producto</button>
+          <button class="ct-tab" data-r="cliprod">Ventas cliente/producto</button>
           <button class="ct-tab" data-r="cprov">Compras por proveedor</button>
           <button class="ct-tab" data-r="cprod">Compras por producto</button>
           <button class="ct-tab" data-r="cxc">Pendientes por cliente</button>
@@ -3835,6 +3836,90 @@ function renderReportes(){
       <table><thead><tr><th>Producto</th><th>Código</th><th>Unidades</th><th>Ingresos</th></tr></thead><tbody>
       ${arr.length?arr.map(p=>`<tr><td style="font-weight:600">${p.nombre}</td><td class="num" style="color:var(--muted)">${p.codigo}</td><td class="num">${p.q}</td><td class="num" style="font-weight:600">${money(p.v)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">Sin ventas</td></tr>'}</tbody></table></div>`;
   }
+  else if(repType==='cliprod'){
+    // VENTAS POR CLIENTE Y PRODUCTO — jerarquía Vendedor → Cliente → Productos
+    // Construir estructura agrupada
+    const grupos={}; // vendedor -> cliente -> {productos, subtotales}
+    ventas.forEach(d=>{
+      const vend=d.vendedorNombre||'Sin vendedor';
+      const cli=d.clienteComercial||d.clienteNombre||'Sin cliente';
+      if(!grupos[vend])grupos[vend]={};
+      if(!grupos[vend][cli])grupos[vend][cli]={};
+      (d.items||[]).forEach(it=>{
+        const prod=productos.find(x=>x.id===it.id);
+        const costoUnit=prod?prod.costo:0;
+        const key=it.id||it.codigo;
+        if(!grupos[vend][cli][key]){
+          grupos[vend][cli][key]={codigo:it.codigo,nombre:it.nombre,cant:0,vUnit:it.precio,costoUnit:costoUnit,ventaTotal:0,costoTotal:0};
+        }
+        const g=grupos[vend][cli][key];
+        g.cant+=it.cantidad;
+        g.ventaTotal+=it.cantidad*it.precio-(it.descuento||0);
+        g.costoTotal+=costoUnit*it.cantidad;
+      });
+    });
+    // Para exportación: filas planas
+    const expFilas=[];
+    // Totales generales
+    let gVenta=0,gCosto=0;
+    // Construir HTML jerárquico
+    let cuerpo='';
+    const vendOrden=Object.keys(grupos).sort();
+    if(!vendOrden.length){
+      cuerpo='<tr><td colspan="8" class="empty">Sin ventas en el período</td></tr>';
+    }
+    vendOrden.forEach(vend=>{
+      let vVenta=0,vCosto=0;
+      let filasVend='';
+      const cliOrden=Object.keys(grupos[vend]).sort();
+      cliOrden.forEach(cli=>{
+        let cVenta=0,cCosto=0;
+        let filasCli='';
+        const prods=Object.values(grupos[vend][cli]).sort((a,b)=>b.ventaTotal-a.ventaTotal);
+        prods.forEach(p=>{
+          const margenQ=p.ventaTotal-p.costoTotal;
+          const margenPct=p.ventaTotal?(margenQ/p.ventaTotal*100):0;
+          cVenta+=p.ventaTotal;cCosto+=p.costoTotal;
+          filasCli+=`<tr>
+            <td style="padding-left:24px;font-size:12px">${p.codigo?`<span style="color:var(--muted);font-size:11px">${p.codigo}</span> `:''}${p.nombre}</td>
+            <td class="num">${p.cant}</td>
+            <td class="num">${money(p.vUnit)}</td>
+            <td class="num" style="font-weight:600">${money(p.ventaTotal)}</td>
+            <td class="num" style="color:var(--muted)">${money(p.costoUnit)}</td>
+            <td class="num" style="color:var(--muted)">${money(p.costoTotal)}</td>
+            <td class="num" style="color:var(--green);font-weight:600">${money(margenQ)}</td>
+            <td class="num" style="color:var(--green)">${margenPct.toFixed(1)}%</td></tr>`;
+          expFilas.push({Vendedor:vend,Cliente:cli,'Código':p.codigo,Producto:p.nombre,Cantidad:p.cant,'Precio Unit.':p.vUnit,'Venta Total':p.ventaTotal,'Costo Unit.':p.costoUnit,'Costo Total':p.costoTotal,'Margen Q':margenQ,'Margen %':margenPct.toFixed(1)});
+        });
+        vVenta+=cVenta;vCosto+=cCosto;
+        const cMargen=cVenta-cCosto;
+        const cPct=cVenta?(cMargen/cVenta*100):0;
+        // Encabezado de cliente + sus productos + subtotal
+        filasVend+=`<tr style="background:var(--surface-2)"><td colspan="8" style="font-weight:700;font-size:12.5px;padding:7px 10px;color:var(--ink)">${cli}</td></tr>`+filasCli+
+          `<tr style="border-bottom:1px solid var(--line)"><td style="text-align:right;font-size:11px;color:var(--muted);font-style:italic">Subtotal ${cli}:</td><td></td><td></td><td class="num" style="font-weight:600;font-size:11.5px">${money(cVenta)}</td><td></td><td class="num" style="font-size:11.5px;color:var(--muted)">${money(cCosto)}</td><td class="num" style="font-weight:600;font-size:11.5px;color:var(--green)">${money(cMargen)}</td><td class="num" style="font-size:11.5px;color:var(--green)">${cPct.toFixed(1)}%</td></tr>`;
+      });
+      gVenta+=vVenta;gCosto+=vCosto;
+      const vMargen=vVenta-vCosto;
+      const vPct=vVenta?(vMargen/vVenta*100):0;
+      // Encabezado de vendedor (banda verde) + clientes + subtotal vendedor
+      cuerpo+=`<tr style="background:var(--green)"><td colspan="8" style="color:#fff;font-weight:700;font-size:13px;padding:8px 10px">▸ ${vend}</td></tr>`+filasVend+
+        `<tr style="border-bottom:2px solid var(--line-strong);background:#f0f5e8"><td style="text-align:right;font-weight:700;font-size:12px">TOTAL ${vend}:</td><td></td><td></td><td class="num" style="font-weight:700">${money(vVenta)}</td><td></td><td class="num" style="font-weight:700;color:var(--muted)">${money(vCosto)}</td><td class="num" style="font-weight:700;color:var(--green)">${money(vMargen)}</td><td class="num" style="font-weight:700;color:var(--green)">${vPct.toFixed(1)}%</td></tr>
+        <tr><td colspan="8" style="height:8px"></td></tr>`;
+    });
+    exportData=expFilas;
+    const gMargen=gVenta-gCosto;
+    const gPct=gVenta?(gMargen/gVenta*100):0;
+    html+=`<div class="kpis stagger">${kpiHTML([
+      {ic:'i-blue',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Ventas totales',val:money(gVenta)},
+      {ic:'i-warn',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/>',lbl:'Costo total',val:money(gCosto)},
+      {ic:'i-green',svg:'<path d="M23 6l-9.5 9.5-5-5L1 18"/>',lbl:'Margen total',val:money(gMargen)},
+      {ic:'i-lime',svg:'<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',lbl:'Margen %',val:gPct.toFixed(1)+'%'}])}</div>
+      <div class="panel"><div class="panel-head"><h3>Ventas por cliente y producto</h3></div>
+      <table style="font-size:12px"><thead><tr>
+        <th>Producto</th><th class="num">Cant.</th><th class="num">Precio Unit.</th><th class="num">Venta Total</th>
+        <th class="num">Costo Unit.</th><th class="num">Costo Total</th><th class="num">Margen Q</th><th class="num">Margen %</th>
+      </tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+  }
   else if(repType==='cprov'){
     const rval=c=>{const v=(c.items||[]).reduce((s,it)=>s+(it.recibido||0)*(it.costo||it.precio||0),0);return v>0?v:Number(c.total||0);};
     const porPr={};comprasR.forEach(c=>{const v=rval(c);if(v<=0)return;if(!porPr[c.proveedorNombre])porPr[c.proveedorNombre]={v:0,n:0};porPr[c.proveedorNombre].v+=v;porPr[c.proveedorNombre].n++;});
@@ -3944,7 +4029,7 @@ function renderReportes(){
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],['Período:',repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
@@ -3957,10 +4042,10 @@ window.exportarExcel=exportarExcel;
 // ---- Exportación PDF ----
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const ths=cols.map(c=>`<th style="padding:7px 10px;background:#f4f7ef;font-size:10px;text-transform:uppercase;letter-spacing:.4px">${c}</th>`).join('');
-  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Margen','Ingresos','Total comprado'].includes(c);
+  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total'].includes(c);
   const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="padding:6px 10px;border-bottom:1px solid #e7ebdf;font-size:12px;${esNum(c)?'text-align:right':''}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
   let old=document.getElementById('rep-print-area');if(old)old.remove();
   const div=document.createElement('div');div.id='rep-print-area';
