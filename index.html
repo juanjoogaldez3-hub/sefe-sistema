@@ -3347,9 +3347,15 @@ function renderDashboardConfig(){
   });
   tbl.querySelector('tbody').innerHTML=tbody;
 }
-function toggleDashboard(rol,key,val){
+async function toggleDashboard(rol,key,val){
   if(!dashboardConfig[rol])dashboardConfig[rol]={};
   dashboardConfig[rol][key]=val;
+  // GUARDAR en la base de datos
+  if(typeof guardarDashboardConfig==='function'){
+    const ok=await guardarDashboardConfig(rol,dashboardConfig[rol]);
+    if(ok){toast('✓ Dashboard guardado','Configuración aplicada');}
+    else{toast('Error al guardar','No se pudo guardar la configuración del dashboard',true);}
+  }
 }
 window.toggleDashboard=toggleDashboard;
 
@@ -3379,23 +3385,31 @@ function renderPermisos(){
   tbl.querySelector('tbody').innerHTML=tbody;
 }
 
-function togglePermiso(rol,key,val){
+async function togglePermiso(rol,key,val){
   const r=ROLES[rol];if(!r)return;
-  if(key==='__facturar'){r.facturar=val;return;}
-  if(key==='__anular'){r.anular=val;return;}
-  if(key==='__crearCliente'){r.crearCliente=val;return;}
-  if(key==='__editarInventario'){r.editarInventario=val;return;}
-  if(key==='__registrarAbono'){r.registrarAbono=val;return;}
-  if(key==='__asignarPiloto'){r.asignarPiloto=val;return;}
-  if(key==='__convertirCajas'){r.convertirCajas=val;return;}
-  if(key==='__compraEspecial'){r.compraEspecial=val;return;}
-  if(key==='__readonly'){r.readonly=val;return;}
-  if(r.views==='ALL'){
+  // Actualiza en memoria según el tipo de permiso
+  if(key==='__facturar'){r.facturar=val;}
+  else if(key==='__anular'){r.anular=val;}
+  else if(key==='__crearCliente'){r.crearCliente=val;}
+  else if(key==='__editarInventario'){r.editarInventario=val;}
+  else if(key==='__registrarAbono'){r.registrarAbono=val;}
+  else if(key==='__asignarPiloto'){r.asignarPiloto=val;}
+  else if(key==='__convertirCajas'){r.convertirCajas=val;}
+  else if(key==='__compraEspecial'){r.compraEspecial=val;}
+  else if(key==='__readonly'){r.readonly=val;}
+  else if(r.views==='ALL'){
     if(!val){r.views=Object.keys(ROLES).flatMap(k=>ROLES[k].views==='ALL'?[]:ROLES[k].views).filter((v,i,a)=>a.indexOf(v)===i).filter(v=>v!==key);}
-    return;
   }
-  if(val){if(!r.views.includes(key))r.views.push(key);}
-  else r.views=r.views.filter(v=>v!==key);
+  else{
+    if(val){if(!r.views.includes(key))r.views.push(key);}
+    else r.views=r.views.filter(v=>v!==key);
+  }
+  // GUARDAR en la base de datos
+  if(typeof guardarRol==='function'){
+    const ok=await guardarRol(rol,r);
+    if(ok){toast('✓ Permiso guardado','Cambios aplicados al rol '+(r.label||rol));}
+    else{toast('Error al guardar','No se pudo guardar el permiso. Revisá tu conexión.',true);}
+  }
 }
 window.togglePermiso=togglePermiso;
 function openUsuario(id){const u=id?usuarios.find(x=>x.id===id):null;

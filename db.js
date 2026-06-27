@@ -27,7 +27,7 @@ async function cargarTodo() {
   try {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
-      rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit
+      rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -42,6 +42,7 @@ async function cargarTodo() {
       sb.from('roles').select('*'),
       sb.from('usuarios').select('*').order('id'),
       sb.from('auditoria').select('*').order('seq'),
+      sb.from('dashboard_config').select('*'),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -81,6 +82,15 @@ async function cargarTodo() {
       accion:a.accion, detalle:a.detalle, prevHash:a.prev_hash, hash:a.hash
     })).reverse();
     auditSeq = auditLog.length ? Math.max(...auditLog.map(a=>a.seq)) : 0;
+
+    // Dashboard config por rol (si la variable global existe)
+    if (typeof dashboardConfig !== 'undefined') {
+      (rDashboard.data||[]).forEach(d=>{
+        let cfg = d.config;
+        if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch(e) { cfg = {}; } }
+        dashboardConfig[d.rol] = cfg || {};
+      });
+    }
 
     console.log('✓ Datos cargados desde Supabase');
     return true;
@@ -380,4 +390,37 @@ async function guardarPiloto(p){
     const {error} = await sb.from('pilotos').update(row).eq('id', p.id);
     if(error)console.error('Error actualizando piloto:',error);
   }
+}
+
+// ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
+// Convierte el formato en memoria (camelCase) al de la base (snake_case).
+// views se guarda como JSON: 'ALL' tal cual, o el array de secciones.
+async function guardarRol(rolKey, r){
+  if(!r) return;
+  const viewsVal = (r.views === 'ALL') ? 'ALL' : (Array.isArray(r.views) ? r.views : []);
+  const row = {
+    label: r.label,
+    views: viewsVal,
+    anular: !!r.anular,
+    facturar: !!r.facturar,
+    crear_cliente: !!r.crearCliente,
+    editar_inventario: !!r.editarInventario,
+    registrar_abono: !!r.registrarAbono,
+    readonly: !!r.readonly,
+    compra_especial: !!r.compraEspecial,
+    asignar_piloto: !!r.asignarPiloto,
+    convertir_cajas: !!r.convertirCajas
+  };
+  const {error} = await sb.from('roles').update(row).eq('rol', rolKey);
+  if(error) console.error('Error guardando rol '+rolKey+':', error);
+  return !error;
+}
+
+// ── Guardar la configuración del DASHBOARD por rol ───────────
+async function guardarDashboardConfig(rolKey, config){
+  // upsert: si no existe la fila para ese rol, la crea; si existe, la actualiza.
+  const {error} = await sb.from('dashboard_config')
+    .upsert({rol: rolKey, config: config}, {onConflict: 'rol'});
+  if(error) console.error('Error guardando dashboard_config '+rolKey+':', error);
+  return !error;
 }
