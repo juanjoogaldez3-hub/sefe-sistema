@@ -4014,7 +4014,12 @@ function openCli(id){
   openMod(c?'Editar cliente':'Nuevo cliente',`
   <div class="row"><div><label>Nombre comercial</label><input id="c-nom" value="${c?c.nombre:''}"></div></div>
   <div class="row"><div><label>Razón social</label><input id="c-rs" value="${c?(c.razonSocial||''):''}"></div></div>
-  <div class="row"><div><label>NIT (o CF)</label><input id="c-nit" value="${c?c.nit:'CF'}"></div><div><label>Correo</label><input id="c-mail" value="${c?(c.email||''):''}"></div></div>
+  <div class="row"><div><label>NIT (o CF)</label>
+    <div style="display:flex;gap:6px">
+      <input id="c-nit" value="${c?c.nit:'CF'}" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarRazonSocial();}">
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-buscar-nit" onclick="buscarRazonSocial()" title="Buscar razón social en SAT" style="white-space:nowrap">🔍 Buscar</button>
+    </div>
+  </div><div><label>Correo</label><input id="c-mail" value="${c?(c.email||''):''}"></div></div>
   <div class="row"><div><label>Dirección</label><input id="c-dir" value="${c?(c.direccion||'Ciudad'):'Ciudad'}"></div></div>
   <div class="row"><div><label>Tiempo de crédito</label><select id="c-tc">
       <option value="0" ${tc===0?'selected':''}>Contado</option>
@@ -4056,6 +4061,58 @@ function openCli(id){
   setTimeout(()=>{const s=$('#c-tc');if(s)s.onchange=()=>{$('#c-tc-custom-wrap').style.display=s.value==='custom'?'block':'none';};},0);
 }
 window.openCli=openCli;
+
+// ── CONSULTAR NIT EN SAT (vía backend EcoFactura) ───────────
+// Consulta el NIT en el endpoint /api/nit y autocompleta la
+// razón social (y el nombre comercial si está vacío).
+async function buscarRazonSocial(){
+  const nitInput=$('#c-nit');
+  if(!nitInput)return;
+  const nit=(nitInput.value||'').trim();
+  if(!nit||nit.toUpperCase()==='CF'){
+    toast('Ingresá un NIT','Escribí el NIT antes de buscar',true);
+    return;
+  }
+  if(typeof FEL_BACKEND_URL==='undefined'||FEL_BACKEND_URL.includes('TU-BACKEND')){
+    toast('Backend no configurado','No se puede consultar el NIT sin el backend FEL',true);
+    return;
+  }
+  const btn=$('#btn-buscar-nit');
+  const txtOrig=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Buscando…';}
+  try{
+    const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/nit/'+encodeURIComponent(nit));
+    const data=await r.json();
+    // Error de servidor/conexión
+    if(!r.ok&&data.error){
+      toast('Error al consultar',data.error,true);
+      return;
+    }
+    // EcoFactura devuelve { valido, nit, nombre, direccion } o { valido:false, codigo, mensaje }
+    if(data.valido===false){
+      toast('NIT no encontrado',data.mensaje||'La SAT no devolvió datos para ese NIT',true);
+      return;
+    }
+    const razon=data.nombre||'';
+    if(razon){
+      const rs=$('#c-rs');if(rs)rs.value=razon;
+      const nom=$('#c-nom');if(nom&&!nom.value.trim())nom.value=razon;
+      if(data.direccion){const dir=$('#c-dir');if(dir&&(!dir.value.trim()||dir.value.trim()==='Ciudad'))dir.value=data.direccion;}
+      // Normaliza el NIT al que devolvió la SAT (sin guiones)
+      if(data.nit&&nitInput)nitInput.value=data.nit;
+      toast('✓ NIT encontrado',razon);
+    }else{
+      toast('Sin razón social','La SAT no devolvió el nombre para ese NIT',true);
+    }
+  }catch(e){
+    console.error('Error consultando NIT:',e);
+    toast('Error de conexión','No se pudo consultar el NIT. Revisá tu conexión.',true);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=txtOrig;}
+  }
+}
+window.buscarRazonSocial=buscarRazonSocial;
+
 
 function openCliSede(padreId){
   if(!canCrearCliente()){toast('Sin permiso','Solo Admin y Gerencia pueden crear sedes',true);return;}
