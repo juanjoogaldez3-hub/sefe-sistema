@@ -1456,7 +1456,7 @@ function renderSeguimiento(){
 //   inputId  : id del <input>
 //   getItems : función que devuelve [{texto, sub, valor}] según lo escrito
 //   onSelect : función(item) al elegir una opción
-const MAX_SUGERENCIAS=8;
+const MAX_SUGERENCIAS=12;
 function crearAutocomplete(inputId, getItems, onSelect){
   const input=document.getElementById(inputId);
   if(!input)return;
@@ -1468,27 +1468,33 @@ function crearAutocomplete(inputId, getItems, onSelect){
     box=document.createElement('div');
     box.id=inputId+'-ac';
     box.className='ac-box';
-    box.style.cssText='position:absolute;z-index:9999;background:var(--surface,#fff);border:1px solid var(--line,#e0e0e0);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);max-height:280px;overflow-y:auto;display:none;-webkit-overflow-scrolling:touch';
+    box.style.cssText='position:absolute;z-index:9999;background:var(--surface,#fff);border:1px solid var(--line,#e0e0e0);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);max-height:420px;overflow-y:auto;display:none;-webkit-overflow-scrolling:touch';
     document.body.appendChild(box);
   }
   let idx=-1, items=[];
   const posicionar=()=>{
     const r=input.getBoundingClientRect();
     const margen=8;
-    // Ancho: igual al input, pero al menos 200px y nunca más que la pantalla
-    let ancho=Math.max(r.width, 200);
+    // Ancho: más generoso. Al menos 320px (o el ancho del input si es mayor),
+    // pero nunca más que la pantalla.
+    let ancho=Math.max(r.width, 320);
     ancho=Math.min(ancho, window.innerWidth - margen*2);
     box.style.width=ancho+'px';
-    // Posición horizontal: alineado al input, pero sin salirse de la pantalla
+    // Posición horizontal: alineado al input, pero sin salirse de la pantalla.
+    // Si el dropdown es más ancho que el input, lo centramos un poco respecto al input.
     let left=r.left+window.scrollX;
+    if(ancho>r.width){
+      // centrar el extra a ambos lados del input
+      left=r.left+window.scrollX-(ancho-r.width)/2;
+    }
     if(left+ancho > window.innerWidth+window.scrollX - margen){
       left=window.innerWidth+window.scrollX - ancho - margen;
     }
     if(left < margen) left=margen;
     box.style.left=left+'px';
-    // Posición vertical: debajo del input. Si no cabe abajo, ponerlo arriba.
+    // Alto: más alto. Hasta 420px o el espacio disponible abajo.
     const espacioAbajo=window.innerHeight - r.bottom;
-    const altoMax=Math.min(280, Math.max(espacioAbajo-margen, 160));
+    const altoMax=Math.min(420, Math.max(espacioAbajo-margen, 200));
     box.style.maxHeight=altoMax+'px';
     box.style.top=(r.bottom+window.scrollY+4)+'px';
   };
@@ -1524,7 +1530,19 @@ function crearAutocomplete(inputId, getItems, onSelect){
     if(box.style.display==='none')return;
     if(e.key==='ArrowDown'){e.preventDefault();idx=Math.min(idx+1,items.length-1);pintarActivo();}
     else if(e.key==='ArrowUp'){e.preventDefault();idx=Math.max(idx-1,0);pintarActivo();}
-    else if(e.key==='Enter'){if(idx>=0){e.preventDefault();elegir(items[idx]);}}
+    else if(e.key==='Enter'){
+      e.preventDefault();
+      if(!items.length)return;
+      // Si ya hay una opción marcada con las flechas, usar esa.
+      // Si no, buscar coincidencia exacta con lo escrito; si no hay, usar la primera.
+      let elegida;
+      if(idx>=0){elegida=items[idx];}
+      else{
+        const q=input.value.trim().toLowerCase();
+        elegida=items.find(it=>it.texto.toLowerCase()===q)||items[0];
+      }
+      elegir(elegida);
+    }
     else if(e.key==='Escape'){cerrar();}
   });
   input.addEventListener('blur',()=>setTimeout(cerrar,150));
