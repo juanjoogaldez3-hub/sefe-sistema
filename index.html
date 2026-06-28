@@ -3806,8 +3806,34 @@ const MODULOS_PERMISOS=[
   {key:'__convertirCajas',lbl:'Convertir cajas a unidades',grp:'Sub-permisos'},
   {key:'__compraEspecial',lbl:'Crear compras especiales',grp:'Sub-permisos'},
   {key:'__readonly',lbl:'Solo lectura (sin acciones)',grp:'Sub-permisos'},
+  {key:'rep_resumen',lbl:'Resumen',grp:'Reportes'},
+  {key:'rep_costos',lbl:'Costos vs ventas',grp:'Reportes'},
+  {key:'rep_vendedor',lbl:'Ventas por vendedor',grp:'Reportes'},
+  {key:'rep_producto',lbl:'Ventas por producto',grp:'Reportes'},
+  {key:'rep_cliprod',lbl:'Ventas cliente/producto',grp:'Reportes'},
+  {key:'rep_cprov',lbl:'Compras por proveedor',grp:'Reportes'},
+  {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes'},
+  {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes'},
+  {key:'rep_recibos',lbl:'Recibos',grp:'Reportes'},
+  {key:'rep_pagos',lbl:'Pagos por cliente',grp:'Reportes'},
 ];
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
+
+// Mapa de tipos de reporte a su clave de permiso
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','cprov','cprod','cxc','recibos','pagos'];
+
+// ¿El rol actual puede ver este reporte?
+// - Admin y roles con 'ALL' ven todos.
+// - Si el rol NO tiene ningún permiso rep_* configurado, ve todos (compatibilidad).
+// - Si tiene al menos uno configurado, solo ve los que tenga marcados.
+function puedeVerReporte(tipo){
+  const r=ROLES[currentRole];
+  if(!r)return true;
+  if(r.views==='ALL')return true;
+  const tieneAlgunRepPerm=REP_TIPOS.some(t=>r.views.includes('rep_'+t));
+  if(!tieneAlgunRepPerm)return true; // sin config = ve todos (como antes)
+  return r.views.includes('rep_'+tipo);
+}
 
 function tienePermisoMod(rol,key){
   const r=ROLES[rol];if(!r)return false;
@@ -4242,6 +4268,18 @@ function renderRepFilters(){
   f.innerHTML=html;
 }
 function bindRep(){
+  // Mostrar/ocultar pestañas de reportes según los permisos del rol
+  let primeraVisible=null;
+  document.querySelectorAll('#rep-types .ct-tab').forEach(b=>{
+    const permitido=puedeVerReporte(b.dataset.r);
+    b.style.display=permitido?'':'none';
+    if(permitido&&!primeraVisible)primeraVisible=b.dataset.r;
+  });
+  // Si el reporte actual no está permitido, saltar al primero visible
+  if(!puedeVerReporte(repType)&&primeraVisible){
+    repType=primeraVisible;
+    document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x.dataset.r===repType));
+  }
   document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.onclick=()=>setRepPeriod(b.dataset.p));
   document.querySelectorAll('#rep-types .ct-tab').forEach(b=>b.onclick=()=>{repType=b.dataset.r;repFiltros={cliente:'',vendedores:[],montoMin:'',montoMax:'',proveedor:'',soloVencidos:false,tiempoCredito:''};gruposColapsados={};document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x===b));renderRepFilters();renderReportes();});
   ['rep-desde','rep-hasta'].forEach(id=>{const e=$('#'+id);if(e)e.onchange=()=>{document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.classList.remove('on'));renderReportes();};});
