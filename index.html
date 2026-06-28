@@ -514,8 +514,8 @@
                 <div class="row">
                   <div style="flex:2">
                     <label>Cliente</label>
-                    <input id="f-cli-search" list="f-cli-list" placeholder="Buscar por nombre, razón social o NIT…" autocomplete="off">
-                    <datalist id="f-cli-list"></datalist>
+                    <input id="f-cli-search" placeholder="Buscar por nombre, razón social o NIT…" autocomplete="off">
+                    
                     <input type="hidden" id="f-cli">
                   </div>
                   <div>
@@ -536,8 +536,8 @@
             <div class="panel">
               <div class="panel-head"><h3>Productos</h3>
                 <div style="display:flex;gap:8px;align-items:center">
-                  <input id="f-add" list="f-add-list" placeholder="Buscar por SKU o nombre…" autocomplete="off" style="max-width:260px;padding:7px 10px;font-size:12.5px">
-                  <datalist id="f-add-list"></datalist>
+                  <input id="f-add" placeholder="Buscar por SKU o nombre…" autocomplete="off" style="max-width:260px;padding:7px 10px;font-size:12.5px">
+                  
                   <button class="btn btn-primary btn-sm" onclick="addPedidoProducto()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
                   <button class="btn btn-ghost btn-sm" id="btn-guardar-precios" onclick="guardarPreciosAlCliente()" style="display:none" title="Guarda los precios de este pedido en la ficha del cliente"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Guardar precios al cliente</button>
                 </div>
@@ -877,6 +877,47 @@ const money=n=>'Q '+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2
 const padn=n=>String(n).padStart(4,'0');
 
 // ---- Tablas: buscador rápido + orden por columna (tipo Excel) ----
+// ── PAGINACIÓN PROGRESIVA (para no saturar la memoria en celulares) ──
+// En vez de dibujar cientos de filas de golpe (lo que cierra navegadores
+// con poca RAM como Samsung Internet), dibuja un bloque y carga más al
+// hacer scroll o con un botón "Ver más".
+const PAGINA_FILAS=60;// cuántas filas por bloque
+let _paginadores={};// estado por tabla
+
+function renderPaginado(tbodyId, htmlFilas, vacioMsg){
+  const tbody=document.getElementById(tbodyId);if(!tbody)return;
+  // htmlFilas es un ARRAY de strings (cada uno una fila <tr>)
+  if(!htmlFilas.length){
+    tbody.innerHTML=`<tr><td colspan="20" class="empty">${vacioMsg||'Sin datos'}</td></tr>`;
+    _paginadores[tbodyId]=null;
+    return;
+  }
+  _paginadores[tbodyId]={filas:htmlFilas,mostradas:0};
+  tbody.innerHTML='';
+  _pintarMasFilas(tbodyId);
+}
+
+function _pintarMasFilas(tbodyId){
+  const st=_paginadores[tbodyId];if(!st)return;
+  const tbody=document.getElementById(tbodyId);if(!tbody)return;
+  // Quitar la fila "Ver más" anterior si existe
+  const btnRow=tbody.querySelector('.fila-vermas');if(btnRow)btnRow.remove();
+  const desde=st.mostradas, hasta=Math.min(desde+PAGINA_FILAS, st.filas.length);
+  const frag=st.filas.slice(desde,hasta).join('');
+  tbody.insertAdjacentHTML('beforeend',frag);
+  st.mostradas=hasta;
+  // Si quedan más, agregar botón "Ver más"
+  if(st.mostradas<st.filas.length){
+    const restantes=st.filas.length-st.mostradas;
+    const cols=tbody.closest('table')?.querySelectorAll('thead th').length||10;
+    tbody.insertAdjacentHTML('beforeend',
+      `<tr class="fila-vermas"><td colspan="${cols}" style="text-align:center;padding:14px">
+        <button class="btn btn-ghost btn-sm" onclick="_pintarMasFilas('${tbodyId}')">Ver más (${restantes} restantes)</button>
+      </td></tr>`);
+  }
+}
+window._pintarMasFilas=_pintarMasFilas;
+
 function enhanceTable(tbodyId){
   const tbody=document.getElementById(tbodyId);if(!tbody)return;
   const table=tbody.closest('table');if(!table)return;
@@ -897,16 +938,32 @@ function enhanceTable(tbodyId){
         th.dataset.dir=String(dir);th.classList.add('sort-active');
         th.querySelector('.sort-arrow').textContent=dir===1?'▲':'▼';
         const tb=table.querySelector('tbody');
-        const rows=Array.from(tb.querySelectorAll('tr'));
-        rows.sort((a,b)=>{
-          const ca=a.cells[idx],cb=b.cells[idx];if(!ca||!cb)return 0;
-          const av=ca.textContent.trim(),bv=cb.textContent.trim();
+        const tbId=tb?tb.id:null;
+        const stP=tbId?_paginadores[tbId]:null;
+        // Comparador que extrae el texto de la celta [idx] de un <tr> en string
+        const valDe=(htmlTr)=>{
+          const tmp=document.createElement('tbody');tmp.innerHTML=htmlTr;
+          const cell=tmp.querySelector('tr')?.cells[idx];
+          return cell?cell.textContent.trim():'';
+        };
+        const cmpFn=(av,bv)=>{
           const an=parseFloat(av.replace(/[^0-9.\-]/g,'')),bn=parseFloat(bv.replace(/[^0-9.\-]/g,''));
           const bothNum=/[0-9]/.test(av)&&/[0-9]/.test(bv)&&!isNaN(an)&&!isNaN(bn);
-          const cmp=bothNum?(an-bn):av.localeCompare(bv,'es',{sensitivity:'base'});
-          return cmp*dir;
-        });
-        rows.forEach(r=>tb.appendChild(r));
+          return (bothNum?(an-bn):av.localeCompare(bv,'es',{sensitivity:'base'}))*dir;
+        };
+        if(stP){
+          // Tabla paginada: ordenar el ARRAY completo y volver a renderizar
+          stP.filas.sort((a,b)=>cmpFn(valDe(a),valDe(b)));
+          stP.mostradas=0;tb.innerHTML='';_pintarMasFilas(tbId);
+        }else{
+          // Tabla normal: ordenar el DOM
+          const rows=Array.from(tb.querySelectorAll('tr'));
+          rows.sort((a,b)=>{
+            const ca=a.cells[idx],cb=b.cells[idx];if(!ca||!cb)return 0;
+            return cmpFn(ca.textContent.trim(),cb.textContent.trim());
+          });
+          rows.forEach(r=>tb.appendChild(r));
+        }
       };
     });
   }
@@ -916,6 +973,26 @@ function applyTableFilter(table){
   const wrap=table.previousElementSibling;if(!wrap||!wrap.classList.contains('tbl-toolbar'))return;
   const q=(wrap.querySelector('.tbl-search').value||'').toLowerCase().trim();
   const tbody=table.querySelector('tbody');
+  const tbodyId=tbody?tbody.id:null;
+  const st=tbodyId?_paginadores[tbodyId]:null;
+  // Si la tabla está paginada y hay una búsqueda, mostrar TODAS las coincidencias
+  // (no solo las filas del bloque visible). Si se borra la búsqueda, volver a paginar.
+  if(st){
+    const btnRow=tbody.querySelector('.fila-vermas');if(btnRow)btnRow.remove();
+    if(q){
+      // Renderizar todas las filas que coincidan
+      const coinciden=st.filas.filter(f=>f.toLowerCase().includes(q));
+      tbody.innerHTML=coinciden.length?coinciden.join(''):`<tr><td colspan="20" class="empty">Sin coincidencias</td></tr>`;
+      wrap.querySelector('.tbl-count').textContent=`${coinciden.length} de ${st.filas.length}`;
+      return;
+    }else{
+      // Sin búsqueda: volver a la vista paginada
+      st.mostradas=0;tbody.innerHTML='';_pintarMasFilas(tbodyId);
+      wrap.querySelector('.tbl-count').textContent='';
+      return;
+    }
+  }
+  // Tabla no paginada: filtrado normal sobre el DOM
   let visible=0;
   Array.from(tbody.querySelectorAll('tr')).forEach(r=>{
     const show=!q||r.textContent.toLowerCase().includes(q);
@@ -1367,12 +1444,122 @@ function renderSeguimiento(){
   </tr>`).join('');
 }
 
+// ══════════ AUTOCOMPLETADO PROPIO ══════════
+// Reemplaza los <datalist> nativos (que muestran todo de golpe y se ven mal)
+// por un dropdown que solo sugiere al escribir, filtrando en vivo.
+//
+// crearAutocomplete(inputId, getItems, onSelect)
+//   inputId  : id del <input>
+//   getItems : función que devuelve [{texto, sub, valor}] según lo escrito
+//   onSelect : función(item) al elegir una opción
+const MAX_SUGERENCIAS=8;
+function crearAutocomplete(inputId, getItems, onSelect){
+  const input=document.getElementById(inputId);
+  if(!input)return;
+  // Quitar el datalist nativo si lo tenía
+  input.removeAttribute('list');
+  // Crear el contenedor del dropdown (una sola vez)
+  let box=document.getElementById(inputId+'-ac');
+  if(!box){
+    box=document.createElement('div');
+    box.id=inputId+'-ac';
+    box.className='ac-box';
+    box.style.cssText='position:absolute;z-index:9999;background:var(--surface,#fff);border:1px solid var(--line,#e0e0e0);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);max-height:280px;overflow-y:auto;display:none;min-width:240px';
+    document.body.appendChild(box);
+  }
+  let idx=-1, items=[];
+  const posicionar=()=>{
+    const r=input.getBoundingClientRect();
+    box.style.left=(r.left+window.scrollX)+'px';
+    box.style.top=(r.bottom+window.scrollY+4)+'px';
+    box.style.width=Math.max(r.width,240)+'px';
+  };
+  const cerrar=()=>{box.style.display='none';idx=-1;};
+  const pintar=()=>{
+    if(!items.length){cerrar();return;}
+    box.innerHTML=items.map((it,i)=>`<div class="ac-item" data-i="${i}" style="padding:9px 13px;cursor:pointer;border-bottom:1px solid var(--line-soft,#f0f0f0);${i===idx?'background:var(--surface-2,#f4f7ef)':''}">
+      <div style="font-weight:600;font-size:13px;color:var(--ink,#1a1a1a)">${it.texto}</div>
+      ${it.sub?`<div style="font-size:11.5px;color:var(--muted,#888)">${it.sub}</div>`:''}
+    </div>`).join('');
+    posicionar();box.style.display='block';
+    box.querySelectorAll('.ac-item').forEach(el=>{
+      el.onmousedown=(e)=>{e.preventDefault();elegir(items[Number(el.dataset.i)]);};
+      el.onmouseenter=()=>{idx=Number(el.dataset.i);pintarActivo();};
+    });
+  };
+  const pintarActivo=()=>{
+    box.querySelectorAll('.ac-item').forEach((el,i)=>{el.style.background=i===idx?'var(--surface-2,#f4f7ef)':'';});
+  };
+  const elegir=(it)=>{
+    if(!it)return;
+    input.value=it.texto;
+    cerrar();
+    if(onSelect)onSelect(it);
+  };
+  input.addEventListener('input',()=>{
+    const q=input.value.trim();
+    if(q.length<1){cerrar();if(onSelect)onSelect(null);return;}
+    items=getItems(q).slice(0,MAX_SUGERENCIAS);
+    idx=-1;pintar();
+  });
+  input.addEventListener('keydown',(e)=>{
+    if(box.style.display==='none')return;
+    if(e.key==='ArrowDown'){e.preventDefault();idx=Math.min(idx+1,items.length-1);pintarActivo();}
+    else if(e.key==='ArrowUp'){e.preventDefault();idx=Math.max(idx-1,0);pintarActivo();}
+    else if(e.key==='Enter'){if(idx>=0){e.preventDefault();elegir(items[idx]);}}
+    else if(e.key==='Escape'){cerrar();}
+  });
+  input.addEventListener('blur',()=>setTimeout(cerrar,150));
+  input.addEventListener('focus',()=>{const q=input.value.trim();if(q){items=getItems(q).slice(0,MAX_SUGERENCIAS);pintar();}});
+}
+
+// Configura todos los autocompletados del formulario de pedido
+function setupAutocomplete(){
+  // CLIENTES
+  crearAutocomplete('f-cli-search',
+    (q)=>{
+      const ql=q.toLowerCase();
+      let base=esVentas()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+      return base.filter(c=>
+        (c.nombre||'').toLowerCase().includes(ql)||
+        (c.razonSocial||'').toLowerCase().includes(ql)||
+        (c.nit||'').toLowerCase().includes(ql)
+      ).map(c=>({texto:`${c.nombre} · ${c.nit}`, sub:c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:'', valor:c.id}));
+    },
+    (item)=>{
+      // Disparar la misma lógica que tenía el oninput original
+      if($('#f-cli-search'))$('#f-cli-search').dispatchEvent(new Event('cli-elegido'));
+      aplicarClienteSeleccionado(item?item.valor:null);
+    });
+  // PRODUCTOS (agregar al pedido)
+  crearAutocomplete('f-add',
+    (q)=>{
+      const ql=q.toLowerCase();
+      return productos.filter(p=>p.activo!==false).filter(p=>
+        (p.codigo||'').toLowerCase().includes(ql)||
+        (p.nombre||'').toLowerCase().includes(ql)||
+        (p.skuProveedor||'').toLowerCase().includes(ql)
+      ).map(p=>({texto:`${p.codigo} — ${p.nombre}`, sub:p.marca||'', valor:p.id}));
+    },
+    (item)=>{ if(item){agregarProductoPorId(item.valor);$('#f-add').value='';} });
+}
+
+// Aplica la selección de cliente (extraído del oninput original)
+function aplicarClienteSeleccionado(cliId){
+  const cli=cliId?clientes.find(c=>c.id===cliId):null;
+  if(cli&&esVentas()&&cli.vendedorId!==miVendedorId()){
+    $('#f-cli').value='';actualizarVendedorInfo(null);
+    const box=$('#f-saldo-alert');
+    if(box){box.style.display='block';box.innerHTML=`<div class="note n-danger" style="margin:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>Este cliente no está asignado a vos. Solo podés crear pedidos para tus clientes.</span></div>`;}
+    return;
+  }
+  if(cli){$('#f-cli').value=String(cli.id);actualizarVendedorInfo(cli);cart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)it.precio=precioCliente(cli,p);});render();}
+  else{$('#f-cli').value='';actualizarVendedorInfo(null);}
+}
+
 function initForm(){
-  const clisFiltrados=esVentas()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
-  const list=$('#f-cli-list');
-  if(list)list.innerHTML=clisFiltrados.map(c=>`<option value="${c.nombre} · ${c.nit}">${c.razonSocial||c.nombre}</option>`).join('');
-  const list2=$('#f-add-list');
-  if(list2)list2.innerHTML=productos.filter(p=>p.activo!==false).map(p=>`<option value="${p.codigo} — ${p.nombre}">`).join('');
+  // Configurar autocompletados propios (reemplazan a los datalist nativos)
+  setupAutocomplete();
 }
 function clienteSel(){return clientes.find(c=>c.id===Number($('#f-cli').value));}
 function actualizarVendedorInfo(cli){
@@ -1406,19 +1593,7 @@ function mostrarAlertaSaldo(cli){
   }
 }
 window.mostrarAlertaSaldo=mostrarAlertaSaldo;
-$('#f-cli-search').oninput=()=>{
-  const v=($('#f-cli-search').value||'').trim();
-  const cli=clientes.find(c=>`${c.nombre} · ${c.nit}`===v||c.nit.toLowerCase()===v.toLowerCase()||c.nombre.toLowerCase()===v.toLowerCase()||c.razonSocial?.toLowerCase()===v.toLowerCase());
-  // Un vendedor solo puede seleccionar sus clientes asignados
-  if(cli&&esVentas()&&cli.vendedorId!==miVendedorId()){
-    $('#f-cli').value='';actualizarVendedorInfo(null);
-    const box=$('#f-saldo-alert');
-    if(box){box.style.display='block';box.innerHTML=`<div class="note n-danger" style="margin:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>Este cliente no está asignado a vos. Solo podés crear pedidos para tus clientes.</span></div>`;}
-    return;
-  }
-  if(cli){$('#f-cli').value=String(cli.id);actualizarVendedorInfo(cli);cart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)it.precio=precioCliente(cli,p);});render();}
-  else{$('#f-cli').value='';actualizarVendedorInfo(null);}
-};
+// (El manejo del input de cliente ahora lo hace el autocompletado en setupAutocomplete)
 function precioCliente(cli,prod){return (cli&&cli.precios&&cli.precios[prod.id]!=null)?cli.precios[prod.id]:prod.precio;}
 // Guarda los precios del pedido actual en la ficha del cliente (lista de precios por cliente)
 function guardarPreciosAlCliente(){
@@ -1471,15 +1646,25 @@ function addPedidoProducto(){
   const inp=$('#f-add');const v=(inp.value||'').trim();if(!v)return;
   const p=buscarProducto(v);
   if(!p){toast('✗ Producto no encontrado','Buscá por SKU o nombre',true);return;}
+  agregarAlCart(p);
+  inp.value='';render();
+}
+// Agrega un producto al carrito por su ID (usado por el autocompletado)
+function agregarProductoPorId(id){
+  const p=productos.find(x=>x.id===id);
+  if(!p){toast('✗ Producto no encontrado','',true);return;}
+  agregarAlCart(p);render();
+}
+window.agregarProductoPorId=agregarProductoPorId;
+// Lógica común de agregar al carrito
+function agregarAlCart(p){
   const ex=cart.find(c=>c.id===p.id&&c.modoVenta===(p.tipoEmpaque==='caja'?'caja':'unidad'));
   if(ex)ex.cantidad++;
   else{
-    // Modo de venta por defecto según el tipo de empaque
     const modoVenta=p.tipoEmpaque==='caja'?'caja':'unidad';
     cart.push({id:p.id,codigo:p.codigo,nombre:p.nombre,precio:precioCliente(clienteSel(),p),unidad:p.unidad,cantidad:1,descuento:0,stock:p.stock,
       tipoEmpaque:p.tipoEmpaque||'unidad',unidadesPorCaja:p.unidadesPorCaja,modoVenta});
   }
-  inp.value='';render();
 }
 window.addPedidoProducto=addPedidoProducto;
 // Cambiar entre vender unidad o caja en una línea del pedido
@@ -1649,7 +1834,7 @@ function renderDocs(){
   let filtrados=documentos.filter(docsEnRango);
   if(esVentas()&&miVendedorId())filtrados=filtrados.filter(d=>d.vendedorId===miVendedorId());
   $('#docs-empty').style.display=filtrados.length?'none':'block';
-  $('#t-docs').innerHTML=filtrados.slice().reverse().map(rowDoc(true)).join('');
+  renderPaginado('t-docs',filtrados.slice().reverse().map(rowDoc(true)),'Sin documentos');
   enhanceTable('t-docs');
 }
 $('#docs-tipo').onchange=renderDocs;
@@ -2152,7 +2337,7 @@ function renderCli(){
   if(acc)acc.innerHTML=canCrearCliente()?`<button class="btn btn-ghost btn-sm" id="btn-nuevo-cli" onclick="openCli()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
     ` <button class="btn btn-ghost btn-sm" onclick="completarRazonSocial()" title="Consultar SAT y rellenar razón social de clientes que no la tienen" style="color:var(--blue)">Completar razón social</button>`:'';
   const listaBase=esVentas()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
-  $('#t-cli').innerHTML=listaBase.map(c=>{const saldo=saldoCliente(c);
+  const filasCli=listaBase.map(c=>{const saldo=saldoCliente(c);
   const esSede=!!c.sedesDe;const padre=esSede?clientes.find(x=>x.id===c.sedesDe):null;
   const nSedes=clientes.filter(x=>x.sedesDe===c.id).length;
   return `<tr style="cursor:pointer" onclick="abrirCliente(${c.id})">
@@ -2164,7 +2349,7 @@ function renderCli(){
     <td>${tcLabel(c.tiempoCredito||0)}</td>
     <td class="num" style="font-weight:${saldo>0?'700':'400'};color:${saldo>0?'var(--warn)':'var(--muted-2)'}">${saldo>0?money(saldo):'—'}</td>
     <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirCliente(${c.id})">Abrir</button></td>
-  </tr>`;}).join('');enhanceTable('t-cli');}
+  </tr>`;});renderPaginado('t-cli',filasCli,'Sin clientes');enhanceTable('t-cli');}
 
 // ---- Detalle de cliente ----
 let cliTab='precios',cliActual=null;
@@ -3754,7 +3939,7 @@ function renderProd(){
   if(acc)acc.innerHTML=(canEditInventario()?`<button class="btn btn-ghost btn-sm" onclick="openProd()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
     ` <button class="btn btn-ghost btn-sm" id="btn-ver-inactivos" onclick="toggleVerInactivos()" style="color:var(--muted)">${_verInactivos?'Ocultar inactivos':'Ver inactivos'}</button> `:'')+btnsExport;
   const lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
-  $('#t-prod').innerHTML=lista.map(p=>{
+  const filasProd=lista.map(p=>{
   const inactivo=p.activo===false;
   const provs=(p.proveedorIds||[]).map(id=>proveedores.find(x=>x.id===id)).filter(Boolean);
   const provTxt=provs.length?provs.map(pv=>pv.nombre).join(', '):'<span style="color:var(--muted-2)">Sin asignar</span>';
@@ -3779,7 +3964,8 @@ function renderProd(){
     }
   }
   const tipoBadge=p.tipoEmpaque==='caja'?' <span class="badge b-muted" style="font-size:9px">Caja</span>':(p.tipoEmpaque==='caja_unidad'?` <span class="badge b-info" style="font-size:9px">Caja×${p.unidadesPorCaja}</span>`:'');
-  return `<tr style="${inactivo?'opacity:.5':''}"><td class="num">${p.codigo}<div style="font-size:10px;color:var(--muted-2)">${p.skuProveedor||''}</div></td><td style="font-weight:600">${p.nombre}${tipoBadge}${inactivo?' <span class="badge b-muted" style="font-size:9.5px">Inactivo</span>':''}</td><td style="font-size:12.5px;color:var(--muted)">${p.marca||'<span style="color:var(--muted-2)">—</span>'}</td><td style="font-size:12.5px;color:var(--muted)">${provTxt}</td><td class="num" style="color:var(--muted)">${money(p.costo||0)}</td><td class="num">${money(p.precio)}</td><td>${p.unidad}</td><td>${stockCell}</td><td style="white-space:nowrap">${acts}</td></tr>`;}).join('');enhanceTable('t-prod');}
+  return `<tr style="${inactivo?'opacity:.5':''}"><td class="num">${p.codigo}<div style="font-size:10px;color:var(--muted-2)">${p.skuProveedor||''}</div></td><td style="font-weight:600">${p.nombre}${tipoBadge}${inactivo?' <span class="badge b-muted" style="font-size:9.5px">Inactivo</span>':''}</td><td style="font-size:12.5px;color:var(--muted)">${p.marca||'<span style="color:var(--muted-2)">—</span>'}</td><td style="font-size:12.5px;color:var(--muted)">${provTxt}</td><td class="num" style="color:var(--muted)">${money(p.costo||0)}</td><td class="num">${money(p.precio)}</td><td>${p.unidad}</td><td>${stockCell}</td><td style="white-space:nowrap">${acts}</td></tr>`;});
+  renderPaginado('t-prod',filasProd,'Sin productos');enhanceTable('t-prod');}
 
 let _verInactivos=false;
 function toggleVerInactivos(){_verInactivos=!_verInactivos;renderProd();}
