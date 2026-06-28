@@ -1794,7 +1794,7 @@ $('#f-go').onclick=()=>{
 
 function rowDoc(withActions){
   return f=>{
-    const [lbl,cls]=TIPO_LBL[f.tipoDoc];
+    const [lbl,cls]=TIPO_LBL[f.tipoDoc]||['Documento','p-ped'];
     const lblFinal=f.esExenta?lbl+' <span style="font-size:10px;background:var(--warn-bg);color:var(--warn);padding:1px 6px;border-radius:8px;font-weight:700;vertical-align:middle">EXENTA</span>':lbl;
     const E={abierto:['Abierto','b-warn'],pendiente:['Pendiente de facturar','b-warn'],certificada:['Certificada','b-ok'],facturado:['Facturado','b-ok'],anulada:['Anulada','b-muted'],devuelto:['Devuelto','b-info']};
     const [en,ec]=E[f.estado]||['—','b-muted'];
@@ -1829,7 +1829,7 @@ function rowDoc(withActions){
       }
       if(f.tipoDoc==='notaCredito'&&f.estado==='certificada'&&canAnular()){
         items.push('<div class="act-sep"></div>');
-        items.push(`<button class="act-danger" onclick="confirmar('Anular ${TIPO_LBL[f.tipoDoc][0]}','Vas a anular ${f.serie}-${f.numeroDte} por ${money(f.totales.total)}. El saldo de la factura origen se recalculará. Esta acción no se puede deshacer.','Anular',()=>anularNotaCD(${f.id}))">Anular nota</button>`);
+        items.push(`<button class="act-danger" onclick="confirmar('Anular ${(TIPO_LBL[f.tipoDoc]||["Documento"])[0]}','Vas a anular ${f.serie}-${f.numeroDte} por ${money(f.totales.total)}. El saldo de la factura origen se recalculará. Esta acción no se puede deshacer.','Anular',()=>anularNotaCD(${f.id}))">Anular nota</button>`);
       }
     }
     const noCol=(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero));
@@ -2083,7 +2083,7 @@ function generarNota(id,type){
   const f=documentos.find(d=>d.id===id);
   Object.assign(f,{tipoDoc:type,estado:'pendiente'});
   renderDocs();
-  toast('✓ '+TIPO_LBL[type][0]+' generada','PED-'+padn(f.numero));
+  toast('✓ '+(TIPO_LBL[type]||['Documento'])[0]+' generada','PED-'+padn(f.numero));
 }
 window.generarNota=generarNota;
 function cancelarPedido(id){
@@ -2223,8 +2223,8 @@ window.crearNotaCD=crearNotaCD;
 window.anularNotaCD=id=>{const d=documentos.find(x=>x.id===id);if(!d)return;
   d.estado='anulada';d.anuladoPor=currentUser;d.anuladoFecha=new Date().toISOString();
   const f=documentos.find(x=>x.id===d.facturaOrigenId);
-  if(f){const nuevo=arInfo(f);f.estadoPago=nuevo.estado;toast('✓ '+TIPO_LBL[d.tipoDoc][0]+' anulada','Saldo de la factura recalculado: '+money(nuevo.saldo));}
-  else toast('✓ '+TIPO_LBL[d.tipoDoc][0]+' anulada');
+  if(f){const nuevo=arInfo(f);f.estadoPago=nuevo.estado;toast('✓ '+(TIPO_LBL[d.tipoDoc]||['Documento'])[0]+' anulada','Saldo de la factura recalculado: '+money(nuevo.saldo));}
+  else toast('✓ '+(TIPO_LBL[d.tipoDoc]||['Documento'])[0]+' anulada');
   renderDocs();};
 
 function verDoc(id){
@@ -2425,7 +2425,7 @@ function clienteStats(c){
       else movimientos.push({fecha:a.fecha,doc:f.serie+'-'+f.numeroDte,detalle:'Abono'+(a.metodo?' · '+a.metodo:'')+(a.referencia?' ('+a.referencia+')':''),cargo:0,abono:Number(a.monto)});
     });
     documentos.filter(d=>d.facturaOrigenId===f.id).forEach(n=>{
-      if(n.estado==='anulada')movimientos.push({fecha:n.anuladoFecha||n.creada,doc:n.serie+'-'+n.numeroDte,detalle:`${TIPO_LBL[n.tipoDoc][0]} ANULADA (${money(n.totales.total)} · ${n.motivo||'sin motivo'})`,cargo:0,abono:0});
+      if(n.estado==='anulada')movimientos.push({fecha:n.anuladoFecha||n.creada,doc:n.serie+'-'+n.numeroDte,detalle:`${(TIPO_LBL[n.tipoDoc]||['Documento'])[0]} ANULADA (${money(n.totales.total)} · ${n.motivo||'sin motivo'})`,cargo:0,abono:0});
       else if(n.tipoDoc==='notaCredito')movimientos.push({fecha:n.creada,doc:n.serie+'-'+n.numeroDte,detalle:'Nota de Crédito · '+(n.motivo||''),cargo:0,abono:n.totales.total});
     });
   });
@@ -2494,7 +2494,7 @@ function renderCliDet(){
   }else if(cliTab==='facturas'){
     body=`<div class="panel"><div class="panel-head"><h3>Facturas Cambiarias emitidas</h3></div>
       <table><thead><tr><th>No.</th><th>Tipo</th><th>Fecha</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>
-      ${facturas.length?facturas.slice().reverse().map(f=>`<tr><td style="font-weight:600">${f.serie}-${f.numeroDte}</td><td><span class="pill ${TIPO_LBL[f.tipoDoc][1]}">${TIPO_LBL[f.tipoDoc][0]}</span></td><td style="color:var(--muted)">${fdate(f.creada)}</td><td class="num" style="font-weight:600">${money(f.totales.total)}</td><td><span class="badge b-ok">${f.estado}</span></td><td><button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin Facturas Cambiarias emitidas</td></tr>'}
+      ${facturas.length?facturas.slice().reverse().map(f=>`<tr><td style="font-weight:600">${f.serie}-${f.numeroDte}</td><td><span class="pill ${(TIPO_LBL[f.tipoDoc]||["","p-ped"])[1]}">${(TIPO_LBL[f.tipoDoc]||["Documento"])[0]}</span></td><td style="color:var(--muted)">${fdate(f.creada)}</td><td class="num" style="font-weight:600">${money(f.totales.total)}</td><td><span class="badge b-ok">${f.estado}</span></td><td><button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin Facturas Cambiarias emitidas</td></tr>'}
       </tbody></table></div>`;
   }else if(cliTab==='prestamos'){
     body=`<div class="panel"><div class="panel-head"><h3>Órdenes de préstamo emitidas</h3></div>
@@ -3811,8 +3811,31 @@ const MODULOS_PERMISOS=[
   {key:'__convertirCajas',lbl:'Convertir cajas a unidades',grp:'Sub-permisos'},
   {key:'__compraEspecial',lbl:'Crear compras especiales',grp:'Sub-permisos'},
   {key:'__readonly',lbl:'Solo lectura (sin acciones)',grp:'Sub-permisos'},
+  {key:'rep_resumen',lbl:'Resumen',grp:'Reportes'},
+  {key:'rep_costos',lbl:'Costos vs ventas',grp:'Reportes'},
+  {key:'rep_vendedor',lbl:'Ventas por vendedor',grp:'Reportes'},
+  {key:'rep_producto',lbl:'Ventas por producto',grp:'Reportes'},
+  {key:'rep_cliprod',lbl:'Ventas cliente/producto',grp:'Reportes'},
+  {key:'rep_cprov',lbl:'Compras por proveedor',grp:'Reportes'},
+  {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes'},
+  {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes'},
+  {key:'rep_recibos',lbl:'Recibos',grp:'Reportes'},
+  {key:'rep_pagos',lbl:'Pagos por cliente',grp:'Reportes'},
 ];
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
+
+// Mapa de tipos de reporte a su clave de permiso
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','cprov','cprod','cxc','recibos','pagos'];
+
+// ¿El rol actual puede ver este reporte?
+function puedeVerReporte(tipo){
+  const r=ROLES[currentRole];
+  if(!r)return true;
+  if(r.views==='ALL')return true;
+  const tieneAlgunRepPerm=REP_TIPOS.some(t=>r.views.includes('rep_'+t));
+  if(!tieneAlgunRepPerm)return true; // sin config = ve todos (como antes)
+  return r.views.includes('rep_'+tipo);
+}
 
 function tienePermisoMod(rol,key){
   const r=ROLES[rol];if(!r)return false;
@@ -4247,6 +4270,17 @@ function renderRepFilters(){
   f.innerHTML=html;
 }
 function bindRep(){
+  // Mostrar/ocultar pestañas de reportes según los permisos del rol
+  let primeraVisible=null;
+  document.querySelectorAll('#rep-types .ct-tab').forEach(b=>{
+    const permitido=puedeVerReporte(b.dataset.r);
+    b.style.display=permitido?'':'none';
+    if(permitido&&!primeraVisible)primeraVisible=b.dataset.r;
+  });
+  if(!puedeVerReporte(repType)&&primeraVisible){
+    repType=primeraVisible;
+    document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x.dataset.r===repType));
+  }
   document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.onclick=()=>setRepPeriod(b.dataset.p));
   document.querySelectorAll('#rep-types .ct-tab').forEach(b=>b.onclick=()=>{repType=b.dataset.r;repFiltros={cliente:'',vendedores:[],montoMin:'',montoMax:'',proveedor:'',soloVencidos:false,tiempoCredito:''};gruposColapsados={};document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x===b));renderRepFilters();renderReportes();});
   ['rep-desde','rep-hasta'].forEach(id=>{const e=$('#'+id);if(e)e.onchange=()=>{document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.classList.remove('on'));renderReportes();};});
