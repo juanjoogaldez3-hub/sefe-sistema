@@ -720,6 +720,7 @@
           <button class="ct-tab" data-r="producto">Ventas por producto</button>
           <button class="ct-tab" data-r="cliprod">Ventas cliente/producto</button>
           <button class="ct-tab" data-r="climes">Ventas cliente/mes</button>
+          <button class="ct-tab" data-r="dircli">Listado de clientes</button>
           <button class="ct-tab" data-r="cprov">Compras por proveedor</button>
           <button class="ct-tab" data-r="cprod">Compras por producto</button>
           <button class="ct-tab" data-r="cxc">Pendientes por cliente</button>
@@ -3936,6 +3937,7 @@ const MODULOS_PERMISOS=[
   {key:'rep_producto',lbl:'Ventas por producto',grp:'Reportes'},
   {key:'rep_cliprod',lbl:'Ventas cliente/producto',grp:'Reportes'},
   {key:'rep_climes',lbl:'Ventas cliente/mes',grp:'Reportes'},
+  {key:'rep_dircli',lbl:'Listado de clientes',grp:'Reportes'},
   {key:'rep_cprov',lbl:'Compras por proveedor',grp:'Reportes'},
   {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes'},
   {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes'},
@@ -3945,7 +3947,7 @@ const MODULOS_PERMISOS=[
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','cprov','cprod','cxc','recibos','pagos'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','dircli','cprov','cprod','cxc','recibos','pagos'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
@@ -4378,7 +4380,21 @@ function renderRepFilters(){
   }
   else if(repType==='climes'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
-    html=`<div class="rep-filter-bar">${sel('rf-vend-cm','Vendedor',vendOpts,repFiltros.vendedores[0]||'','vendedor_simple')}</div>`;
+    html=`<div class="rep-filter-bar">${sel('rf-vend-cm','Vendedor',vendOpts,repFiltros.vendedores[0]||'','vendedor_simple')}
+      <div style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(true)" title="Expandir todo">⊞ Expandir</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(false)" title="Colapsar todo">⊟ Colapsar</button>
+      </div>
+    </div>`;
+  }
+  else if(repType==='dircli'){
+    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    html=`<div class="rep-filter-bar">${sel('rf-vend-dc','Vendedor',vendOpts,repFiltros.vendedores[0]||'','vendedor_simple')}
+      <div style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(true)" title="Expandir todo">⊞ Expandir</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(false)" title="Colapsar todo">⊟ Colapsar</button>
+      </div>
+    </div>`;
   }
   else if(repType==='cxc'){
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
@@ -4652,6 +4668,7 @@ function renderReportes(){
   }
   else if(repType==='climes'){
     // VENTAS POR CLIENTE Y MES — vendedor → clientes, montos por mes (con IVA) + total
+    const primeraVezMes=!gruposColapsados.__mesInit;
     // Filtro de vendedor (ventas ya viene filtrada si se eligió uno)
     // 1) Determinar los meses presentes en el rango de ventas
     const mesKey=d=>{const f=new Date(d.creada);return f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0');};
@@ -4679,8 +4696,11 @@ function renderReportes(){
     Object.keys(grupos).sort((a,b)=>a.localeCompare(b,'es')).forEach(vend=>{
       const clientesV=grupos[vend];
       const subt={}; meses.forEach(m=>subt[m]=0); let subTotalVend=0;
-      // encabezado vendedor
-      cuerpo+=`<tr style="background:var(--green)"><td colspan="${meses.length+2}" style="color:#fff;font-weight:700;font-size:13px;padding:8px 12px">${vend}</td></tr>`;
+      const vendKey='V:'+vend;
+      // Colapsar por defecto la primera vez
+      if(primeraVezMes&&gruposColapsados[vendKey]===undefined)gruposColapsados[vendKey]=true;
+      // encabezado vendedor (clickeable)
+      cuerpo+=`<tr data-grupo-key="${vendKey}" style="background:var(--green);cursor:pointer" onclick="toggleGrupo('${vendKey.replace(/'/g,"\\'")}')"><td colspan="${meses.length+2}" style="color:#fff;font-weight:700;font-size:13px;padding:8px 12px"><span class="flecha-grupo" style="display:inline-block;width:14px">▾</span>${vend}</td></tr>`;
       // clientes ordenados por total desc
       Object.entries(clientesV).sort((a,b)=>b[1].total-a[1].total).forEach(([cli,info])=>{
         let celdas='';
@@ -4694,13 +4714,13 @@ function renderReportes(){
         filaExp['Total']=info.total;
         expFilas.push(filaExp);
         subTotalVend+=info.total; granTotal+=info.total;
-        cuerpo+=`<tr style="border-bottom:1px solid var(--line)"><td style="padding-left:26px">${cli}</td>${celdas}<td class="num" style="font-weight:600;background:#fafdf5">${money(info.total)}</td></tr>`;
+        cuerpo+=`<tr data-pertenece="1" data-vend="${vend}" style="border-bottom:1px solid var(--line)"><td style="padding-left:26px">${cli}</td>${celdas}<td class="num" style="font-weight:600;background:#fafdf5">${money(info.total)}</td></tr>`;
       });
       // subtotal vendedor
       let celdasSub='';
       meses.forEach(m=>{celdasSub+=`<td class="num" style="font-weight:700">${money(subt[m])}</td>`;});
-      cuerpo+=`<tr style="border-bottom:2px solid var(--line-strong);background:#f0f5e8"><td style="text-align:right;font-weight:700;font-size:12px">Total ${vend}:</td>${celdasSub}<td class="num" style="font-weight:700">${money(subTotalVend)}</td></tr>
-        <tr><td colspan="${meses.length+2}" style="height:8px"></td></tr>`;
+      cuerpo+=`<tr data-pertenece="1" data-vend="${vend}" style="border-bottom:2px solid var(--line-strong);background:#f0f5e8"><td style="text-align:right;font-weight:700;font-size:12px">Total ${vend}:</td>${celdasSub}<td class="num" style="font-weight:700">${money(subTotalVend)}</td></tr>
+        <tr data-pertenece="1" data-vend="${vend}"><td colspan="${meses.length+2}" style="height:8px"></td></tr>`;
     });
     // total general
     let celdasGen='';
@@ -4709,12 +4729,72 @@ function renderReportes(){
     // encabezados de meses
     const ths=meses.map(m=>`<th class="num">${mesLbl(m)}</th>`).join('');
     exportData=expFilas;
+    gruposColapsados.__mesInit=true;
     if(!meses.length){
       html+=`<div class="panel"><div class="panel-body"><p class="empty">No hay ventas en el período seleccionado.</p></div></div>`;
     }else{
       html+=`<div class="panel"><div class="panel-head"><h3>Ventas por cliente y mes</h3><span style="font-size:12px;color:var(--muted)">Montos con IVA · ${expFilas.length} cliente${expFilas.length!==1?'s':''}</span></div>
         <table style="font-size:12.5px"><thead><tr><th>Vendedor / Cliente</th>${ths}<th class="num" style="background:#f0f5e8">Total</th></tr></thead>
         <tbody>${cuerpo}</tbody></table></div>`;
+    }
+  }
+  else if(repType==='dircli'){
+    // LISTADO DE CLIENTES — directorio de contactos agrupado por vendedor
+    const primeraVezDir=!gruposColapsados.__dirInit;
+    // Filtrar clientes por vendedor si se eligió uno
+    let clientesDir=clientes.filter(c=>c.nit!=='CF'); // excluir Consumidor Final
+    if(repFiltros.vendedor_simple){
+      const v=vendedores.find(x=>x.nombre===repFiltros.vendedor_simple);
+      if(v)clientesDir=clientesDir.filter(c=>c.vendedorId===v.id);
+    }
+    // Agrupar por vendedor
+    const porVend={};
+    clientesDir.forEach(c=>{
+      const v=vendedores.find(x=>x.id===c.vendedorId);
+      const nombreVend=v?v.nombre:'Sin vendedor';
+      if(!porVend[nombreVend])porVend[nombreVend]=[];
+      porVend[nombreVend].push(c);
+    });
+    const dash='<span style="color:var(--muted-2)">—</span>';
+    const expFilas=[];
+    let cuerpo='';
+    let totalClientes=0;
+    Object.keys(porVend).sort((a,b)=>a.localeCompare(b,'es')).forEach(vend=>{
+      const cls=porVend[vend].sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
+      const vendKey='V:'+vend;
+      // Colapsar por defecto la primera vez
+      if(primeraVezDir&&gruposColapsados[vendKey]===undefined)gruposColapsados[vendKey]=true;
+      cuerpo+=`<tr data-grupo-key="${vendKey}" style="background:var(--green);cursor:pointer" onclick="toggleGrupo('${vendKey.replace(/'/g,"\\'")}')"><td colspan="7" style="color:#fff;font-weight:700;font-size:12.5px;padding:7px 12px"><span class="flecha-grupo" style="display:inline-block;width:14px">▾</span>${vend} <span style="font-weight:400;opacity:.8">(${cls.length})</span></td></tr>`;
+      cls.forEach(c=>{
+        totalClientes++;
+        const cc=c.contactoCompras||{}, cp=c.contactoPagos||{};
+        cuerpo+=`<tr data-pertenece="1" data-vend="${vend}" style="border-bottom:1px solid var(--line)">
+          <td style="font-weight:600">${c.nombre||dash}</td>
+          <td style="font-size:11px;color:var(--muted)">${c.nit||dash}</td>
+          <td style="color:var(--muted)">${c.razonSocial||dash}</td>
+          <td style="color:var(--muted);font-size:11px">${c.direccion||dash}</td>
+          <td style="color:var(--muted);font-size:11px">${c.email||dash}</td>
+          <td>${cc.nombre||dash}<div style="font-family:monospace;font-size:11px;color:var(--muted)">${cc.telefono||''}</div></td>
+          <td>${cp.nombre||dash}<div style="font-family:monospace;font-size:11px;color:var(--muted)">${cp.telefono||''}</div></td>
+        </tr>`;
+        expFilas.push({
+          Vendedor:vend, Cliente:c.nombre||'', NIT:c.nit||'', 'Razón Social':c.razonSocial||'',
+          'Dirección':c.direccion||'', 'Correo':c.email||'',
+          'Contacto Compras':cc.nombre||'', 'Tel. Compras':cc.telefono||'',
+          'Contacto Pagos':cp.nombre||'', 'Tel. Pagos':cp.telefono||''
+        });
+      });
+    });
+    exportData=expFilas;
+    gruposColapsados.__dirInit=true;
+    if(!totalClientes){
+      html+=`<div class="panel"><div class="panel-body"><p class="empty">No hay clientes para mostrar.</p></div></div>`;
+    }else{
+      html+=`<div class="panel"><div class="panel-head"><h3>Listado de clientes</h3><span style="font-size:12px;color:var(--muted)">${totalClientes} cliente${totalClientes!==1?'s':''}</span></div>
+        <table style="font-size:11.5px"><thead><tr>
+          <th>Cliente</th><th>NIT</th><th>Razón Social</th><th>Dirección</th><th>Correo</th>
+          <th style="background:#f0f5e8">Contacto Compras</th><th style="background:#fef6e8">Contacto Pagos</th>
+        </tr></thead><tbody>${cuerpo}</tbody></table></div>`;
     }
   }
   else if(repType==='cprov'){
@@ -4821,14 +4901,14 @@ function renderReportes(){
   repLastData=exportData;
   $('#rep-body').innerHTML=html;
   // Si es el reporte cliente/producto, aplicar el estado de colapso guardado
-  if(repType==='cliprod')aplicarColapso();
+  if(repType==='cliprod'||repType==='dircli'||repType==='climes')aplicarColapso();
 }
 
 // ---- Exportación Excel ----
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],['Período:',repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
@@ -4841,7 +4921,7 @@ window.exportarExcel=exportarExcel;
 // ---- Exportación PDF ----
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const ths=cols.map(c=>`<th style="padding:7px 10px;background:#f4f7ef;font-size:10px;text-transform:uppercase;letter-spacing:.4px">${c}</th>`).join('');
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
