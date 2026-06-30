@@ -398,6 +398,24 @@
   🧪 MODELO DE PRUEBAS — Esto NO es el sistema real. Las facturas son simuladas y no afectan la SAT.
 </div>
 <div style="height:34px"></div>
+<!-- ══════════ PANTALLA DE CARGA ══════════ -->
+<div id="sefe-loader" style="position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#173916,#0f2810);display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;transition:opacity .5s ease">
+  <div style="text-align:center;width:340px;max-width:86vw">
+    <div style="width:110px;height:110px;margin:0 auto 26px;background:rgba(255,255,255,.08);border-radius:24px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(168,192,56,.2)">
+      <div style="font-family:'Bricolage Grotesque','Inter',system-ui,sans-serif;font-size:36px;font-weight:700;color:#A8C038">SE</div>
+    </div>
+    <div style="font-family:'Bricolage Grotesque','Inter',system-ui,sans-serif;font-size:21px;font-weight:600;color:#fff;letter-spacing:.3px">Soluciones Efectivas</div>
+    <div style="font-size:12px;color:#7d9070;margin-top:5px;margin-bottom:30px">Piensa Verde, Vive Verde</div>
+    <div style="position:relative;width:100%;height:5px;background:rgba(255,255,255,.1);border-radius:5px;overflow:hidden">
+      <div id="sefe-loader-bar" style="position:absolute;top:0;height:100%;width:40%;background:linear-gradient(90deg,transparent,#A8C038);border-radius:5px;left:-40%;animation:sefeBarSlide 1.3s ease-in-out infinite"></div>
+    </div>
+    <div style="font-size:13px;color:#9FB394;margin-top:18px">Cargando tu información…</div>
+  </div>
+</div>
+<style>
+@keyframes sefeBarSlide{0%{left:-40%}100%{left:100%}}
+#sefe-loader.oculto{opacity:0;pointer-events:none}
+</style>
 <div id="login-screen">
   <div class="login-card">
     <div class="lg-left">
@@ -2227,6 +2245,72 @@ window.anularNotaCD=id=>{const d=documentos.find(x=>x.id===id);if(!d)return;
   else toast('✓ '+(TIPO_LBL[d.tipoDoc]||['Documento'])[0]+' anulada');
   renderDocs();};
 
+function notaPrestamoHTML(f){
+  const cli=clientes.find(c=>c.id===f.clienteId)||{};
+  const dir=cli.direccion||'';
+  const razon=f.clienteNombre||f.clienteComercial||'Cliente';
+  const comercial=(f.clienteComercial&&f.clienteComercial!==razon)?f.clienteComercial:'';
+  const fechaLarga=f.creada?new Date(f.creada).toLocaleDateString('es-GT',{day:'numeric',month:'long',year:'numeric'}):'';
+  const firmante=f.vendedorNombre||currentUser||'Soluciones Efectivas';
+  const filas=(f.items||[]).map(it=>`<tr>
+      <td class="num" style="padding:12px 16px;font-size:13px;font-weight:600;border-bottom:1px solid #EEF1E8">${it.codigo||'—'}</td>
+      <td style="padding:12px 16px;font-size:13px;border-bottom:1px solid #EEF1E8">${it.nombre}</td>
+      <td class="num" style="padding:12px 16px;font-size:13px;text-align:right;font-weight:600;border-bottom:1px solid #EEF1E8">${Number(it.cantidad).toFixed(2)}</td>
+    </tr>`).join('');
+  return `
+  <div style="font-family:'Inter',sans-serif;color:#1c1f17;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
+      <div>
+        <img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:172px;height:auto;display:block">
+        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">Soluciones Efectivas, S.A.<br>NIT 1234567-8 · Guatemala, C.A.</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="display:inline-block;background:var(--green);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.3px;padding:8px 16px;border-radius:8px">NOTA DE PRÉSTAMO</div>
+        <div style="margin-top:14px;font-size:12px;color:#7a7f6e">Referencia</div>
+        <div style="font-family:var(--disp);font-size:20px;font-weight:700;letter-spacing:-.3px">PED-${padn(f.numero)}</div>
+        <div style="margin-top:10px;font-size:12px;color:#3a3f33">Guatemala, ${fechaLarga}</div>
+      </div>
+    </div>
+    <div style="height:3px;background:var(--lime);width:100%;border-radius:2px;margin:22px 0 26px"></div>
+    <div style="font-size:13.5px;line-height:1.6">
+      <div style="font-size:11px;font-weight:700;color:#9aa089;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">Señores</div>
+      <div style="font-family:var(--disp);font-size:16px;font-weight:700">${razon}</div>
+      ${comercial?`<div style="color:#3a3f33">${comercial}</div>`:''}
+      ${dir?`<div style="color:#3a3f33">${dir}</div>`:''}
+      <div style="color:#7a7f6e;margin-top:2px">Presente.</div>
+    </div>
+    <p style="font-size:13.5px;line-height:1.7;color:#3a3f33;margin-top:22px">Estimados señores:</p>
+    <p style="font-size:13.5px;line-height:1.7;color:#3a3f33;margin-top:10px">Por este medio hacemos de su conocimiento que se instaló en su establecimiento el siguiente equipo, propiedad de Soluciones Efectivas:</p>
+    <table style="width:100%;border-collapse:collapse;margin-top:18px;border:1px solid #E1E6D6;border-radius:10px;overflow:hidden">
+      <thead><tr style="background:var(--green);color:#fff">
+        <th style="text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:11px 16px;width:120px">Código</th>
+        <th style="text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:11px 16px">Producto</th>
+        <th style="text-align:right;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:11px 16px;width:110px">Cantidad</th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+    </table>
+    <p style="font-size:12.5px;line-height:1.7;color:#3a3f33;margin-top:20px">Este equipo es <b style="color:var(--green)">propiedad de Soluciones Efectivas</b> y se entrega en calidad de préstamo por el consumo de nuestros productos. Deberá ser devuelto en el momento en que la relación comercial finalice.</p>
+    <div style="margin-top:18px;border:1px solid #DCE6C9;background:#F4F8EA;border-radius:12px;padding:16px 20px">
+      <div style="font-family:var(--disp);font-size:13px;font-weight:700;color:var(--green);letter-spacing:.2px;margin-bottom:7px">Garantía del equipo</div>
+      <p style="font-size:12.5px;line-height:1.65;color:#3a3f33">El equipo tiene garantía de por vida por desperfectos de fabricación, exceptuando si el daño es causado por el mal uso del equipo, en cuyo caso el cliente se hará cargo de acuerdo al valor del mismo.</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px dashed #C9D6AD">
+        <span style="font-size:11px;font-weight:700;color:#7a7f6e;text-transform:uppercase;letter-spacing:.5px">Costo total del equipo</span>
+        <span class="num" style="font-family:var(--disp);font-size:19px;font-weight:700;color:var(--green);letter-spacing:-.3px">${money(f.totales.total)}</span>
+      </div>
+    </div>
+    <p style="font-size:13px;line-height:1.7;color:#3a3f33;margin-top:24px">Agradeciendo de antemano su atención, me suscribo.</p>
+    <p style="font-size:13px;color:#3a3f33;margin-top:18px">Atentamente,</p>
+    <div style="margin-top:30px"><div style="width:240px;border-top:1.5px solid #1c1f17;padding-top:7px">
+      <div style="font-family:var(--disp);font-size:14px;font-weight:700">${firmante}</div>
+      <div style="font-size:11.5px;color:#7a7f6e">Soluciones Efectivas, S.A.</div>
+    </div></div>
+    <div style="margin-top:46px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:26px">
+      <div style="text-align:center"><div style="border-top:1.2px solid #aeb3a2;padding-top:7px;font-size:11px;color:#7a7f6e">Firma de quien recibe</div></div>
+      <div style="text-align:center"><div style="border-top:1.2px solid #aeb3a2;padding-top:7px;font-size:11px;color:#7a7f6e">Nombre de quien recibe</div></div>
+      <div style="text-align:center"><div style="border-top:1.2px solid #aeb3a2;padding-top:7px;font-size:11px;color:#7a7f6e">Fecha de recepción</div></div>
+    </div>
+  </div>`;
+}
 function verDoc(id){
   const f=documentos.find(d=>d.id===id);
 
@@ -2254,6 +2338,13 @@ function verDoc(id){
   }
   window._pdfActual=null;
   window._pdfNombre=null;
+
+  if(f.tipoDoc==='prestamo'){
+    $('#doc-bar-t').textContent=TIPO_TIT[f.tipoDoc]+'  ·  PED-'+padn(f.numero);
+    $('#doc-sheet').innerHTML=notaPrestamoHTML(f);
+    $('#docov').classList.add('show');
+    return;
+  }
 
   const fiscal=FISCAL[f.tipoDoc];const cert=['certificada','facturado'].includes(f.estado);
   const esNotaCD=f.tipoDoc==='notaCredito';
@@ -5718,25 +5809,31 @@ async function verificarSesion(){
     if(typeof sb==='undefined'||!sb.auth)return;
     const {data}=await sb.auth.getSession();
     if(data && data.session && data.session.user){
-      // Red de seguridad: si por timing los datos no cargaron (usuarios vacío),
-      // reintentar cargarTodo una vez y redibujar antes de entrar.
-      if((!usuarios || usuarios.length===0) && typeof cargarTodo==='function'){
-        try{
-          const ok=await cargarTodo();
-          if(ok){
-            window._sefeConectado=true;
-            cliN=(clientes.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
-            prodN=(productos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-            corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;
-            compN=(compras.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
-            usrN=(usuarios.reduce((m,u)=>Math.max(m,u.id),0)||0)+1;
-            pilN=(pilotos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-            vendN=(vendedores.reduce((m,v)=>Math.max(m,v.id),0)||0)+1;
-            cobroRutaN=(cobrosRuta.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
-            provN=(proveedores.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-            initForm();initCompra();render();renderPanel();renderUserGrid();
-          }
-        }catch(e2){ /* si vuelve a fallar, sigue al login */ }
+      // Red de seguridad: si por timing los datos no cargaron (usuarios vacío
+      // O documentos/clientes vacíos), reintentar cargarTodo y esperar a que
+      // estén realmente completos antes de entrar.
+      const datosIncompletos=()=>(!usuarios||usuarios.length===0);
+      if(datosIncompletos() && typeof cargarTodo==='function'){
+        // Reintentar hasta 3 veces, esperando entre intentos
+        for(let intento=0; intento<3 && datosIncompletos(); intento++){
+          try{
+            const ok=await cargarTodo();
+            if(ok){
+              window._sefeConectado=true;
+              cliN=(clientes.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+              prodN=(productos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+              corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;
+              compN=(compras.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+              usrN=(usuarios.reduce((m,u)=>Math.max(m,u.id),0)||0)+1;
+              pilN=(pilotos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+              vendN=(vendedores.reduce((m,v)=>Math.max(m,v.id),0)||0)+1;
+              cobroRutaN=(cobrosRuta.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+              provN=(proveedores.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+              initForm();initCompra();render();renderPanel();renderUserGrid();
+            }
+          }catch(e2){ /* si vuelve a fallar, sigue al login */ }
+          if(datosIncompletos())await new Promise(r=>setTimeout(r,500));
+        }
       }
       const email=(data.session.user.email||'').toLowerCase();
       const u=usuarios.find(x=>(x.correo||'').toLowerCase()===email && x.activo);
@@ -5745,12 +5842,29 @@ async function verificarSesion(){
         $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
         aplicarPermisosUI();
         go('panel');
-        // Redibujo extra por si algo quedó a medio cargar
-        setTimeout(()=>{try{renderPanel();render();}catch(e){}}, 400);
+        // Red de seguridad contra timing: si los datos llegaron tarde, la vista
+        // podría haber quedado vacía. Redibujamos la vista actual varias veces
+        // en los primeros segundos para garantizar que se pinte con datos completos.
+        const _vistaActual=()=>{
+          const activa=document.querySelector('.view.active');
+          return activa?activa.id.replace('v-',''):'panel';
+        };
+        const _redibujar=()=>{ try{ go(_vistaActual()); }catch(e){} };
+        setTimeout(_redibujar, 300);
+        setTimeout(_redibujar, 900);
+        setTimeout(_redibujar, 1800);
         setTimeout(recuperarBorrador,300);
       }
     }
   }catch(e){ /* si falla, se queda en el login normal */ }
+}
+
+// Oculta la pantalla de carga con un desvanecido suave
+function ocultarLoader(){
+  const l=document.getElementById('sefe-loader');
+  if(!l)return;
+  l.classList.add('oculto');
+  setTimeout(()=>{ if(l&&l.parentNode)l.parentNode.removeChild(l); }, 600);
 }
 
 // Arrancar y luego verificar sesión.
@@ -5763,7 +5877,11 @@ function esperarDependencias(intentos){
   const dbListo   = (typeof cargarTodo==='function');
   if((supaListo && dbListo) || intentos>=60){
     // listo, o nos rendimos tras ~6s y arrancamos igual (modo prueba)
-    arrancarApp().then(verificarSesion);
+    arrancarApp().then(verificarSesion).finally(()=>{
+      // Ocultar la pantalla de carga cuando todo el arranque terminó
+      // (sea que entró con sesión o que quedó en el login).
+      ocultarLoader();
+    });
   } else {
     setTimeout(()=>esperarDependencias(intentos+1), 100);
   }
@@ -5773,6 +5891,9 @@ if(document.readyState==='loading'){
 } else {
   esperarDependencias(0);
 }
+// Red de seguridad: si por lo que sea el loader no se ocultó en 12s, quitarlo
+// para no dejar al usuario atascado en la pantalla de carga.
+setTimeout(()=>{ if(typeof ocultarLoader==='function')ocultarLoader(); }, 12000);
 </script>
 </body>
 </html>

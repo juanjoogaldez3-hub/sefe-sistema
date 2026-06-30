@@ -394,6 +394,24 @@
 <script src="db.js"></script>
 </head>
 <body>
+<!-- ══════════ PANTALLA DE CARGA ══════════ -->
+<div id="sefe-loader" style="position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#173916,#0f2810);display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;transition:opacity .5s ease">
+  <div style="text-align:center;width:340px;max-width:86vw">
+    <div style="width:110px;height:110px;margin:0 auto 26px;background:rgba(255,255,255,.08);border-radius:24px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(168,192,56,.2)">
+      <div style="font-family:'Bricolage Grotesque','Inter',system-ui,sans-serif;font-size:36px;font-weight:700;color:#A8C038">SE</div>
+    </div>
+    <div style="font-family:'Bricolage Grotesque','Inter',system-ui,sans-serif;font-size:21px;font-weight:600;color:#fff;letter-spacing:.3px">Soluciones Efectivas</div>
+    <div style="font-size:12px;color:#7d9070;margin-top:5px;margin-bottom:30px">Piensa Verde, Vive Verde</div>
+    <div style="position:relative;width:100%;height:5px;background:rgba(255,255,255,.1);border-radius:5px;overflow:hidden">
+      <div id="sefe-loader-bar" style="position:absolute;top:0;height:100%;width:40%;background:linear-gradient(90deg,transparent,#A8C038);border-radius:5px;left:-40%;animation:sefeBarSlide 1.3s ease-in-out infinite"></div>
+    </div>
+    <div style="font-size:13px;color:#9FB394;margin-top:18px">Cargando tu información…</div>
+  </div>
+</div>
+<style>
+@keyframes sefeBarSlide{0%{left:-40%}100%{left:100%}}
+#sefe-loader.oculto{opacity:0;pointer-events:none}
+</style>
 <div id="login-screen">
   <div class="login-card">
     <div class="lg-left">
@@ -5786,25 +5804,30 @@ async function verificarSesion(){
     if(typeof sb==='undefined'||!sb.auth)return;
     const {data}=await sb.auth.getSession();
     if(data && data.session && data.session.user){
-      // Red de seguridad: si por timing los datos no cargaron (usuarios vacío),
-      // reintentar cargarTodo una vez y redibujar antes de entrar.
-      if((!usuarios || usuarios.length===0) && typeof cargarTodo==='function'){
-        try{
-          const ok=await cargarTodo();
-          if(ok){
-            window._sefeConectado=true;
-            cliN=(clientes.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
-            prodN=(productos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-            corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;
-            compN=(compras.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
-            usrN=(usuarios.reduce((m,u)=>Math.max(m,u.id),0)||0)+1;
-            pilN=(pilotos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-            vendN=(vendedores.reduce((m,v)=>Math.max(m,v.id),0)||0)+1;
-            cobroRutaN=(cobrosRuta.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
-            provN=(proveedores.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-            initForm();initCompra();render();renderPanel();renderUserGrid();
-          }
-        }catch(e2){ /* si vuelve a fallar, sigue al login */ }
+      // Red de seguridad: si por timing los datos no cargaron (usuarios vacío
+      // O documentos/clientes vacíos), reintentar cargarTodo y esperar a que
+      // estén realmente completos antes de entrar.
+      const datosIncompletos=()=>(!usuarios||usuarios.length===0);
+      if(datosIncompletos() && typeof cargarTodo==='function'){
+        for(let intento=0; intento<3 && datosIncompletos(); intento++){
+          try{
+            const ok=await cargarTodo();
+            if(ok){
+              window._sefeConectado=true;
+              cliN=(clientes.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+              prodN=(productos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+              corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;
+              compN=(compras.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+              usrN=(usuarios.reduce((m,u)=>Math.max(m,u.id),0)||0)+1;
+              pilN=(pilotos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+              vendN=(vendedores.reduce((m,v)=>Math.max(m,v.id),0)||0)+1;
+              cobroRutaN=(cobrosRuta.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+              provN=(proveedores.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+              initForm();initCompra();render();renderPanel();renderUserGrid();
+            }
+          }catch(e2){ /* si vuelve a fallar, sigue al login */ }
+          if(datosIncompletos())await new Promise(r=>setTimeout(r,500));
+        }
       }
       const email=(data.session.user.email||'').toLowerCase();
       const u=usuarios.find(x=>(x.correo||'').toLowerCase()===email && x.activo);
@@ -5813,12 +5836,26 @@ async function verificarSesion(){
         $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
         aplicarPermisosUI();
         go('panel');
-        // Redibujo extra por si algo quedó a medio cargar
-        setTimeout(()=>{try{renderPanel();render();}catch(e){}}, 400);
+        const _vistaActual=()=>{
+          const activa=document.querySelector('.view.active');
+          return activa?activa.id.replace('v-',''):'panel';
+        };
+        const _redibujar=()=>{ try{ go(_vistaActual()); }catch(e){} };
+        setTimeout(_redibujar, 300);
+        setTimeout(_redibujar, 900);
+        setTimeout(_redibujar, 1800);
         setTimeout(recuperarBorrador,300);
       }
     }
   }catch(e){ /* si falla, se queda en el login normal */ }
+}
+
+// Oculta la pantalla de carga con un desvanecido suave
+function ocultarLoader(){
+  const l=document.getElementById('sefe-loader');
+  if(!l)return;
+  l.classList.add('oculto');
+  setTimeout(()=>{ if(l&&l.parentNode)l.parentNode.removeChild(l); }, 600);
 }
 
 // Arrancar y luego verificar sesión.
@@ -5831,7 +5868,9 @@ function esperarDependencias(intentos){
   const dbListo   = (typeof cargarTodo==='function');
   if((supaListo && dbListo) || intentos>=60){
     // listo, o nos rendimos tras ~6s y arrancamos igual (modo prueba)
-    arrancarApp().then(verificarSesion);
+    arrancarApp().then(verificarSesion).finally(()=>{
+      ocultarLoader();
+    });
   } else {
     setTimeout(()=>esperarDependencias(intentos+1), 100);
   }
@@ -5841,6 +5880,8 @@ if(document.readyState==='loading'){
 } else {
   esperarDependencias(0);
 }
+// Red de seguridad: si el loader no se ocultó en 12s, quitarlo igual.
+setTimeout(()=>{ if(typeof ocultarLoader==='function')ocultarLoader(); }, 12000);
 </script>
 </body>
 </html>
