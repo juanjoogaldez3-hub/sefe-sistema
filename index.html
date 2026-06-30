@@ -714,6 +714,7 @@
           <button class="ct-tab" data-r="vendedor">Ventas por vendedor</button>
           <button class="ct-tab" data-r="producto">Ventas por producto</button>
           <button class="ct-tab" data-r="cliprod">Ventas cliente/producto</button>
+          <button class="ct-tab" data-r="climes">Ventas cliente/mes</button>
           <button class="ct-tab" data-r="cprov">Compras por proveedor</button>
           <button class="ct-tab" data-r="cprod">Compras por producto</button>
           <button class="ct-tab" data-r="cxc">Pendientes por cliente</button>
@@ -3926,6 +3927,7 @@ const MODULOS_PERMISOS=[
   {key:'rep_vendedor',lbl:'Ventas por vendedor',grp:'Reportes'},
   {key:'rep_producto',lbl:'Ventas por producto',grp:'Reportes'},
   {key:'rep_cliprod',lbl:'Ventas cliente/producto',grp:'Reportes'},
+  {key:'rep_climes',lbl:'Ventas cliente/mes',grp:'Reportes'},
   {key:'rep_cprov',lbl:'Compras por proveedor',grp:'Reportes'},
   {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes'},
   {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes'},
@@ -3935,7 +3937,7 @@ const MODULOS_PERMISOS=[
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','cprov','cprod','cxc','recibos','pagos'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','cprov','cprod','cxc','recibos','pagos'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
@@ -4365,6 +4367,10 @@ function renderRepFilters(){
       </div>
     </div>`;
   }
+  else if(repType==='climes'){
+    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    html=`<div class="rep-filter-bar">${sel('rf-vend-cm','Vendedor',vendOpts,repFiltros.vendedores[0]||'','vendedor_simple')}</div>`;
+  }
   else if(repType==='cxc'){
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     const tcOpts=[{v:'0',l:'Contado'},{v:'15',l:'15 días'},{v:'30',l:'30 días'},{v:'45',l:'45 días'},{v:'60',l:'60 días'}];
@@ -4633,6 +4639,73 @@ function renderReportes(){
         <th class="num">Costo Unit.</th><th class="num">Costo Total</th><th class="num">Margen Q</th><th class="num">Margen %</th>
       </tr></thead><tbody>${cuerpo}</tbody></table></div>`;
   }
+  else if(repType==='climes'){
+    // VENTAS POR CLIENTE Y MES — vendedor → clientes, montos por mes (con IVA) + total
+    // Filtro de vendedor (ventas ya viene filtrada si se eligió uno)
+    // 1) Determinar los meses presentes en el rango de ventas
+    const mesKey=d=>{const f=new Date(d.creada);return f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0');};
+    const MESES_ES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const mesLbl=k=>{const [a,m]=k.split('-');return MESES_ES[Number(m)-1]+' '+a;};
+    const mesesSet=new Set();
+    ventas.forEach(d=>mesesSet.add(mesKey(d)));
+    const meses=[...mesesSet].sort();
+    // 2) Agrupar: vendedor → cliente → {mes: monto, total}
+    const grupos={};
+    ventas.forEach(d=>{
+      const vend=d.vendedorNombre||'Sin vendedor';
+      const cli=d.clienteComercial||d.clienteNombre||'Sin cliente';
+      const mk=mesKey(d);
+      const monto=Number(d.totales?.total||0); // con IVA (total facturado)
+      if(!grupos[vend])grupos[vend]={};
+      if(!grupos[vend][cli])grupos[vend][cli]={meses:{},total:0};
+      grupos[vend][cli].meses[mk]=(grupos[vend][cli].meses[mk]||0)+monto;
+      grupos[vend][cli].total+=monto;
+    });
+    // 3) Construir tabla + export
+    const expFilas=[];
+    const totalesGen={}; meses.forEach(m=>totalesGen[m]=0); let granTotal=0;
+    let cuerpo='';
+    Object.keys(grupos).sort((a,b)=>a.localeCompare(b,'es')).forEach(vend=>{
+      const clientesV=grupos[vend];
+      const subt={}; meses.forEach(m=>subt[m]=0); let subTotalVend=0;
+      // encabezado vendedor
+      cuerpo+=`<tr style="background:var(--green)"><td colspan="${meses.length+2}" style="color:#fff;font-weight:700;font-size:13px;padding:8px 12px">${vend}</td></tr>`;
+      // clientes ordenados por total desc
+      Object.entries(clientesV).sort((a,b)=>b[1].total-a[1].total).forEach(([cli,info])=>{
+        let celdas='';
+        const filaExp={Vendedor:vend,Cliente:cli};
+        meses.forEach(m=>{
+          const val=info.meses[m]||0;
+          subt[m]+=val; totalesGen[m]+=val;
+          celdas+=`<td class="num">${val?money(val):'<span style="color:var(--muted-2)">—</span>'}</td>`;
+          filaExp[mesLbl(m)]=val;
+        });
+        filaExp['Total']=info.total;
+        expFilas.push(filaExp);
+        subTotalVend+=info.total; granTotal+=info.total;
+        cuerpo+=`<tr style="border-bottom:1px solid var(--line)"><td style="padding-left:26px">${cli}</td>${celdas}<td class="num" style="font-weight:600;background:#fafdf5">${money(info.total)}</td></tr>`;
+      });
+      // subtotal vendedor
+      let celdasSub='';
+      meses.forEach(m=>{celdasSub+=`<td class="num" style="font-weight:700">${money(subt[m])}</td>`;});
+      cuerpo+=`<tr style="border-bottom:2px solid var(--line-strong);background:#f0f5e8"><td style="text-align:right;font-weight:700;font-size:12px">Total ${vend}:</td>${celdasSub}<td class="num" style="font-weight:700">${money(subTotalVend)}</td></tr>
+        <tr><td colspan="${meses.length+2}" style="height:8px"></td></tr>`;
+    });
+    // total general
+    let celdasGen='';
+    meses.forEach(m=>{celdasGen+=`<td class="num" style="font-weight:800">${money(totalesGen[m])}</td>`;});
+    cuerpo+=`<tr style="border-top:3px solid var(--green);background:#eaf0e0"><td style="padding:11px 12px;font-weight:800;font-size:13px">TOTAL GENERAL</td>${celdasGen}<td class="num" style="font-weight:800">${money(granTotal)}</td></tr>`;
+    // encabezados de meses
+    const ths=meses.map(m=>`<th class="num">${mesLbl(m)}</th>`).join('');
+    exportData=expFilas;
+    if(!meses.length){
+      html+=`<div class="panel"><div class="panel-body"><p class="empty">No hay ventas en el período seleccionado.</p></div></div>`;
+    }else{
+      html+=`<div class="panel"><div class="panel-head"><h3>Ventas por cliente y mes</h3><span style="font-size:12px;color:var(--muted)">Montos con IVA · ${expFilas.length} cliente${expFilas.length!==1?'s':''}</span></div>
+        <table style="font-size:12.5px"><thead><tr><th>Vendedor / Cliente</th>${ths}<th class="num" style="background:#f0f5e8">Total</th></tr></thead>
+        <tbody>${cuerpo}</tbody></table></div>`;
+    }
+  }
   else if(repType==='cprov'){
     const rval=c=>{const v=(c.items||[]).reduce((s,it)=>s+(it.recibido||0)*(it.costo||it.precio||0),0);return v>0?v:Number(c.total||0);};
     const porPr={};comprasR.forEach(c=>{const v=rval(c);if(v<=0)return;if(!porPr[c.proveedorNombre])porPr[c.proveedorNombre]={v:0,n:0};porPr[c.proveedorNombre].v+=v;porPr[c.proveedorNombre].n++;});
@@ -4744,7 +4817,7 @@ function renderReportes(){
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],['Período:',repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
@@ -4757,10 +4830,11 @@ window.exportarExcel=exportarExcel;
 // ---- Exportación PDF ----
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const ths=cols.map(c=>`<th style="padding:7px 10px;background:#f4f7ef;font-size:10px;text-transform:uppercase;letter-spacing:.4px">${c}</th>`).join('');
-  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total'].includes(c);
+  const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
   const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="padding:6px 10px;border-bottom:1px solid #e7ebdf;font-size:12px;${esNum(c)?'text-align:right':''}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
   let old=document.getElementById('rep-print-area');if(old)old.remove();
   const div=document.createElement('div');div.id='rep-print-area';
