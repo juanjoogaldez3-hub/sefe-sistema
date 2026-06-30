@@ -395,7 +395,7 @@
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA ══════════ -->
-<div id="sefe-loader" style="position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#173916,#0f2810);display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;transition:opacity .5s ease">
+<div id="sefe-loader" style="position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#173916,#0f2810);display:none;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;transition:opacity .5s ease">
   <div style="text-align:center;width:340px;max-width:86vw">
     <div style="width:110px;height:110px;margin:0 auto 26px;background:rgba(255,255,255,.08);border-radius:24px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(168,192,56,.2)">
       <div style="font-family:'Bricolage Grotesque','Inter',system-ui,sans-serif;font-size:36px;font-weight:700;color:#A8C038">SE</div>
@@ -1212,10 +1212,34 @@ async function doLoginAuth(){
     }
     currentUser=u.nombre;currentRole=u.rol;
     $('#login-pass').value='';
-    $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
+    mostrarLoader();
+    $('#login-screen').style.display='none';
+    if(typeof cargarTodo==='function'){
+      for(let intento=0; intento<3; intento++){
+        try{
+          const ok=await cargarTodo();
+          if(ok){
+            cliN=(clientes.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+            prodN=(productos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+            corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;
+            compN=(compras.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+            usrN=(usuarios.reduce((m,u)=>Math.max(m,u.id),0)||0)+1;
+            pilN=(pilotos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+            vendN=(vendedores.reduce((m,v)=>Math.max(m,v.id),0)||0)+1;
+            cobroRutaN=(cobrosRuta.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
+            provN=(proveedores.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
+            initForm();initCompra();
+            break;
+          }
+        }catch(e3){ /* reintentar */ }
+        await new Promise(r=>setTimeout(r,500));
+      }
+    }
+    $('#app-layout').style.display='flex';
     aplicarPermisosUI();
     go('panel');
     setTimeout(recuperarBorrador,300);
+    ocultarLoader();
     btn.disabled=false;btn.textContent='Ingresar';
   }catch(e){
     errBox.textContent='Error al ingresar: '+e.message;
@@ -5804,6 +5828,7 @@ async function verificarSesion(){
     if(typeof sb==='undefined'||!sb.auth)return;
     const {data}=await sb.auth.getSession();
     if(data && data.session && data.session.user){
+      mostrarLoader();
       // Red de seguridad: si por timing los datos no cargaron (usuarios vacío
       // O documentos/clientes vacíos), reintentar cargarTodo y esperar a que
       // estén realmente completos antes de entrar.
@@ -5850,12 +5875,19 @@ async function verificarSesion(){
   }catch(e){ /* si falla, se queda en el login normal */ }
 }
 
+// Muestra la pantalla de carga
+function mostrarLoader(){
+  const l=document.getElementById('sefe-loader');
+  if(!l)return;
+  l.style.display='flex';
+  l.classList.remove('oculto');
+}
 // Oculta la pantalla de carga con un desvanecido suave
 function ocultarLoader(){
   const l=document.getElementById('sefe-loader');
   if(!l)return;
   l.classList.add('oculto');
-  setTimeout(()=>{ if(l&&l.parentNode)l.parentNode.removeChild(l); }, 600);
+  setTimeout(()=>{ if(l)l.style.display='none'; }, 600);
 }
 
 // Arrancar y luego verificar sesión.
