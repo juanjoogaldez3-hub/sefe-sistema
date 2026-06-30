@@ -917,6 +917,11 @@ const FEL_BACKEND_URL = 'https://sefe-backend.onrender.com-TU-BACKEND'; // MODO 
 
 const $=s=>document.querySelector(s);
 const money=n=>'Q '+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2});
+// Calcula las iniciales de un nombre: "Juan José Ogaldez" -> "JJO", "Oficina" -> "O"
+function inicialesVendedor(nombre){
+  if(!nombre)return '';
+  return nombre.trim().split(/\s+/).map(p=>p.charAt(0).toUpperCase()).join('');
+}
 const padn=n=>String(n).padStart(4,'0');
 
 // ---- Tablas: buscador rápido + orden por columna (tipo Excel) ----
@@ -1163,7 +1168,7 @@ function tienePermiso(v){
   const r=ROLES[currentRole];if(!r)return true;
   return r.views==='ALL'||r.views.includes(v);
 }
-function go(v){
+function go(v,desdeHash){
   if(!tienePermiso(v)){toast('No tenés permiso para esta sección','Tu rol es '+(ROLES[currentRole]?.label||currentRole),true);return;}
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
@@ -1171,6 +1176,9 @@ function go(v){
   const t={panel:['Dashboard','Resumen de operación'],pedido:['Nuevo pedido','Generá el pedido; después lo facturás o convertís'],documentos:['Documentos','Pedidos, notas y facturas'],cobros:['Cobros','Cuentas por cobrar de las facturas a crédito'],clientes:['Clientes','Catálogo de clientes'],inventario:['Inventario','Existencias de productos'],reportes:['Reportes','Análisis de ventas'],compras:['Compras','Registro de compras a proveedores'],nuevacompra:['Nueva compra','Registrá la entrada de mercadería'],porpagar:['Por pagar','Cuentas por pagar a proveedores'],talonarios:['Talonarios','Control de talonarios de recibos y su cuadre'],proveedores:['Proveedores','Catálogo de proveedores'],usuarios:['Usuarios','Usuarios y roles del sistema'],auditoria:['Auditoría','Registro de todas las acciones del sistema'],despachos:['Despachos','Asignación de entregas y rutas'],misentregas:['Mis entregas','Documentos asignados para entregar']};
   $('#ttl').textContent=t[v][0];$('#sub').textContent=t[v][1];
   if(v==='panel')renderPanel();if(v==='documentos')renderDocs();if(v==='cobros')renderCobros();if(v==='clientes')renderCli();if(v==='inventario')renderProd();if(v==='reportes')renderReportes();if(v==='compras')renderCompras();if(v==='nuevacompra')renderCompraForm();if(v==='porpagar')renderPorPagar();if(v==='proveedores')renderProveedores();if(v==='talonarios')renderTalonarios();if(v==='usuarios')renderUsuarios();if(v==='auditoria')renderAuditoria();if(v==='despachos')renderDespachos();if(v==='misentregas')renderMisEntregas();
+  // Actualizar la dirección (hash) para que el botón atrás y el recargar funcionen.
+  // Si el cambio vino del propio hash, no lo reescribimos para evitar bucles.
+  if(!desdeHash && ('#'+v)!==location.hash){ try{ location.hash=v; }catch(e){} }
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.view));
 window.go=go;
@@ -1247,7 +1255,7 @@ async function doLoginAuth(){
     }
     $('#app-layout').style.display='flex';
     aplicarPermisosUI();
-    go('panel');
+    entrarVistaInicial();
     setTimeout(recuperarBorrador,300);
     ocultarLoader();
     btn.disabled=false;btn.textContent='Ingresar';
@@ -1977,6 +1985,11 @@ async function facturarPedido(id,dias){
   toast('⏳ Emitiendo factura...','Conectando con EcoFactura (puede tardar un momento)');
   const hoy=new Date().toISOString().slice(0,10);
   const venc=new Date(Date.now()+dias*86400000).toISOString().slice(0,10);
+  // Datos comerciales extra para los campos adicionales del XML (TrnCampAd):
+  // condición de pago, vendedor y fecha de vencimiento en formato dd/mm/aaaa
+  const condicionPago=(dias>0)?'CREDITO':'CONTADO';
+  const vendedorIniciales=inicialesVendedor(f.vendedorNombre||currentUser||'');
+  const vencDDMMAAAA=(()=>{const d=new Date(Date.now()+dias*86400000);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();})();
   const payload={
     numero:f.numero,
     fecha:hoy,
@@ -1993,6 +2006,10 @@ async function facturarPedido(id,dias){
     total:f.totales.total,
     vencimiento:venc,
     observaciones:f.observaciones||'',
+    // Campos comerciales extra (para TrnCampAd en el backend)
+    condicionPago:condicionPago,
+    vendedor:vendedorIniciales,
+    vencimientoTexto:vencDDMMAAAA,
   };
 
   try{
@@ -2090,6 +2107,9 @@ async function facturarPedidoExento(id,dias,escenario){
   toast('⏳ Emitiendo factura exenta...','Conectando con EcoFactura');
   const hoy=new Date().toISOString().slice(0,10);
   const venc=new Date(Date.now()+dias*86400000).toISOString().slice(0,10);
+  const condicionPago=(dias>0)?'CREDITO':'CONTADO';
+  const vendedorIniciales=inicialesVendedor(f.vendedorNombre||currentUser||'');
+  const vencDDMMAAAA=(()=>{const d=new Date(Date.now()+dias*86400000);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();})();
   const payload={
     numero:f.numero, fecha:hoy,
     cliente:{nit:f.clienteNit||'CF', nombre:f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:f.clienteDireccion||'Ciudad', email:f.clienteEmail||''},
@@ -2097,6 +2117,8 @@ async function facturarPedidoExento(id,dias,escenario){
     total:f.totales.total, vencimiento:venc, observaciones:f.observaciones||'',
     // Datos de exención
     exenta:true, fraseTipo:4, escenario:escenario,
+    // Campos comerciales extra (para TrnCampAd en el backend)
+    condicionPago:condicionPago, vendedor:vendedorIniciales, vencimientoTexto:vencDDMMAAAA,
   };
 
   try{
@@ -6226,10 +6248,34 @@ window.openPagoGlobalCliente=openPagoGlobalCliente;
 // ================= HOOKS DE AUDITORÍA =================
 // Se inyectan en los puntos clave del sistema
 const _origGo=go;
-window.go=function(v){
+window.go=function(v,desdeHash){
   if(v==='auditoria')renderAuditoria();
-  _origGo(v);
+  _origGo(v,desdeHash);
 };
+
+// ---- Navegación por dirección (hash) ----
+// Permite que el botón "atrás"/"adelante" del navegador y el recargar (F5)
+// funcionen dentro del sistema. Cada sección tiene su dirección: #inventario, #reportes, etc.
+const VISTAS_VALIDAS=['panel','pedido','documentos','cobros','clientes','inventario','reportes','compras','nuevacompra','porpagar','talonarios','proveedores','usuarios','auditoria','despachos','misentregas'];
+function irAHash(){
+  // Solo navegar por hash si ya entramos al sistema (app visible)
+  const app=document.getElementById('app-layout');
+  if(!app||app.style.display==='none')return;
+  const v=(location.hash||'').replace('#','');
+  if(v && VISTAS_VALIDAS.includes(v) && tienePermiso(v)){
+    window.go(v,true); // true = viene del hash, no reescribir
+  }
+}
+window.addEventListener('hashchange',irAHash);
+// Al entrar al sistema: si la dirección trae una sección válida y con permiso, ir ahí; si no, al panel.
+function entrarVistaInicial(){
+  const v=(location.hash||'').replace('#','');
+  if(v && VISTAS_VALIDAS.includes(v) && tienePermiso(v)){
+    window.go(v);
+  }else{
+    window.go('panel');
+  }
+}
 
 // ---- ARRANQUE: cargar datos desde Supabase antes de mostrar la app ----
 async function arrancarApp(){
@@ -6311,7 +6357,7 @@ async function verificarSesion(){
         currentUser=u.nombre;currentRole=u.rol;
         $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
         aplicarPermisosUI();
-        go('panel');
+        entrarVistaInicial();
         // Red de seguridad contra timing: si los datos llegaron tarde, la vista
         // podría haber quedado vacía. Redibujamos la vista actual varias veces
         // en los primeros segundos para garantizar que se pinte con datos completos.
