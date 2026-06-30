@@ -2545,6 +2545,27 @@ function clienteStats(c){
   let bal=0;movimientos.forEach(m=>{bal+=m.cargo-m.abono;m.balance=bal;});
   return {facturas,totalFacturado,totalCobrado,saldoActual,vencidos,ultima,frecuencia,promPago,buckets,movimientos};
 }
+// ¿Este cliente es un principal (paraguas) con sedes?
+function esPrincipal(c){return clientes.some(x=>x.sedesDe===c.id);}
+// Devuelve las sedes de un principal
+function obtenerSedes(c){return clientes.filter(x=>x.sedesDe===c.id).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));}
+// Estadísticas consolidadas del grupo (principal + todas sus sedes)
+function grupoStats(principal){
+  const sedes=obtenerSedes(principal);
+  const miembros=[principal,...sedes];
+  let totalFacturado=0,totalCobrado=0,saldoActual=0,vencidosN=0;
+  const buckets={c30:0,c60:0,c90:0,c90p:0};
+  const porSede=miembros.map(m=>{
+    const st=clienteStats(m);
+    totalFacturado+=st.totalFacturado;
+    totalCobrado+=st.totalCobrado;
+    saldoActual+=st.saldoActual;
+    vencidosN+=st.vencidos.length;
+    buckets.c30+=st.buckets.c30;buckets.c60+=st.buckets.c60;buckets.c90+=st.buckets.c90;buckets.c90p+=st.buckets.c90p;
+    return {cliente:m,st,esPrincipal:m.id===principal.id};
+  }).filter(x=>x.esPrincipal?x.st.totalFacturado>0||sedes.length===0:true);
+  return {sedes,porSede,totalFacturado,totalCobrado,saldoActual,vencidosN,buckets};
+}
 function fichaIntegral(c,st){
   const k=(lbl,val,sub,color)=>`<div class="kpi"><div class="k-lbl">${lbl}</div><div class="k-val num" style="${color?'color:'+color:''}">${val}</div>${sub?`<div class="k-sub">${sub}</div>`:''}</div>`;
   const kpis=[
@@ -2579,8 +2600,62 @@ function fichaIntegral(c,st){
     </div>
   </div></div>`;
 }
+// Vista consolidada del cliente PRINCIPAL (paraguas): total del grupo + desglose por sede
+function renderGrupoConsolidado(c){
+  const g=grupoStats(c);
+  const k=(lbl,val,sub,color)=>`<div class="kpi"><div class="kpi-label">${lbl}</div><div class="kpi-value"${color?` style="color:${color}"`:''}>${val}</div>${sub?`<div class="kpi-sub">${sub}</div>`:''}</div>`;
+  const kpis=[
+    k('Saldo del grupo',money(g.saldoActual),g.sedes.length+' sede(s)',g.saldoActual>0?'var(--warn)':'var(--ok)'),
+    k('Total facturado',money(g.totalFacturado)),
+    k('Total cobrado',money(g.totalCobrado)),
+    k('Facturas vencidas',g.vencidosN,g.vencidosN?'requiere gestión':'al día',g.vencidosN?'var(--danger)':'var(--ok)'),
+  ].join('');
+  const maxB=Math.max(1,g.buckets.c30,g.buckets.c60,g.buckets.c90,g.buckets.c90p);
+  const ageRow=(lbl,v,color)=>`<div class="hbar-row"><div class="hbar-name">${lbl}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.round(v/maxB*100)}%;background:${color}"></div></div><div class="hbar-val num">${money(v)}</div></div>`;
+  const hayMora=g.buckets.c30+g.buckets.c60+g.buckets.c90+g.buckets.c90p>0;
+  const filasSedes=g.porSede.map(x=>{
+    const s=x.cliente, st=x.st;
+    const etiqueta=x.esPrincipal?' <span class="badge b-muted" style="font-size:9px">Principal</span>':'';
+    return `<tr style="cursor:pointer" onclick="abrirCliente(${s.id})">
+      <td style="font-weight:600">${s.nombre}${etiqueta}<div style="font-size:10.5px;color:var(--muted)">${s.direccion||''}</div></td>
+      <td class="num" style="color:var(--muted)">${money(st.totalFacturado)}</td>
+      <td class="num" style="color:var(--ok)">${money(st.totalCobrado)}</td>
+      <td class="num" style="font-weight:700;color:${st.saldoActual>0?'var(--warn)':'var(--muted-2)'}">${st.saldoActual>0?money(st.saldoActual):'—'}</td>
+      <td class="num" style="color:${st.vencidos.length?'var(--danger)':'var(--muted-2)'}">${st.vencidos.length||'—'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirCliente(${s.id})">Abrir</button></td>
+    </tr>`;
+  }).join('');
+  const vend=c.vendedorId?vendedores.find(v=>v.id===c.vendedorId)?.nombre:null;
+  $('#v-clientedet').innerHTML=`
+    <button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="go('clientes')">← Volver a clientes</button>
+    <div class="panel"><div class="panel-body">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+        <div><div style="font-family:var(--disp);font-size:22px;font-weight:700;letter-spacing:-.4px">${c.nombre} <span class="badge b-info" style="font-size:11px;vertical-align:middle">Grupo · ${g.sedes.length} sede${g.sedes.length!==1?'s':''}</span></div>
+        <div style="font-size:13px;color:var(--muted);margin-top:3px">${c.razonSocial||''} · NIT ${c.nit}${vend?` · Vendedor: ${vend}`:''}</div>
+        <div style="font-size:12px;color:var(--muted-2);margin-top:2px">Cliente paraguas — el detalle de compras y pagos se maneja en cada sede</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="estadoCuentaGrupoPDF(${c.id})" title="Estado de cuenta consolidado del grupo en PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>Estado de cuenta del grupo</button>
+          ${canRegistrarAbono()?`<button class="btn btn-primary btn-sm" onclick="openPagoGlobalCliente(${(g.sedes[0]||c).id})"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pago del grupo</button>`:''}
+          ${canCrearCliente()?`<button class="btn btn-ghost btn-sm" onclick="openCliSede(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar sede</button>`:''}
+          ${canCrearCliente()?`<button class="btn btn-ghost btn-sm" onclick="openCli(${c.id})">Editar datos</button>`:''}
+        </div>
+      </div>
+    </div></div>
+    <div class="panel"><div class="panel-head"><h3>Estado de cuenta consolidado</h3></div><div class="panel-body">
+      <div class="kpis" style="margin-bottom:${hayMora?'16px':'0'}">${kpis}</div>
+      ${hayMora?`<div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Antigüedad de saldos (todo el grupo)</div>
+      ${ageRow('0–30 días',g.buckets.c30,'var(--warn)')}${ageRow('31–60 días',g.buckets.c60,'#D98A2B')}${ageRow('61–90 días',g.buckets.c90,'#C45A2C')}${ageRow('+90 días',g.buckets.c90p,'var(--danger)')}`:''}
+    </div></div>
+    <div class="panel"><div class="panel-head"><h3>Sedes del grupo</h3><span style="font-size:12px;color:var(--muted)">Tocá una sede para ver su detalle</span></div>
+      <table><thead><tr><th>Sede</th><th>Facturado</th><th>Cobrado</th><th>Saldo</th><th>Vencidas</th><th></th></tr></thead>
+      <tbody>${filasSedes||'<tr><td colspan="6" class="empty">Sin sedes</td></tr>'}</tbody></table>
+    </div>`;
+}
 function renderCliDet(){
   const c=clientes.find(x=>x.id===cliActual);if(!c)return;
+  // Si es un cliente PRINCIPAL (paraguas) con sedes, mostrar vista consolidada del grupo
+  if(esPrincipal(c)){ renderGrupoConsolidado(c); return; }
   const st=clienteStats(c);
   const facturas=st.facturas;
   const prestamos=documentos.filter(d=>d.clienteId===c.id&&d.tipoDoc==='prestamo');
@@ -2754,6 +2829,102 @@ function estadoCuentaPDF(cliId){
   setTimeout(()=>{const e=document.getElementById('rep-print-area');if(e)e.remove();},1000);
 }
 window.estadoCuentaPDF=estadoCuentaPDF;
+// Estado de cuenta CONSOLIDADO del grupo (principal + todas las sedes) en PDF
+function estadoCuentaGrupoPDF(cliId){
+  const c=clientes.find(x=>x.id===cliId);if(!c)return;
+  const g=grupoStats(c);
+  const hoy=new Date().toLocaleDateString('es-GT',{day:'2-digit',month:'long',year:'numeric'});
+  const vend=c.vendedorId?vendedores.find(v=>v.id===c.vendedorId)?.nombre:null;
+  // Filas por sede con su saldo
+  const filasSedes=g.porSede.map(x=>{
+    const s=x.cliente,st=x.st;
+    return `<tr>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;font-weight:600">${s.nombre}${x.esPrincipal?' (principal)':''}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;text-align:right">Q ${st.totalFacturado.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;text-align:right;color:#2a7d2a">Q ${st.totalCobrado.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;text-align:right;font-weight:700">Q ${st.saldoActual.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;text-align:right;color:${st.vencidos.length?'#c0392b':'#999'}">${st.vencidos.length||'—'}</td>
+    </tr>`;
+  }).join('');
+  // Detalle de facturas pendientes de todas las sedes
+  const pendientes=[];
+  g.porSede.forEach(x=>{
+    x.st.facturas.forEach(f=>{const ai=arInfo(f);if(ai.saldo>0.001)pendientes.push({sede:x.cliente.nombre,f,ai});});
+  });
+  pendientes.sort((a,b)=>new Date(a.f.creada)-new Date(b.f.creada));
+  const filasPend=pendientes.length?pendientes.map(p=>`<tr>
+    <td style="padding:5px 8px;border-bottom:1px solid #eee;font-size:11px">${fdate(p.f.creada)}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;font-weight:600">${p.f.serie}-${p.f.numeroDte}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;color:#2563a8">${p.sede}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;color:${p.ai.vencido?'#c0392b':'#666'}">${fdate(p.f.vencimiento)}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:700">Q ${p.ai.saldo.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
+  </tr>`).join(''):'<tr><td colspan="5" style="padding:14px;text-align:center;color:#999">Sin facturas pendientes</td></tr>';
+
+  let old=document.getElementById('rep-print-area');if(old)old.remove();
+  const div=document.createElement('div');div.id='rep-print-area';
+  div.innerHTML=`<div style="font-family:Inter,Arial,sans-serif;padding:28px;color:#1a1a1a">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #a8c038;padding-bottom:16px;margin-bottom:20px">
+      <div><img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:150px;height:auto;display:block">
+        <div style="font-size:11px;color:#666;margin-top:6px">Soluciones Efectivas, S.A.<br>NIT 1234567-8 · Guatemala, C.A.</div>
+      </div>
+      <div style="text-align:right">
+        <div style="background:#173916;color:#fff;padding:7px 16px;border-radius:6px;font-weight:700;font-size:14px;display:inline-block">ESTADO DE CUENTA · GRUPO</div>
+        <div style="font-size:12px;color:#666;margin-top:10px">Fecha de emisión</div>
+        <div style="font-size:14px;font-weight:700">${hoy}</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:20px">
+      <div style="flex:1;min-width:240px">
+        <div style="font-size:10.5px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.5px">Grupo</div>
+        <div style="font-size:17px;font-weight:700;margin-top:3px">${c.nombre}</div>
+        ${c.razonSocial?`<div style="font-size:12.5px;color:#555">${c.razonSocial}</div>`:''}
+        <div style="font-size:12px;color:#666;margin-top:4px">NIT: ${c.nit||'—'} · ${g.sedes.length} sede${g.sedes.length!==1?'s':''}</div>
+        ${vend?`<div style="font-size:12px;color:#666;margin-top:2px">Vendedor: ${vend}</div>`:''}
+      </div>
+      <div style="text-align:right;min-width:200px">
+        <div style="font-size:10.5px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.5px">Saldo total del grupo</div>
+        <div style="font-size:30px;font-weight:800;color:${g.saldoActual>0?'#C9A227':'#2a7d2a'};margin-top:2px">Q ${g.saldoActual.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        <div style="font-size:12px;color:#666;margin-top:8px">Total facturado: Q ${g.totalFacturado.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        <div style="font-size:12px;color:#666">Total pagado: Q ${g.totalCobrado.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        ${g.vencidosN?`<div style="font-size:12px;color:#c0392b;font-weight:700;margin-top:4px">${g.vencidosN} factura(s) vencida(s)</div>`:''}
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Resumen por sede</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f4f7ef">
+          <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Sede</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Facturado</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Pagado</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Saldo</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Vencidas</th>
+        </tr></thead>
+        <tbody>${filasSedes}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:22px">
+      <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Facturas pendientes del grupo</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f4f7ef">
+          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Fecha</th>
+          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Factura</th>
+          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Sede</th>
+          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Vence</th>
+          <th style="padding:7px 8px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Saldo</th>
+        </tr></thead>
+        <tbody>${filasPend}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:30px;padding-top:14px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:11px;color:#888">
+      <div>Estado de cuenta consolidado de todas las sedes del grupo.</div>
+      <div>SEFE · ${new Date().toLocaleDateString('es-GT')}</div>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+  window.print();
+  setTimeout(()=>{const e=document.getElementById('rep-print-area');if(e)e.remove();},1000);
+}
+window.estadoCuentaGrupoPDF=estadoCuentaGrupoPDF;
 function setPrecioCli(prodId,val){const c=clientes.find(x=>x.id===cliActual);if(!c)return;c.precios=c.precios||{};
   if(val===''||val==null)return;c.precios[prodId]=Number(val);if(typeof guardarCliente==='function')guardarCliente(c);}
 window.setPrecioCli=setPrecioCli;
