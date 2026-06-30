@@ -4119,8 +4119,10 @@ function renderProd(){
   const btnsExport=`<button class="btn btn-ghost btn-sm" onclick="exportarInventarioPDF()" title="Descargar inventario en PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>PDF</button> `+
     `<button class="btn btn-ghost btn-sm" onclick="exportarInventarioExcel()" title="Descargar inventario en Excel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13l2 4 2-4"/><path d="M16 13v4"/></svg>Excel</button>`;
   if(acc)acc.innerHTML=(canEditInventario()?`<button class="btn btn-ghost btn-sm" onclick="openProd()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
-    ` <button class="btn btn-ghost btn-sm" id="btn-ver-inactivos" onclick="toggleVerInactivos()" style="color:var(--muted)">${_verInactivos?'Ocultar inactivos':'Ver inactivos'}</button> `:'')+btnsExport;
-  const lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
+    ` <button class="btn btn-ghost btn-sm" id="btn-ver-inactivos" onclick="toggleVerInactivos()" style="color:var(--muted)">${_verInactivos?'Ocultar inactivos':'Ver inactivos'}</button> `:'')+filtroMarcaInv()+btnsExport;
+  let lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
+  // Filtrar por marca si está seleccionada
+  if(_filtroMarca)lista=lista.filter(p=>(p.marca||'')===_filtroMarca);
   const filasProd=lista.map(p=>{
   const inactivo=p.activo===false;
   const provs=(p.proveedorIds||[]).map(id=>proveedores.find(x=>x.id===id)).filter(Boolean);
@@ -4150,6 +4152,17 @@ function renderProd(){
   renderPaginado('t-prod',filasProd,'Sin productos');enhanceTable('t-prod');}
 
 let _verInactivos=false;
+let _filtroMarca='';
+// Genera el selector de marca para el inventario
+function filtroMarcaInv(){
+  const marcas=[...new Set(productos.filter(p=>p.activo!==false||_verInactivos).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
+  if(!marcas.length)return '';
+  const opts=['<option value="">Todas las marcas</option>']
+    .concat(marcas.map(m=>`<option value="${m}"${_filtroMarca===m?' selected':''}>${m}</option>`))
+    .join('');
+  return `<select onchange="setFiltroMarca(this.value)" style="margin-right:8px;padding:7px 10px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;max-width:180px">${opts}</select> `;
+}
+window.setFiltroMarca=function(v){_filtroMarca=v;renderProd();};
 function toggleVerInactivos(){_verInactivos=!_verInactivos;renderProd();}
 window.toggleVerInactivos=toggleVerInactivos;
 
