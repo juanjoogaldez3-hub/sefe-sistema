@@ -2740,7 +2740,8 @@ function renderCliDet(){
       <div class="panel-body" style="padding-bottom:8px">
         <div style="display:flex;gap:9px;align-items:flex-end">
           <div style="flex:1"><label>Agregar producto</label><input id="cp-add" list="cp-prods" placeholder="Buscar por código o nombre…" onkeydown="if(event.key==='Enter')addPrecioProd()"><datalist id="cp-prods">${opts}</datalist></div>
-          <button class="btn btn-primary" onclick="addPrecioProd()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
+          <button class="btn btn-ghost" onclick="addPrecioProd()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
+          <button class="btn btn-ghost" id="btn-guardar-precios" onclick="guardarPreciosCli()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Guardar precios</button>
         </div>
       </div>
       <table><thead><tr><th>Producto</th><th>Precio base</th><th>Precio cliente</th><th>Descuento</th>${esAdmin?'<th>Margen</th>':''}<th></th></tr></thead><tbody>${rows}</tbody></table>
@@ -2995,8 +2996,24 @@ function estadoCuentaGrupoPDF(cliId){
 }
 window.estadoCuentaGrupoPDF=estadoCuentaGrupoPDF;
 function setPrecioCli(prodId,val){const c=clientes.find(x=>x.id===cliActual);if(!c)return;c.precios=c.precios||{};
-  if(val===''||val==null)return;c.precios[prodId]=Number(val);if(typeof guardarCliente==='function')guardarCliente(c);}
+  if(val===''||val==null)return;c.precios[prodId]=Number(val);
+  // Marcar que hay cambios sin guardar (el botón "Guardar precios" los persiste)
+  _preciosSinGuardar=true;
+  const btn=document.getElementById('btn-guardar-precios');
+  if(btn){btn.classList.add('btn-primary');btn.classList.remove('btn-ghost');btn.textContent='● Guardar precios';}
+}
 window.setPrecioCli=setPrecioCli;
+let _preciosSinGuardar=false;
+function guardarPreciosCli(){
+  const c=clientes.find(x=>x.id===cliActual);if(!c)return;
+  if(typeof guardarCliente==='function')guardarCliente(c);
+  _preciosSinGuardar=false;
+  const btn=document.getElementById('btn-guardar-precios');
+  if(btn){btn.classList.remove('btn-primary');btn.classList.add('btn-ghost');btn.textContent='✓ Precios guardados';
+    setTimeout(()=>{if(btn)btn.textContent='Guardar precios';},2000);}
+  toast('✓ Precios guardados','Los precios de '+c.nombre+' se guardaron correctamente');
+}
+window.guardarPreciosCli=guardarPreciosCli;
 function addPrecioProd(){const c=clientes.find(x=>x.id===cliActual);if(!c)return;c.precios=c.precios||{};
   const v=($('#cp-add').value||'').trim();if(!v)return;
   const p=productos.find(x=>`${x.codigo} — ${x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase()===v.toLowerCase());
