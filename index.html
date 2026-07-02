@@ -2712,12 +2712,29 @@ function renderCliDet(){
   const tabBtn=(t,l)=>`<button class="ct-tab ${cliTab===t?'on':''}" onclick="cliSetTab('${t}')">${l}</button>`;
   let body='';
   if(cliTab==='precios'){
+    const esAdmin=currentRole==="admin";
     const ids=Object.keys(c.precios||{}).map(Number).filter(id=>productos.find(p=>p.id===id));
     const opts=productos.filter(p=>!(c.precios&&c.precios[p.id]!=null)).map(p=>`<option value="${p.codigo} — ${p.nombre}">`).join('');
-    const rows=ids.length?ids.map(pid=>{const p=productos.find(x=>x.id===pid);return `<tr><td style="font-weight:600">${p.nombre}<div style="font-size:10.5px;color:var(--muted)">${p.codigo}</div></td>
-      <td class="num" style="color:var(--muted)">${money(p.precio)}</td>
+    const rows=ids.length?ids.map(pid=>{
+      const p=productos.find(x=>x.id===pid);
+      const precioCli=Number(c.precios[pid])||0;
+      const base=Number(p.precio)||0;
+      const costo=Number(p.costo)||0;
+      // Descuento: cuánto menos paga el cliente vs el precio base (en %)
+      const desc=base>0?((precioCli-base)/base*100):0;
+      const descTxt=desc<-0.05?`<span style="color:var(--ok)">${desc.toFixed(1)}%</span>`:(desc>0.05?`<span style="color:var(--warn)">+${desc.toFixed(1)}%</span>`:'<span style="color:var(--muted-2)">—</span>');
+      // Margen: ganancia sobre el precio de venta al cliente (en %), solo admin
+      const margen=precioCli>0?((precioCli-costo)/precioCli*100):0;
+      const margenColor=margen<0?'var(--danger)':(margen<15?'var(--warn)':'var(--ok)');
+      const margenVal=costo>0?margen.toFixed(1)+'%':'<span style="color:var(--muted-2)">—</span>';
+      const margenTd=esAdmin?`<td class="num" style="color:${margenColor};font-weight:600">${margenVal}</td>`:'';
+      return `<tr><td style="font-weight:600">${p.nombre}<div style="font-size:10.5px;color:var(--muted)">${p.codigo}</div></td>
+      <td class="num" style="color:var(--muted)">${money(base)}</td>
       <td><input type="number" step="0.01" class="num" style="max-width:120px;padding:7px 9px" value="${c.precios[pid]}" oninput="setPrecioCli(${pid},this.value)"></td>
-      <td><button class="x" onclick="quitarPrecio(${pid})">×</button></td></tr>`;}).join(''):'<tr><td colspan="4" class="empty">Este cliente aún no tiene precios asignados. Agregá los productos que compra.</td></tr>';
+      <td class="num">${descTxt}</td>
+      ${margenTd}
+      <td><button class="x" onclick="quitarPrecio(${pid})">×</button></td></tr>`;
+    }).join(''):`<tr><td colspan="${esAdmin?6:5}" class="empty">Este cliente aún no tiene precios asignados. Agregá los productos que compra.</td></tr>`;
     body=`<div class="panel">
       <div class="panel-head"><h3>Precios específicos</h3><span style="font-size:12px;color:var(--muted)">${ids.length} producto(s) asignado(s)</span></div>
       <div class="panel-body" style="padding-bottom:8px">
@@ -2726,7 +2743,7 @@ function renderCliDet(){
           <button class="btn btn-primary" onclick="addPrecioProd()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
         </div>
       </div>
-      <table><thead><tr><th>Producto</th><th>Precio base</th><th>Precio cliente</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <table><thead><tr><th>Producto</th><th>Precio base</th><th>Precio cliente</th><th>Descuento</th>${esAdmin?'<th>Margen</th>':''}<th></th></tr></thead><tbody>${rows}</tbody></table>
     </div>`;
   }else if(cliTab==='facturas'){
     body=`<div class="panel"><div class="panel-head"><h3>Facturas Cambiarias emitidas</h3></div>
