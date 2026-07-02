@@ -922,6 +922,14 @@ function inicialesVendedor(nombre){
   return nombre.trim().split(/\s+/).map(p=>p.charAt(0).toUpperCase()).join('');
 }
 const padn=n=>String(n).padStart(4,'0');
+// Fecha de HOY en hora de Guatemala (UTC-6), formato aaaa-mm-dd.
+// Usamos esto en vez de new Date().toISOString() porque ese usa UTC
+// y de noche podía guardar la fecha del día siguiente (o del anterior).
+function fechaHoyGT(){
+  const ahora=new Date();
+  const gt=new Date(ahora.getTime()-6*60*60*1000); // Guatemala es UTC-6 todo el año
+  return gt.toISOString().slice(0,10);
+}
 
 // ---- Tablas: buscador rápido + orden por columna (tipo Excel) ----
 // ── PAGINACIÓN PROGRESIVA (para no saturar la memoria en celulares) ──
@@ -5357,7 +5365,7 @@ function openCli(id){
       contactoPagos:{nombre:$('#cp-nom').value,telefono:$('#cp-tel').value,correo:$('#cp-mail').value},
       contactoCompras:{nombre:$('#cc-nom').value,telefono:$('#cc-tel').value,correo:$('#cc-mail').value}};
     if(c){Object.assign(c,datos);logAudit('Cliente editado',nom+' · NIT '+datos.nit);toast('✓ Cliente actualizado');if(typeof guardarCliente==='function')guardarCliente(c);}
-    else{const nuevo={id:cliN++,...datos,fechaAlta:new Date().toISOString().slice(0,10),precios:{},_nuevo:true};clientes.push(nuevo);logAudit('Cliente creado',nom+' · NIT '+datos.nit);toast('✓ Cliente agregado');if(typeof guardarCliente==='function')guardarCliente(nuevo);}
+    else{const nuevo={id:cliN++,...datos,fechaAlta:fechaHoyGT(),precios:{},_nuevo:true};clientes.push(nuevo);logAudit('Cliente creado',nom+' · NIT '+datos.nit);toast('✓ Cliente agregado');if(typeof guardarCliente==='function')guardarCliente(nuevo);}
     closeMod();initForm();renderCli();if(cliActual&&$('#v-clientedet').classList.contains('active'))renderCliDet();});
   setTimeout(()=>{const s=$('#c-tc');if(s)s.onchange=()=>{$('#c-tc-custom-wrap').style.display=s.value==='custom'?'block':'none';};},0);
 }
@@ -5512,7 +5520,7 @@ function openCliSede(padreId){
   <div style="font-size:11.5px;color:var(--muted);margin-top:4px">NIT: <b>${padre.nit}</b> · Razón social: <b>${padre.razonSocial||padre.nombre}</b> · Crédito: <b>${tcLabel(padre.tiempoCredito||0)}</b> (heredados del cliente principal)</div>`,
   ()=>{
     const nom=$('#cs-nom').value.trim();if(!nom){toast('Ingresá el nombre de la sede',null,true);return;}
-    const nuevaSede={id:cliN++,nombre:nom,razonSocial:padre.razonSocial||padre.nombre,nit:padre.nit,email:$('#cs-mail').value,direccion:$('#cs-dir').value||'Ciudad',direccionEntrega:$('#cs-dirent').value.trim(),fechaAlta:new Date().toISOString().slice(0,10),tiempoCredito:padre.tiempoCredito||0,vendedorId:padre.vendedorId,sedesDe:padreId,
+    const nuevaSede={id:cliN++,nombre:nom,razonSocial:padre.razonSocial||padre.nombre,nit:padre.nit,email:$('#cs-mail').value,direccion:$('#cs-dir').value||'Ciudad',direccionEntrega:$('#cs-dirent').value.trim(),fechaAlta:fechaHoyGT(),tiempoCredito:padre.tiempoCredito||0,vendedorId:padre.vendedorId,sedesDe:padreId,
       contactoPagos:{...padre.contactoPagos},contactoCompras:{...padre.contactoCompras},precios:{...padre.precios},_nuevo:true};
     clientes.push(nuevaSede);
     logAudit('Sede creada',nom+' · sede de '+padre.nombre+' · NIT '+padre.nit);
