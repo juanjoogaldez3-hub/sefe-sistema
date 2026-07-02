@@ -2049,9 +2049,11 @@ window.facturarPedido=facturarPedido;
 // Abrir el PDF que devuelve EcoFactura (viene en Base64)
 function verFacturaPDF(id){
   const f=documentos.find(d=>d.id===id);
-  if(!f||!f.pdfBase64){toast('Esta factura no tiene PDF','Las facturas simuladas no generan PDF',true);return;}
+  // Si la factura está anulada y tenemos el PDF de anulación, mostrar ese (no el original)
+  const pdf=(f && f.estado==='anulada' && f.pdfAnulacionBase64)?f.pdfAnulacionBase64:(f&&f.pdfBase64);
+  if(!f||!pdf){toast('Esta factura no tiene PDF','Las facturas simuladas no generan PDF',true);return;}
   try{
-    const bytes=atob(f.pdfBase64);
+    const bytes=atob(pdf);
     const arr=new Uint8Array(bytes.length);
     for(let i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
     const blob=new Blob([arr],{type:'application/pdf'});
@@ -2210,6 +2212,14 @@ async function anularFacturaReal(id,motivo){
         toast('✗ EcoFactura no anuló la factura',msg,true);
         logAudit('Error al anular','('+(f.serie||'')+'-'+(f.numeroDte||'')+') '+msg);
         return; // NO cambiamos nada si EcoFactura rechazó
+      }
+      // Guardar el PDF/XML de anulación que devuelve EcoFactura (si vino)
+      // para que en el sistema se vea el documento anulado, no el original.
+      if(data.pdfBase64){
+        f.pdfAnulacionBase64=data.pdfBase64;
+      }
+      if(data.xmlBase64){
+        f.xmlAnulacionBase64=data.xmlBase64;
       }
       // Descargar el PDF de anulación que devuelve EcoFactura (si vino)
       if(data.pdfBase64){
@@ -2460,9 +2470,10 @@ window.imprimirDoc=imprimirDoc;
 // Descargar el PDF oficial de EcoFactura como archivo
 function descargarFacturaPDF(id){
   const f=documentos.find(d=>d.id===id);
-  if(!f||!f.pdfBase64){toast('Esta factura no tiene PDF',null,true);return;}
+  const pdf=(f && f.estado==='anulada' && f.pdfAnulacionBase64)?f.pdfAnulacionBase64:(f&&f.pdfBase64);
+  if(!f||!pdf){toast('Esta factura no tiene PDF',null,true);return;}
   try{
-    const bytes=atob(f.pdfBase64);
+    const bytes=atob(pdf);
     const arr=new Uint8Array(bytes.length);
     for(let i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
     const blob=new Blob([arr],{type:'application/pdf'});
@@ -2484,7 +2495,8 @@ function nombreArchivoFactura(f){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // quita acentos
     .replace(/[^a-zA-Z0-9 ]/g,'').trim().replace(/\s+/g,'_').slice(0,40); // limpia y acorta
   const serie=f.serie||'SF';
-  return 'Factura-'+serie+'-'+cli+'.pdf';
+  const prefijo=(f.estado==='anulada'&&f.pdfAnulacionBase64)?'ANULADA-':'';
+  return prefijo+'Factura-'+serie+'-'+cli+'.pdf';
 }
 
 // Bloque de comprobante de recepción / entrega en el PDF
