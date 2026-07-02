@@ -36,7 +36,11 @@
   .brand .mk{width:40px;height:40px;border-radius:11px;background:var(--lime);color:var(--green);display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:-.5px;box-shadow:0 4px 14px rgba(168,192,56,.3)}
   .brand h2{font-family:var(--disp);font-size:17px;font-weight:700;color:#fff;letter-spacing:-.3px;line-height:1}
   .brand span{font-size:10.5px;color:#9FB394;font-weight:500;letter-spacing:.3px;display:block;margin-top:3px}
-  .nav{padding:6px 12px;display:flex;flex-direction:column;gap:1px}
+  .nav{padding:6px 12px;display:flex;flex-direction:column;gap:1px;flex:1;overflow-y:auto;min-height:0}
+  .nav::-webkit-scrollbar{width:6px}
+  .nav::-webkit-scrollbar-thumb{background:rgba(220,229,211,.25);border-radius:3px}
+  .nav::-webkit-scrollbar-thumb:hover{background:rgba(220,229,211,.4)}
+  .nav::-webkit-scrollbar-track{background:transparent}
   .nav .lbl{font-size:10px;font-weight:600;color:#7E9472;text-transform:uppercase;letter-spacing:.9px;padding:16px 12px 7px}
   .nav button{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;color:#C4D2B8;font-size:13.5px;font-weight:500;text-align:left;width:100%;transition:background .14s,color .14s}
   .nav button svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.7;fill:none;flex-shrink:0}
@@ -394,7 +398,7 @@
 <script src="db.js"></script>
 </head>
 <body>
-<!-- ══════════ PANTALLA DE CARGA ══════════ -->
+<!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
 <div id="sefe-loader" style="position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#173916,#0f2810);display:none;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;transition:opacity .5s ease">
   <div style="text-align:center;width:340px;max-width:86vw">
     <div style="width:110px;height:110px;margin:0 auto 26px;background:rgba(255,255,255,.08);border-radius:24px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(168,192,56,.2)">
@@ -912,6 +916,11 @@ const FEL_BACKEND_URL = 'https://sefe-backend.onrender.com';
 
 const $=s=>document.querySelector(s);
 const money=n=>'Q '+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2});
+// Calcula las iniciales de un nombre: "Juan José Ogaldez" -> "JJO", "Oficina" -> "O"
+function inicialesVendedor(nombre){
+  if(!nombre)return '';
+  return nombre.trim().split(/\s+/).map(p=>p.charAt(0).toUpperCase()).join('');
+}
 const padn=n=>String(n).padStart(4,'0');
 
 // ---- Tablas: buscador rápido + orden por columna (tipo Excel) ----
@@ -1158,7 +1167,7 @@ function tienePermiso(v){
   const r=ROLES[currentRole];if(!r)return true;
   return r.views==='ALL'||r.views.includes(v);
 }
-function go(v){
+function go(v,desdeHash){
   if(!tienePermiso(v)){toast('No tenés permiso para esta sección','Tu rol es '+(ROLES[currentRole]?.label||currentRole),true);return;}
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
@@ -1166,6 +1175,9 @@ function go(v){
   const t={panel:['Dashboard','Resumen de operación'],pedido:['Nuevo pedido','Generá el pedido; después lo facturás o convertís'],documentos:['Documentos','Pedidos, notas y facturas'],cobros:['Cobros','Cuentas por cobrar de las facturas a crédito'],clientes:['Clientes','Catálogo de clientes'],inventario:['Inventario','Existencias de productos'],reportes:['Reportes','Análisis de ventas'],compras:['Compras','Registro de compras a proveedores'],nuevacompra:['Nueva compra','Registrá la entrada de mercadería'],porpagar:['Por pagar','Cuentas por pagar a proveedores'],talonarios:['Talonarios','Control de talonarios de recibos y su cuadre'],proveedores:['Proveedores','Catálogo de proveedores'],usuarios:['Usuarios','Usuarios y roles del sistema'],auditoria:['Auditoría','Registro de todas las acciones del sistema'],despachos:['Despachos','Asignación de entregas y rutas'],misentregas:['Mis entregas','Documentos asignados para entregar']};
   $('#ttl').textContent=t[v][0];$('#sub').textContent=t[v][1];
   if(v==='panel')renderPanel();if(v==='documentos')renderDocs();if(v==='cobros')renderCobros();if(v==='clientes')renderCli();if(v==='inventario')renderProd();if(v==='reportes')renderReportes();if(v==='compras')renderCompras();if(v==='nuevacompra')renderCompraForm();if(v==='porpagar')renderPorPagar();if(v==='proveedores')renderProveedores();if(v==='talonarios')renderTalonarios();if(v==='usuarios')renderUsuarios();if(v==='auditoria')renderAuditoria();if(v==='despachos')renderDespachos();if(v==='misentregas')renderMisEntregas();
+  // Actualizar la dirección (hash) para que el botón atrás y el recargar funcionen.
+  // Si el cambio vino del propio hash, no lo reescribimos para evitar bucles.
+  if(!desdeHash && ('#'+v)!==location.hash){ try{ location.hash=v; }catch(e){} }
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.view));
 window.go=go;
@@ -1214,8 +1226,11 @@ async function doLoginAuth(){
     }
     currentUser=u.nombre;currentRole=u.rol;
     $('#login-pass').value='';
+    // Mostrar pantalla de carga mientras preparamos los datos frescos
     mostrarLoader();
     $('#login-screen').style.display='none';
+    // Recargar datos frescos desde la base antes de entrar, para que el
+    // sistema no aparezca vacío. Reintenta si hace falta.
     if(typeof cargarTodo==='function'){
       for(let intento=0; intento<3; intento++){
         try{
@@ -1239,7 +1254,7 @@ async function doLoginAuth(){
     }
     $('#app-layout').style.display='flex';
     aplicarPermisosUI();
-    go('panel');
+    entrarVistaInicial();
     setTimeout(recuperarBorrador,300);
     ocultarLoader();
     btn.disabled=false;btn.textContent='Ingresar';
@@ -1969,6 +1984,11 @@ async function facturarPedido(id,dias){
   toast('⏳ Emitiendo factura...','Conectando con EcoFactura (puede tardar un momento)');
   const hoy=new Date().toISOString().slice(0,10);
   const venc=new Date(Date.now()+dias*86400000).toISOString().slice(0,10);
+  // Datos comerciales extra para los campos adicionales del XML (TrnCampAd):
+  // condición de pago, vendedor y fecha de vencimiento en formato dd/mm/aaaa
+  const condicionPago=(dias>0)?'CREDITO':'CONTADO';
+  const vendedorIniciales=inicialesVendedor(f.vendedorNombre||currentUser||'');
+  const vencDDMMAAAA=(()=>{const d=new Date(Date.now()+dias*86400000);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();})();
   const payload={
     numero:f.numero,
     fecha:hoy,
@@ -1985,6 +2005,10 @@ async function facturarPedido(id,dias){
     total:f.totales.total,
     vencimiento:venc,
     observaciones:f.observaciones||'',
+    // Campos comerciales extra (para TrnCampAd en el backend)
+    condicionPago:condicionPago,
+    vendedor:vendedorIniciales,
+    vencimientoTexto:vencDDMMAAAA,
   };
 
   try{
@@ -2020,9 +2044,11 @@ window.facturarPedido=facturarPedido;
 // Abrir el PDF que devuelve EcoFactura (viene en Base64)
 function verFacturaPDF(id){
   const f=documentos.find(d=>d.id===id);
-  if(!f||!f.pdfBase64){toast('Esta factura no tiene PDF','Las facturas simuladas no generan PDF',true);return;}
+  // Si la factura está anulada y tenemos el PDF de anulación, mostrar ese (no el original)
+  const pdf=(f && f.estado==='anulada' && f.pdfAnulacionBase64)?f.pdfAnulacionBase64:(f&&f.pdfBase64);
+  if(!f||!pdf){toast('Esta factura no tiene PDF','Las facturas simuladas no generan PDF',true);return;}
   try{
-    const bytes=atob(f.pdfBase64);
+    const bytes=atob(pdf);
     const arr=new Uint8Array(bytes.length);
     for(let i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
     const blob=new Blob([arr],{type:'application/pdf'});
@@ -2082,6 +2108,9 @@ async function facturarPedidoExento(id,dias,escenario){
   toast('⏳ Emitiendo factura exenta...','Conectando con EcoFactura');
   const hoy=new Date().toISOString().slice(0,10);
   const venc=new Date(Date.now()+dias*86400000).toISOString().slice(0,10);
+  const condicionPago=(dias>0)?'CREDITO':'CONTADO';
+  const vendedorIniciales=inicialesVendedor(f.vendedorNombre||currentUser||'');
+  const vencDDMMAAAA=(()=>{const d=new Date(Date.now()+dias*86400000);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();})();
   const payload={
     numero:f.numero, fecha:hoy,
     cliente:{nit:f.clienteNit||'CF', nombre:f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:f.clienteDireccion||'Ciudad', email:f.clienteEmail||''},
@@ -2089,6 +2118,8 @@ async function facturarPedidoExento(id,dias,escenario){
     total:f.totales.total, vencimiento:venc, observaciones:f.observaciones||'',
     // Datos de exención
     exenta:true, fraseTipo:4, escenario:escenario,
+    // Campos comerciales extra (para TrnCampAd en el backend)
+    condicionPago:condicionPago, vendedor:vendedorIniciales, vencimientoTexto:vencDDMMAAAA,
   };
 
   try{
@@ -2176,6 +2207,14 @@ async function anularFacturaReal(id,motivo){
         toast('✗ EcoFactura no anuló la factura',msg,true);
         logAudit('Error al anular','('+(f.serie||'')+'-'+(f.numeroDte||'')+') '+msg);
         return; // NO cambiamos nada si EcoFactura rechazó
+      }
+      // Guardar el PDF/XML de anulación que devuelve EcoFactura (si vino)
+      // para que en el sistema se vea el documento anulado, no el original.
+      if(data.pdfBase64){
+        f.pdfAnulacionBase64=data.pdfBase64;
+      }
+      if(data.xmlBase64){
+        f.xmlAnulacionBase64=data.xmlBase64;
       }
       // Descargar el PDF de anulación que devuelve EcoFactura (si vino)
       if(data.pdfBase64){
@@ -2426,9 +2465,10 @@ window.imprimirDoc=imprimirDoc;
 // Descargar el PDF oficial de EcoFactura como archivo
 function descargarFacturaPDF(id){
   const f=documentos.find(d=>d.id===id);
-  if(!f||!f.pdfBase64){toast('Esta factura no tiene PDF',null,true);return;}
+  const pdf=(f && f.estado==='anulada' && f.pdfAnulacionBase64)?f.pdfAnulacionBase64:(f&&f.pdfBase64);
+  if(!f||!pdf){toast('Esta factura no tiene PDF',null,true);return;}
   try{
-    const bytes=atob(f.pdfBase64);
+    const bytes=atob(pdf);
     const arr=new Uint8Array(bytes.length);
     for(let i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
     const blob=new Blob([arr],{type:'application/pdf'});
@@ -2450,7 +2490,8 @@ function nombreArchivoFactura(f){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // quita acentos
     .replace(/[^a-zA-Z0-9 ]/g,'').trim().replace(/\s+/g,'_').slice(0,40); // limpia y acorta
   const serie=f.serie||'SF';
-  return 'Factura-'+serie+'-'+cli+'.pdf';
+  const prefijo=(f.estado==='anulada'&&f.pdfAnulacionBase64)?'ANULADA-':'';
+  return prefijo+'Factura-'+serie+'-'+cli+'.pdf';
 }
 
 // Bloque de comprobante de recepción / entrega en el PDF
@@ -2552,6 +2593,7 @@ function obtenerSedes(c){return clientes.filter(x=>x.sedesDe===c.id).sort((a,b)=
 // Estadísticas consolidadas del grupo (principal + todas sus sedes)
 function grupoStats(principal){
   const sedes=obtenerSedes(principal);
+  // El principal es paraguas: el grupo son sus sedes (y el principal mismo por si tuviera facturas sueltas)
   const miembros=[principal,...sedes];
   let totalFacturado=0,totalCobrado=0,saldoActual=0,vencidosN=0;
   const buckets={c30:0,c60:0,c90:0,c90p:0};
@@ -2563,7 +2605,7 @@ function grupoStats(principal){
     vencidosN+=st.vencidos.length;
     buckets.c30+=st.buckets.c30;buckets.c60+=st.buckets.c60;buckets.c90+=st.buckets.c90;buckets.c90p+=st.buckets.c90p;
     return {cliente:m,st,esPrincipal:m.id===principal.id};
-  }).filter(x=>x.esPrincipal?x.st.totalFacturado>0||sedes.length===0:true);
+  }).filter(x=>x.esPrincipal?x.st.totalFacturado>0||sedes.length===0:true); // ocultar el principal si no compra
   return {sedes,porSede,totalFacturado,totalCobrado,saldoActual,vencidosN,buckets};
 }
 function fichaIntegral(c,st){
@@ -2721,7 +2763,9 @@ function renderCliDet(){
         <div><div style="font-family:var(--disp);font-size:22px;font-weight:700;letter-spacing:-.4px">${c.nombre}</div>
         <div style="font-size:13px;color:var(--muted);margin-top:3px">${c.razonSocial||''} · NIT ${c.nit} · Crédito: ${tcLabel(c.tiempoCredito||0)}${c.vendedorId?` · Vendedor: ${vendedores.find(v=>v.id===c.vendedorId)?.nombre||'—'}`:''}
         </div>
-        ${c.email?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">✉ ${c.email}</div>`:''}</div>
+        ${c.email?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">✉ ${c.email}</div>`:''}
+        ${c.direccionEntrega?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">🚚 Entrega: ${c.direccionEntrega}</div>`:''}
+        ${c.fechaAlta?`<div style="font-size:12px;color:var(--muted-2);margin-top:2px">Fecha de alta: ${fdate(c.fechaAlta)}</div>`:''}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="estadoCuentaPDF(${c.id})" title="Descargar estado de cuenta en PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>Estado de cuenta PDF</button>
           ${canRegistrarAbono()?`<button class="btn btn-primary btn-sm" onclick="openPagoGlobalCliente(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pago global</button>`:''}
@@ -4374,6 +4418,7 @@ function renderProd(){
   if(acc)acc.innerHTML=(canEditInventario()?`<button class="btn btn-ghost btn-sm" onclick="openProd()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
     ` <button class="btn btn-ghost btn-sm" id="btn-ver-inactivos" onclick="toggleVerInactivos()" style="color:var(--muted)">${_verInactivos?'Ocultar inactivos':'Ver inactivos'}</button> `:'')+filtroMarcaInv()+btnsExport;
   let lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
+  // Filtrar por marca si está seleccionada
   if(_filtroMarca)lista=lista.filter(p=>(p.marca||'')===_filtroMarca);
   const filasProd=lista.map(p=>{
   const inactivo=p.activo===false;
@@ -4405,6 +4450,7 @@ function renderProd(){
 
 let _verInactivos=false;
 let _filtroMarca='';
+// Genera el selector de marca para el inventario
 function filtroMarcaInv(){
   const marcas=[...new Set(productos.filter(p=>p.activo!==false||_verInactivos).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
   if(!marcas.length)return '';
@@ -4614,10 +4660,11 @@ function renderRepFilters(){
     if(repType!=='producto')html+=sel('rf-cli','Cliente',cliOpts,repFiltros.cliente,'cliente');
     if(repType!=='producto')html+=sel('rf-vend','Vendedor',vendOpts,repFiltros.vendedores[0]||'','vendedor_simple');
     if(repType==='producto'){
+      // Filtros de cliente y marca para el reporte de ventas por producto
       html+=sel('rf-cli-prod','Cliente',cliOpts,repFiltros.cliente,'cliente');
       const marcas=[...new Set(productos.map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
       const marcaOpts=marcas.map(m=>({v:m,l:m}));
-      html+=sel('rf-marca','Marca',marcaOpts,repFiltros.marca_prod,'marca_prod');
+      html+=sel('rf-marca','Marca',marcaOpts,repFiltros.marca,'marca_prod');
     }
     html=`<div class="rep-filter-bar">${html}</div>`;
   }
@@ -4821,6 +4868,7 @@ function renderReportes(){
       <div class="note" style="margin-top:12px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La comisión es el 5% sobre las ventas sin IVA (ventas ÷ 1.12 × 5%).</span></div>`;
   }
   else if(repType==='producto'){
+    // Filtrar ventas por cliente si está seleccionado
     let ventasProd=ventas;
     if(repFiltros.cliente){
       const cid=Number(repFiltros.cliente);
@@ -4828,6 +4876,7 @@ function renderReportes(){
     }
     const porP={};ventasProd.forEach(d=>d.items.forEach(it=>{const v=it.cantidad*it.precio-(it.descuento||0);if(!porP[it.id])porP[it.id]={nombre:it.nombre,codigo:it.codigo,q:0,v:0,marca:(productos.find(x=>x.id===it.id)||{}).marca||''};porP[it.id].q+=it.cantidad;porP[it.id].v+=v;}));
     let arr=Object.values(porP).sort((a,b)=>b.v-a.v);
+    // Filtrar por marca si está seleccionada
     if(repFiltros.marca_prod)arr=arr.filter(p=>p.marca===repFiltros.marca_prod);
     exportData=arr.map(p=>({Código:p.codigo,Producto:p.nombre,Marca:p.marca||'',Unidades:p.q,Ingresos:p.v}));
     html+=`<div class="panel"><div class="panel-head"><h3>Ventas por producto</h3><span style="font-size:12px;color:var(--muted)">${arr.length} producto${arr.length!==1?'s':''}</span></div>
@@ -5272,6 +5321,7 @@ function openCli(id){
     </div>
   </div><div><label>Correo</label><input id="c-mail" value="${c?(c.email||''):''}"></div></div>
   <div class="row"><div><label>Dirección</label><input id="c-dir" value="${c?(c.direccion||'Ciudad'):'Ciudad'}"></div></div>
+  <div class="row"><div><label>Dirección de entrega <span style="font-weight:400;color:var(--muted-2)">(si es distinta a la de facturación)</span></label><input id="c-dirent" value="${c?(c.direccionEntrega||''):''}" placeholder="Dejar vacío si entrega en la misma dirección"></div></div>
   <div class="row"><div><label>Tiempo de crédito</label><select id="c-tc">
       <option value="0" ${tc===0?'selected':''}>Contado</option>
       <option value="15" ${tc===15?'selected':''}>15 días</option>
@@ -5303,11 +5353,11 @@ function openCli(id){
     const tiempoCredito=tcSel==='custom'?(Number($('#c-tc-custom').value)||0):Number(tcSel);
     const vendedorId=$('#c-vend').value?Number($('#c-vend').value):null;
     const sedesDe=$('#c-sede').value?Number($('#c-sede').value):null;
-    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:$('#c-nit').value||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,tiempoCredito,vendedorId,sedesDe,
+    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:$('#c-nit').value||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),tiempoCredito,vendedorId,sedesDe,
       contactoPagos:{nombre:$('#cp-nom').value,telefono:$('#cp-tel').value,correo:$('#cp-mail').value},
       contactoCompras:{nombre:$('#cc-nom').value,telefono:$('#cc-tel').value,correo:$('#cc-mail').value}};
     if(c){Object.assign(c,datos);logAudit('Cliente editado',nom+' · NIT '+datos.nit);toast('✓ Cliente actualizado');if(typeof guardarCliente==='function')guardarCliente(c);}
-    else{const nuevo={id:cliN++,...datos,precios:{},_nuevo:true};clientes.push(nuevo);logAudit('Cliente creado',nom+' · NIT '+datos.nit);toast('✓ Cliente agregado');if(typeof guardarCliente==='function')guardarCliente(nuevo);}
+    else{const nuevo={id:cliN++,...datos,fechaAlta:new Date().toISOString().slice(0,10),precios:{},_nuevo:true};clientes.push(nuevo);logAudit('Cliente creado',nom+' · NIT '+datos.nit);toast('✓ Cliente agregado');if(typeof guardarCliente==='function')guardarCliente(nuevo);}
     closeMod();initForm();renderCli();if(cliActual&&$('#v-clientedet').classList.contains('active'))renderCliDet();});
   setTimeout(()=>{const s=$('#c-tc');if(s)s.onchange=()=>{$('#c-tc-custom-wrap').style.display=s.value==='custom'?'block':'none';};},0);
 }
@@ -5457,11 +5507,12 @@ function openCliSede(padreId){
   <div class="note n-ok" style="margin-bottom:14px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La sede comparte el NIT y razón social de <b>${padre.nombre}</b>. Solo cambian el nombre comercial, la dirección y los contactos.</span></div>
   <div class="row"><div><label>Nombre de la sede</label><input id="cs-nom" placeholder="Ej. ${padre.nombre} — Zona 10"></div></div>
   <div class="row"><div><label>Dirección de la sede</label><input id="cs-dir" placeholder="Dirección física"></div></div>
+  <div class="row"><div><label>Dirección de entrega <span style="font-weight:400;color:var(--muted-2)">(si es distinta)</span></label><input id="cs-dirent" placeholder="Dejar vacío si entrega en la misma dirección"></div></div>
   <div class="row"><div><label>Correo</label><input id="cs-mail" value="${padre.email||''}"></div></div>
   <div style="font-size:11.5px;color:var(--muted);margin-top:4px">NIT: <b>${padre.nit}</b> · Razón social: <b>${padre.razonSocial||padre.nombre}</b> · Crédito: <b>${tcLabel(padre.tiempoCredito||0)}</b> (heredados del cliente principal)</div>`,
   ()=>{
     const nom=$('#cs-nom').value.trim();if(!nom){toast('Ingresá el nombre de la sede',null,true);return;}
-    const nuevaSede={id:cliN++,nombre:nom,razonSocial:padre.razonSocial||padre.nombre,nit:padre.nit,email:$('#cs-mail').value,direccion:$('#cs-dir').value||'Ciudad',tiempoCredito:padre.tiempoCredito||0,vendedorId:padre.vendedorId,sedesDe:padreId,
+    const nuevaSede={id:cliN++,nombre:nom,razonSocial:padre.razonSocial||padre.nombre,nit:padre.nit,email:$('#cs-mail').value,direccion:$('#cs-dir').value||'Ciudad',direccionEntrega:$('#cs-dirent').value.trim(),fechaAlta:new Date().toISOString().slice(0,10),tiempoCredito:padre.tiempoCredito||0,vendedorId:padre.vendedorId,sedesDe:padreId,
       contactoPagos:{...padre.contactoPagos},contactoCompras:{...padre.contactoCompras},precios:{...padre.precios},_nuevo:true};
     clientes.push(nuevaSede);
     logAudit('Sede creada',nom+' · sede de '+padre.nombre+' · NIT '+padre.nit);
@@ -6212,10 +6263,34 @@ window.openPagoGlobalCliente=openPagoGlobalCliente;
 // ================= HOOKS DE AUDITORÍA =================
 // Se inyectan en los puntos clave del sistema
 const _origGo=go;
-window.go=function(v){
+window.go=function(v,desdeHash){
   if(v==='auditoria')renderAuditoria();
-  _origGo(v);
+  _origGo(v,desdeHash);
 };
+
+// ---- Navegación por dirección (hash) ----
+// Permite que el botón "atrás"/"adelante" del navegador y el recargar (F5)
+// funcionen dentro del sistema. Cada sección tiene su dirección: #inventario, #reportes, etc.
+const VISTAS_VALIDAS=['panel','pedido','documentos','cobros','clientes','inventario','reportes','compras','nuevacompra','porpagar','talonarios','proveedores','usuarios','auditoria','despachos','misentregas'];
+function irAHash(){
+  // Solo navegar por hash si ya entramos al sistema (app visible)
+  const app=document.getElementById('app-layout');
+  if(!app||app.style.display==='none')return;
+  const v=(location.hash||'').replace('#','');
+  if(v && VISTAS_VALIDAS.includes(v) && tienePermiso(v)){
+    window.go(v,true); // true = viene del hash, no reescribir
+  }
+}
+window.addEventListener('hashchange',irAHash);
+// Al entrar al sistema: si la dirección trae una sección válida y con permiso, ir ahí; si no, al panel.
+function entrarVistaInicial(){
+  const v=(location.hash||'').replace('#','');
+  if(v && VISTAS_VALIDAS.includes(v) && tienePermiso(v)){
+    window.go(v);
+  }else{
+    window.go('panel');
+  }
+}
 
 // ---- ARRANQUE: cargar datos desde Supabase antes de mostrar la app ----
 async function arrancarApp(){
@@ -6263,12 +6338,14 @@ async function verificarSesion(){
     if(typeof sb==='undefined'||!sb.auth)return;
     const {data}=await sb.auth.getSession();
     if(data && data.session && data.session.user){
+      // Hay sesión guardada: mostrar el loader mientras preparamos los datos
       mostrarLoader();
       // Red de seguridad: si por timing los datos no cargaron (usuarios vacío
       // O documentos/clientes vacíos), reintentar cargarTodo y esperar a que
       // estén realmente completos antes de entrar.
       const datosIncompletos=()=>(!usuarios||usuarios.length===0);
       if(datosIncompletos() && typeof cargarTodo==='function'){
+        // Reintentar hasta 3 veces, esperando entre intentos
         for(let intento=0; intento<3 && datosIncompletos(); intento++){
           try{
             const ok=await cargarTodo();
@@ -6295,7 +6372,10 @@ async function verificarSesion(){
         currentUser=u.nombre;currentRole=u.rol;
         $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
         aplicarPermisosUI();
-        go('panel');
+        entrarVistaInicial();
+        // Red de seguridad contra timing: si los datos llegaron tarde, la vista
+        // podría haber quedado vacía. Redibujamos la vista actual varias veces
+        // en los primeros segundos para garantizar que se pinte con datos completos.
         const _vistaActual=()=>{
           const activa=document.querySelector('.view.active');
           return activa?activa.id.replace('v-',''):'panel';
@@ -6310,13 +6390,14 @@ async function verificarSesion(){
   }catch(e){ /* si falla, se queda en el login normal */ }
 }
 
-// Muestra la pantalla de carga
+// Muestra la pantalla de carga (después del login o al entrar con sesión)
 function mostrarLoader(){
   const l=document.getElementById('sefe-loader');
   if(!l)return;
   l.style.display='flex';
   l.classList.remove('oculto');
 }
+
 // Oculta la pantalla de carga con un desvanecido suave
 function ocultarLoader(){
   const l=document.getElementById('sefe-loader');
@@ -6336,6 +6417,8 @@ function esperarDependencias(intentos){
   if((supaListo && dbListo) || intentos>=60){
     // listo, o nos rendimos tras ~6s y arrancamos igual (modo prueba)
     arrancarApp().then(verificarSesion).finally(()=>{
+      // Ocultar la pantalla de carga cuando todo el arranque terminó
+      // (sea que entró con sesión o que quedó en el login).
       ocultarLoader();
     });
   } else {
@@ -6347,7 +6430,8 @@ if(document.readyState==='loading'){
 } else {
   esperarDependencias(0);
 }
-// Red de seguridad: si el loader no se ocultó en 12s, quitarlo igual.
+// Red de seguridad: si por lo que sea el loader no se ocultó en 12s, quitarlo
+// para no dejar al usuario atascado en la pantalla de carga.
 setTimeout(()=>{ if(typeof ocultarLoader==='function')ocultarLoader(); }, 12000);
 </script>
 </body>
