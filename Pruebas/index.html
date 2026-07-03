@@ -726,6 +726,7 @@
           <button class="ct-tab" data-r="climes">Ventas cliente/mes</button>
           <button class="ct-tab" data-r="dircli">Listado de clientes</button>
           <button class="ct-tab" data-r="factem">Facturas emitidas</button>
+          <button class="ct-tab" data-r="cardex">Cardex de inventario</button>
           <button class="ct-tab" data-r="cprov">Compras por proveedor</button>
           <button class="ct-tab" data-r="cprod">Compras por producto</button>
           <button class="ct-tab" data-r="cxc">Pendientes por cliente</button>
@@ -3503,7 +3504,11 @@ function openRecibir(id){
        <div class="num" style="text-align:center;color:var(--muted)">${it.recibido||0}</div>
        <input type="number" min="0" max="${pend}" value="${pend}" data-i="${i}" class="rec-in" style="text-align:center"></div>`;}).join('')}`,
     ()=>{let algo=false;
-      document.querySelectorAll('#m-body .rec-in').forEach(inp=>{const i=Number(inp.dataset.i);let q=Number(inp.value)||0;const it=c.items[i];const pend=it.cantidad-(it.recibido||0);if(q>pend)q=pend;if(q>0){const p=productos.find(x=>x.id===it.id);if(p){if(p.tipoEmpaque==='caja_unidad')p.stockCajas=(p.stockCajas||0)+q;else p.stock+=q;if(typeof guardarProducto==='function')guardarProducto(p);}it.recibido=(it.recibido||0)+q;algo=true;}});
+      document.querySelectorAll('#m-body .rec-in').forEach(inp=>{const i=Number(inp.dataset.i);let q=Number(inp.value)||0;const it=c.items[i];const pend=it.cantidad-(it.recibido||0);if(q>pend)q=pend;if(q>0){const p=productos.find(x=>x.id===it.id);if(p){if(p.tipoEmpaque==='caja_unidad')p.stockCajas=(p.stockCajas||0)+q;else p.stock+=q;if(typeof guardarProducto==='function')guardarProducto(p);}it.recibido=(it.recibido||0)+q;
+        // Registrar quién y cuándo recibió (historial de recepciones para el cardex)
+        it.recepciones=it.recepciones||[];
+        it.recepciones.push({cantidad:q,fecha:new Date().toISOString(),recibidoPor:currentUser});
+        algo=true;}});
       if(!algo){toast('No ingresaste cantidades a recibir',null,true);return;}
       const totRec=recRecibido(c),totPed=recTotal(c);
       c.estadoRecepcion=totRec>=totPed?'recibida':'parcial';
@@ -4285,6 +4290,7 @@ const MODULOS_PERMISOS=[
   {key:'rep_climes',lbl:'Ventas cliente/mes',grp:'Reportes'},
   {key:'rep_dircli',lbl:'Listado de clientes',grp:'Reportes'},
   {key:'rep_factem',lbl:'Facturas emitidas',grp:'Reportes'},
+  {key:'rep_cardex',lbl:'Cardex de inventario',grp:'Reportes'},
   {key:'rep_cprov',lbl:'Compras por proveedor',grp:'Reportes'},
   {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes'},
   {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes'},
@@ -4294,7 +4300,7 @@ const MODULOS_PERMISOS=[
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','dircli','factem','cprov','cprod','cxc','recibos','pagos'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','dircli','factem','cardex','cprov','cprod','cxc','recibos','pagos'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
@@ -4682,7 +4688,7 @@ window.cvPreview=cvPreview;
 
 // ---- Reportería ----
 let repPeriod='3m',repType='resumen';
-let repFiltros={cliente:'',vendedores:[],montoMin:'',montoMax:'',proveedor:'',soloVencidos:false,tiempoCredito:'',metodoRec:'',marca_prod:''};
+let repFiltros={cliente:'',vendedores:[],montoMin:'',montoMax:'',proveedor:'',soloVencidos:false,tiempoCredito:'',metodoRec:'',marca_prod:'',producto:''};
 function repRange(){
   const d=$('#rep-desde')?.value,h=$('#rep-hasta')?.value;
   if(d||h)return {start:d?new Date(d):new Date(0),end:h?new Date(h+'T23:59:59'):new Date('2999-01-01')};
@@ -4760,6 +4766,10 @@ function renderRepFilters(){
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-cli-fe','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
   }
+  else if(repType==='cardex'){
+    const prodOpts=productos.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')).map(p=>({v:String(p.id),l:`${p.codigo} — ${p.nombre}`}));
+    html=`<div class="rep-filter-bar">${sel('rf-prod-cx','Producto (dejá "Todos" para ver el listado general)',prodOpts,repFiltros.producto||'','producto')}</div>`;
+  }
   else if(repType==='cxc'){
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     const tcOpts=[{v:'0',l:'Contado'},{v:'15',l:'15 días'},{v:'30',l:'30 días'},{v:'45',l:'45 días'},{v:'60',l:'60 días'}];
@@ -4792,7 +4802,7 @@ function bindRep(){
     document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x.dataset.r===repType));
   }
   document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.onclick=()=>setRepPeriod(b.dataset.p));
-  document.querySelectorAll('#rep-types .ct-tab').forEach(b=>b.onclick=()=>{repType=b.dataset.r;repFiltros={cliente:'',vendedores:[],montoMin:'',montoMax:'',proveedor:'',soloVencidos:false,tiempoCredito:'',marca_prod:''};gruposColapsados={};document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x===b));renderRepFilters();renderReportes();});
+  document.querySelectorAll('#rep-types .ct-tab').forEach(b=>b.onclick=()=>{repType=b.dataset.r;repFiltros={cliente:'',vendedores:[],montoMin:'',montoMax:'',proveedor:'',soloVencidos:false,tiempoCredito:'',marca_prod:'',producto:''};gruposColapsados={};document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x===b));renderRepFilters();renderReportes();});
   ['rep-desde','rep-hasta'].forEach(id=>{const e=$('#'+id);if(e)e.onchange=()=>{document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.classList.remove('on'));renderReportes();};});
 }
 const kpiHTML=k=>k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub||''}</div></div>`).join('');
@@ -5207,6 +5217,116 @@ function renderReportes(){
         </tr></thead><tbody>${filas}</tbody></table></div>`;
     }
   }
+  else if(repType==='cardex'){
+    // CARDEX DE INVENTARIO — todos los movimientos de entrada y salida por producto
+    // Salidas: facturas (cambiaria) que rebajaron inventario
+    // Ingresos: compras recibidas (con historial de recepciones)
+    const prodSel=repFiltros.producto?productos.find(p=>String(p.id)===String(repFiltros.producto)):null;
+    // 1) Reunir todos los movimientos
+    const movs=[];
+    // SALIDAS: facturas certificadas/facturadas (no anuladas) que rebajaron stock
+    documentos.filter(d=>d.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(d.estado)&&enRango(d.creada,r)).forEach(f=>{
+      (f.items||[]).forEach(it=>{
+        if(prodSel&&it.id!==prodSel.id)return;
+        movs.push({
+          fecha:f.creada, tipo:'salida', prodId:it.id,
+          prodNombre:it.nombre, prodCodigo:it.codigo,
+          cantidad:Number(it.cantidad)||0,
+          doc:(f.serie||'')+'-'+(f.numeroDte||''),
+          docTipo:'Factura', tercero:f.clienteComercial||f.clienteNombre||'—',
+          usuario:f.vendedorNombre||'—', usuarioLbl:'Facturó'
+        });
+      });
+    });
+    // INGRESOS: compras con recepciones registradas
+    compras.filter(c=>enRango(c.fecha,r)||( (c.items||[]).some(it=>(it.recepciones||[]).some(rc=>enRango(rc.fecha,r))))).forEach(c=>{
+      (c.items||[]).forEach(it=>{
+        if(prodSel&&it.id!==prodSel.id)return;
+        // Si hay historial de recepciones, usar cada una; si no, usar el recibido total con la fecha de compra
+        if(it.recepciones&&it.recepciones.length){
+          it.recepciones.forEach(rc=>{
+            if(!enRango(rc.fecha,r))return;
+            movs.push({
+              fecha:rc.fecha, tipo:'ingreso', prodId:it.id,
+              prodNombre:it.nombre, prodCodigo:it.codigo,
+              cantidad:Number(rc.cantidad)||0,
+              doc:'CMP-'+padn(c.id), docTipo:'Compra',
+              tercero:c.proveedorNombre||'—',
+              usuario:rc.recibidoPor||'—', usuarioLbl:'Recibió'
+            });
+          });
+        }else if((it.recibido||0)>0&&enRango(c.fecha,r)){
+          movs.push({
+            fecha:c.fecha, tipo:'ingreso', prodId:it.id,
+            prodNombre:it.nombre, prodCodigo:it.codigo,
+            cantidad:Number(it.recibido)||0,
+            doc:'CMP-'+padn(c.id), docTipo:'Compra',
+            tercero:c.proveedorNombre||'—',
+            usuario:'—', usuarioLbl:'Recibió'
+          });
+        }
+      });
+    });
+    // 2) Ordenar por fecha
+    movs.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+    const expFilas=[];
+    // 3) Construir la tabla
+    if(prodSel){
+      // ── VISTA POR PRODUCTO: con saldo corriente ──
+      // Calcular stock inicial (stock actual menos los movimientos del rango, hacia atrás no es exacto,
+      // así que mostramos el saldo corriente partiendo de 0 en el rango y sumando/restando)
+      let saldo=0;
+      const filas=movs.map(m=>{
+        saldo+=(m.tipo==='ingreso'?m.cantidad:-m.cantidad);
+        expFilas.push({
+          Fecha:fdate(m.fecha), Documento:m.doc, Tipo:m.docTipo,
+          'Entra':m.tipo==='ingreso'?m.cantidad:'', 'Sale':m.tipo==='salida'?m.cantidad:'',
+          Saldo:saldo, Tercero:m.tercero, Usuario:m.usuario
+        });
+        return `<tr style="border-bottom:1px solid var(--line)">
+          <td style="font-size:11.5px;color:var(--muted)">${fdate(m.fecha)}</td>
+          <td style="font-size:11.5px;font-weight:600">${m.doc}<div style="font-size:10px;color:var(--muted-2)">${m.docTipo}</div></td>
+          <td style="font-size:11.5px">${m.tercero}</td>
+          <td class="num" style="font-size:11.5px;color:var(--ok);font-weight:${m.tipo==='ingreso'?'700':'400'}">${m.tipo==='ingreso'?'+'+m.cantidad:'—'}</td>
+          <td class="num" style="font-size:11.5px;color:var(--danger);font-weight:${m.tipo==='salida'?'700':'400'}">${m.tipo==='salida'?'−'+m.cantidad:'—'}</td>
+          <td class="num" style="font-size:11.5px;font-weight:700;background:#fafdf5">${saldo}</td>
+          <td style="font-size:11px;color:var(--muted)">${m.usuarioLbl}: ${m.usuario}</td>
+        </tr>`;
+      }).join('');
+      exportData=expFilas;
+      const stockActual=prodSel.tipoEmpaque==='caja_unidad'?((prodSel.stock||0)+(prodSel.stockCajas||0)*(prodSel.unidadesPorCaja||0)):(prodSel.stock||0);
+      html+=`<div class="panel"><div class="panel-head"><h3>Cardex: ${prodSel.nombre}</h3><span style="font-size:12px;color:var(--muted)">${prodSel.codigo} · Stock actual: <b style="color:var(--ink)">${stockActual}</b> · ${movs.length} movimiento${movs.length!==1?'s':''}</span></div>
+        ${movs.length?`<table style="font-size:12px"><thead><tr>
+          <th>Fecha</th><th>Documento</th><th>Cliente / Proveedor</th>
+          <th class="num">Entra</th><th class="num">Sale</th><th class="num">Saldo</th><th>Quién</th>
+        </tr></thead><tbody>${filas}</tbody></table>`:'<div class="panel-body"><p class="empty">Sin movimientos para este producto en el período.</p></div>'}</div>`;
+    }else{
+      // ── VISTA GENERAL: todos los productos, sin saldo corriente ──
+      const filas=movs.map(m=>{
+        expFilas.push({
+          Fecha:fdate(m.fecha), Producto:m.prodNombre, Codigo:m.prodCodigo,
+          Movimiento:m.tipo==='ingreso'?'Ingreso':'Salida',
+          Cantidad:m.cantidad, Documento:m.doc, Tipo:m.docTipo,
+          'Cliente/Proveedor':m.tercero, Usuario:m.usuario
+        });
+        return `<tr style="border-bottom:1px solid var(--line)">
+          <td style="font-size:11px;color:var(--muted)">${fdate(m.fecha)}</td>
+          <td style="font-size:11.5px;font-weight:600">${m.prodNombre}<div style="font-size:10px;color:var(--muted-2)">${m.prodCodigo}</div></td>
+          <td style="font-size:11px"><span class="badge ${m.tipo==='ingreso'?'b-ok':'b-danger'}" style="font-size:10px">${m.tipo==='ingreso'?'▲ Ingreso':'▼ Salida'}</span></td>
+          <td class="num" style="font-size:11.5px;font-weight:700;color:${m.tipo==='ingreso'?'var(--ok)':'var(--danger)'}">${m.tipo==='ingreso'?'+':'−'}${m.cantidad}</td>
+          <td style="font-size:11.5px;font-weight:600">${m.doc}<div style="font-size:10px;color:var(--muted-2)">${m.docTipo}</div></td>
+          <td style="font-size:11px">${m.tercero}</td>
+          <td style="font-size:11px;color:var(--muted)">${m.usuarioLbl}: ${m.usuario}</td>
+        </tr>`;
+      }).join('');
+      exportData=expFilas;
+      html+=`<div class="panel"><div class="panel-head"><h3>Cardex general de inventario</h3><span style="font-size:12px;color:var(--muted)">${movs.length} movimiento${movs.length!==1?'s':''} · elegí un producto arriba para ver su saldo corriente</span></div>
+        ${movs.length?`<table style="font-size:12px"><thead><tr>
+          <th>Fecha</th><th>Producto</th><th>Movimiento</th><th class="num">Cantidad</th>
+          <th>Documento</th><th>Cliente / Proveedor</th><th>Quién</th>
+        </tr></thead><tbody>${filas}</tbody></table>`:'<div class="panel-body"><p class="empty">Sin movimientos de inventario en el período.</p></div>'}</div>`;
+    }
+  }
   else if(repType==='cprov'){
     const rval=c=>{const v=(c.items||[]).reduce((s,it)=>s+(it.recibido||0)*(it.costo||it.precio||0),0);return v>0?v:Number(c.total||0);};
     const porPr={};comprasR.forEach(c=>{const v=rval(c);if(v<=0)return;if(!porPr[c.proveedorNombre])porPr[c.proveedorNombre]={v:0,n:0};porPr[c.proveedorNombre].v+=v;porPr[c.proveedorNombre].n++;});
@@ -5318,7 +5438,7 @@ function renderReportes(){
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],['Período:',repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
@@ -5331,11 +5451,11 @@ window.exportarExcel=exportarExcel;
 // ---- Exportación PDF ----
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const ths=cols.map(c=>`<th style="padding:7px 10px;background:#f4f7ef;font-size:10px;text-transform:uppercase;letter-spacing:.4px">${c}</th>`).join('');
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
+  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
   const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="padding:6px 10px;border-bottom:1px solid #e7ebdf;font-size:12px;${esNum(c)?'text-align:right':''}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
   let old=document.getElementById('rep-print-area');if(old)old.remove();
   const div=document.createElement('div');div.id='rep-print-area';
