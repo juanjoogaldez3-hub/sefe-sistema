@@ -657,7 +657,7 @@
       <section class="view" id="v-clientes">
         <div class="panel">
           <div class="panel-head"><h3>Clientes</h3><div id="cli-acciones"></div></div>
-          <table><thead><tr><th>Nombre comercial</th><th>Razón social</th><th>NIT</th><th>Contacto de pagos</th><th>Crédito</th><th>Fecha de alta</th><th>Saldo</th><th></th></tr></thead><tbody id="t-cli"></tbody></table>
+          <table><thead><tr><th>Nombre comercial</th><th>Razón social</th><th>NIT</th><th>Contacto de pagos</th><th>Fecha de alta</th><th>Crédito</th><th>Saldo</th><th></th></tr></thead><tbody id="t-cli"></tbody></table>
         </div>
       </section>
 
@@ -2544,8 +2544,8 @@ function renderCli(){
     <td style="color:var(--muted)">${c.razonSocial||'—'}</td>
     <td class="num">${c.nit}</td>
     <td style="color:var(--muted)">${c.contactoPagos&&c.contactoPagos.nombre?`${c.contactoPagos.nombre}${c.contactoPagos.telefono?`<div style="font-size:10.5px;color:var(--muted-2);margin-top:1px">☎ ${c.contactoPagos.telefono}</div>`:''}`:'—'}</td>
-    <td>${tcLabel(c.tiempoCredito||0)}</td>
     <td style="color:var(--muted);font-size:12px">${c.fechaAlta?fdate(c.fechaAlta):'—'}</td>
+    <td>${tcLabel(c.tiempoCredito||0)}</td>
     <td class="num" style="font-weight:${saldo>0?'700':'400'};color:${saldo>0?'var(--warn)':'var(--muted-2)'}">${saldo>0?money(saldo):'—'}</td>
     <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirCliente(${c.id})">Abrir</button></td>
   </tr>`;});renderPaginado('t-cli',filasCli,'Sin clientes');enhanceTable('t-cli');}
