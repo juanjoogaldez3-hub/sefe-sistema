@@ -6475,11 +6475,12 @@ async function verificarSesion(){
           const activa=document.querySelector('.view.active');
           return activa?activa.id.replace('v-',''):'panel';
         };
-        const _redibujar=()=>{ try{ go(_vistaActual()); }catch(e){} };
+        const _redibujar=()=>{ try{ const v=_vistaActual(); if(v!=='pedido')go(v); }catch(e){} };
         setTimeout(_redibujar, 300);
         setTimeout(_redibujar, 900);
         setTimeout(_redibujar, 1800);
-        setTimeout(recuperarBorrador,300);
+        // Recuperar el borrador DESPUÉS de los redibujados, para que no lo borren
+        setTimeout(recuperarBorrador, 2000);
       }
     }
   }catch(e){ /* si falla, se queda en el login normal */ }
