@@ -361,7 +361,10 @@
   @media print{
     body *{visibility:hidden}
     #rep-print-area,#rep-print-area *{visibility:visible}
-    #rep-print-area{position:absolute;left:0;top:0;width:100%;padding:20px}
+    #rep-print-area{position:absolute;left:0;top:0;width:100%;padding:0}
+    #rep-print-area table{page-break-inside:auto}
+    #rep-print-area tr{page-break-inside:avoid}
+    #rep-print-area thead{display:table-header-group}
     .no-print{display:none !important}
   }
 
@@ -2831,75 +2834,52 @@ function estadoCuentaPDF(cliId){
   // Antigüedad de saldos (solo si hay mora)
   const b=st.buckets;
   const hayMora=b.c30+b.c60+b.c90+b.c90p>0;
-  const moraHTML=hayMora?`<div style="margin-top:18px">
-    <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Antigüedad de saldos</div>
-    <table style="width:100%;border-collapse:collapse;font-size:11.5px">
-      <tr style="background:#f4f7ef"><td style="padding:6px 10px">0–30 días</td><td style="padding:6px 10px">31–60 días</td><td style="padding:6px 10px">61–90 días</td><td style="padding:6px 10px">+90 días</td></tr>
+  const moraHTML=hayMora?`<div>${_pdfSec('Antigüedad de saldos')}
+    <table style="width:100%;border-collapse:collapse">
       <tr>
-        <td style="padding:6px 10px;border:1px solid #eee">Q ${b.c30.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
-        <td style="padding:6px 10px;border:1px solid #eee">Q ${b.c60.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
-        <td style="padding:6px 10px;border:1px solid #eee">Q ${b.c90.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
-        <td style="padding:6px 10px;border:1px solid #eee;color:#c0392b;font-weight:700">Q ${b.c90p.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
+        <th style="${_pdfTH()}">0–30 días</th><th style="${_pdfTH()}">31–60 días</th><th style="${_pdfTH()}">61–90 días</th><th style="${_pdfTH()}">+90 días</th>
+      </tr>
+      <tr>
+        <td style="${_pdfTD()}">Q ${b.c30.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
+        <td style="${_pdfTD()}">Q ${b.c60.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
+        <td style="${_pdfTD()}">Q ${b.c90.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
+        <td style="${_pdfTD('color:#BE4326;font-weight:700')}">Q ${b.c90p.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
       </tr>
     </table></div>`:'';
 
-  let old=document.getElementById('rep-print-area');if(old)old.remove();
-  const div=document.createElement('div');div.id='rep-print-area';
-  div.innerHTML=`<div style="font-family:Inter,Arial,sans-serif;padding:28px;color:#1a1a1a">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #a8c038;padding-bottom:16px;margin-bottom:20px">
-      <div><img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:150px;height:auto;display:block">
-        <div style="font-size:11px;color:#666;margin-top:6px">Soluciones Efectivas, S.A.<br>NIT 1234567-8 · Guatemala, C.A.</div>
-      </div>
-      <div style="text-align:right">
-        <div style="background:#173916;color:#fff;padding:7px 16px;border-radius:6px;font-weight:700;font-size:15px;display:inline-block">ESTADO DE CUENTA</div>
-        <div style="font-size:12px;color:#666;margin-top:10px">Fecha de emisión</div>
-        <div style="font-size:14px;font-weight:700">${hoy}</div>
-      </div>
-    </div>
-
-    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:20px">
+  const body=`
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px">
       <div style="flex:1;min-width:240px">
-        <div style="font-size:10.5px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.5px">Cliente</div>
-        <div style="font-size:17px;font-weight:700;margin-top:3px">${c.nombre||''}</div>
+        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Cliente</div>
+        <div style="font-size:17px;font-weight:700;margin-top:3px;color:#173916">${c.nombre||''}</div>
         ${c.razonSocial?`<div style="font-size:12.5px;color:#555">${c.razonSocial}</div>`:''}
-        <div style="font-size:12px;color:#666;margin-top:4px">NIT: ${c.nit||'—'}</div>
-        ${c.direccion?`<div style="font-size:12px;color:#666">${c.direccion}</div>`:''}
-        ${vend?`<div style="font-size:12px;color:#666;margin-top:2px">Vendedor: ${vend}</div>`:''}
+        <div style="font-size:12px;color:#666B5C;margin-top:4px">NIT: ${c.nit||'—'}</div>
+        ${c.direccion?`<div style="font-size:12px;color:#666B5C">${c.direccion}</div>`:''}
+        ${vend?`<div style="font-size:12px;color:#666B5C;margin-top:2px">Vendedor: ${vend}</div>`:''}
       </div>
-      <div style="text-align:right;min-width:200px">
-        <div style="font-size:10.5px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.5px">Saldo pendiente</div>
-        <div style="font-size:30px;font-weight:800;color:${st.saldoActual>0?'#C9A227':'#2a7d2a'};margin-top:2px">Q ${st.saldoActual.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
-        <div style="font-size:12px;color:#666;margin-top:8px">Total facturado: Q ${st.totalFacturado.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
-        <div style="font-size:12px;color:#666">Total pagado: Q ${st.totalCobrado.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
-        ${st.vencidos.length?`<div style="font-size:12px;color:#c0392b;font-weight:700;margin-top:4px">${st.vencidos.length} factura(s) vencida(s)</div>`:''}
+      <div style="text-align:right;min-width:230px;background:#F4F7EF;border:1px solid #D6DCC9;border-radius:8px;padding:12px 16px">
+        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Saldo pendiente</div>
+        <div style="font-size:28px;font-weight:800;color:${st.saldoActual>0?'#9A6B07':'#3B6D11'};margin-top:2px">Q ${st.saldoActual.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        <div style="font-size:11.5px;color:#666B5C;margin-top:8px">Total facturado: Q ${st.totalFacturado.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        <div style="font-size:11.5px;color:#666B5C">Total pagado: Q ${st.totalCobrado.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        ${st.vencidos.length?`<div style="font-size:11.5px;color:#BE4326;font-weight:700;margin-top:4px">${st.vencidos.length} factura(s) vencida(s)</div>`:''}
       </div>
     </div>
-
     ${moraHTML}
-
-    <div style="margin-top:22px">
-      <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Detalle de movimientos</div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:#f4f7ef">
-          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Fecha</th>
-          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Documento</th>
-          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Detalle</th>
-          <th style="padding:7px 8px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Cargo</th>
-          <th style="padding:7px 8px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Abono</th>
-          <th style="padding:7px 8px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Saldo</th>
-        </tr></thead>
-        <tbody>${movs}</tbody>
-      </table>
-    </div>
-
-    <div style="margin-top:30px;padding-top:14px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:11px;color:#888">
-      <div>Para cualquier consulta sobre su estado de cuenta, comuníquese con nosotros.</div>
-      <div>SEFE · ${new Date().toLocaleDateString('es-GT')}</div>
-    </div>
-  </div>`;
-  document.body.appendChild(div);
-  window.print();
-  setTimeout(()=>{const e=document.getElementById('rep-print-area');if(e)e.remove();},1000);
+    ${_pdfSec('Detalle de movimientos')}
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="${_pdfTH()}">Fecha</th>
+        <th style="${_pdfTH()}">Documento</th>
+        <th style="${_pdfTH()}">Detalle</th>
+        <th style="${_pdfTH('text-align:right')}">Cargo</th>
+        <th style="${_pdfTH('text-align:right')}">Abono</th>
+        <th style="${_pdfTH('text-align:right')}">Saldo</th>
+      </tr></thead>
+      <tbody>${movs}</tbody>
+    </table>
+    <div style="margin-top:24px;font-size:11px;color:#666B5C">Para cualquier consulta sobre su estado de cuenta, comuníquese con nosotros.</div>`;
+  _abrirPDF(_pdfShell({titulo:'ESTADO DE CUENTA',subtitulo:c.nombre||'',orientacion:'portrait',body}));
 }
 window.estadoCuentaPDF=estadoCuentaPDF;
 // Estado de cuenta CONSOLIDADO del grupo (principal + todas las sedes) en PDF
@@ -2933,69 +2913,47 @@ function estadoCuentaGrupoPDF(cliId){
     <td style="padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:700">Q ${p.ai.saldo.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
   </tr>`).join(''):'<tr><td colspan="5" style="padding:14px;text-align:center;color:#999">Sin facturas pendientes</td></tr>';
 
-  let old=document.getElementById('rep-print-area');if(old)old.remove();
-  const div=document.createElement('div');div.id='rep-print-area';
-  div.innerHTML=`<div style="font-family:Inter,Arial,sans-serif;padding:28px;color:#1a1a1a">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #a8c038;padding-bottom:16px;margin-bottom:20px">
-      <div><img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:150px;height:auto;display:block">
-        <div style="font-size:11px;color:#666;margin-top:6px">Soluciones Efectivas, S.A.<br>NIT 1234567-8 · Guatemala, C.A.</div>
-      </div>
-      <div style="text-align:right">
-        <div style="background:#173916;color:#fff;padding:7px 16px;border-radius:6px;font-weight:700;font-size:14px;display:inline-block">ESTADO DE CUENTA · GRUPO</div>
-        <div style="font-size:12px;color:#666;margin-top:10px">Fecha de emisión</div>
-        <div style="font-size:14px;font-weight:700">${hoy}</div>
-      </div>
-    </div>
-    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:20px">
+  const body=`
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px">
       <div style="flex:1;min-width:240px">
-        <div style="font-size:10.5px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.5px">Grupo</div>
-        <div style="font-size:17px;font-weight:700;margin-top:3px">${c.nombre}</div>
+        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Grupo</div>
+        <div style="font-size:17px;font-weight:700;margin-top:3px;color:#173916">${c.nombre}</div>
         ${c.razonSocial?`<div style="font-size:12.5px;color:#555">${c.razonSocial}</div>`:''}
-        <div style="font-size:12px;color:#666;margin-top:4px">NIT: ${c.nit||'—'} · ${g.sedes.length} sede${g.sedes.length!==1?'s':''}</div>
-        ${vend?`<div style="font-size:12px;color:#666;margin-top:2px">Vendedor: ${vend}</div>`:''}
+        <div style="font-size:12px;color:#666B5C;margin-top:4px">NIT: ${c.nit||'—'} · ${g.sedes.length} sede${g.sedes.length!==1?'s':''}</div>
+        ${vend?`<div style="font-size:12px;color:#666B5C;margin-top:2px">Vendedor: ${vend}</div>`:''}
       </div>
-      <div style="text-align:right;min-width:200px">
-        <div style="font-size:10.5px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.5px">Saldo total del grupo</div>
-        <div style="font-size:30px;font-weight:800;color:${g.saldoActual>0?'#C9A227':'#2a7d2a'};margin-top:2px">Q ${g.saldoActual.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
-        <div style="font-size:12px;color:#666;margin-top:8px">Total facturado: Q ${g.totalFacturado.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
-        <div style="font-size:12px;color:#666">Total pagado: Q ${g.totalCobrado.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
-        ${g.vencidosN?`<div style="font-size:12px;color:#c0392b;font-weight:700;margin-top:4px">${g.vencidosN} factura(s) vencida(s)</div>`:''}
+      <div style="text-align:right;min-width:230px;background:#F4F7EF;border:1px solid #D6DCC9;border-radius:8px;padding:12px 16px">
+        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Saldo total del grupo</div>
+        <div style="font-size:28px;font-weight:800;color:${g.saldoActual>0?'#9A6B07':'#3B6D11'};margin-top:2px">Q ${g.saldoActual.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        <div style="font-size:11.5px;color:#666B5C;margin-top:8px">Total facturado: Q ${g.totalFacturado.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        <div style="font-size:11.5px;color:#666B5C">Total pagado: Q ${g.totalCobrado.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        ${g.vencidosN?`<div style="font-size:11.5px;color:#BE4326;font-weight:700;margin-top:4px">${g.vencidosN} factura(s) vencida(s)</div>`:''}
       </div>
     </div>
-    <div style="margin-top:8px">
-      <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Resumen por sede</div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:#f4f7ef">
-          <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Sede</th>
-          <th style="padding:7px 10px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Facturado</th>
-          <th style="padding:7px 10px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Pagado</th>
-          <th style="padding:7px 10px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Saldo</th>
-          <th style="padding:7px 10px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Vencidas</th>
-        </tr></thead>
-        <tbody>${filasSedes}</tbody>
-      </table>
-    </div>
-    <div style="margin-top:22px">
-      <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Facturas pendientes del grupo</div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:#f4f7ef">
-          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Fecha</th>
-          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Factura</th>
-          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Sede</th>
-          <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666">Vence</th>
-          <th style="padding:7px 8px;text-align:right;font-size:10px;text-transform:uppercase;color:#666">Saldo</th>
-        </tr></thead>
-        <tbody>${filasPend}</tbody>
-      </table>
-    </div>
-    <div style="margin-top:30px;padding-top:14px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:11px;color:#888">
-      <div>Estado de cuenta consolidado de todas las sedes del grupo.</div>
-      <div>SEFE · ${new Date().toLocaleDateString('es-GT')}</div>
-    </div>
-  </div>`;
-  document.body.appendChild(div);
-  window.print();
-  setTimeout(()=>{const e=document.getElementById('rep-print-area');if(e)e.remove();},1000);
+    ${_pdfSec('Resumen por sede')}
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="${_pdfTH()}">Sede</th>
+        <th style="${_pdfTH('text-align:right')}">Facturado</th>
+        <th style="${_pdfTH('text-align:right')}">Pagado</th>
+        <th style="${_pdfTH('text-align:right')}">Saldo</th>
+        <th style="${_pdfTH('text-align:right')}">Vencidas</th>
+      </tr></thead>
+      <tbody>${filasSedes}</tbody>
+    </table>
+    ${_pdfSec('Facturas pendientes del grupo')}
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="${_pdfTH()}">Fecha</th>
+        <th style="${_pdfTH()}">Factura</th>
+        <th style="${_pdfTH()}">Sede</th>
+        <th style="${_pdfTH()}">Vence</th>
+        <th style="${_pdfTH('text-align:right')}">Saldo</th>
+      </tr></thead>
+      <tbody>${filasPend}</tbody>
+    </table>
+    <div style="margin-top:24px;font-size:11px;color:#666B5C">Estado de cuenta consolidado de todas las sedes del grupo.</div>`;
+  _abrirPDF(_pdfShell({titulo:'ESTADO DE CUENTA · GRUPO',subtitulo:c.nombre,orientacion:'portrait',body}));
 }
 window.estadoCuentaGrupoPDF=estadoCuentaGrupoPDF;
 function setPrecioCli(prodId,val){const c=clientes.find(x=>x.id===cliActual);if(!c)return;c.precios=c.precios||{};
@@ -5444,26 +5402,56 @@ async function exportarExcel(){
 window.exportarExcel=exportarExcel;
 
 // ---- Exportación PDF ----
+// Plantilla corporativa compartida (membrete, doble filete verde/lima, pie en cada página)
+function _pdfTH(extra){return 'padding:8px 10px;background:#173916;color:#fff;font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;text-align:left;'+(extra||'');}
+function _pdfTD(extra){return 'padding:7px 10px;border-bottom:1px solid #E7EBDF;font-size:11.5px;'+(extra||'');}
+function _pdfSec(t){return '<div style="font-size:10.5px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.8px;margin:22px 0 8px;display:flex;align-items:center;gap:10px"><span>'+t+'</span><span style="flex:1;height:1px;background:#D6DCC9"></span></div>';}
+function _pdfShell(o){
+  const hoy=new Date();
+  const fecha=hoy.toLocaleDateString('es-GT',{day:'2-digit',month:'long',year:'numeric'});
+  const hora=hoy.toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'});
+  const usuario=(typeof currentUser!=='undefined'&&currentUser)?currentUser:'';
+  return `
+  <style>@page{size:letter ${o.orientacion||'portrait'};margin:13mm 12mm 18mm}</style>
+  <div style="font-family:Inter,Arial,sans-serif;color:#1c1f17;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
+      <div>
+        <img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:150px;height:auto;display:block">
+        <div style="font-size:10.5px;color:#666B5C;margin-top:6px;line-height:1.55">Soluciones Efectivas, S.A.<br>NIT 1234567-8 · Guatemala, C.A.</div>
+      </div>
+      <div style="text-align:right">
+        <div style="display:inline-block;background:#173916;color:#fff;padding:8px 18px;border-radius:6px;font-weight:700;font-size:14px;letter-spacing:.5px">${o.titulo}</div>
+        ${o.subtitulo?`<div style="font-size:12.5px;color:#444;margin-top:8px;font-weight:600">${o.subtitulo}</div>`:''}
+        <div style="font-size:11px;color:#666B5C;margin-top:6px">Emitido el ${fecha} · ${hora}${usuario?'<br>Por: '+usuario:''}</div>
+      </div>
+    </div>
+    <div style="height:3px;background:#173916;margin-top:14px"></div>
+    <div style="height:2px;background:#A8C038;margin-top:2px;margin-bottom:16px"></div>
+    ${o.body}
+    <div style="position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #D6DCC9;padding-top:5px;display:flex;justify-content:space-between;font-size:9px;color:#909584">
+      <span>Soluciones Efectivas, S.A. · NIT 1234567-8 · Guatemala, C.A.</span>
+      <span>SEFE · Sistema de Pedidos y Facturación · ${hoy.toLocaleDateString('es-GT')}</span>
+    </div>
+  </div>`;
+}
+function _abrirPDF(html){
+  let old=document.getElementById('rep-print-area');if(old)old.remove();
+  const div=document.createElement('div');div.id='rep-print-area';
+  div.innerHTML=html;
+  document.body.appendChild(div);window.print();
+  setTimeout(()=>{const e=document.getElementById('rep-print-area');if(e)e.remove();},1000);
+}
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
-  const ths=cols.map(c=>`<th style="padding:7px 10px;background:#f4f7ef;font-size:10px;text-transform:uppercase;letter-spacing:.4px">${c}</th>`).join('');
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
-  const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="padding:6px 10px;border-bottom:1px solid #e7ebdf;font-size:12px;${esNum(c)?'text-align:right':''}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
-  let old=document.getElementById('rep-print-area');if(old)old.remove();
-  const div=document.createElement('div');div.id='rep-print-area';
-  div.innerHTML=`<div style="font-family:Inter,sans-serif;padding:24px">
-    <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #a8c038">
-      <div><div style="font-size:18px;font-weight:700;color:#173916">Soluciones Efectivas GT</div><div style="font-size:13px;color:#666">NIT: 1234567-8</div></div>
-      <div style="text-align:right"><div style="font-size:15px;font-weight:700">${TIPO_NOMBRES[repType]||repType}</div><div style="font-size:11px;color:#666">Generado: ${new Date().toLocaleString('es-GT')}</div><div style="font-size:11px;color:#666">Por: ${currentUser}</div></div>
-    </div>
-    <table style="width:100%;border-collapse:collapse"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
-    <div style="margin-top:16px;font-size:10px;color:#909584;text-align:center">SEFE · Sistema de Facturación · ${new Date().toLocaleDateString('es-GT')}</div>
-  </div>`;
-  document.body.appendChild(div);window.print();
-  setTimeout(()=>{const e=document.getElementById('rep-print-area');if(e)e.remove();},1000);
+  const ths=cols.map(c=>`<th style="${_pdfTH(esNum(c)?'text-align:right':'')}">${c}</th>`).join('');
+  const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="${_pdfTD(esNum(c)?'text-align:right;font-variant-numeric:tabular-nums':'')}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
+  const body=`${_pdfSec((TIPO_NOMBRES[repType]||repType)+' · '+repLastData.length+' registros')}
+    <table style="width:100%;border-collapse:collapse"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+  _abrirPDF(_pdfShell({titulo:'REPORTE',subtitulo:TIPO_NOMBRES[repType]||repType,orientacion:cols.length>6?'landscape':'portrait',body}));
 }
 window.exportarPDF=exportarPDF;
 
@@ -5495,20 +5483,11 @@ function exportarInventarioPDF(){
   const data=_filasInventario();
   if(!data.length){toast('Sin productos para exportar','El inventario está vacío',true);return;}
   const cols=['Código','Producto','Marca','Proveedor(es)','Existencias'];
-  const ths=cols.map(c=>`<th style="padding:7px 10px;background:#f4f7ef;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left;border-bottom:2px solid #a8c038">${c}</th>`).join('');
-  const trs=data.map(row=>`<tr>${cols.map(c=>`<td style="padding:6px 10px;border-bottom:1px solid #e7ebdf;font-size:11.5px">${row[c]}</td>`).join('')}</tr>`).join('');
-  let old=document.getElementById('rep-print-area');if(old)old.remove();
-  const div=document.createElement('div');div.id='rep-print-area';
-  div.innerHTML=`<div style="font-family:Inter,sans-serif;padding:24px">
-    <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #a8c038">
-      <div><div style="font-size:18px;font-weight:700;color:#173916">Soluciones Efectivas GT</div><div style="font-size:13px;color:#666">Reporte de Inventario</div></div>
-      <div style="text-align:right"><div style="font-size:11px;color:#666">Generado: ${new Date().toLocaleString('es-GT')}</div><div style="font-size:11px;color:#666">Por: ${currentUser}</div><div style="font-size:11px;color:#666">Total: ${data.length} productos</div></div>
-    </div>
-    <table style="width:100%;border-collapse:collapse"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
-    <div style="margin-top:16px;font-size:10px;color:#909584;text-align:center">SEFE · Inventario · ${new Date().toLocaleDateString('es-GT')}</div>
-  </div>`;
-  document.body.appendChild(div);window.print();
-  setTimeout(()=>{const e=document.getElementById('rep-print-area');if(e)e.remove();},1000);
+  const ths=cols.map(c=>`<th style="${_pdfTH(c==='Existencias'?'text-align:right':'')}">${c}</th>`).join('');
+  const trs=data.map(row=>`<tr>${cols.map(c=>`<td style="${_pdfTD(c==='Existencias'?'text-align:right':'')}">${row[c]}</td>`).join('')}</tr>`).join('');
+  const body=`${_pdfSec('Existencias · '+data.length+' productos')}
+    <table style="width:100%;border-collapse:collapse"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+  _abrirPDF(_pdfShell({titulo:'INVENTARIO',subtitulo:'Reporte de existencias',orientacion:'portrait',body}));
 }
 window.exportarInventarioPDF=exportarInventarioPDF;
 
