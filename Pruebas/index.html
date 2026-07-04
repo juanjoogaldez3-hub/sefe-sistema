@@ -2388,6 +2388,85 @@ function notaPrestamoHTML(f){
     </div>
   </div>`;
 }
+function notaEnvioHTML(f){
+  const cli=clientes.find(c=>c.id===f.clienteId)||{};
+  const razon=f.clienteNombre||f.clienteComercial||'Cliente';
+  const comercial=(f.clienteComercial&&f.clienteComercial!==razon)?f.clienteComercial:'';
+  // Dirección de entrega si existe, si no la de facturación
+  const dirFiscal=cli.direccion||'';
+  const dirEntrega=cli.direccionEntrega||dirFiscal;
+  const cc=cli.contactoCompras||{};
+  const fechaLarga=f.creada?new Date(f.creada).toLocaleDateString('es-GT',{day:'numeric',month:'long',year:'numeric'}):'';
+  const firmante=f.vendedorNombre||currentUser||'Soluciones Efectivas';
+  let totalGen=0;
+  const filas=(f.items||[]).map(it=>{
+    const cant=Number(it.cantidad)||0;
+    const pu=Number(it.precio)||0;
+    const tot=cant*pu-(Number(it.descuento)||0);
+    totalGen+=tot;
+    return `<tr>
+      <td class="num" style="padding:11px 14px;font-size:12.5px;font-weight:600;border-bottom:1px solid #EEF1E8">${it.codigo||'—'}</td>
+      <td style="padding:11px 14px;font-size:12.5px;border-bottom:1px solid #EEF1E8">${it.nombre}</td>
+      <td class="num" style="padding:11px 14px;font-size:12.5px;text-align:right;font-weight:600;border-bottom:1px solid #EEF1E8">${cant.toFixed(2)}</td>
+      <td class="num" style="padding:11px 14px;font-size:12.5px;text-align:right;border-bottom:1px solid #EEF1E8">${money(pu)}</td>
+      <td class="num" style="padding:11px 14px;font-size:12.5px;text-align:right;font-weight:600;border-bottom:1px solid #EEF1E8">${money(tot)}</td>
+    </tr>`;
+  }).join('');
+  return `
+  <div style="font-family:'Inter',sans-serif;color:#1c1f17;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
+      <div>
+        <img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:172px;height:auto;display:block">
+        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">Soluciones Efectivas, S.A.<br>NIT 1234567-8 · Guatemala, C.A.</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="display:inline-block;background:var(--green);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.3px;padding:8px 16px;border-radius:8px">NOTA DE ENVÍO</div>
+        <div style="margin-top:14px;font-size:12px;color:#7a7f6e">Referencia</div>
+        <div style="font-family:var(--disp);font-size:20px;font-weight:700;letter-spacing:-.3px">PED-${padn(f.numero)}</div>
+        <div style="margin-top:10px;font-size:12px;color:#3a3f33">Guatemala, ${fechaLarga}</div>
+      </div>
+    </div>
+    <div style="height:3px;background:var(--lime);width:100%;border-radius:2px;margin:22px 0 26px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div style="font-size:13px;line-height:1.55">
+        <div style="font-size:11px;font-weight:700;color:#9aa089;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">Cliente</div>
+        <div style="font-family:var(--disp);font-size:15px;font-weight:700">${razon}</div>
+        ${comercial?`<div style="color:#3a3f33">${comercial}</div>`:''}
+        ${cli.nit?`<div style="color:#7a7f6e;font-size:12px;margin-top:2px">NIT ${cli.nit}</div>`:''}
+      </div>
+      <div style="font-size:13px;line-height:1.55;background:#F4F8EA;border:1px solid #DCE6C9;border-radius:12px;padding:14px 18px">
+        <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">🚚 Entregar en</div>
+        <div style="color:#3a3f33">${dirEntrega||'—'}</div>
+        ${cc.nombre?`<div style="color:#7a7f6e;font-size:12px;margin-top:6px">Contacto: ${cc.nombre}${cc.telefono?' · ☎ '+cc.telefono:''}</div>`:''}
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-top:22px;border:1px solid #E1E6D6;border-radius:10px;overflow:hidden">
+      <thead><tr style="background:var(--green);color:#fff">
+        <th style="text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:11px 14px;width:110px">Código</th>
+        <th style="text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:11px 14px">Producto</th>
+        <th style="text-align:right;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:11px 14px;width:90px">Cantidad</th>
+        <th style="text-align:right;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:11px 14px;width:110px">P. Unitario</th>
+        <th style="text-align:right;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:11px 14px;width:120px">Total</th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr>
+        <td colspan="4" style="padding:12px 14px;text-align:right;font-size:12px;font-weight:700;color:#7a7f6e;text-transform:uppercase;letter-spacing:.5px">Total</td>
+        <td class="num" style="padding:12px 14px;text-align:right;font-family:var(--disp);font-size:16px;font-weight:700;color:var(--green)">${money(totalGen)}</td>
+      </tr></tfoot>
+    </table>
+    ${f.observaciones?`<div style="margin-top:16px;font-size:12.5px;color:#3a3f33"><b>Observaciones:</b> ${f.observaciones}</div>`:''}
+    <p style="font-size:12px;line-height:1.6;color:#7a7f6e;margin-top:22px">Documento no tributario para control de despacho y entrega de mercadería. No genera crédito fiscal. Verifique las cantidades al momento de recibir.</p>
+    <div style="margin-top:24px"><div style="width:240px;border-top:1.5px solid #1c1f17;padding-top:7px">
+      <div style="font-family:var(--disp);font-size:14px;font-weight:700">${firmante}</div>
+      <div style="font-size:11.5px;color:#7a7f6e">Entregado por · Soluciones Efectivas, S.A.</div>
+    </div></div>
+    <div style="margin-top:52px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:26px">
+      <div style="text-align:center"><div style="border-top:1.2px solid #aeb3a2;padding-top:7px;font-size:11px;color:#7a7f6e">Firma de quien recibe</div></div>
+      <div style="text-align:center"><div style="border-top:1.2px solid #aeb3a2;padding-top:7px;font-size:11px;color:#7a7f6e">Nombre de quien recibe</div></div>
+      <div style="text-align:center"><div style="border-top:1.2px solid #aeb3a2;padding-top:7px;font-size:11px;color:#7a7f6e">Fecha y hora de recepción</div></div>
+    </div>
+  </div>`;
+}
 function verDoc(id){
   const f=documentos.find(d=>d.id===id);
 
@@ -2419,6 +2498,12 @@ function verDoc(id){
   if(f.tipoDoc==='prestamo'){
     $('#doc-bar-t').textContent=TIPO_TIT[f.tipoDoc]+'  ·  PED-'+padn(f.numero);
     $('#doc-sheet').innerHTML=notaPrestamoHTML(f);
+    $('#docov').classList.add('show');
+    return;
+  }
+  if(f.tipoDoc==='envio'){
+    $('#doc-bar-t').textContent=TIPO_TIT[f.tipoDoc]+'  ·  PED-'+padn(f.numero);
+    $('#doc-sheet').innerHTML=notaEnvioHTML(f);
     $('#docov').classList.add('show');
     return;
   }
