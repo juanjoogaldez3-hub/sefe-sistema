@@ -401,6 +401,10 @@
 <script src="db.js"></script>
 </head>
 <body>
+<div id="banner-pruebas" style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#C9A227;color:#fff;text-align:center;padding:7px;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:bold;letter-spacing:.4px;box-shadow:0 2px 8px rgba(0,0,0,.15)">
+  🧪 MODELO DE PRUEBAS — Esto NO es el sistema real. Las facturas son simuladas y no afectan la SAT.
+</div>
+<div style="height:34px"></div>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
 <div id="sefe-loader" style="position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#173916,#0f2810);display:none;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;transition:opacity .5s ease">
   <div style="text-align:center;width:340px;max-width:86vw">
@@ -725,6 +729,7 @@
           <button class="ct-tab" data-r="dircli">Listado de clientes</button>
           <button class="ct-tab" data-r="factem">Facturas emitidas</button>
           <button class="ct-tab" data-r="cardex">Cardex de inventario</button>
+          <button class="ct-tab" data-r="canalvend">Ventas por canal (Whaticket)</button>
           <button class="ct-tab" data-r="cprov">Compras por proveedor</button>
           <button class="ct-tab" data-r="cprod">Compras por producto</button>
           <button class="ct-tab" data-r="cxc">Pendientes por cliente</button>
@@ -917,11 +922,17 @@
 //  URL del backend FEL (EcoFactura) en Render
 //  ⚠️ PONÉ ACÁ TU URL DE RENDER (sin barra al final)
 // ═══════════════════════════════════════════════════════════
-const FEL_BACKEND_URL = 'https://sefe-backend.onrender.com';
+const FEL_BACKEND_URL = 'https://sefe-backend.onrender.com-TU-BACKEND'; // MODO PRUEBAS: simulado, no toca SAT
 
 const $=s=>document.querySelector(s);
 const money=n=>'Q '+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2});
 // Calcula las iniciales de un nombre: "Juan José Ogaldez" -> "JJO", "Oficina" -> "O"
+// Vendedores que son CANALES (varias personas venden a través de ellos, ej. Whaticket/WhatsApp).
+// Al facturar con uno de estos, se pide elegir quién vendió realmente.
+const VENDEDORES_CANAL=['whaticket','whatsapp'];
+function esVendedorCanal(nombre){
+  return nombre && VENDEDORES_CANAL.includes(String(nombre).trim().toLowerCase());
+}
 function inicialesVendedor(nombre){
   if(!nombre)return '';
   return nombre.trim().split(/\s+/).map(p=>p.charAt(0).toUpperCase()).join('');
@@ -1988,12 +1999,22 @@ function abrirFacturar(id){
       </select>
       <div style="font-size:11px;color:var(--muted);margin-top:5px">La factura sale al NIT elegido, pero la venta queda registrada en ${nitPrincipalNombre}.</div>
     </div>`:'';
+  // Si el vendedor del pedido es un CANAL (ej. Whaticket), pedir quién vendió realmente
+  const selectorSubVend=esVendedorCanal(f.vendedorNombre)?`
+    <div style="margin-top:12px">
+      <label style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px">¿Quién vendió por ${f.vendedorNombre}?</label>
+      <select id="fac-subvend-sel" style="width:100%;margin-top:4px">
+        <option value="">— Sin especificar —</option>
+        ${vendedores.filter(v=>!esVendedorCanal(v.nombre)).map(v=>`<option value="${v.nombre.replace(/"/g,'&quot;')}"${f.subVendedorNombre===v.nombre?' selected':''}>${v.nombre}</option>`).join('')}
+      </select>
+      <div style="font-size:11px;color:var(--muted);margin-top:5px">El vendedor sigue siendo ${f.vendedorNombre}, pero se registra quién hizo la venta.</div>
+    </div>`:'';
   openMod('Facturar PED-'+padn(f.numero),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Se generará la Factura Cambiaria por <b style="color:var(--ink)">${money(f.totales.total)}</b>.</p>
      <div style="background:var(--surface-2);border-radius:8px;padding:12px 14px;font-size:12.5px">
        <div style="color:var(--muted)">Condición de pago del cliente:</div>
        <div style="font-weight:600;color:var(--ink);margin-top:2px">${creditoTxt}</div>
-     </div>${selectorNit}`,
+     </div>${selectorNit}${selectorSubVend}`,
     ()=>facturarPedido(id,dias));
 }
 window.abrirFacturar=abrirFacturar;
@@ -2007,10 +2028,17 @@ async function facturarPedido(id,dias){
     const cli=clientes.find(c=>c.id===f.clienteId);
     const ns=cli&&cli.nitsSecundarios?cli.nitsSecundarios[Number(selNit.value)]:null;
     if(ns){
+      // Guardar el NIT/nombre originales por si acaso, y aplicar el secundario para la factura
       f.nitFacturado=ns.nit;
       f.clienteNit=ns.nit;
       f.clienteNombre=ns.nombre||ns.nit;
+      // clienteId NO se toca: la venta sigue perteneciendo al cliente real
     }
+  }
+  // Si el vendedor es un canal (Whaticket) y se eligió quién vendió, guardarlo
+  const selSubVend=document.getElementById('fac-subvend-sel');
+  if(selSubVend){
+    f.subVendedorNombre=selSubVend.value||null;
   }
 
   // Si no hay backend configurado, usar modo simulado (como antes)
@@ -4400,6 +4428,7 @@ const MODULOS_PERMISOS=[
   {key:'rep_dircli',lbl:'Listado de clientes',grp:'Reportes'},
   {key:'rep_factem',lbl:'Facturas emitidas',grp:'Reportes'},
   {key:'rep_cardex',lbl:'Cardex de inventario',grp:'Reportes'},
+  {key:'rep_canalvend',lbl:'Ventas por canal (Whaticket)',grp:'Reportes'},
   {key:'rep_cprov',lbl:'Compras por proveedor',grp:'Reportes'},
   {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes'},
   {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes'},
@@ -4409,7 +4438,7 @@ const MODULOS_PERMISOS=[
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','dircli','factem','cardex','cprov','cprod','cxc','recibos','pagos'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','dircli','factem','cardex','canalvend','cprov','cprod','cxc','recibos','pagos'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
@@ -5436,6 +5465,43 @@ function renderReportes(){
         </tr></thead><tbody>${filas}</tbody></table>`:'<div class="panel-body"><p class="empty">Sin movimientos de inventario en el período.</p></div>'}</div>`;
     }
   }
+  else if(repType==='canalvend'){
+    // VENTAS POR CANAL — desglosa las ventas de vendedores tipo canal (Whaticket)
+    // por la persona que realmente vendió (subVendedorNombre)
+    const facts=documentos.filter(d=>d.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(d.estado)&&enRango(d.creada,r)&&esVendedorCanal(d.vendedorNombre));
+    // Agrupar por sub-vendedor
+    const porPersona={};
+    facts.forEach(f=>{
+      const persona=f.subVendedorNombre||'(sin especificar)';
+      if(!porPersona[persona])porPersona[persona]={cantidad:0,total:0};
+      porPersona[persona].cantidad++;
+      porPersona[persona].total+=Number(f.totales.total)||0;
+    });
+    const filasDatos=Object.entries(porPersona).sort((a,b)=>b[1].total-a[1].total);
+    const totalGeneral=facts.reduce((s,f)=>s+(Number(f.totales.total)||0),0);
+    const expFilas=filasDatos.map(([persona,d])=>({
+      Vendedor:persona, Facturas:d.cantidad, Total:d.total,
+      Porcentaje:totalGeneral>0?Math.round(d.total/totalGeneral*1000)/10+'%':'0%'
+    }));
+    exportData=expFilas;
+    if(!facts.length){
+      html+=`<div class="panel"><div class="panel-body"><p class="empty">No hay ventas por canal (Whaticket) en el período seleccionado.</p></div></div>`;
+    }else{
+      const filas=filasDatos.map(([persona,d])=>{
+        const pct=totalGeneral>0?(d.total/totalGeneral*100):0;
+        return `<tr style="border-bottom:1px solid var(--line)">
+          <td style="font-size:12.5px;font-weight:600">${persona==='(sin especificar)'?`<span style="color:var(--muted-2)">${persona}</span>`:persona}</td>
+          <td class="num" style="font-size:12px">${d.cantidad}</td>
+          <td class="num" style="font-size:12.5px;font-weight:600">${money(d.total)}</td>
+          <td class="num" style="font-size:12px;color:var(--muted)">${pct.toFixed(1)}%</td>
+        </tr>`;
+      }).join('');
+      html+=`<div class="panel"><div class="panel-head"><h3>Ventas por canal · Whaticket</h3><span style="font-size:12px;color:var(--muted)">${facts.length} factura${facts.length!==1?'s':''} · Total: <b style="color:var(--ink)">${money(totalGeneral)}</b></span></div>
+        <table style="font-size:12px"><thead><tr>
+          <th>Vendedor (quién vendió)</th><th class="num">Facturas</th><th class="num">Total vendido</th><th class="num">%</th>
+        </tr></thead><tbody>${filas}</tbody></table></div>`;
+    }
+  }
   else if(repType==='cprov'){
     const rval=c=>{const v=(c.items||[]).reduce((s,it)=>s+(it.recibido||0)*(it.costo||it.precio||0),0);return v>0?v:Number(c.total||0);};
     const porPr={};comprasR.forEach(c=>{const v=rval(c);if(v<=0)return;if(!porPr[c.proveedorNombre])porPr[c.proveedorNombre]={v:0,n:0};porPr[c.proveedorNombre].v+=v;porPr[c.proveedorNombre].n++;});
@@ -5547,7 +5613,7 @@ function renderReportes(){
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],['Período:',repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
@@ -5599,10 +5665,10 @@ function _abrirPDF(html){
 }
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
+  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
   const ths=cols.map(c=>`<th style="${_pdfTH(esNum(c)?'text-align:right':'')}">${c}</th>`).join('');
   const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="${_pdfTD(esNum(c)?'text-align:right;font-variant-numeric:tabular-nums':'')}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
   const body=`${_pdfSec((TIPO_NOMBRES[repType]||repType)+' · '+repLastData.length+' registros')}
