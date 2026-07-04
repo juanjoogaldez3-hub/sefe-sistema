@@ -159,7 +159,7 @@ function mapDocumentoFromDB(d, todosAbonos){
   return {
     id:d.id, numero:d.numero, tipoDoc:d.tipo_doc, clienteId:d.cliente_id,
     clienteNombre:d.cliente_nombre, clienteComercial:d.cliente_comercial, clienteNit:d.cliente_nit,
-    vendedorId:d.vendedor_id, vendedorNombre:d.vendedor_nombre,
+    vendedorId:d.vendedor_id, vendedorNombre:d.vendedor_nombre, subVendedorNombre:d.sub_vendedor_nombre,
     items:d.items||[], totales:d.totales||{}, estado:d.estado, estadoPago:d.estado_pago,
     inventarioRebajado:d.inventario_rebajado, autorizacion:d.autorizacion,
     serie:d.serie, numeroDte:d.numero_dte, ordenCompra:d.orden_compra,
@@ -239,7 +239,7 @@ async function guardarDocumento(d){
   const row = {
     numero:d.numero, tipo_doc:d.tipoDoc, cliente_id:d.clienteId,
     cliente_nombre:d.clienteNombre, cliente_comercial:d.clienteComercial, cliente_nit:d.clienteNit,
-    vendedor_id:d.vendedorId, vendedor_nombre:d.vendedorNombre,
+    vendedor_id:d.vendedorId, vendedor_nombre:d.vendedorNombre, sub_vendedor_nombre:d.subVendedorNombre,
     items:d.items, totales:d.totales, estado:d.estado, estado_pago:d.estadoPago,
     inventario_rebajado:d.inventarioRebajado, autorizacion:d.autorizacion,
     serie:d.serie, numero_dte:d.numeroDte, orden_compra:d.ordenCompra,
