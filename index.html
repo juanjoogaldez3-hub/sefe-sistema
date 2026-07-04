@@ -6151,12 +6151,14 @@ function renderDespachos(){
   }
   const fEstado=$('#desp-estado')?.value,fPiloto=$('#desp-piloto')?.value;
   let lista=docsDespachables().filter(d=>{
-    if(fEstado&&estadoEntrega(d)!==fEstado)return false;
+    if(fEstado){if(estadoEntrega(d)!==fEstado)return false;}
+    else if(estadoEntrega(d)==='entregado')return false; // por defecto, ocultar los ya entregados
     if(fPiloto&&String(d.pilotoId||'')!==fPiloto)return false;
     return true;
   });
   // KPIs
   const todos=docsDespachables();
+  const activos=todos.filter(d=>estadoEntrega(d)!=='entregado'); // los que realmente falta despachar
   const sinAsig=todos.filter(d=>estadoEntrega(d)==='sin').length;
   const enRuta=todos.filter(d=>estadoEntrega(d)==='ruta').length;
   const entregadosHoy=todos.filter(d=>estadoEntrega(d)==='entregado'&&d.entregaInfo?.fecha?.slice(0,10)===new Date().toISOString().slice(0,10)).length;
@@ -6164,7 +6166,7 @@ function renderDespachos(){
     {ic:sinAsig?'i-warn':'i-lime',svg:'<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',lbl:'Sin asignar',val:sinAsig,sub:'esperan piloto'},
     {ic:'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'En ruta',val:enRuta,sub:'en camino'},
     {ic:'i-green',svg:'<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/>',lbl:'Entregados hoy',val:entregadosHoy,sub:'completados'},
-    {ic:'i-blue',svg:'<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/>',lbl:'Total a despachar',val:todos.length,sub:'documentos activos'},
+    {ic:'i-blue',svg:'<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/>',lbl:'Total a despachar',val:activos.length,sub:'documentos activos'},
   ];
   $('#desp-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
   // Ordenar por ruta (los que tienen orden primero, luego por número)
