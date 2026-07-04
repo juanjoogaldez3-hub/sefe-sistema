@@ -1968,18 +1968,42 @@ function abrirFacturar(id){
   const cli=clientes.find(c=>c.id===f.clienteId);
   const dias=(cli&&typeof cli.tiempoCredito==='number')?cli.tiempoCredito:0;
   const creditoTxt=dias>0?(dias+' días de crédito'):'Contado (sin crédito)';
+  // Si el cliente tiene NITs secundarios, ofrecer un menú para elegir a cuál facturar
+  const nitsSec=(cli&&cli.nitsSecundarios&&cli.nitsSecundarios.length)?cli.nitsSecundarios:[];
+  const nitPrincipalNombre=cli?(cli.razonSocial||cli.nombre):(f.clienteNombre||'');
+  const selectorNit=nitsSec.length?`
+    <div style="margin-top:12px">
+      <label style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px">Facturar a nombre de</label>
+      <select id="fac-nit-sel" style="width:100%;margin-top:4px">
+        <option value="__principal__">${nitPrincipalNombre} · NIT ${f.clienteNit||'CF'} (principal)</option>
+        ${nitsSec.map((n,i)=>`<option value="${i}">${(n.nombre||n.nit)} · NIT ${n.nit}</option>`).join('')}
+      </select>
+      <div style="font-size:11px;color:var(--muted);margin-top:5px">La factura sale al NIT elegido, pero la venta queda registrada en ${nitPrincipalNombre}.</div>
+    </div>`:'';
   openMod('Facturar PED-'+padn(f.numero),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Se generará la Factura Cambiaria por <b style="color:var(--ink)">${money(f.totales.total)}</b>.</p>
      <div style="background:var(--surface-2);border-radius:8px;padding:12px 14px;font-size:12.5px">
        <div style="color:var(--muted)">Condición de pago del cliente:</div>
        <div style="font-weight:600;color:var(--ink);margin-top:2px">${creditoTxt}</div>
-     </div>`,
+     </div>${selectorNit}`,
     ()=>facturarPedido(id,dias));
 }
 window.abrirFacturar=abrirFacturar;
 async function facturarPedido(id,dias){
   const f=documentos.find(d=>d.id===id);
   if(!f){toast('✗ Pedido no encontrado',null,true);return;}
+
+  // Si se eligió facturar a un NIT secundario, aplicarlo (la venta sigue vinculada al cliente real)
+  const selNit=document.getElementById('fac-nit-sel');
+  if(selNit && selNit.value!=='__principal__'){
+    const cli=clientes.find(c=>c.id===f.clienteId);
+    const ns=cli&&cli.nitsSecundarios?cli.nitsSecundarios[Number(selNit.value)]:null;
+    if(ns){
+      f.nitFacturado=ns.nit;
+      f.clienteNit=ns.nit;
+      f.clienteNombre=ns.nombre||ns.nit;
+    }
+  }
 
   // Si no hay backend configurado, usar modo simulado (como antes)
   if(typeof FEL_BACKEND_URL==='undefined' || FEL_BACKEND_URL.includes('TU-BACKEND')){
@@ -2882,7 +2906,8 @@ function renderCliDet(){
         </div>
         ${c.email?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">✉ ${c.email}</div>`:''}
         ${c.direccionEntrega?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">🚚 Entrega: ${c.direccionEntrega}</div>`:''}
-        ${c.fechaAlta?`<div style="font-size:12px;color:var(--muted-2);margin-top:2px">Fecha de alta: ${fdate(c.fechaAlta)}</div>`:''}</div>
+        ${c.fechaAlta?`<div style="font-size:12px;color:var(--muted-2);margin-top:2px">Fecha de alta: ${fdate(c.fechaAlta)}</div>`:''}
+        ${(c.nitsSecundarios&&c.nitsSecundarios.length)?`<div style="font-size:12px;color:var(--muted);margin-top:4px">🧾 NITs adicionales: ${c.nitsSecundarios.map(n=>`${n.nit}${n.nombre&&n.nombre!==n.nit?` (${n.nombre})`:''}`).join(' · ')}</div>`:''}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="estadoCuentaPDF(${c.id})" title="Descargar estado de cuenta en PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>Estado de cuenta PDF</button>
           ${canRegistrarAbono()?`<button class="btn btn-primary btn-sm" onclick="openPagoGlobalCliente(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pago global</button>`:''}
@@ -5637,6 +5662,16 @@ function openCli(id){
       <button type="button" class="btn btn-ghost btn-sm" id="btn-buscar-nit" onclick="buscarRazonSocial()" title="Buscar razón social en SAT" style="white-space:nowrap">🔍 Buscar</button>
     </div>
   </div><div><label>Correo</label><input id="c-mail" value="${c?(c.email||''):''}"></div></div>
+  <div class="row"><div>
+    <label>NITs adicionales de facturación <span style="font-weight:400;color:var(--muted-2)">(si el cliente pide factura a otro NIT)</span></label>
+    <div id="nits-sec-lista" style="display:flex;flex-direction:column;gap:7px;margin-bottom:8px">${(c&&c.nitsSecundarios||[]).map((n,i)=>`
+      <div class="nit-sec-row" style="display:flex;gap:7px;align-items:center">
+        <input class="nit-sec-nit" value="${n.nit||''}" placeholder="NIT" style="flex:0 0 130px">
+        <input class="nit-sec-nombre" value="${(n.nombre||'').replace(/"/g,'&quot;')}" placeholder="Nombre de referencia" style="flex:1">
+        <button type="button" class="x" onclick="this.closest('.nit-sec-row').remove()" title="Quitar">×</button>
+      </div>`).join('')}</div>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="agregarNitSecRow()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar NIT</button>
+  </div></div>
   <div class="row"><div><label>Dirección</label><input id="c-dir" value="${c?(c.direccion||'Ciudad'):'Ciudad'}"></div></div>
   <div class="row"><div><label>Dirección de entrega <span style="font-weight:400;color:var(--muted-2)">(si es distinta a la de facturación)</span></label><input id="c-dirent" value="${c?(c.direccionEntrega||''):''}" placeholder="Dejar vacío si entrega en la misma dirección"></div></div>
   <div class="row"><div><label>Tiempo de crédito</label><select id="c-tc">
@@ -5670,7 +5705,7 @@ function openCli(id){
     const tiempoCredito=tcSel==='custom'?(Number($('#c-tc-custom').value)||0):Number(tcSel);
     const vendedorId=$('#c-vend').value?Number($('#c-vend').value):null;
     const sedesDe=$('#c-sede').value?Number($('#c-sede').value):null;
-    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:$('#c-nit').value||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),tiempoCredito,vendedorId,sedesDe,
+    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:$('#c-nit').value||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),tiempoCredito,vendedorId,sedesDe,nitsSecundarios:leerNitsSecundarios(),
       contactoPagos:{nombre:$('#cp-nom').value,telefono:$('#cp-tel').value,correo:$('#cp-mail').value},
       contactoCompras:{nombre:$('#cc-nom').value,telefono:$('#cc-tel').value,correo:$('#cc-mail').value}};
     if(c){Object.assign(c,datos);logAudit('Cliente editado',nom+' · NIT '+datos.nit);toast('✓ Cliente actualizado');if(typeof guardarCliente==='function')guardarCliente(c);}
@@ -5679,6 +5714,30 @@ function openCli(id){
   setTimeout(()=>{const s=$('#c-tc');if(s)s.onchange=()=>{$('#c-tc-custom-wrap').style.display=s.value==='custom'?'block':'none';};},0);
 }
 window.openCli=openCli;
+// Agregar una fila vacía de NIT secundario en el formulario del cliente
+function agregarNitSecRow(){
+  const cont=document.getElementById('nits-sec-lista');
+  if(!cont)return;
+  const div=document.createElement('div');
+  div.className='nit-sec-row';
+  div.style.cssText='display:flex;gap:7px;align-items:center';
+  div.innerHTML=`<input class="nit-sec-nit" value="" placeholder="NIT" style="flex:0 0 130px">
+    <input class="nit-sec-nombre" value="" placeholder="Nombre de referencia" style="flex:1">
+    <button type="button" class="x" onclick="this.closest('.nit-sec-row').remove()" title="Quitar">×</button>`;
+  cont.appendChild(div);
+}
+window.agregarNitSecRow=agregarNitSecRow;
+// Leer los NITs secundarios del formulario
+function leerNitsSecundarios(){
+  const filas=document.querySelectorAll('#nits-sec-lista .nit-sec-row');
+  const arr=[];
+  filas.forEach(f=>{
+    const nit=(f.querySelector('.nit-sec-nit')?.value||'').trim();
+    const nombre=(f.querySelector('.nit-sec-nombre')?.value||'').trim();
+    if(nit)arr.push({nit,nombre:nombre||nit});
+  });
+  return arr;
+}
 
 // ── CONSULTAR NIT EN SAT (vía backend EcoFactura) ───────────
 // Consulta el NIT en el endpoint /api/nit y autocompleta la
