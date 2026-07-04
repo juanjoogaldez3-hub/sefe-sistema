@@ -3092,8 +3092,10 @@ function eliminarCliente(id){
     <p style="font-size:14px;margin-bottom:10px">¿Seguro que querés eliminar a <b>${c.nombre}</b>${c.nit?' (NIT '+c.nit+')':''}?</p>
     ${infoDocs}
     <p style="font-size:12.5px;color:var(--danger)">Esta acción no se puede deshacer.</p>`,
-    `<button class="btn btn-ghost" onclick="closeMod()">Cancelar</button>
-     <button class="btn" style="background:var(--danger);color:#fff" onclick="confirmarEliminarCliente(${id})">Sí, eliminar cliente</button>`);
+    ()=>confirmarEliminarCliente(id));
+  // Cambiar el texto del botón Guardar por algo más claro
+  const btnSave=$('#m-save');
+  if(btnSave){btnSave.textContent='Sí, eliminar cliente';btnSave.style.background='var(--danger)';btnSave.style.color='#fff';}
 }
 window.eliminarCliente=eliminarCliente;
 function confirmarEliminarCliente(id){
@@ -5618,7 +5620,7 @@ window.exportarInventarioPDF=exportarInventarioPDF;
 
 
 let saveFn=null;
-function openMod(title,html,fn){$('#m-title').textContent=title;$('#m-body').innerHTML=html;saveFn=fn;$('#m-save').disabled=false;$('#m-save').textContent='Guardar';$('#m-save').style.display='';$('#m-save').onclick=()=>{if(saveFn)saveFn();};$('#ov').classList.add('show');}
+function openMod(title,html,fn){$('#m-title').textContent=title;$('#m-body').innerHTML=html;saveFn=fn;$('#m-save').disabled=false;$('#m-save').textContent='Guardar';$('#m-save').style.display='';$('#m-save').style.background='';$('#m-save').style.color='';$('#m-save').onclick=()=>{if(saveFn)saveFn();};$('#ov').classList.add('show');}
 function closeMod(){$('#ov').classList.remove('show');$('#ov').classList.remove('modal-wide');}
 window.closeMod=closeMod;
 $('#m-save').onclick=()=>{if(saveFn)saveFn();};
