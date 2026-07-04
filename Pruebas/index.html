@@ -2892,6 +2892,7 @@ function renderCliDet(){
           ${canRegistrarAbono()?`<button class="btn btn-primary btn-sm" onclick="openPagoGlobalCliente(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pago global</button>`:''}
           ${canCrearCliente()&&!c.sedesDe?`<button class="btn btn-ghost btn-sm" onclick="openCliSede(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar sede</button>`:''}
           ${canCrearCliente()?`<button class="btn btn-ghost btn-sm" onclick="openCli(${c.id})">Editar datos</button>`:''}
+          ${currentRole==="admin"?`<button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:#f0d0d0" onclick="eliminarCliente(${c.id})" title="Eliminar cliente (solo admin)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>Eliminar</button>`:''}
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:18px">
@@ -3073,6 +3074,41 @@ function addPrecioProd(){const c=clientes.find(x=>x.id===cliActual);if(!c)return
 window.addPrecioProd=addPrecioProd;
 function quitarPrecio(pid){const c=clientes.find(x=>x.id===cliActual);if(!c)return;delete c.precios[pid];renderCliDet();if(typeof guardarCliente==='function')guardarCliente(c);}
 window.quitarPrecio=quitarPrecio;
+// ---- Eliminar cliente (SOLO ADMIN) ----
+function eliminarCliente(id){
+  if(currentRole!=="admin"){toast('Sin permiso','Solo un administrador puede eliminar clientes',true);return;}
+  const c=clientes.find(x=>x.id===id);if(!c)return;
+  // Verificar si tiene documentos asociados
+  const docsCli=documentos.filter(d=>d.clienteId===id);
+  const conSaldo=docsCli.filter(d=>d.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(d.estado)&&arInfo(d).saldo>0.01);
+  // Verificar si tiene sedes (cliente paraguas)
+  const sedes=clientes.filter(x=>x.sedesDe===id);
+  let advertencia='';
+  if(sedes.length)advertencia+=`<div class="note n-danger" style="margin-bottom:10px"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>Este cliente tiene <b>${sedes.length} sede(s)</b> asociada(s). Al eliminarlo, las sedes quedarán sin cliente principal.</div>`;
+  if(conSaldo.length)advertencia+=`<div class="note n-danger" style="margin-bottom:10px"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>⚠ Este cliente tiene <b>${conSaldo.length} factura(s) con saldo pendiente</b> por un total de <b>${money(conSaldo.reduce((s,d)=>s+arInfo(d).saldo,0))}</b>.</div>`;
+  const infoDocs=docsCli.length?`<div style="font-size:13px;color:var(--muted);margin-bottom:12px">Este cliente tiene <b>${docsCli.length} documento(s)</b> en el historial. Eliminar el cliente <b>NO borra</b> sus facturas (quedan en el sistema para efectos fiscales), pero ya no aparecerá en la lista de clientes.</div>`:'<div style="font-size:13px;color:var(--muted);margin-bottom:12px">Este cliente no tiene documentos asociados.</div>';
+  openMod('Eliminar cliente',
+    `${advertencia}
+    <p style="font-size:14px;margin-bottom:10px">¿Seguro que querés eliminar a <b>${c.nombre}</b>${c.nit?' (NIT '+c.nit+')':''}?</p>
+    ${infoDocs}
+    <p style="font-size:12.5px;color:var(--danger)">Esta acción no se puede deshacer.</p>`,
+    `<button class="btn btn-ghost" onclick="closeMod()">Cancelar</button>
+     <button class="btn" style="background:var(--danger);color:#fff" onclick="confirmarEliminarCliente(${id})">Sí, eliminar cliente</button>`);
+}
+window.eliminarCliente=eliminarCliente;
+function confirmarEliminarCliente(id){
+  if(currentRole!=="admin")return;
+  const idx=clientes.findIndex(x=>x.id===id);if(idx<0)return;
+  const c=clientes[idx];
+  clientes.splice(idx,1);
+  logAudit('Cliente eliminado',c.nombre+(c.nit?' · NIT '+c.nit:''));
+  // Borrar de la base de datos
+  if(typeof borrarCliente==='function')borrarCliente(id);
+  closeMod();
+  toast('✓ Cliente eliminado',c.nombre);
+  go('clientes');
+}
+window.confirmarEliminarCliente=confirmarEliminarCliente;
 
 // ---- Cuentas por cobrar ----
 function notasDe(f){
