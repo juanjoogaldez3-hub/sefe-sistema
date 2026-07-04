@@ -1338,6 +1338,9 @@ const DB_WIDGETS=[
   {key:'kpi_clientes',  lbl:'KPI — Mis clientes (Ventas)',    grp:'KPIs'},
   {key:'kpi_facturar',  lbl:'KPI — Por facturar',             grp:'KPIs'},
   {key:'kpi_ocpend',    lbl:'KPI — OC pendientes (Bodega)',   grp:'KPIs'},
+  {key:'kpi_cobrarmis', lbl:'KPI — Por cobrar mis clientes (Ventas)', grp:'KPIs'},
+  {key:'kpi_cobradomes',lbl:'KPI — Cobrado este mes',         grp:'KPIs'},
+  {key:'kpi_porvencer', lbl:'KPI — Por vencer (7 días)',      grp:'KPIs'},
   {key:'panel_docs',    lbl:'Panel — Documentos recientes',   grp:'Paneles'},
   {key:'panel_venc',    lbl:'Panel — Cobros / vencimientos',  grp:'Paneles'},
   {key:'panel_stocktbl',lbl:'Panel — Stock bajo',             grp:'Paneles'},
@@ -1392,6 +1395,12 @@ function renderPanel(){
   const docsFacturar=documentos.filter(d=>['pedido','envio','prestamo'].includes(d.tipoDoc)&&d.estado==='abierto');
   const misClis=esVentasRol&&miVendedorId()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
 
+  // ── Datos para KPIs nuevos ──────────────────────────────────
+  const porCobrarMis=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+arInfo(d).saldo,0);
+  const vencidosMis=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&arInfo(d).vencido);
+  let cobradoMes=0;documentos.forEach(d=>(d.abonos||[]).forEach(a=>{if(!a.anulado&&a.fecha&&new Date(a.fecha)>=mes)cobradoMes+=Number(a.monto);}));
+  const porVencerMonto=porVencer.reduce((s,d)=>s+arInfo(d).saldo,0);
+
   // ── Resumen del día ──────────────────────────────────────
   const hoyStr=new Date().toISOString().slice(0,10);
   const hojE=new Date();
@@ -1424,6 +1433,9 @@ function renderPanel(){
   if(dbConf('kpi_clientes'))kpis.push({ic:'i-lime',svg:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',lbl:'Mis clientes',val:misClis.length,sub:'asignados a mí'});
   if(dbConf('kpi_facturar'))kpis.push({ic:'i-warn',svg:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',lbl:esConta?'Facturas del mes':'Por facturar',val:esConta?facturasMes.length:docsFacturar.length,sub:esConta?money(ventasMes)+' certificados':'documentos abiertos'});
   if(dbConf('kpi_ocpend'))kpis.push({ic:ocPend.length?'i-warn':'i-lime',svg:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',lbl:'OC pendientes',val:ocPend.length,sub:'de recibir'});
+  if(dbConf('kpi_cobrarmis')||esVentasRol)kpis.push({ic:vencidosMis.length?'i-danger':'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9.5a2.5 2.5 0 0 0-2.5-2h-1a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 1 0 5h-1A2.5 2.5 0 0 1 9 14.5"/>',lbl:'Por cobrar (mis clientes)',val:money(porCobrarMis),sub:vencidosMis.length?vencidosMis.length+' vencida'+(vencidosMis.length!==1?'s':''):'al día'});
+  if(dbConf('kpi_cobradomes')||['cobros','contabilidad','admin','gerencia'].includes(rol))kpis.push({ic:'i-green',svg:'<path d="M20 6 9 17l-5-5"/>',lbl:'Cobrado este mes',val:money(cobradoMes),sub:'abonos recibidos'});
+  if(dbConf('kpi_porvencer')||['cobros','contabilidad','admin','gerencia'].includes(rol))kpis.push({ic:porVencer.length?'i-warn':'i-lime',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'Por vencer (7 días)',val:money(porVencerMonto),sub:porVencer.length?porVencer.length+' factura'+(porVencer.length!==1?'s':''):'ninguna'});
   if(!kpis.length)kpis.push({ic:'i-blue',svg:'<path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/>',lbl:'Bienvenido',val:'—',sub:'Dashboard de SEFE'});
   $('#kpis').innerHTML=kpis.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-body"><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div></div>`).join('');
 
