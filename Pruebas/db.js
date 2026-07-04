@@ -21,6 +21,26 @@ if (!SUPABASE_URL || SUPABASE_URL.includes('TU-PROYECTO') || !SUPABASE_KEY || SU
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================================
+// fetchAll — trae TODAS las filas de una tabla, paginando.
+// Supabase devuelve máximo 1000 filas por consulta; esta función
+// pide de a 1000 hasta traer todo. Necesario para tablas grandes
+// como documentos y abonos.
+// ============================================================
+async function fetchAll(tabla, ordenCampo){
+  const PAGE=1000;
+  let desde=0, todo=[];
+  while(true){
+    const {data,error}=await sb.from(tabla).select('*').order(ordenCampo).range(desde,desde+PAGE-1);
+    if(error){console.error('Error cargando '+tabla+':',error);break;}
+    if(!data||!data.length)break;
+    todo=todo.concat(data);
+    if(data.length<PAGE)break; // última página
+    desde+=PAGE;
+  }
+  return {data:todo};
+}
+
+// ============================================================
 // CARGA INICIAL — trae todo de la base y llena los arrays de la app
 // ============================================================
 async function cargarTodo() {
@@ -34,14 +54,14 @@ async function cargarTodo() {
       sb.from('vendedores').select('*').order('id'),
       sb.from('pilotos').select('*').order('id'),
       sb.from('proveedores').select('*').order('id'),
-      sb.from('documentos').select('*').order('id'),
-      sb.from('abonos').select('*').order('id'),
+      fetchAll('documentos','id'),
+      fetchAll('abonos','id'),
       sb.from('cobros_ruta').select('*').order('id'),
       sb.from('compras').select('*').order('id'),
-      sb.from('pagos_proveedor').select('*').order('id'),
+      fetchAll('pagos_proveedor','id'),
       sb.from('roles').select('*'),
       sb.from('usuarios').select('*').order('id'),
-      sb.from('auditoria').select('*').order('seq'),
+      fetchAll('auditoria','seq'),
       sb.from('dashboard_config').select('*'),
       sb.from('talonarios').select('*').order('numero_inicial'),
       sb.from('recibos_anulados').select('*'),
