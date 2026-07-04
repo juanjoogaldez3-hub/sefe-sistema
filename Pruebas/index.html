@@ -1397,15 +1397,15 @@ function renderPanel(){
   const hojE=new Date();
   const saludo=hojE.getHours()<12?'Buenos días':hojE.getHours()<19?'Buenas tardes':'Buenas noches';
   const fechaLarga=hojE.toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const facturasHoy=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.creada?.slice(0,10)===hoyStr);
+  const facturasHoy=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.creada?.slice(0,10)===hoyStr);
   const ventasHoy=facturasHoy.reduce((s,d)=>s+d.totales.total,0);
-  let cobradoHoy=0;documentos.forEach(d=>(d.abonos||[]).forEach(a=>{if(!a.anulado&&a.fecha===hoyStr)cobradoHoy+=Number(a.monto);}));
-  const pedidosHoy=documentos.filter(d=>d.tipoDoc==='pedido'&&d.creada?.slice(0,10)===hoyStr).length;
-  const vencenHoy=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&d.vencimiento.slice(0,10)===hoyStr&&arInfo(d).saldo>0).length;
+  let cobradoHoy=0;misDocsBase.forEach(d=>(d.abonos||[]).forEach(a=>{if(!a.anulado&&a.fecha===hoyStr)cobradoHoy+=Number(a.monto);}));
+  const pedidosHoy=misDocsBase.filter(d=>d.tipoDoc==='pedido'&&d.creada?.slice(0,10)===hoyStr).length;
+  const vencenHoy=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&d.vencimiento.slice(0,10)===hoyStr&&arInfo(d).saldo>0).length;
   const rdItems=[];
-  if(dbConf('kpi_ventas')||['admin','gerencia','auditoria'].includes(rol))rdItems.push({lbl:'Vendido hoy',val:money(ventasHoy),sub:facturasHoy.length+' factura'+(facturasHoy.length!==1?'s':'')});
-  if(dbConf('kpi_cobrar')||esConta||['admin','gerencia','auditoria'].includes(rol))rdItems.push({lbl:'Cobrado hoy',val:money(cobradoHoy),sub:'abonos recibidos'});
-  rdItems.push({lbl:'Pedidos hoy',val:pedidosHoy,sub:'nuevos pedidos'});
+  if(dbConf('kpi_ventas')||['admin','gerencia','auditoria'].includes(rol))rdItems.push({lbl:esVentasRol?'Mis ventas hoy':'Vendido hoy',val:money(ventasHoy),sub:facturasHoy.length+' factura'+(facturasHoy.length!==1?'s':'')});
+  if(dbConf('kpi_cobrar')||esConta||['admin','gerencia','auditoria'].includes(rol))rdItems.push({lbl:esVentasRol?'Mis cobros hoy':'Cobrado hoy',val:money(cobradoHoy),sub:'abonos recibidos'});
+  rdItems.push({lbl:esVentasRol?'Mis pedidos hoy':'Pedidos hoy',val:pedidosHoy,sub:'nuevos pedidos'});
   rdItems.push({lbl:'Vencen hoy',val:vencenHoy,sub:vencenHoy?'requieren cobro':'ninguno'});
   const rd=$('#resumen-dia');
   if(rd)rd.innerHTML=`<div class="resumen-dia">
