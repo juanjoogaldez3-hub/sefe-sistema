@@ -3256,12 +3256,13 @@ function renderCobros(){
   const info=todas.filter(x=>cobrosEnFiltro(x.f,x));
   const porCobrar=info.reduce((s,x)=>s+Math.max(0,x.saldo),0);
   const vencidoM=info.filter(x=>x.vencido).reduce((s,x)=>s+x.saldo,0);
+  const vencidasN=info.filter(x=>x.vencido).length;
   const pend=info.filter(x=>x.saldo>0.001).length;
   const clis=new Set(info.filter(x=>x.saldo>0.001).map(x=>x.f.clienteId)).size;
   const k=[
     {ic:'i-green',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Total por cobrar',val:money(porCobrar),sub:pend+' facturas pendientes'},
     {ic:'i-warn',svg:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',lbl:'Vencido',val:money(vencidoM),sub:'requiere gestión de cobro'},
-    {ic:'i-blue',svg:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',lbl:'Facturas a crédito',val:info.length,sub:'cambiarias en este filtro'},
+    {ic:'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'Facturas vencidas',val:vencidasN,sub:vencidasN===1?'ya pasó su vencimiento':'ya pasaron su vencimiento'},
     {ic:'i-lime',svg:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',lbl:'Clientes con saldo',val:clis,sub:'con deuda pendiente'},
   ];
   $('#cobros-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
