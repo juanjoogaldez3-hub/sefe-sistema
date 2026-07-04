@@ -931,6 +931,14 @@ function inicialesVendedor(nombre){
   return nombre.trim().split(/\s+/).map(p=>p.charAt(0).toUpperCase()).join('');
 }
 const padn=n=>String(n).padStart(4,'0');
+// Normaliza un NIT quitando el guión y espacios (deja "CF" como CF).
+// Así todos los NITs quedan uniformes y no hay problemas de comparación.
+function normalizarNit(nit){
+  if(!nit)return '';
+  const limpio=String(nit).trim().replace(/[-\s]/g,'');
+  return limpio.toUpperCase()==='CF'?'CF':limpio;
+}
+window.normalizarNit=normalizarNit;
 // Fecha de HOY en hora de Guatemala (UTC-6), formato aaaa-mm-dd.
 // Usamos esto en vez de new Date().toISOString() porque ese usa UTC
 // y de noche podía guardar la fecha del día siguiente (o del anterior).
@@ -5711,7 +5719,7 @@ function openCli(id){
     const tiempoCredito=tcSel==='custom'?(Number($('#c-tc-custom').value)||0):Number(tcSel);
     const vendedorId=$('#c-vend').value?Number($('#c-vend').value):null;
     const sedesDe=$('#c-sede').value?Number($('#c-sede').value):null;
-    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:$('#c-nit').value||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),tiempoCredito,vendedorId,sedesDe,nitsSecundarios:leerNitsSecundarios(),
+    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:normalizarNit($('#c-nit').value)||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),tiempoCredito,vendedorId,sedesDe,nitsSecundarios:leerNitsSecundarios(),
       contactoPagos:{nombre:$('#cp-nom').value,telefono:$('#cp-tel').value,correo:$('#cp-mail').value},
       contactoCompras:{nombre:$('#cc-nom').value,telefono:$('#cc-tel').value,correo:$('#cc-mail').value}};
     if(c){Object.assign(c,datos);logAudit('Cliente editado',nom+' · NIT '+datos.nit);toast('✓ Cliente actualizado');if(typeof guardarCliente==='function')guardarCliente(c);}
@@ -5738,7 +5746,7 @@ function leerNitsSecundarios(){
   const filas=document.querySelectorAll('#nits-sec-lista .nit-sec-row');
   const arr=[];
   filas.forEach(f=>{
-    const nit=(f.querySelector('.nit-sec-nit')?.value||'').trim();
+    const nit=normalizarNit(f.querySelector('.nit-sec-nit')?.value||'');
     const nombre=(f.querySelector('.nit-sec-nombre')?.value||'').trim();
     if(nit)arr.push({nit,nombre:nombre||nit});
   });
