@@ -401,10 +401,6 @@
 <script src="db.js"></script>
 </head>
 <body>
-<div id="banner-pruebas" style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#C9A227;color:#fff;text-align:center;padding:7px;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:bold;letter-spacing:.4px;box-shadow:0 2px 8px rgba(0,0,0,.15)">
-  🧪 MODELO DE PRUEBAS — Esto NO es el sistema real. Las facturas son simuladas y no afectan la SAT.
-</div>
-<div style="height:34px"></div>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
 <div id="sefe-loader" style="position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#173916,#0f2810);display:none;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;transition:opacity .5s ease">
   <div style="text-align:center;width:340px;max-width:86vw">
@@ -922,7 +918,7 @@
 //  URL del backend FEL (EcoFactura) en Render
 //  ⚠️ PONÉ ACÁ TU URL DE RENDER (sin barra al final)
 // ═══════════════════════════════════════════════════════════
-const FEL_BACKEND_URL = 'https://sefe-backend.onrender.com-TU-BACKEND'; // MODO PRUEBAS: simulado, no toca SAT
+const FEL_BACKEND_URL = 'https://sefe-backend.onrender.com';
 
 const $=s=>document.querySelector(s);
 const money=n=>'Q '+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2028,11 +2024,9 @@ async function facturarPedido(id,dias){
     const cli=clientes.find(c=>c.id===f.clienteId);
     const ns=cli&&cli.nitsSecundarios?cli.nitsSecundarios[Number(selNit.value)]:null;
     if(ns){
-      // Guardar el NIT/nombre originales por si acaso, y aplicar el secundario para la factura
       f.nitFacturado=ns.nit;
       f.clienteNit=ns.nit;
       f.clienteNombre=ns.nombre||ns.nit;
-      // clienteId NO se toca: la venta sigue perteneciendo al cliente real
     }
   }
   // Si el vendedor es un canal (Whaticket) y se eligió quién vendió, guardarlo
