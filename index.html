@@ -566,6 +566,15 @@
                     <div id="f-vend-info" style="padding:10px 12px;background:var(--surface-2);border:1.5px solid var(--line-strong);border-radius:var(--r-sm);font-size:13.5px;color:var(--muted);min-height:40px;display:flex;align-items:center">—</div>
                   </div>
                 </div>
+                <div id="f-subvend-wrap" class="row" style="display:none;margin-bottom:13px">
+                  <div style="grid-column:1/-1">
+                    <label>¿Quién vendió por Whaticket?</label>
+                    <select id="f-subvend" style="width:100%">
+                      <option value="">— Sin especificar —</option>
+                    </select>
+                    <div style="font-size:11px;color:var(--muted);margin-top:5px">El vendedor sigue siendo Whaticket, pero se registra quién hizo la venta.</div>
+                  </div>
+                </div>
                 <div id="f-saldo-alert" style="display:none;margin-bottom:13px"></div>
                 <div class="row">
                   <div><label>Orden de compra</label><input id="f-oc" placeholder="OC-2026-…"></div>
@@ -927,6 +936,8 @@ const money=n=>'Q '+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2
 // Vendedores que son CANALES (varias personas venden a través de ellos, ej. Whaticket/WhatsApp).
 // Al facturar con uno de estos, se pide elegir quién vendió realmente.
 const VENDEDORES_CANAL=['whaticket','whatsapp'];
+// Vendedores que operan a través del canal Whaticket (lista fija, aparte del catálogo)
+const SUBVENDEDORES_WHATICKET=['Luis Menocal','Christian Martinez','Rodolfo Salala','Enrique bixcul'];
 function esVendedorCanal(nombre){
   return nombre && VENDEDORES_CANAL.includes(String(nombre).trim().toLowerCase());
 }
@@ -1159,7 +1170,8 @@ function guardarBorrador(){
     const oc=$('#f-oc')?.value||'';
     const obs=$('#f-obs')?.value||'';
     const nota=$('#f-nota')?.value||'';
-    localStorage.setItem(BORRADOR_KEY,JSON.stringify({cart,cliSel,cliSearch,oc,obs,nota,ts:Date.now()}));
+    const subvend=$('#f-subvend')?.value||'';
+    localStorage.setItem(BORRADOR_KEY,JSON.stringify({cart,cliSel,cliSearch,oc,obs,nota,subvend,ts:Date.now()}));
   }catch(e){/* si el navegador no permite, no pasa nada */}
 }
 function recuperarBorrador(){
@@ -1177,6 +1189,7 @@ function recuperarBorrador(){
     if(b.nota&&$('#f-nota'))$('#f-nota').value=b.nota;
     const cli=clientes.find(c=>String(c.id)===String(b.cliSel));
     if(cli)actualizarVendedorInfo(cli);
+    if(b.subvend&&$('#f-subvend'))$('#f-subvend').value=b.subvend;
     render();
     toast('📝 Borrador recuperado','Tenías un pedido sin guardar');
     return true;
@@ -1684,8 +1697,24 @@ function initForm(){
 function clienteSel(){return clientes.find(c=>c.id===Number($('#f-cli').value));}
 function actualizarVendedorInfo(cli){
   const el=$('#f-vend-info');if(!el)return;
+  let nombreVend=null;
   if(!cli||!cli.vendedorId){el.textContent='Sin vendedor asignado';el.style.color='var(--muted-2)';}
-  else{const v=vendedores.find(x=>x.id===cli.vendedorId);el.textContent=v?v.nombre:'—';el.style.color='var(--ink)';el.style.fontWeight='600';}
+  else{const v=vendedores.find(x=>x.id===cli.vendedorId);nombreVend=v?v.nombre:null;el.textContent=v?v.nombre:'—';el.style.color='var(--ink)';el.style.fontWeight='600';}
+  // Mostrar el selector de sub-vendedor solo si el vendedor del cliente es un canal (Whaticket)
+  const wrap=$('#f-subvend-wrap'),sel=$('#f-subvend');
+  if(wrap&&sel){
+    if(esVendedorCanal(nombreVend)){
+      // llenar opciones una sola vez
+      if(sel.dataset.built!=='1'){
+        sel.innerHTML='<option value="">— Sin especificar —</option>'+SUBVENDEDORES_WHATICKET.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">${n}</option>`).join('');
+        sel.dataset.built='1';
+      }
+      wrap.style.display='';
+    }else{
+      wrap.style.display='none';
+      sel.value='';
+    }
+  }
   mostrarAlertaSaldo(cli);
 }
 function mostrarAlertaSaldo(cli){
@@ -1853,7 +1882,8 @@ $('#f-go').onclick=()=>{
     const ids=new Set([...Object.keys(editOldMap).map(Number),...cart.map(it=>it.id)]);
     ids.forEach(id=>{const oldQ=editOldMap[id]||0;const ci=cart.find(it=>it.id===id);const newQ=ci?ci.cantidad:0;const p=productos.find(x=>x.id===id);if(p)p.stock-=(newQ-oldQ);});
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
-    Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,items:cart.map(it=>({...it})),totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||''});
+    const subVendEd=(esVendedorCanal(vend?.nombre)&&$('#f-subvend'))?($('#f-subvend').value||null):null;
+    Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,subVendedorNombre:subVendEd,items:cart.map(it=>({...it})),totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||''});
     toast('✓ Pedido actualizado','PED-'+padn(f.numero)+' · inventario ajustado');
     logAudit('Pedido editado','PED-'+padn(f.numero)+' · '+cli.nombre+' · '+money(totales.total));
     if(typeof guardarDocumento==='function')guardarDocumento(f);
@@ -1865,14 +1895,15 @@ $('#f-go').onclick=()=>{
       if(typeof guardarProducto==='function')guardarProducto(p);
     });
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
-    const doc={id:corr,numero:corr,tipoDoc:'pedido',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend?.id,vendedorNombre:vend?.nombre,
+    const subVend=(esVendedorCanal(vend?.nombre)&&$('#f-subvend'))?($('#f-subvend').value||null):null;
+    const doc={id:corr,numero:corr,tipoDoc:'pedido',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend?.id,vendedorNombre:vend?.nombre,subVendedorNombre:subVend,
       items:cart.map(it=>({...it})),totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',_nuevo:true};
     documentos.push(doc);corr++;
     logAudit('Pedido creado','PED-'+padn(doc.numero)+' · '+cli.nombre+' · '+money(totales.total));
     if(typeof guardarDocumento==='function')guardarDocumento(doc);
     toast('✓ Pedido ingresado','PED-'+padn(doc.numero)+' · inventario rebajado. Facturalo o convertilo en Documentos.');
   }
-  cart=[];$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';limpiarBorrador();initForm();render();go('documentos');
+  cart=[];$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';limpiarBorrador();initForm();render();go('documentos');
 };
 
 function rowDoc(withActions){
@@ -1997,15 +2028,8 @@ function abrirFacturar(id){
       <div style="font-size:11px;color:var(--muted);margin-top:5px">La factura sale al NIT elegido, pero la venta queda registrada en ${nitPrincipalNombre}.</div>
     </div>`:'';
   // Si el vendedor del pedido es un CANAL (ej. Whaticket), pedir quién vendió realmente
-  const selectorSubVend=esVendedorCanal(f.vendedorNombre)?`
-    <div style="margin-top:12px">
-      <label style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px">¿Quién vendió por ${f.vendedorNombre}?</label>
-      <select id="fac-subvend-sel" style="width:100%;margin-top:4px">
-        <option value="">— Sin especificar —</option>
-        ${vendedores.filter(v=>!esVendedorCanal(v.nombre)).map(v=>`<option value="${v.nombre.replace(/"/g,'&quot;')}"${f.subVendedorNombre===v.nombre?' selected':''}>${v.nombre}</option>`).join('')}
-      </select>
-      <div style="font-size:11px;color:var(--muted);margin-top:5px">El vendedor sigue siendo ${f.vendedorNombre}, pero se registra quién hizo la venta.</div>
-    </div>`:'';
+  // El sub-vendedor de Whaticket ahora se captura al generar el pedido, no al facturar.
+  const selectorSubVend='';
   openMod('Facturar PED-'+padn(f.numero),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Se generará la Factura Cambiaria por <b style="color:var(--ink)">${money(f.totales.total)}</b>.</p>
      <div style="background:var(--surface-2);border-radius:8px;padding:12px 14px;font-size:12.5px">
@@ -2030,11 +2054,7 @@ async function facturarPedido(id,dias){
       f.clienteNombre=ns.nombre||ns.nit;
     }
   }
-  // Si el vendedor es un canal (Whaticket) y se eligió quién vendió, guardarlo
-  const selSubVend=document.getElementById('fac-subvend-sel');
-  if(selSubVend){
-    f.subVendedorNombre=selSubVend.value||null;
-  }
+  // El sub-vendedor de Whaticket viaja desde el pedido; no se toca al facturar.
 
   // Si no hay backend configurado, usar modo simulado (como antes)
   if(typeof FEL_BACKEND_URL==='undefined' || FEL_BACKEND_URL.includes('TU-BACKEND')){
@@ -2326,9 +2346,10 @@ window.editarPedido=id=>{const f=documentos.find(d=>d.id===id);if(f.tipoDoc!=='p
   initForm();
   const cli=clientes.find(c=>c.id===f.clienteId);
   if(cli){$('#f-cli').value=String(cli.id);$('#f-cli-search').value=`${cli.nombre} · ${cli.nit}`;actualizarVendedorInfo(cli);}
+  if(f.subVendedorNombre&&$('#f-subvend')){$('#f-subvend').value=f.subVendedorNombre;}
   $('#f-oc').value=f.ordenCompra||'';$('#f-obs').value=f.observaciones||'';if($('#f-nota'))$('#f-nota').value=f.notaInterna||'';
   go('pedido');render();toast('Editando PED-'+padn(f.numero),'Ajustá productos o cliente y guardá');};
-window.cancelarEdicion=()=>{editId=null;editOldMap={};cart=[];$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';render();go('documentos');};
+window.cancelarEdicion=()=>{editId=null;editOldMap={};cart=[];$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';render();go('documentos');};
 window.regresar=id=>{const f=documentos.find(d=>d.id===id);if(!['envio','prestamo'].includes(f.tipoDoc)||f.estado!=='pendiente')return;
   Object.assign(f,{tipoDoc:'pedido',estado:'abierto'});delete f.autorizacion;delete f.serie;delete f.numeroDte;
   closeMod();renderDocs();
