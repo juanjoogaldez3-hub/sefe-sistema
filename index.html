@@ -519,6 +519,10 @@
           <div class="panel-head"><h3 id="panel-seg-title">Seguimiento de clientes</h3><span style="font-size:11.5px;color:var(--muted)">Frecuencia de compra y días sin facturar</span></div>
           <table><thead><tr><th>Cliente</th><th>Vendedor</th><th>Compra cada</th><th>Última factura</th><th>Días sin comprar</th></tr></thead><tbody id="panel-seguimiento"></tbody></table>
         </div>
+        <div class="panel" style="margin-top:16px" id="panel-bloque-miscobros">
+          <div class="panel-head"><h3>Mis clientes con saldo vencido</h3><button class="btn btn-ghost btn-sm" onclick="go('cobros')">Ver cobros</button></div>
+          <table><thead><tr><th>Cliente</th><th>Saldo total</th><th>Vencido</th></tr></thead><tbody id="panel-miscobros"></tbody></table>
+        </div>
       </section>
 
       <!-- AUDITORÍA -->
@@ -1341,6 +1345,7 @@ const DB_WIDGETS=[
   {key:'panel_venc',    lbl:'Panel — Cobros / vencimientos',  grp:'Paneles'},
   {key:'panel_stocktbl',lbl:'Panel — Stock bajo',             grp:'Paneles'},
   {key:'panel_ped',     lbl:'Panel — Pedidos / resumen',      grp:'Paneles'},
+  {key:'panel_miscobros',lbl:'Panel — Mis clientes con vencido (Ventas)', grp:'Paneles'},
   {key:'alerta_venc',   lbl:'Alerta — Facturas vencidas',     grp:'Alertas'},
   {key:'alerta_stock',  lbl:'Alerta — Stock bajo / sin stock',grp:'Alertas'},
   {key:'alerta_oc',     lbl:'Alerta — OC sin recibir',        grp:'Alertas'},
@@ -1480,6 +1485,27 @@ function renderPanel(){
     }
     document.getElementById('panel-bloque-venc').style.display='';
   }else document.getElementById('panel-bloque-venc').style.display='none';
+
+  // ── Panel: Mis clientes con saldo vencido (Ventas) ──────────
+  const bloqueMisCob=document.getElementById('panel-bloque-miscobros');
+  if(bloqueMisCob){
+    if(dbConf('panel_miscobros')||esVentasRol){
+      const porCli={};
+      misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
+        const ai=arInfo(d);if(ai.saldo<=0.001)return;
+        const k=d.clienteId;
+        if(!porCli[k])porCli[k]={nombre:d.clienteComercial||d.clienteNombre,saldo:0,vencido:0};
+        porCli[k].saldo+=ai.saldo;
+        if(ai.vencido)porCli[k].vencido+=ai.saldo;
+      });
+      // Solo clientes con saldo vencido, los más urgentes primero
+      const lista=Object.values(porCli).filter(c=>c.vencido>0.001).sort((a,b)=>b.vencido-a.vencido);
+      $('#panel-miscobros').innerHTML=lista.length
+        ?lista.map(c=>`<tr><td style="font-weight:600;font-size:12.5px">${c.nombre}</td><td class="num" style="font-size:12.5px;color:var(--muted)">${money(c.saldo)}</td><td class="num" style="font-weight:700;font-size:12.5px;color:var(--danger)">${money(c.vencido)}</td></tr>`).join('')
+        :'<tr><td colspan="3" class="empty" style="font-size:12px">Ningún cliente tuyo con saldo vencido 🎉</td></tr>';
+      bloqueMisCob.style.display='';
+    }else bloqueMisCob.style.display='none';
+  }
 
   // ── Panel 3: Stock bajo ──────────────────────────────────
   if(dbConf('panel_stocktbl')){
