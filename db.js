@@ -128,6 +128,7 @@ function mapClienteFromDB(c){
     id:c.id, nit:c.nit, nombre:c.nombre, razonSocial:c.razon_social,
     direccion:c.direccion, email:c.email, tiempoCredito:c.tiempo_credito,
     vendedorId:c.vendedor_id, sedesDe:c.sedes_de,
+    direccionEntrega:c.direccion_entrega, fechaAlta:c.fecha_alta,
     contactoPagos:c.contacto_pagos||{}, contactoCompras:c.contacto_compras||{},
     precios:c.precios||{}
   };
@@ -212,6 +213,7 @@ async function guardarCliente(cli){
     nit:cli.nit, nombre:cli.nombre, razon_social:cli.razonSocial,
     direccion:cli.direccion, email:cli.email, tiempo_credito:cli.tiempoCredito,
     vendedor_id:cli.vendedorId, sedes_de:cli.sedesDe,
+    direccion_entrega:cli.direccionEntrega, fecha_alta:cli.fechaAlta,
     contacto_pagos:cli.contactoPagos, contacto_compras:cli.contactoCompras, precios:cli.precios
   };
   if (cli._nuevo) {
@@ -224,6 +226,12 @@ async function guardarCliente(cli){
     if(error)console.error('Error actualizando cliente:',error);
   }
 }
+
+async function borrarCliente(id){
+  const {error} = await sb.from('clientes').delete().eq('id', id);
+  if(error)console.error('Error borrando cliente:',error);
+}
+window.borrarCliente = borrarCliente;
 
 async function guardarDocumento(d){
   const row = {
