@@ -5798,7 +5798,8 @@ window.exportarPDF=exportarPDF;
 
 // ── EXPORTAR INVENTARIO (Excel y PDF) ───────────────────────
 function _filasInventario(){
-  const lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
+  let lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
+  if(_filtroMarca)lista=lista.filter(p=>(p.marca||'')===_filtroMarca);
   return lista.map(p=>{
     const provs=(p.proveedorIds||[]).map(id=>{const x=proveedores.find(v=>v.id===id);return x?x.nombre:null;}).filter(Boolean);
     let stock=p.stock;
@@ -5810,9 +5811,9 @@ async function exportarInventarioExcel(){
   const data=_filasInventario();
   if(!data.length){toast('Sin productos para exportar','El inventario está vacío',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const meta=[['Inventario · Soluciones Efectivas GT'],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],['Total productos:',data.length],[]];
+  const meta=[['Inventario · Soluciones Efectivas GT'],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],['Marca:',_filtroMarca||'Todas las marcas'],['Total productos:',data.length],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
-  XLSX.utils.sheet_add_json(ws,data,{origin:'A6'});
+  XLSX.utils.sheet_add_json(ws,data,{origin:'A7'});
   ws['!cols']=[{wch:14},{wch:48},{wch:16},{wch:30},{wch:18}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Inventario');
   const fn=`SEFE_Inventario_${new Date().toISOString().slice(0,10)}.xlsx`;
@@ -5826,9 +5827,9 @@ function exportarInventarioPDF(){
   const cols=['Código','Producto','Marca','Proveedor(es)','Existencias'];
   const ths=cols.map(c=>`<th style="${_pdfTH(c==='Existencias'?'text-align:right':'')}">${c}</th>`).join('');
   const trs=data.map(row=>`<tr>${cols.map(c=>`<td style="${_pdfTD(c==='Existencias'?'text-align:right':'')}">${row[c]}</td>`).join('')}</tr>`).join('');
-  const body=`${_pdfSec('Existencias · '+data.length+' productos')}
+  const body=`${_pdfSec('Existencias · '+data.length+' productos'+(_filtroMarca?' · Marca: '+_filtroMarca:''))}
     <table style="width:100%;border-collapse:collapse"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
-  _abrirPDF(_pdfShell({titulo:'INVENTARIO',subtitulo:'Reporte de existencias',orientacion:'portrait',body}));
+  _abrirPDF(_pdfShell({titulo:'INVENTARIO',subtitulo:_filtroMarca?'Reporte de existencias · '+_filtroMarca:'Reporte de existencias',orientacion:'portrait',body}));
 }
 window.exportarInventarioPDF=exportarInventarioPDF;
 
