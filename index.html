@@ -132,8 +132,6 @@
 
   table{width:100%;border-collapse:collapse}
   th{text-align:left;font-size:11px;font-weight:600;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;padding:12px 18px;background:var(--surface-2);border-bottom:1px solid var(--line)}
-  /* Encabezados de columna fijos al hacer scroll (debajo del topbar de 64px) */
-  .content thead th{position:sticky;top:64px;z-index:9}
   th.sortable{cursor:pointer;user-select:none;transition:color .12s}
   th.sortable:hover{color:var(--green)}
   th.sortable .sort-arrow{margin-left:5px;font-size:9px;opacity:.4}
@@ -330,7 +328,6 @@
     /* Tablas con scroll horizontal */
     .panel{overflow:visible}
     .panel table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
-    .content thead th{top:56px}
     /* Resumen fijo más compacto en celular para no tapar la pantalla */
     .kpis.sticky-top{padding-bottom:8px;gap:8px}
     .kpis.sticky-top .kpi{padding:9px 11px}
@@ -1249,25 +1246,32 @@ function aplicarStickyTop(){
   if(!view)return;
   const esMovil=window.innerWidth<=600;
   const topbarH=esMovil?56:64;
-  let offset=topbarH;
-  // 1) Resumen (KPIs) — solo el que es hijo directo de la vista
+  // Limpiar cualquier sticky previo de esta vista
+  view.querySelectorAll('.sticky-top').forEach(el=>{el.classList.remove('sticky-top');el.style.top='';});
+  view.querySelectorAll('thead th').forEach(th=>{th.style.position='';th.style.top='';th.style.zIndex='';});
+  // 1) Resumen (KPIs) — hijo directo de la vista
+  let baseOffset=topbarH;
   const kpis=view.querySelector(':scope > .kpis');
   if(kpis){
     kpis.classList.add('sticky-top');
-    kpis.style.top=offset+'px';
-    offset+=Math.round(kpis.getBoundingClientRect().height);
+    kpis.style.top=baseOffset+'px';
+    baseOffset+=Math.round(kpis.getBoundingClientRect().height);
   }
-  // 2) Barras de filtros y buscador (dentro del panel)
-  view.querySelectorAll('.panel > .tbl-toolbar').forEach(tb=>{
-    tb.classList.add('sticky-top');
-    tb.style.top=offset+'px';
-    offset+=Math.round(tb.getBoundingClientRect().height);
-  });
-  // 3) Encabezados de columna
-  view.querySelectorAll('.panel table thead th').forEach(th=>{
-    th.style.position='sticky';
-    th.style.top=offset+'px';
-    th.style.zIndex='11';
+  // 2) Por cada panel: solo si tiene barra(s) de filtros/buscador, fijamos toolbar(s) + su encabezado
+  view.querySelectorAll(':scope > .panel').forEach(panel=>{
+    const toolbars=panel.querySelectorAll(':scope > .tbl-toolbar');
+    if(!toolbars.length)return; // panel sin filtros (ej. "A quién llamar hoy"): no fijamos su encabezado
+    let off=baseOffset;
+    toolbars.forEach(tb=>{
+      tb.classList.add('sticky-top');
+      tb.style.top=off+'px';
+      off+=Math.round(tb.getBoundingClientRect().height);
+    });
+    panel.querySelectorAll('table thead th').forEach(th=>{
+      th.style.position='sticky';
+      th.style.top=off+'px';
+      th.style.zIndex='11';
+    });
   });
 }
 window.aplicarStickyTop=aplicarStickyTop;
