@@ -5062,9 +5062,23 @@ function bindRep(){
 }
 const kpiHTML=k=>k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub||''}</div></div>`).join('');
 const hbars=arr=>{const max=Math.max(1,...arr.map(x=>x.v));return arr.length?arr.map(x=>`<div class="hbar-row"><div class="hbar-name">${x.n}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.round(x.v/max*100)}%;${x.c?'background:'+x.c:''}"></div></div><div class="hbar-val num">${money(x.v)}</div></div>`).join(''):'<div class="empty">Sin datos en el período</div>';};
-function mesesSerie(docs,getF,getV){const meses=[];const now=new Date();
-  for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);meses.push({key:d.getFullYear()+'-'+d.getMonth(),lbl:d.toLocaleDateString('es-GT',{month:'short'}),v:0});}
-  docs.forEach(d=>{const dt=new Date(getF(d));const m=meses.find(x=>x.key===dt.getFullYear()+'-'+dt.getMonth());if(m)m.v+=getV(d);});return meses;}
+function mesesEje(docs,getF){
+  let min=null,max=null;
+  docs.forEach(d=>{const t=new Date(getF(d));if(isNaN(t))return;if(!min||t<min)min=t;if(!max||t>max)max=t;});
+  if(!min){const n=new Date();min=new Date(n.getFullYear(),n.getMonth()-5,1);max=n;}
+  const multiAnio=max.getFullYear()!==min.getFullYear();
+  const meses=[];let y=min.getFullYear(),m=min.getMonth();const ey=max.getFullYear(),em=max.getMonth();let g=0;
+  while((y<ey||(y===ey&&m<=em))&&g<240){
+    meses.push({key:y+'-'+m,lbl:new Date(y,m,1).toLocaleDateString('es-GT',{month:'short'})+(multiAnio?' '+String(y).slice(2):''),v:0});
+    m++;if(m>11){m=0;y++;}g++;
+  }
+  return meses;
+}
+function mesesSerie(docs,getF,getV,eje){
+  const meses=(eje||mesesEje(docs,getF)).map(x=>({key:x.key,lbl:x.lbl,v:0}));
+  docs.forEach(d=>{const dt=new Date(getF(d));const m=meses.find(x=>x.key===dt.getFullYear()+'-'+dt.getMonth());if(m)m.v+=getV(d);});
+  return meses;
+}
 const barsHTML=(meses,fmt)=>{const max=Math.max(1,...meses.map(m=>m.v));return `<div class="bars">${meses.map((m,i)=>`<div class="bcol"><div class="bval num">${m.v?(fmt?fmt(m.v):Math.round(m.v/1000)+'k'):''}</div><div class="bar ${i===meses.length-1?'alt':''}" style="height:${Math.round(m.v/max*100)}%"></div><div class="blbl">${m.lbl}</div></div>`).join('')}</div>`;};
 
 // colores por vendedor
@@ -5143,8 +5157,9 @@ function renderReportes(){
       {ic:'i-warn',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/>',lbl:'Costo de lo vendido',val:money(cTot)},
       {ic:'i-green',svg:'<path d="M23 6l-9.5 9.5-5-5L1 18"/>',lbl:'Margen bruto',val:money(margen)},
       {ic:'i-lime',svg:'<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',lbl:'Margen %',val:pct.toFixed(1)+'%'}])}</div>`;
-    const mv=mesesSerie(ventas,d=>d.creada,d=>d.totales.total);
-    const mc=mesesSerie(ventas,d=>d.creada,d=>d.items.reduce((a,it)=>{const p=productos.find(x=>x.id===it.id);return a+(p?p.costo:0)*it.cantidad;},0));
+    const ejeV=mesesEje(ventas,d=>d.creada);
+    const mv=mesesSerie(ventas,d=>d.creada,d=>d.totales.total,ejeV);
+    const mc=mesesSerie(ventas,d=>d.creada,d=>d.items.reduce((a,it)=>{const p=productos.find(x=>x.id===it.id);return a+(p?p.costo:0)*it.cantidad;},0),ejeV);
     const max=Math.max(1,...mv.map(m=>m.v));
     exportData=mv.map((m,i)=>{const mg=m.v-mc[i].v;return {Mes:m.lbl,Ventas:m.v,Costo:mc[i].v,Margen:mg,'Margen%':m.v?(mg/m.v*100).toFixed(1):0};});
     html+=`<div class="panel"><div class="panel-head"><h3>Ventas vs costos por mes</h3>
@@ -5159,7 +5174,7 @@ function renderReportes(){
     const activos=repFiltros.vendedores.length?repFiltros.vendedores:vendedores.map(v=>v.nombre);
     const colores={};activos.forEach((n,i)=>colores[n]=VEND_COLORS[i%VEND_COLORS.length]);
     // por vendedor: monto total y por mes
-    const datos={};activos.forEach(n=>{datos[n]={v:0,c:0,n:0,meses:mesesSerie(ventas.filter(d=>d.vendedorNombre===n),d=>d.creada,d=>d.totales.total)};});
+    const datos={};const ejeVend=mesesEje(ventas,d=>d.creada);activos.forEach(n=>{datos[n]={v:0,c:0,n:0,meses:mesesSerie(ventas.filter(d=>d.vendedorNombre===n),d=>d.creada,d=>d.totales.total,ejeVend)};});
     ventas.filter(d=>activos.includes(d.vendedorNombre||'Sin asignar')).forEach(d=>{const k=d.vendedorNombre||'Sin asignar';if(datos[k]){datos[k].v+=d.totales.total;datos[k].n++;
       // costo de lo vendido por este vendedor
       d.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);datos[k].c+=(p?p.costo:0)*it.cantidad;});
