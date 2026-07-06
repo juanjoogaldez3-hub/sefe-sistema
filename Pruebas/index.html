@@ -4944,7 +4944,12 @@ function repRange(){
     const end=new Date(n.getFullYear(),n.getMonth(),0,23,59,59); // día 0 del mes actual = último día del mes anterior
     return {start,end};
   }
-  else if(repPeriod==='3m'){start=new Date(n);start.setMonth(start.getMonth()-3);}
+  else if(repPeriod==='3m'){
+    // Últimos 3 meses COMPLETOS anteriores (sin el mes en curso). Ej. en julio: abril, mayo, junio
+    const start=new Date(n.getFullYear(),n.getMonth()-3,1);
+    const end=new Date(n.getFullYear(),n.getMonth(),0,23,59,59); // día 0 del mes actual = último día del mes anterior
+    return {start,end};
+  }
   else if(repPeriod==='anio')start=new Date(n.getFullYear(),0,1);
   else start=new Date(0);
   return {start,end:new Date('2999-01-01')};
