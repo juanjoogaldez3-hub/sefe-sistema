@@ -143,6 +143,10 @@
   .tbl-toolbar svg{width:15px;height:15px;color:var(--muted-2);flex-shrink:0}
   .tbl-search{max-width:260px;padding:8px 11px;font-size:12.5px;border:1.5px solid var(--line-strong);border-radius:8px;background:var(--surface-2)}
   .tbl-search:focus{outline:none;border-color:var(--lime-dk);box-shadow:0 0 0 3px rgba(168,192,56,.16)}
+  /* Bloques fijos al hacer scroll (resumen + filtros + buscador) */
+  .sticky-top{position:sticky}
+  .kpis.sticky-top{z-index:16;background:var(--bg);padding-bottom:12px}
+  .tbl-toolbar.sticky-top{z-index:15}
   .tbl-count{font-size:11.5px;color:var(--muted-2);margin-left:auto;font-weight:500}
   td{padding:13px 18px;font-size:13.5px;border-bottom:1px solid var(--line);vertical-align:middle}
   tr:last-child td{border-bottom:none}
@@ -324,9 +328,14 @@
     .k-val{font-size:19px}
     .k-lbl{font-size:10.5px}
     /* Tablas con scroll horizontal */
-    .panel{overflow:hidden}
+    .panel{overflow:visible}
     .panel table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
     .content thead th{top:56px}
+    /* Resumen fijo más compacto en celular para no tapar la pantalla */
+    .kpis.sticky-top{padding-bottom:8px;gap:8px}
+    .kpis.sticky-top .kpi{padding:9px 11px}
+    .kpis.sticky-top .k-val{font-size:16px}
+    .kpis.sticky-top .k-sub{display:none}
     .panel-head{flex-wrap:wrap;gap:8px;padding:14px 16px}
     .panel-head h3{font-size:15px}
     .panel-body{padding:15px}
@@ -1228,9 +1237,42 @@ function go(v,desdeHash){
   // Actualizar la dirección (hash) para que el botón atrás y el recargar funcionen.
   // Si el cambio vino del propio hash, no lo reescribimos para evitar bucles.
   if(!desdeHash && ('#'+v)!==location.hash){ try{ location.hash=v; }catch(e){} }
+  // Fijar resumen + filtros + buscador + encabezados (tras renderizar el contenido)
+  requestAnimationFrame(()=>setTimeout(aplicarStickyTop,60));
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.view));
 window.go=go;
+
+// ===== Fijar resumen (KPIs) + filtros + buscador + encabezados al hacer scroll =====
+function aplicarStickyTop(){
+  const view=document.querySelector('.view.active');
+  if(!view)return;
+  const esMovil=window.innerWidth<=600;
+  const topbarH=esMovil?56:64;
+  let offset=topbarH;
+  // 1) Resumen (KPIs) — solo el que es hijo directo de la vista
+  const kpis=view.querySelector(':scope > .kpis');
+  if(kpis){
+    kpis.classList.add('sticky-top');
+    kpis.style.top=offset+'px';
+    offset+=Math.round(kpis.getBoundingClientRect().height);
+  }
+  // 2) Barras de filtros y buscador (dentro del panel)
+  view.querySelectorAll('.panel > .tbl-toolbar').forEach(tb=>{
+    tb.classList.add('sticky-top');
+    tb.style.top=offset+'px';
+    offset+=Math.round(tb.getBoundingClientRect().height);
+  });
+  // 3) Encabezados de columna
+  view.querySelectorAll('.panel table thead th').forEach(th=>{
+    th.style.position='sticky';
+    th.style.top=offset+'px';
+    th.style.zIndex='11';
+  });
+}
+window.aplicarStickyTop=aplicarStickyTop;
+// Recalcular al cambiar tamaño/orientación
+window.addEventListener('resize',()=>{clearTimeout(window._stkT);window._stkT=setTimeout(aplicarStickyTop,150);});
 
 // ---- Login / sesión ----
 function renderUserGrid(){
