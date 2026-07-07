@@ -6086,6 +6086,7 @@ function openCli(id){
       <div class="nit-sec-row" style="display:flex;gap:7px;align-items:center">
         <input class="nit-sec-nit" value="${n.nit||''}" placeholder="NIT" style="flex:0 0 130px">
         <input class="nit-sec-nombre" value="${(n.nombre||'').replace(/"/g,'&quot;')}" placeholder="Nombre de referencia" style="flex:1">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="buscarRazonSocialSec(this)" title="Buscar razón social en SAT" style="white-space:nowrap;padding:6px 9px">🔍</button>
         <button type="button" class="x" onclick="this.closest('.nit-sec-row').remove()" title="Quitar">×</button>
       </div>`).join('')}</div>
     <button type="button" class="btn btn-ghost btn-sm" onclick="agregarNitSecRow()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar NIT</button>
@@ -6141,6 +6142,7 @@ function agregarNitSecRow(){
   div.style.cssText='display:flex;gap:7px;align-items:center';
   div.innerHTML=`<input class="nit-sec-nit" value="" placeholder="NIT" style="flex:0 0 130px">
     <input class="nit-sec-nombre" value="" placeholder="Nombre de referencia" style="flex:1">
+    <button type="button" class="btn btn-ghost btn-sm" onclick="buscarRazonSocialSec(this)" title="Buscar razón social en SAT" style="white-space:nowrap;padding:6px 9px">🔍</button>
     <button type="button" class="x" onclick="this.closest('.nit-sec-row').remove()" title="Quitar">×</button>`;
   cont.appendChild(div);
 }
@@ -6207,6 +6209,31 @@ async function buscarRazonSocial(){
   }
 }
 window.buscarRazonSocial=buscarRazonSocial;
+
+// Consulta la razón social en SAT para una fila de NIT secundario y llena su nombre
+async function buscarRazonSocialSec(btn){
+  const row=btn.closest('.nit-sec-row');if(!row)return;
+  const nitInput=row.querySelector('.nit-sec-nit');
+  const nombreInput=row.querySelector('.nit-sec-nombre');
+  const nit=(nitInput?.value||'').trim();
+  if(!nit||nit.toUpperCase()==='CF'){toast('Ingresá un NIT','Escribí el NIT secundario antes de buscar',true);return;}
+  if(typeof FEL_BACKEND_URL==='undefined'||FEL_BACKEND_URL.includes('TU-BACKEND')){toast('Backend no configurado','No se puede consultar el NIT sin el backend FEL',true);return;}
+  const txtOrig=btn.textContent;btn.disabled=true;btn.textContent='…';
+  try{
+    const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/nit/'+encodeURIComponent(nit));
+    const data=await r.json();
+    if(!r.ok&&data.error){toast('Error al consultar',data.error,true);return;}
+    if(data.valido===false){toast('NIT no encontrado',data.mensaje||'La SAT no devolvió datos para ese NIT',true);return;}
+    const razon=data.nombre||'';
+    if(razon){
+      if(nombreInput)nombreInput.value=razon;
+      if(data.nit&&nitInput)nitInput.value=data.nit; // normaliza el NIT
+      toast('✓ NIT encontrado',razon);
+    }else{toast('Sin razón social','La SAT no devolvió el nombre para ese NIT',true);}
+  }catch(e){console.error('Error consultando NIT secundario:',e);toast('Error de conexión','No se pudo consultar el NIT.',true);}
+  finally{btn.disabled=false;btn.textContent=txtOrig;}
+}
+window.buscarRazonSocialSec=buscarRazonSocialSec;
 
 // ── COMPLETAR RAZÓN SOCIAL MASIVO (clientes sin razón social) ──
 // Recorre los clientes con NIT válido pero sin razón social,
