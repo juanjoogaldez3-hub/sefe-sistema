@@ -757,6 +757,7 @@
           <button class="ct-tab" data-r="cprov">Compras por proveedor</button>
           <button class="ct-tab" data-r="cprod">Compras por producto</button>
           <button class="ct-tab" data-r="cxc">Pendientes por cliente</button>
+          <button class="ct-tab" data-r="estcta">Estado de cuenta general</button>
           <button class="ct-tab" data-r="recibos">Recibos</button>
           <button class="ct-tab" data-r="pagos">Pagos por cliente</button>
         </div>
@@ -4569,13 +4570,14 @@ const MODULOS_PERMISOS=[
   {key:'rep_cprov',lbl:'Compras por proveedor',grp:'Reportes'},
   {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes'},
   {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes'},
+  {key:'rep_estcta',lbl:'Estado de cuenta general',grp:'Reportes'},
   {key:'rep_recibos',lbl:'Recibos',grp:'Reportes'},
   {key:'rep_pagos',lbl:'Pagos por cliente',grp:'Reportes'},
 ];
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','dircli','factem','cardex','canalvend','cprov','cprod','cxc','recibos','pagos'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','dircli','factem','cardex','canalvend','cprov','cprod','cxc','estcta','recibos','pagos'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
@@ -4987,6 +4989,7 @@ function repRange(){
 }
 function enRango(iso,r){const t=new Date(iso);return t>=r.start&&t<=r.end;}
 function setRepPeriod(p){repPeriod=p;$('#rep-desde').value='';$('#rep-hasta').value='';document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.classList.toggle('on',b.dataset.p===p));renderReportes();}
+window.toggleEstcta=function(i){const det=document.getElementById('estcta-det-'+i),arr=document.getElementById('estcta-arrow-'+i);if(!det)return;const abierto=det.style.display!=='none';det.style.display=abierto?'none':'table-row';if(arr)arr.textContent=abierto?'▸':'▾';};
 window.setRepPeriod=setRepPeriod;
 function toggleVend(nombre){const i=repFiltros.vendedores.indexOf(nombre);if(i>=0)repFiltros.vendedores.splice(i,1);else repFiltros.vendedores.push(nombre);renderRepFilters();renderReportes();}
 window.toggleVend=toggleVend;
@@ -5056,7 +5059,7 @@ function renderRepFilters(){
     const prodOpts=productos.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')).map(p=>({v:String(p.id),l:`${p.codigo} — ${p.nombre}`}));
     html=`<div class="rep-filter-bar">${sel('rf-prod-cx','Producto (dejá "Todos" para ver el listado general)',prodOpts,repFiltros.producto||'','producto')}</div>`;
   }
-  else if(repType==='cxc'){
+  else if(repType==='cxc'||repType==='estcta'){
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     const tcOpts=[{v:'0',l:'Contado'},{v:'15',l:'15 días'},{v:'30',l:'30 días'},{v:'45',l:'45 días'},{v:'60',l:'60 días'}];
     html=`<div class="rep-filter-bar">
@@ -5706,6 +5709,59 @@ function renderReportes(){
       <table><thead><tr><th>Cliente</th><th>Facturas</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Vencido</th></tr></thead><tbody>
       ${arr.length?arr.map(([n,o])=>`<tr><td style="font-weight:600">${n}</td><td class="num">${o.n}</td><td class="num" style="color:var(--muted)">${money(o.total)}</td><td class="num" style="color:var(--muted)">${money(o.abonado)}</td><td class="num" style="font-weight:700">${money(o.saldo)}</td><td class="num" style="color:${o.venc>0?'var(--danger)':'var(--muted-2)'}">${money(o.venc)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin saldos pendientes</td></tr>'}</tbody></table></div>`;
   }
+  else if(repType==='estcta'){
+    const hoy=new Date();
+    const porCli={};
+    documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
+      if(repFiltros.cliente&&String(d.clienteId)!==repFiltros.cliente)return;
+      if(repFiltros.tiempoCredito){const c=clientes.find(x=>x.id===d.clienteId);if(!c||String(c.tiempoCredito||0)!==repFiltros.tiempoCredito)return;}
+      const inf=arInfo(d);if(inf.saldo<=0.001)return;
+      if(repFiltros.soloVencidos&&!inf.vencido)return;
+      const k=d.clienteComercial||d.clienteNombre;
+      if(!porCli[k])porCli[k]={b1:0,b2:0,b3:0,saldo:0,facts:[]};
+      const dias=Math.floor((hoy-new Date(d.creada))/86400000); // antigüedad desde emisión
+      const tramo=dias<=30?'b1':(dias<=90?'b2':'b3');
+      porCli[k][tramo]+=inf.saldo; porCli[k].saldo+=inf.saldo;
+      porCli[k].facts.push({num:d.numero_dte||d.serie||('#'+d.id),emitida:d.creada,vence:d.vencimiento,dias,saldo:inf.saldo,vencido:inf.vencido,tramo});
+    });
+    const arr=Object.entries(porCli).sort((a,b)=>b[1].saldo-a[1].saldo);
+    const T={b1:0,b2:0,b3:0,saldo:0};
+    arr.forEach(([,o])=>{T.b1+=o.b1;T.b2+=o.b2;T.b3+=o.b3;T.saldo+=o.saldo;});
+    // Datos para exportar (una fila por cliente)
+    exportData=arr.map(([n,o])=>({Cliente:n,'0-30 días':o.b1,'30-90 días':o.b2,'90+ días':o.b3,'Saldo total':o.saldo}));
+    const tramoBadge=t=>t==='b1'?'<span class="badge b-ok" style="font-size:9.5px">0-30</span>':t==='b2'?'<span class="badge b-warn" style="font-size:9.5px">30-90</span>':'<span class="badge b-danger" style="font-size:9.5px">90+</span>';
+    html+=`<div class="kpis stagger">${kpiHTML([
+      {ic:'i-warn',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>',lbl:'Saldo total pendiente',val:money(T.saldo),sub:arr.length+' clientes'},
+      {ic:'i-ok',svg:'<path d="M20 6 9 17l-5-5"/>',lbl:'0-30 días',val:money(T.b1)},
+      {ic:'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'30-90 días',val:money(T.b2)},
+      {ic:'i-danger',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',lbl:'90+ días',val:money(T.b3)}])}</div>
+      <div class="panel"><div class="panel-head"><h3>Estado de cuenta general · saldos pendientes</h3><span style="font-size:12px;color:var(--muted)">Tocá un cliente para ver el detalle</span></div>
+      <table><thead><tr><th>Cliente</th><th>0-30 días</th><th>30-90 días</th><th>90+ días</th><th>Saldo total</th></tr></thead><tbody>
+      ${arr.length?arr.map(([n,o],i)=>`
+        <tr class="estcta-cli" style="cursor:pointer" onclick="toggleEstcta(${i})">
+          <td style="font-weight:600"><span id="estcta-arrow-${i}" style="color:var(--muted-2);display:inline-block;width:14px">▸</span>${n}</td>
+          <td class="num" style="color:${o.b1>0?'var(--ink)':'var(--muted-2)'}">${money(o.b1)}</td>
+          <td class="num" style="color:${o.b2>0?'#9A6B07':'var(--muted-2)'}">${money(o.b2)}</td>
+          <td class="num" style="color:${o.b3>0?'var(--danger)':'var(--muted-2)'}">${money(o.b3)}</td>
+          <td class="num" style="font-weight:700">${money(o.saldo)}</td>
+        </tr>
+        <tr id="estcta-det-${i}" style="display:none"><td colspan="5" style="padding:0;background:var(--surface-2)">
+          <div style="padding:8px 14px">
+            <table style="width:100%"><thead><tr><th style="font-size:10px">Factura</th><th style="font-size:10px">Emitida</th><th style="font-size:10px">Vence</th><th style="font-size:10px">Días</th><th style="font-size:10px">Tramo</th><th style="font-size:10px">Saldo</th></tr></thead><tbody>
+            ${o.facts.sort((a,b)=>b.dias-a.dias).map(f=>`<tr>
+              <td style="font-size:11.5px">${f.num}</td>
+              <td style="font-size:11.5px;color:var(--muted)">${f.emitida?f.emitida.slice(0,10):'—'}</td>
+              <td style="font-size:11.5px;color:${f.vencido?'var(--danger)':'var(--muted)'}">${f.vence?f.vence.slice(0,10):'—'}</td>
+              <td class="num" style="font-size:11.5px">${f.dias}</td>
+              <td>${tramoBadge(f.tramo)}</td>
+              <td class="num" style="font-size:11.5px;font-weight:600">${money(f.saldo)}</td>
+            </tr>`).join('')}
+            </tbody></table>
+          </div>
+        </td></tr>`).join(''):'<tr><td colspan="5" class="empty">Sin saldos pendientes</td></tr>'}
+      ${arr.length?`<tr style="border-top:2px solid var(--line-strong);font-weight:700"><td>TOTAL</td><td class="num">${money(T.b1)}</td><td class="num" style="color:#9A6B07">${money(T.b2)}</td><td class="num" style="color:var(--danger)">${money(T.b3)}</td><td class="num">${money(T.saldo)}</td></tr>`:''}
+      </tbody></table></div>`;
+  }
   else if(repType==='recibos'){
     // Reporte de Recibos: cada abono como una fila con No. de recibo
     const filas=[];
@@ -5776,7 +5832,7 @@ function renderReportes(){
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],['Período:',repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
@@ -5828,7 +5884,7 @@ function _abrirPDF(html){
 }
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
