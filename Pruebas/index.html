@@ -3675,6 +3675,37 @@ function apInfo(c){
   return {abon,saldo,estado,vencido,venc};
 }
 function recRecibido(c){return c.items.reduce((s,it)=>s+(it.recibido||0),0);}
+
+// ===== Costo promedio móvil basado en compras reales =====
+function costoPromedioRango(pid,desde,hasta){
+  let sumaCosto=0,sumaCant=0;
+  (typeof compras!=='undefined'?compras:[]).forEach(c=>{
+    if(c.anulado||!Array.isArray(c.items)||!c.items.length)return;
+    const f=new Date(c.fecha);
+    if((desde&&f<desde)||(hasta&&f>hasta))return;
+    c.items.forEach(it=>{
+      if(it.id!==pid)return;
+      const cant=Number(it.cantidad)||0,cost=Number(it.costo)||0;
+      if(cant>0){sumaCosto+=cost*cant;sumaCant+=cant;}
+    });
+  });
+  return sumaCant>0?sumaCosto/sumaCant:null;
+}
+function costoActual(p){
+  const hasta=new Date();
+  const desde=new Date(hasta.getFullYear(),hasta.getMonth()-3,hasta.getDate());
+  const prom=costoPromedioRango(p.id,desde,hasta);
+  return prom!=null?prom:(Number(p.costo)||0);
+}
+function costoProductoMes(pid,anio,mes){
+  const desde=new Date(anio,mes,1);
+  const hasta=new Date(anio,mes+1,0,23,59,59);
+  let prom=costoPromedioRango(pid,desde,hasta);
+  if(prom==null)prom=costoPromedioRango(pid,new Date(anio,mes-2,1),hasta);
+  if(prom==null){const p=productos.find(x=>x.id===pid);prom=p?(Number(p.costo)||0):0;}
+  return prom;
+}
+
 function recTotal(c){return c.items.reduce((s,it)=>s+it.cantidad,0);}
 function limpiarFiltroCompras(){['cmp-prov','cmp-rec','cmp-desde','cmp-hasta'].forEach(id=>{const e=$('#'+id);if(e)e.value='';});renderCompras();}
 window.limpiarFiltroCompras=limpiarFiltroCompras;
@@ -4745,7 +4776,7 @@ function renderProd(){
     }
   }
   const tipoBadge=p.tipoEmpaque==='caja'?' <span class="badge b-muted" style="font-size:9px">Caja</span>':(p.tipoEmpaque==='caja_unidad'?` <span class="badge b-info" style="font-size:9px">Caja×${p.unidadesPorCaja}</span>`:'');
-  return `<tr style="${inactivo?'opacity:.5':''}"><td class="num">${p.codigo}<div style="font-size:10px;color:var(--muted-2)">${p.skuProveedor||''}</div></td><td style="font-weight:600">${p.nombre}${tipoBadge}${inactivo?' <span class="badge b-muted" style="font-size:9.5px">Inactivo</span>':''}</td><td style="font-size:12.5px;color:var(--muted)">${p.marca||'<span style="color:var(--muted-2)">—</span>'}</td><td style="font-size:12.5px;color:var(--muted)">${provTxt}</td><td class="num" style="color:var(--muted)">${money(p.costo||0)}</td><td class="num">${money(p.precio)}</td><td>${p.unidad}</td><td>${stockCell}</td><td style="white-space:nowrap">${acts}</td></tr>`;});
+  return `<tr style="${inactivo?'opacity:.5':''}"><td class="num">${p.codigo}<div style="font-size:10px;color:var(--muted-2)">${p.skuProveedor||''}</div></td><td style="font-weight:600">${p.nombre}${tipoBadge}${inactivo?' <span class="badge b-muted" style="font-size:9.5px">Inactivo</span>':''}</td><td style="font-size:12.5px;color:var(--muted)">${p.marca||'<span style="color:var(--muted-2)">—</span>'}</td><td style="font-size:12.5px;color:var(--muted)">${provTxt}</td><td class="num" style="color:var(--muted)">${money(costoActual(p))}</td><td class="num">${money(p.precio)}</td><td>${p.unidad}</td><td>${stockCell}</td><td style="white-space:nowrap">${acts}</td></tr>`;});
   renderPaginado('t-prod',filasProd,'Sin productos');enhanceTable('t-prod');}
 
 let _verInactivos=false;
@@ -5150,7 +5181,7 @@ function renderReportes(){
       <div class="panel"><div class="panel-head"><h3>Productos más vendidos</h3></div><div class="panel-body">${hbars(Object.entries(porP).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([n,v])=>({n,v,c:'var(--green)'})))}</div></div>`;
   }
   else if(repType==='costos'){
-    let vTot=0,cTot=0;ventas.forEach(d=>{vTot+=d.totales.total;d.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);cTot+=(p?p.costo:0)*it.cantidad;});});
+    let vTot=0,cTot=0;ventas.forEach(d=>{vTot+=d.totales.total;const dt=new Date(d.creada);d.items.forEach(it=>{cTot+=costoProductoMes(it.id,dt.getFullYear(),dt.getMonth())*it.cantidad;});});
     const margen=vTot-cTot;const pct=vTot?(margen/vTot*100):0;
     html+=`<div class="kpis stagger">${kpiHTML([
       {ic:'i-blue',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Ventas',val:money(vTot)},
@@ -5159,7 +5190,7 @@ function renderReportes(){
       {ic:'i-lime',svg:'<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',lbl:'Margen %',val:pct.toFixed(1)+'%'}])}</div>`;
     const ejeV=mesesEje(ventas,d=>d.creada);
     const mv=mesesSerie(ventas,d=>d.creada,d=>d.totales.total,ejeV);
-    const mc=mesesSerie(ventas,d=>d.creada,d=>d.items.reduce((a,it)=>{const p=productos.find(x=>x.id===it.id);return a+(p?p.costo:0)*it.cantidad;},0),ejeV);
+    const mc=mesesSerie(ventas,d=>d.creada,d=>{const dt=new Date(d.creada);return d.items.reduce((a,it)=>a+costoProductoMes(it.id,dt.getFullYear(),dt.getMonth())*it.cantidad,0);},ejeV);
     const max=Math.max(1,...mv.map(m=>m.v));
     exportData=mv.map((m,i)=>{const mg=m.v-mc[i].v;return {Mes:m.lbl,Ventas:m.v,Costo:mc[i].v,Margen:mg,'Margen%':m.v?(mg/m.v*100).toFixed(1):0};});
     html+=`<div class="panel"><div class="panel-head"><h3>Ventas vs costos por mes</h3>
@@ -5176,8 +5207,8 @@ function renderReportes(){
     // por vendedor: monto total y por mes
     const datos={};const ejeVend=mesesEje(ventas,d=>d.creada);activos.forEach(n=>{datos[n]={v:0,c:0,n:0,meses:mesesSerie(ventas.filter(d=>d.vendedorNombre===n),d=>d.creada,d=>d.totales.total,ejeVend)};});
     ventas.filter(d=>activos.includes(d.vendedorNombre||'Sin asignar')).forEach(d=>{const k=d.vendedorNombre||'Sin asignar';if(datos[k]){datos[k].v+=d.totales.total;datos[k].n++;
-      // costo de lo vendido por este vendedor
-      d.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);datos[k].c+=(p?p.costo:0)*it.cantidad;});
+      // costo de lo vendido por este vendedor (costo promedio del mes de la venta)
+      const dtV=new Date(d.creada);d.items.forEach(it=>{datos[k].c+=costoProductoMes(it.id,dtV.getFullYear(),dtV.getMonth())*it.cantidad;});
     }});
     const arr=Object.entries(datos).sort((a,b)=>b[1].v-a[1].v);
     // Export estilo Crystal: Vendedor | Ventas | Costos | Ganancia
@@ -5230,9 +5261,9 @@ function renderReportes(){
       const cli=d.clienteComercial||d.clienteNombre||'Sin cliente';
       if(!grupos[vend])grupos[vend]={};
       if(!grupos[vend][cli])grupos[vend][cli]={};
+      const _dtP=new Date(d.creada);
       (d.items||[]).forEach(it=>{
-        const prod=productos.find(x=>x.id===it.id);
-        const costoUnit=prod?prod.costo:0;
+        const costoUnit=costoProductoMes(it.id,_dtP.getFullYear(),_dtP.getMonth());
         const key=it.id||it.codigo;
         if(!grupos[vend][cli][key]){
           grupos[vend][cli][key]={codigo:it.codigo,nombre:it.nombre,cant:0,vUnit:it.precio,costoUnit:costoUnit,ventaTotal:0,costoTotal:0};
