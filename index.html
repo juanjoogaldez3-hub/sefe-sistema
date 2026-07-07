@@ -2670,16 +2670,23 @@ function verDoc(id){
   // Si la factura tiene el PDF oficial de EcoFactura, mostrarlo directamente
   if(f.pdfBase64){
     const numeroTit=(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero));
-    $('#doc-bar-t').textContent=TIPO_TIT[f.tipoDoc]+'  ·  '+numeroTit;
-    // PDF como data URL, ajustado al ancho de la página
-    const pdfUrl='data:application/pdf;base64,'+f.pdfBase64;
-    const nombreArch='Factura-'+(f.serie||'')+'-'+(f.numeroDte||f.numero)+'.pdf';
+    const esAnulada=f.estado==='anulada';
+    $('#doc-bar-t').textContent=TIPO_TIT[f.tipoDoc]+'  ·  '+numeroTit+(esAnulada?'  ·  ANULADA':'');
+    // Si está anulada y EcoFactura devolvió el PDF de anulación, mostrar ese; si no, el original con aviso
+    const pdfMostrar=(esAnulada&&f.pdfAnulacionBase64)?f.pdfAnulacionBase64:f.pdfBase64;
+    const pdfUrl='data:application/pdf;base64,'+pdfMostrar;
+    const nombreArch=(esAnulada?'Anulacion-':'Factura-')+(f.serie||'')+'-'+(f.numeroDte||f.numero)+'.pdf';
+    const bannerAnulada=esAnulada?`<div style="background:#FDECEA;border:1.5px solid var(--danger);color:#B3261E;border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+        <svg viewBox="0 0 24 24" style="width:22px;height:22px;flex:none" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M4.9 4.9 19.1 19.1"/></svg>
+        <div><b>FACTURA ANULADA</b>${f.anuladoFecha?` · ${new Date(f.anuladoFecha).toLocaleDateString('es-GT',{day:'2-digit',month:'long',year:'numeric'})}`:''}${f.motivo?`<div style="font-size:12px;font-weight:500;margin-top:2px">Motivo: ${f.motivo}</div>`:''}${!f.pdfAnulacionBase64?`<div style="font-size:11.5px;color:#8A1C13;margin-top:3px">Se muestra la factura original. La anulación está registrada ante SAT.</div>`:''}</div>
+      </div>`:'';
     $('#doc-sheet').innerHTML=`
+      ${bannerAnulada}
       <div style="width:100%;height:82vh;background:#525659;border-radius:8px;overflow:hidden">
         <iframe src="${pdfUrl}#zoom=page-width&toolbar=1" style="width:100%;height:100%;border:none" title="Factura EcoFactura"></iframe>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;flex-wrap:wrap">
-        <span style="font-size:12px;color:var(--muted)">Documento oficial certificado por EcoFactura ante SAT · Aut.: ${f.autorizacion}</span>
+        <span style="font-size:12px;color:var(--muted)">${esAnulada&&f.pdfAnulacionBase64?'Documento de anulación certificado por EcoFactura ante SAT':'Documento oficial certificado por EcoFactura ante SAT'} · Aut.: ${f.autorizacion}</span>
         <button class="btn btn-primary btn-sm" onclick="descargarFacturaPDF(${f.id})">⬇ Descargar PDF</button>
       </div>
       ${f.entregaInfo?`<div style="background:#fff;border-radius:10px;padding:20px 24px;margin-top:14px;color:#1a1a17">${reciboEntregaHTML(f)}</div>`:''}`;
