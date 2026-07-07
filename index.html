@@ -2004,7 +2004,8 @@ $('#f-go').onclick=()=>{
     });
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
     const subVend=(esVendedorCanal(vend?.nombre)&&$('#f-subvend'))?($('#f-subvend').value||null):null;
-    const doc={id:corr,numero:corr,tipoDoc:'pedido',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend?.id,vendedorNombre:vend?.nombre,subVendedorNombre:subVend,
+    const nuevoId=(documentos.reduce((m,d)=>Math.max(m,d.id||0),0)||0)+1;
+    const doc={id:nuevoId,numero:corr,tipoDoc:'pedido',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend?.id,vendedorNombre:vend?.nombre,subVendedorNombre:subVend,
       items:cart.map(it=>({...it})),totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',_nuevo:true};
     documentos.push(doc);corr++;
     logAudit('Pedido creado','PED-'+padn(doc.numero)+' · '+cli.nombre+' · '+money(totales.total));
@@ -2501,9 +2502,10 @@ function openNotaCD(facturaId){
 window.openNotaCD=openNotaCD;
 function crearNotaCD(f,monto,motivo,fecha){
   const uuid='SIM-'+Math.random().toString(36).slice(2,10).toUpperCase();
-  const doc={id:corr,numero:corr,tipoDoc:'notaCredito',clienteId:f.clienteId,clienteNombre:f.clienteNombre,clienteComercial:f.clienteComercial,clienteNit:f.clienteNit,
+  const nuevoIdNC=(documentos.reduce((m,d)=>Math.max(m,d.id||0),0)||0)+1;
+  const doc={id:nuevoIdNC,numero:corr,tipoDoc:'notaCredito',clienteId:f.clienteId,clienteNombre:f.clienteNombre,clienteComercial:f.clienteComercial,clienteNit:f.clienteNit,
     items:[],totales:{total:monto,baseSinIva:monto/1.12,iva:monto-monto/1.12},estado:'certificada',
-    autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+corr),
+    autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+nuevoIdNC),
     creada:new Date(fecha).toISOString(),facturaOrigenId:f.id,motivo,creadoPor:currentUser};
   documentos.push(doc);corr++;
   const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
