@@ -2102,6 +2102,28 @@ function confirmar(titulo,mensaje,boton,fn){
 window.confirmar=confirmar;
 
 // ---- Facturar (siempre genera Factura Cambiaria; el usuario solo ve "Facturar") ----
+// Normaliza los NITs secundarios de un cliente a un arreglo [{nit,nombre}] sin importar el formato guardado
+function nitsSecNorm(cli){
+  let raw=cli&&cli.nitsSecundarios;
+  if(typeof raw==='string'){try{raw=JSON.parse(raw);}catch(e){raw=[];}}
+  if(!Array.isArray(raw))return [];
+  return raw.map(n=>typeof n==='string'?{nit:n,nombre:n}:{nit:(n.nit||n.NIT||'').toString(),nombre:(n.nombre||n.nit||'').toString()}).filter(n=>n.nit);
+}
+// Construye el selector "Facturar a nombre de" (principal + secundarios), escapando caracteres especiales
+function selectorNitHTML(f,cli){
+  const nitsSec=nitsSecNorm(cli);
+  if(!nitsSec.length)return '';
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const nitPrincipalNombre=cli?(cli.razonSocial||cli.nombre):(f.clienteNombre||'');
+  return `<div style="margin-top:12px">
+      <label style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px">Facturar a nombre de</label>
+      <select id="fac-nit-sel" style="width:100%;margin-top:4px">
+        <option value="__principal__">${esc(nitPrincipalNombre)} · NIT ${esc(f.clienteNit||'CF')} (principal)</option>
+        ${nitsSec.map((n,i)=>`<option value="${i}">${esc(n.nombre||n.nit)} · NIT ${esc(n.nit)}</option>`).join('')}
+      </select>
+      <div style="font-size:11px;color:var(--muted);margin-top:5px">La factura sale al NIT elegido, pero la venta queda registrada en ${esc(nitPrincipalNombre)}.</div>
+    </div>`;
+}
 function abrirFacturar(id){
   const f=documentos.find(d=>d.id===id);
   const esCF=String(f.clienteNit).toUpperCase().replace(/[-\s]/g,'')==='CF';
@@ -2111,17 +2133,7 @@ function abrirFacturar(id){
   const dias=(cli&&typeof cli.tiempoCredito==='number')?cli.tiempoCredito:0;
   const creditoTxt=dias>0?(dias+' días de crédito'):'Contado (sin crédito)';
   // Si el cliente tiene NITs secundarios, ofrecer un menú para elegir a cuál facturar
-  const nitsSec=(cli&&cli.nitsSecundarios&&cli.nitsSecundarios.length)?cli.nitsSecundarios:[];
-  const nitPrincipalNombre=cli?(cli.razonSocial||cli.nombre):(f.clienteNombre||'');
-  const selectorNit=nitsSec.length?`
-    <div style="margin-top:12px">
-      <label style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px">Facturar a nombre de</label>
-      <select id="fac-nit-sel" style="width:100%;margin-top:4px">
-        <option value="__principal__">${nitPrincipalNombre} · NIT ${f.clienteNit||'CF'} (principal)</option>
-        ${nitsSec.map((n,i)=>`<option value="${i}">${(n.nombre||n.nit)} · NIT ${n.nit}</option>`).join('')}
-      </select>
-      <div style="font-size:11px;color:var(--muted);margin-top:5px">La factura sale al NIT elegido, pero la venta queda registrada en ${nitPrincipalNombre}.</div>
-    </div>`:'';
+  const selectorNit=selectorNitHTML(f,cli);
   // Si el vendedor del pedido es un CANAL (ej. Whaticket), pedir quién vendió realmente
   // El sub-vendedor de Whaticket ahora se captura al generar el pedido, no al facturar.
   const selectorSubVend='';
@@ -2142,7 +2154,7 @@ async function facturarPedido(id,dias){
   const selNit=document.getElementById('fac-nit-sel');
   if(selNit && selNit.value!=='__principal__'){
     const cli=clientes.find(c=>c.id===f.clienteId);
-    const ns=cli&&cli.nitsSecundarios?cli.nitsSecundarios[Number(selNit.value)]:null;
+    const ns=nitsSecNorm(cli)[Number(selNit.value)]||null;
     if(ns){
       f.nitFacturado=ns.nit;
       f.clienteNit=ns.nit;
@@ -2259,11 +2271,17 @@ function abrirFacturarExenta(id){
       Pedido <b style="color:var(--ink)">PED-${padn(f.numero)}</b> por <b style="color:var(--ink)">${money(f.totales.total)}</b> · ${f.clienteComercial||f.clienteNombre}
     </p>
     <label>Escenario de exención <span style="color:var(--danger)">*</span></label>
-    <select id="ex-esc" style="margin-bottom:0"><option value="">— Seleccioná el escenario que aplica —</option>${opts}</select>`,
+    <select id="ex-esc" style="margin-bottom:0"><option value="">— Seleccioná el escenario que aplica —</option>${opts}</select>${selectorNitHTML(f,clientes.find(c=>c.id===f.clienteId))}`,
     ()=>{
       const esc=Number($('#ex-esc').value);
       if(!esc){toast('Seleccioná el escenario de exención',null,true);return;}
       const cli=clientes.find(c=>c.id===f.clienteId);
+      // Aplicar NIT secundario si se eligió
+      const selNit=document.getElementById('fac-nit-sel');
+      if(selNit && selNit.value!=='__principal__'){
+        const ns=nitsSecNorm(cli)[Number(selNit.value)]||null;
+        if(ns){f.nitFacturado=ns.nit;f.clienteNit=ns.nit;f.clienteNombre=ns.nombre||ns.nit;}
+      }
       const dias=cli?.tiempoCredito||0;
       facturarPedidoExento(id,dias,esc);
     });
