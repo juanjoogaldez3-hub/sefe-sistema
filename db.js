@@ -47,7 +47,8 @@ async function cargarTodo() {
   try {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
-      rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul
+      rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
+      rCuentasBanco, rMovBanco
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -65,6 +66,8 @@ async function cargarTodo() {
       sb.from('dashboard_config').select('*'),
       sb.from('talonarios').select('*').order('numero_inicial'),
       sb.from('recibos_anulados').select('*'),
+      sb.from('cuentas_banco').select('*').order('id'),
+      fetchAll('movimientos_banco','id'),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -128,6 +131,23 @@ async function cargarTodo() {
       recibosAnulados = (rRecAnul.data||[]).map(r=>({
         id:r.id, numero:r.numero, talonarioId:r.talonario_id,
         motivo:r.motivo, anuladoPor:r.anulado_por, fecha:r.fecha
+      }));
+    }
+
+    // Cuentas de banco
+    if (typeof cuentasBanco !== 'undefined') {
+      cuentasBanco = (rCuentasBanco.data||[]).map(c=>({
+        id:c.id, nombre:c.nombre, banco:c.banco, numero:c.numero, tipo:c.tipo||'monetaria',
+        moneda:c.moneda||'GTQ', saldoInicial:Number(c.saldo_inicial)||0, activo:c.activo!==false, creada:c.creada
+      }));
+    }
+    // Movimientos de banco
+    if (typeof movimientosBanco !== 'undefined') {
+      movimientosBanco = (rMovBanco.data||[]).map(m=>({
+        id:m.id, cuentaId:m.cuenta_id, fecha:m.fecha, tipo:m.tipo, monto:Number(m.monto)||0,
+        concepto:m.concepto, categoria:m.categoria, origen:m.origen, origenId:m.origen_id,
+        cuentaDestinoId:m.cuenta_destino_id, referencia:m.referencia, registradoPor:m.registrado_por,
+        registradoEl:m.registrado_el, anulado:m.anulado===true
       }));
     }
 
@@ -440,6 +460,42 @@ async function guardarPiloto(p){
     if(error)console.error('Error actualizando piloto:',error);
   }
 }
+
+// ── Cuentas de banco ──────────────────────────────────────
+async function guardarCuentaBanco(c){
+  const row = {nombre:c.nombre, banco:c.banco||null, numero:c.numero||null, tipo:c.tipo||'monetaria',
+    moneda:c.moneda||'GTQ', saldo_inicial:Number(c.saldoInicial)||0, activo:c.activo!==false};
+  if (c._nuevo) {
+    delete c._nuevo;
+    const {data,error} = await sb.from('cuentas_banco').insert(row).select().single();
+    if(error){console.error('Error guardando cuenta:',error); c._nuevo=true;}
+    else c.id = data.id;
+  } else {
+    const {error} = await sb.from('cuentas_banco').update(row).eq('id', c.id);
+    if(error)console.error('Error actualizando cuenta:',error);
+  }
+}
+async function eliminarCuentaBanco(id){
+  const {error} = await sb.from('cuentas_banco').delete().eq('id', id);
+  if(error)console.error('Error eliminando cuenta:',error);
+}
+// ── Movimientos de banco (fase siguiente) ─────────────────
+async function guardarMovimientoBanco(m){
+  const row = {cuenta_id:m.cuentaId, fecha:m.fecha, tipo:m.tipo, monto:Number(m.monto)||0,
+    concepto:m.concepto||null, categoria:m.categoria||null, origen:m.origen||'manual', origen_id:m.origenId||null,
+    cuenta_destino_id:m.cuentaDestinoId||null, referencia:m.referencia||null,
+    registrado_por:m.registradoPor||null, anulado:m.anulado===true};
+  if (m._nuevo) {
+    delete m._nuevo;
+    const {data,error} = await sb.from('movimientos_banco').insert(row).select().single();
+    if(error){console.error('Error guardando movimiento:',error); m._nuevo=true;}
+    else m.id = data.id;
+  } else {
+    const {error} = await sb.from('movimientos_banco').update(row).eq('id', m.id);
+    if(error)console.error('Error actualizando movimiento:',error);
+  }
+}
+if(typeof window!=='undefined'){window.guardarCuentaBanco=guardarCuentaBanco;window.eliminarCuentaBanco=eliminarCuentaBanco;window.guardarMovimientoBanco=guardarMovimientoBanco;}
 
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).

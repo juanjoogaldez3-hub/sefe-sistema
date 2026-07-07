@@ -475,6 +475,7 @@
       <div class="lbl">Finanzas</div>
       <button data-view="cobros"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9.5a2.5 2.5 0 0 0-2.5-2h-1a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 1 0 5h-1A2.5 2.5 0 0 1 9 14.5"/></svg><span>Cobros</span></button>
       <button data-view="porpagar"><svg viewBox="0 0 24 24"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg><span>Por pagar</span></button>
+      <button data-view="bancos"><svg viewBox="0 0 24 24"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/></svg><span>Bancos</span></button>
       <button data-view="talonarios"><svg viewBox="0 0 24 24"><path d="M9 2h6a2 2 0 0 1 2 2v16l-3-2-2 2-2-2-3 2V4a2 2 0 0 1 2-2z"/><path d="M9 7h6M9 11h6"/></svg><span>Talonarios</span></button>
       <div class="lbl">Bodega</div>
       <button data-view="inventario"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg><span>Inventario</span></button>
@@ -864,6 +865,16 @@
         </div>
       </section>
 
+      <!-- BANCOS -->
+      <section class="view" id="v-bancos">
+        <div class="kpis stagger" id="bancos-kpis"></div>
+        <div class="panel">
+          <div class="panel-head"><h3>Cuentas de banco</h3><button class="btn btn-ghost btn-sm" onclick="openCuentaBanco()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva cuenta</button></div>
+          <table><thead><tr><th>Cuenta</th><th>Banco</th><th>Número</th><th>Tipo</th><th>Saldo inicial</th><th>Movimientos</th><th>Saldo actual</th><th></th></tr></thead><tbody id="t-bancos"></tbody></table>
+          <div class="empty" id="bancos-empty">Aún no hay cuentas. Creá la primera con "Nueva cuenta".</div>
+        </div>
+      </section>
+
       <!-- PROVEEDORES -->
       <section class="view" id="v-proveedores">
         <div class="panel">
@@ -1171,6 +1182,8 @@ let compras=[];
 let documentos=[];
 let talonarios=[];
 let recibosAnulados=[];
+let cuentasBanco=[];
+let movimientosBanco=[];
 let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====
@@ -1229,9 +1242,9 @@ function go(v,desdeHash){
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   $('#v-'+v).classList.add('active');
-  const t={panel:['Dashboard','Resumen de operación'],pedido:['Nuevo pedido','Generá el pedido; después lo facturás o convertís'],documentos:['Documentos','Pedidos, notas y facturas'],cobros:['Cobros','Cuentas por cobrar de las facturas a crédito'],clientes:['Clientes','Catálogo de clientes'],inventario:['Inventario','Existencias de productos'],reportes:['Reportes','Análisis de ventas'],compras:['Compras','Registro de compras a proveedores'],nuevacompra:['Nueva compra','Registrá la entrada de mercadería'],porpagar:['Por pagar','Cuentas por pagar a proveedores'],talonarios:['Talonarios','Control de talonarios de recibos y su cuadre'],proveedores:['Proveedores','Catálogo de proveedores'],usuarios:['Usuarios','Usuarios y roles del sistema'],auditoria:['Auditoría','Registro de todas las acciones del sistema'],despachos:['Despachos','Asignación de entregas y rutas'],misentregas:['Mis entregas','Documentos asignados para entregar']};
+  const t={panel:['Dashboard','Resumen de operación'],pedido:['Nuevo pedido','Generá el pedido; después lo facturás o convertís'],documentos:['Documentos','Pedidos, notas y facturas'],cobros:['Cobros','Cuentas por cobrar de las facturas a crédito'],clientes:['Clientes','Catálogo de clientes'],inventario:['Inventario','Existencias de productos'],reportes:['Reportes','Análisis de ventas'],compras:['Compras','Registro de compras a proveedores'],nuevacompra:['Nueva compra','Registrá la entrada de mercadería'],porpagar:['Por pagar','Cuentas por pagar a proveedores'],bancos:['Bancos','Control de cuentas, entradas y salidas de dinero'],talonarios:['Talonarios','Control de talonarios de recibos y su cuadre'],proveedores:['Proveedores','Catálogo de proveedores'],usuarios:['Usuarios','Usuarios y roles del sistema'],auditoria:['Auditoría','Registro de todas las acciones del sistema'],despachos:['Despachos','Asignación de entregas y rutas'],misentregas:['Mis entregas','Documentos asignados para entregar']};
   $('#ttl').textContent=t[v][0];$('#sub').textContent=t[v][1];
-  if(v==='panel')renderPanel();if(v==='documentos')renderDocs();if(v==='cobros')renderCobros();if(v==='clientes')renderCli();if(v==='inventario')renderProd();if(v==='reportes')renderReportes();if(v==='compras')renderCompras();if(v==='nuevacompra')renderCompraForm();if(v==='porpagar')renderPorPagar();if(v==='proveedores')renderProveedores();if(v==='talonarios')renderTalonarios();if(v==='usuarios')renderUsuarios();if(v==='auditoria')renderAuditoria();if(v==='despachos')renderDespachos();if(v==='misentregas')renderMisEntregas();
+  if(v==='panel')renderPanel();if(v==='documentos')renderDocs();if(v==='cobros')renderCobros();if(v==='clientes')renderCli();if(v==='inventario')renderProd();if(v==='reportes')renderReportes();if(v==='compras')renderCompras();if(v==='nuevacompra')renderCompraForm();if(v==='porpagar')renderPorPagar();if(v==='bancos')renderBancos();if(v==='proveedores')renderProveedores();if(v==='talonarios')renderTalonarios();if(v==='usuarios')renderUsuarios();if(v==='auditoria')renderAuditoria();if(v==='despachos')renderDespachos();if(v==='misentregas')renderMisEntregas();
   // Actualizar la dirección (hash) para que el botón atrás y el recargar funcionen.
   // Si el cambio vino del propio hash, no lo reescribimos para evitar bucles.
   if(!desdeHash && ('#'+v)!==location.hash){ try{ location.hash=v; }catch(e){} }
@@ -3862,6 +3875,81 @@ function renderPorPagar(){
   }).join('');
   enhanceTable('t-pp');
 }
+
+// ===== BANCOS: cuentas =====
+// Saldo actual de una cuenta = saldo inicial + entradas - salidas (movimientos no anulados)
+function saldoCuenta(cuentaId){
+  const c=cuentasBanco.find(x=>x.id===cuentaId);
+  let s=c?c.saldoInicial:0;
+  movimientosBanco.forEach(m=>{
+    if(m.anulado||m.cuentaId!==cuentaId)return;
+    s+=(m.tipo==='entrada'?1:-1)*Number(m.monto||0);
+  });
+  return s;
+}
+function nMovsCuenta(cuentaId){return movimientosBanco.filter(m=>!m.anulado&&m.cuentaId===cuentaId).length;}
+const TIPO_CUENTA_LBL={monetaria:'Monetaria',ahorro:'Ahorro',efectivo:'Efectivo / Caja'};
+function renderBancos(){
+  const lista=cuentasBanco.filter(c=>c.activo!==false);
+  $('#bancos-empty').style.display=lista.length?'none':'block';
+  const saldoTotal=lista.reduce((s,c)=>s+saldoCuenta(c.id),0);
+  const hoyStr=new Date().toISOString().slice(0,10);
+  let entHoy=0,salHoy=0;
+  movimientosBanco.forEach(m=>{if(m.anulado)return;if((m.fecha||'').slice(0,10)===hoyStr){if(m.tipo==='entrada')entHoy+=Number(m.monto||0);else salHoy+=Number(m.monto||0);}});
+  $('#bancos-kpis').innerHTML=kpiHTML([
+    {ic:'i-green',svg:'<path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11"/>',lbl:'Saldo total en bancos',val:money(saldoTotal),sub:lista.length+' cuenta'+(lista.length!==1?'s':'')},
+    {ic:'i-blue',svg:'<path d="M12 5v14M19 12l-7 7-7-7"/>',lbl:'Entradas hoy',val:money(entHoy)},
+    {ic:'i-warn',svg:'<path d="M12 19V5M5 12l7-7 7 7"/>',lbl:'Salidas hoy',val:money(salHoy)}]);
+  $('#t-bancos').innerHTML=lista.map(c=>{
+    const sact=saldoCuenta(c.id);
+    return `<tr>
+      <td style="font-weight:600">${c.nombre}</td>
+      <td style="color:var(--muted)">${c.banco||'—'}</td>
+      <td style="color:var(--muted)">${c.numero||'—'}</td>
+      <td><span class="badge b-muted" style="font-size:10px">${TIPO_CUENTA_LBL[c.tipo]||c.tipo}</span></td>
+      <td class="num" style="color:var(--muted)">${money(c.saldoInicial)}</td>
+      <td class="num">${nMovsCuenta(c.id)}</td>
+      <td class="num" style="font-weight:700;color:${sact>=0?'var(--ink)':'var(--danger)'}">${money(sact)}</td>
+      <td><div class="acts"><button class="btn btn-ghost btn-sm" onclick="openCuentaBanco(${c.id})">Editar</button></div></td>
+    </tr>`;
+  }).join('');
+  enhanceTable('t-bancos');
+}
+function openCuentaBanco(id){
+  const c=id?cuentasBanco.find(x=>x.id===id):null;
+  const t=c?c.tipo:'monetaria';
+  const opt=(v,l)=>`<option value="${v}"${t===v?' selected':''}>${l}</option>`;
+  openMod(c?'Editar cuenta':'Nueva cuenta de banco',
+    `<div class="row"><div><label>Nombre de la cuenta</label><input id="cb-nom" value="${c?c.nombre:''}" placeholder="Ej. Banrural Monetaria"></div></div>
+     <div class="row"><div><label>Banco</label><input id="cb-banco" value="${c?(c.banco||''):''}" placeholder="Ej. Banrural"></div><div><label>Número de cuenta</label><input id="cb-num" value="${c?(c.numero||''):''}"></div></div>
+     <div class="row"><div><label>Tipo</label><select id="cb-tipo">${opt('monetaria','Monetaria')}${opt('ahorro','Ahorro')}${opt('efectivo','Efectivo / Caja')}</select></div><div><label>Saldo inicial</label><input id="cb-saldo" type="number" step="0.01" value="${c?c.saldoInicial:0}"></div></div>
+     ${c?`<div style="margin-top:6px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="eliminarCuentaBancoUI(${c.id})">🗑 Eliminar cuenta</button></div>`:''}`,
+    ()=>{
+      const nom=$('#cb-nom').value.trim();
+      if(!nom){toast('Poné un nombre a la cuenta',null,true);return;}
+      if(c){
+        Object.assign(c,{nombre:nom,banco:$('#cb-banco').value.trim(),numero:$('#cb-num').value.trim(),tipo:$('#cb-tipo').value,saldoInicial:Number($('#cb-saldo').value)||0});
+      }else{
+        const nueva={nombre:nom,banco:$('#cb-banco').value.trim(),numero:$('#cb-num').value.trim(),tipo:$('#cb-tipo').value,moneda:'GTQ',saldoInicial:Number($('#cb-saldo').value)||0,activo:true,_nuevo:true};
+        cuentasBanco.push(nueva);
+      }
+      if(typeof guardarCuentaBanco==='function')guardarCuentaBanco(c||cuentasBanco[cuentasBanco.length-1]);
+      logAudit(c?'Cuenta de banco editada':'Cuenta de banco creada',nom);
+      closeMod();renderBancos();
+    });
+}
+window.openCuentaBanco=openCuentaBanco;
+window.renderBancos=renderBancos;
+window.eliminarCuentaBancoUI=function(id){
+  const c=cuentasBanco.find(x=>x.id===id);if(!c)return;
+  if(nMovsCuenta(id)>0){toast('No se puede eliminar','La cuenta tiene movimientos registrados. Desactivala en vez de borrarla.',true);return;}
+  confirmar('¿Eliminar la cuenta "'+c.nombre+'"?','Esta acción no se puede deshacer.',()=>{
+    cuentasBanco=cuentasBanco.filter(x=>x.id!==id);
+    if(typeof eliminarCuentaBanco==='function')eliminarCuentaBanco(id);
+    logAudit('Cuenta de banco eliminada',c.nombre);
+    closeMod();renderBancos();
+  });
+};
 function openAbonoProv(id){
   if(!canRegistrarAbono()){toast('Sin permiso','Solo Admin y Contabilidad registran pagos',true);return;}
   _compFoto=null;
@@ -4566,6 +4654,7 @@ const MODULOS_PERMISOS=[
   {key:'clientes',lbl:'Clientes',grp:'Módulos'},
   {key:'cobros',lbl:'Cobros',grp:'Módulos'},
   {key:'porpagar',lbl:'Por pagar',grp:'Módulos'},
+  {key:'bancos',lbl:'Bancos',grp:'Módulos'},
   {key:'talonarios',lbl:'Talonarios',grp:'Módulos'},
   {key:'inventario',lbl:'Inventario',grp:'Módulos'},
   {key:'compras',lbl:'Compras',grp:'Módulos'},
@@ -6903,6 +6992,7 @@ const PERMISOS_VISTAS={
   clientes:['admin','gerencia','ventas','cobros'],
   cobros:['admin','gerencia','cobros','contabilidad'],
   porpagar:['admin','gerencia','bodega','contabilidad'],
+  bancos:['admin','gerencia','contabilidad'],
   inventario:['admin','gerencia','bodega','ventas'],
   compras:['admin','gerencia','bodega'],
   proveedores:['admin','gerencia','bodega'],
@@ -6970,7 +7060,7 @@ window.go=function(v,desdeHash){
 // ---- Navegación por dirección (hash) ----
 // Permite que el botón "atrás"/"adelante" del navegador y el recargar (F5)
 // funcionen dentro del sistema. Cada sección tiene su dirección: #inventario, #reportes, etc.
-const VISTAS_VALIDAS=['panel','pedido','documentos','cobros','clientes','inventario','reportes','compras','nuevacompra','porpagar','talonarios','proveedores','usuarios','auditoria','despachos','misentregas'];
+const VISTAS_VALIDAS=['panel','pedido','documentos','cobros','clientes','inventario','reportes','compras','nuevacompra','porpagar','bancos','talonarios','proveedores','usuarios','auditoria','despachos','misentregas'];
 function irAHash(){
   // Solo navegar por hash si ya entramos al sistema (app visible)
   const app=document.getElementById('app-layout');
