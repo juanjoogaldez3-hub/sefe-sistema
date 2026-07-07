@@ -2158,13 +2158,12 @@ async function facturarPedido(id,dias){
     const cli=clientes.find(c=>c.id===f.clienteId);
     const ns=nitsSecNorm(cli)[Number(selNit.value)]||null;
     if(ns){
-      // Guardar el NIT/nombre originales por si acaso, y aplicar el secundario para la factura
+      // Guardar el NIT secundario aparte para la factura fiscal (la venta queda en el cliente real)
       f.nitFacturado=ns.nit;
-      f.clienteNit=ns.nit;
-      f.clienteNombre=ns.nombre||ns.nit;
+      f.nombreFacturado=ns.nombre||ns.nit;
       // clienteId NO se toca: la venta sigue perteneciendo al cliente real
     }
-  }
+  }else{ f.nitFacturado=null; f.nombreFacturado=null; }
   // El sub-vendedor de Whaticket viaja desde el pedido; no se toca al facturar.
 
   // Si no hay backend configurado, usar modo simulado (como antes)
@@ -2192,8 +2191,8 @@ async function facturarPedido(id,dias){
     numero:f.numero,
     fecha:hoy,
     cliente:{
-      nit:f.clienteNit||'CF',
-      nombre:f.clienteNombre||f.clienteComercial||'Consumidor Final',
+      nit:f.nitFacturado||f.clienteNit||'CF',
+      nombre:f.nombreFacturado||f.clienteNombre||f.clienteComercial||'Consumidor Final',
       direccion:f.clienteDireccion||'Ciudad',
       email:f.clienteEmail||'',
     },
@@ -2283,8 +2282,8 @@ function abrirFacturarExenta(id){
       const selNit=document.getElementById('fac-nit-sel');
       if(selNit && selNit.value!=='__principal__'){
         const ns=nitsSecNorm(cli)[Number(selNit.value)]||null;
-        if(ns){f.nitFacturado=ns.nit;f.clienteNit=ns.nit;f.clienteNombre=ns.nombre||ns.nit;}
-      }
+        if(ns){f.nitFacturado=ns.nit;f.nombreFacturado=ns.nombre||ns.nit;}
+      }else{ f.nitFacturado=null; f.nombreFacturado=null; }
       const dias=cli?.tiempoCredito||0;
       facturarPedidoExento(id,dias,esc);
     });
@@ -2317,7 +2316,7 @@ async function facturarPedidoExento(id,dias,escenario){
   const vencDDMMAAAA=(()=>{const d=new Date(Date.now()+dias*86400000);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();})();
   const payload={
     numero:f.numero, fecha:hoy,
-    cliente:{nit:f.clienteNit||'CF', nombre:f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:f.clienteDireccion||'Ciudad', email:f.clienteEmail||''},
+    cliente:{nit:f.nitFacturado||f.clienteNit||'CF', nombre:f.nombreFacturado||f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:f.clienteDireccion||'Ciudad', email:f.clienteEmail||''},
     items:(f.items||[]).map(it=>({codigo:it.codigo||'GEN', nombre:it.nombre, cantidad:it.cantidad, precio:it.precio, descuento:it.descuento||0, unidad:it.unidad||'UNI', tipo:'B'})),
     total:f.totales.total, vencimiento:venc, observaciones:f.observaciones||'',
     // Datos de exención
@@ -2720,7 +2719,7 @@ function verDoc(id){
       <div class="ds-doctype"><div class="dt">${TIPO_TIT[f.tipoDoc]}</div><p>${docTypeRef}</p></div>
     </div>${stamp}
     <div class="ds-meta">
-      <div><div class="mt-l">Cliente</div><div class="mt-v">${f.clienteNombre}</div><div class="mt-s">NIT: ${f.clienteNit}</div></div>
+      <div><div class="mt-l">Facturado a</div><div class="mt-v">${f.nombreFacturado||f.clienteNombre}</div><div class="mt-s">NIT: ${f.nitFacturado||f.clienteNit}</div>${f.nitFacturado?`<div class="mt-s" style="color:var(--muted-2);font-size:10.5px">Venta registrada a: ${f.clienteComercial||f.clienteNombre}</div>`:''}</div>
       <div style="text-align:right"><div class="mt-l">Fecha</div><div class="mt-v">${new Date(f.creada).toLocaleDateString('es-GT',{day:'2-digit',month:'long',year:'numeric'})}</div>${f.ordenCompra?`<div class="mt-s">OC: ${f.ordenCompra}</div>`:''}</div>
     </div>
     <table class="ds-table"><thead><tr><th>Descripción</th><th style="text-align:center">Cant.</th><th style="text-align:right">Precio</th><th style="text-align:right">Total</th></tr></thead>
