@@ -3496,6 +3496,7 @@ function openAbono(id){
      <div class="row"><div><label>No. de recibo</label><input id="ab-recibo" placeholder="REC-${nextRecibo}" value="REC-${nextRecibo}"></div><div><label>Fecha</label><input id="ab-fecha" type="date" value="${hoy}"></div></div>
      <div class="row"><div><label>Monto del abono</label><input id="ab-monto" type="number" step="0.01" value="${saldo.toFixed(2)}"></div><div><label>Método</label><select id="ab-met"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>Depósito</option><option>Tarjeta</option></select></div></div>
      <div class="row"><div><label>Referencia / No. boleta / cheque</label><input id="ab-ref" placeholder="Opcional"></div></div>
+     <div class="row">${selectorCuentaBancoHTML('ab-cuenta','¿A qué cuenta entró el dinero?')}</div>
      ${compFotoHTML()}
      <div class="note n-danger" id="ab-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>{
@@ -3504,9 +3505,14 @@ function openAbono(id){
       if(monto>saldo+0.001){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El abono no puede superar el saldo de '+money(saldo);return;}
       f.abonos=f.abonos||[];
       const _ab={fecha:$('#ab-fecha').value||hoy,monto,metodo:$('#ab-met').value,referencia:$('#ab-ref').value,
-        noRecibo:$('#ab-recibo').value.trim(),comprobante:_compFoto,
+        noRecibo:$('#ab-recibo').value.trim(),comprobante:_compFoto,cuentaBancoId:($('#ab-cuenta')?.value||null),
         registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
       f.abonos.push(_ab);
+      if($('#ab-cuenta')?.value){
+        registrarMovimientoBanco({cuentaId:$('#ab-cuenta').value,tipo:'entrada',monto,
+          concepto:'Cobro '+(_ab.noRecibo||'')+' · '+(f.clienteComercial||f.clienteNombre),
+          categoria:'cobro',origen:'cobro',origenId:f.id,referencia:_ab.referencia,fecha:_ab.fecha});
+      }
       const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
       closeMod();renderCobros();
       logAudit('Abono registrado','Recibo '+($('#ab-recibo').value||'—')+' · '+f.serie+'-'+f.numeroDte+' · '+(f.clienteComercial||f.clienteNombre)+' · '+money(monto));
@@ -3882,6 +3888,21 @@ function saldoCuenta(cuentaId){
   return s;
 }
 function nMovsCuenta(cuentaId){return movimientosBanco.filter(m=>!m.anulado&&m.cuentaId===cuentaId).length;}
+function cuentasActivasBanco(){return (typeof cuentasBanco!=='undefined'?cuentasBanco:[]).filter(c=>c.activo!==false);}
+function selectorCuentaBancoHTML(idSel,label,sel){
+  const cuentas=cuentasActivasBanco();
+  if(!cuentas.length)return `<div><label>${label}</label><div style="font-size:12px;color:var(--muted);padding:9px 0">Sin cuentas — creá una en la sección Bancos para registrar el movimiento.</div></div>`;
+  return `<div><label>${label}</label><select id="${idSel}"><option value="">— Sin especificar —</option>${cuentas.map(c=>`<option value="${c.id}"${String(sel)===String(c.id)?' selected':''}>${c.nombre}</option>`).join('')}</select></div>`;
+}
+function registrarMovimientoBanco({cuentaId,tipo,monto,concepto,categoria,origen,origenId,referencia,fecha}){
+  if(!cuentaId||!(monto>0))return null;
+  const mov={cuentaId:Number(cuentaId),fecha:fecha||new Date().toISOString().slice(0,10),tipo,monto:Number(monto),
+    concepto:concepto||'',categoria:categoria||'otro',origen:origen||'manual',origenId:origenId||null,
+    referencia:referencia||null,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,_nuevo:true};
+  movimientosBanco.push(mov);
+  if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mov);
+  return mov;
+}
 const TIPO_CUENTA_LBL={monetaria:'Monetaria',ahorro:'Ahorro',efectivo:'Efectivo / Caja'};
 function renderBancos(){
   const lista=cuentasBanco.filter(c=>c.activo!==false);

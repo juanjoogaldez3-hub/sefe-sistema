@@ -194,7 +194,7 @@ function mapDocumentoFromDB(d, todosAbonos){
     fecha:a.fecha, monto:Number(a.monto), metodo:a.metodo, referencia:a.referencia,
     noRecibo:a.no_recibo, comprobante:a.comprobante, registradoPor:a.registrado_por,
     registradoEl:a.registrado_el, anulado:a.anulado, motivoAnulacion:a.motivo_anulacion,
-    origenCobroRuta:a.origen_cobro_ruta, _id:a.id
+    origenCobroRuta:a.origen_cobro_ruta, cuentaBancoId:a.cuenta_banco_id, _id:a.id
   }));
   return {
     id:d.id, numero:d.numero, tipoDoc:d.tipo_doc, clienteId:d.cliente_id,
@@ -306,7 +306,8 @@ async function guardarAbono(documentoId, ab){
     documento_id:documentoId, fecha:ab.fecha, monto:ab.monto, metodo:ab.metodo,
     referencia:ab.referencia, no_recibo:ab.noRecibo, comprobante:ab.comprobante,
     registrado_por:ab.registradoPor, registrado_el:ab.registradoEl,
-    anulado:ab.anulado, motivo_anulacion:ab.motivoAnulacion, origen_cobro_ruta:ab.origenCobroRuta
+    anulado:ab.anulado, motivo_anulacion:ab.motivoAnulacion, origen_cobro_ruta:ab.origenCobroRuta,
+    cuenta_banco_id:ab.cuentaBancoId||null
   };
   const {data,error} = await sb.from('abonos').insert(row).select().single();
   if(error)console.error(error); else ab._id = data.id;
