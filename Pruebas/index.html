@@ -3929,15 +3929,15 @@ function renderBancos(){
     {ic:'i-warn',svg:'<path d="M12 19V5M5 12l7-7 7 7"/>',lbl:'Salidas hoy',val:money(salHoy)}]);
   $('#t-bancos').innerHTML=lista.map(c=>{
     const sact=saldoCuenta(c.id);
-    return `<tr>
-      <td style="font-weight:600">${c.nombre}</td>
+return `<tr>
+      <td style="font-weight:600"><a href="#" onclick="verEstadoCuentaBanco(${c.id});return false" style="color:var(--brand);text-decoration:none">${c.nombre}</a></td>
       <td style="color:var(--muted)">${c.banco||'—'}</td>
       <td style="color:var(--muted)">${c.numero||'—'}</td>
       <td><span class="badge b-muted" style="font-size:10px">${TIPO_CUENTA_LBL[c.tipo]||c.tipo}</span></td>
       <td class="num" style="color:var(--muted)">${money(c.saldoInicial)}</td>
       <td class="num">${nMovsCuenta(c.id)}</td>
       <td class="num" style="font-weight:700;color:${sact>=0?'var(--ink)':'var(--danger)'}">${money(sact)}</td>
-      <td><div class="acts"><button class="btn btn-ghost btn-sm" onclick="openCuentaBanco(${c.id})">Editar</button></div></td>
+      <td><div class="acts"><button class="btn btn-ghost btn-sm" onclick="verEstadoCuentaBanco(${c.id})" title="Estado de cuenta detallado">Estado de cuenta</button><button class="btn btn-ghost btn-sm" onclick="openCuentaBanco(${c.id})">Editar</button></div></td>
     </tr>`;
   }).join('');
   enhanceTable('t-bancos');
@@ -4035,6 +4035,170 @@ window.anularMovimientoBancoUI=function(id){
     closeMod();renderBancos();
   });
 };
+
+// ── ESTADO DE CUENTA DETALLADO POR CUENTA DE BANCO ──────────
+// Calcula saldo inicial del rango, movimientos con saldo corriente, totales y desglose
+function _estadoCuentaBancoData(id,desde,hasta){
+  const c=cuentasBanco.find(x=>x.id===id);if(!c)return null;
+  const movs=movimientosBanco.filter(m=>!m.anulado&&m.cuentaId===id)
+    .slice().sort((a,b)=>{const d=((a.fecha||'')).localeCompare(b.fecha||'');return d!==0?d:((a.id||0)-(b.id||0));});
+  const dz=desde||'0000-01-01',hz=hasta||'9999-12-31';
+  const val=m=>m.tipo==='entrada'?Number(m.monto||0):-Number(m.monto||0);
+  let saldoAntes=Number(c.saldoInicial||0);
+  movs.forEach(m=>{const f=(m.fecha||'').slice(0,10);if(f<dz)saldoAntes+=val(m);});
+  const enRango=movs.filter(m=>{const f=(m.fecha||'').slice(0,10);return f>=dz&&f<=hz;});
+  let run=saldoAntes,totEnt=0,totSal=0;const porCat={};
+  const filas=enRango.map(m=>{
+    const ent=m.tipo==='entrada'?Number(m.monto||0):0,sal=m.tipo==='salida'?Number(m.monto||0):0;
+    run+=ent-sal;totEnt+=ent;totSal+=sal;
+    const k=m.categoria||'otro';if(!porCat[k])porCat[k]={ent:0,sal:0};porCat[k].ent+=ent;porCat[k].sal+=sal;
+    return {fecha:(m.fecha||'').slice(0,10),concepto:m.concepto||'—',categoria:CAT_MOV_LBL[m.categoria]||m.categoria||'Otro',referencia:m.referencia||'',ent,sal,saldo:run,origen:m.origen||'manual'};
+  });
+  return {cuenta:c,saldoAntes,filas,totEnt,totSal,saldoFinal:run,porCat};
+}
+function verEstadoCuentaBanco(id){
+  const c=cuentasBanco.find(x=>x.id===id);if(!c)return;
+  openMod('Estado de cuenta · '+c.nombre,
+    `<div class="row">
+       <div><label>Desde</label><input id="ecb-desde" type="date" onchange="_renderEstadoCtaBco(${id})"></div>
+       <div><label>Hasta</label><input id="ecb-hasta" type="date" onchange="_renderEstadoCtaBco(${id})"></div>
+     </div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 12px">
+       <button type="button" class="btn btn-ghost btn-sm" onclick="_ecbRango('mes',${id})">Este mes</button>
+       <button type="button" class="btn btn-ghost btn-sm" onclick="_ecbRango('anio',${id})">Este año</button>
+       <button type="button" class="btn btn-ghost btn-sm" onclick="_ecbRango('todo',${id})">Todo</button>
+       <span style="flex:1"></span>
+       <button type="button" class="btn btn-ghost btn-sm" onclick="estadoCuentaBancoPDF(${id})" title="Descargar PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>PDF</button>
+       <button type="button" class="btn btn-primary btn-sm" onclick="estadoCuentaBancoExcel(${id})" title="Descargar balance detallado en Excel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M8 13h2l2 5 2-5h2"/></svg>Excel</button>
+     </div>
+     <div id="ecb-cont"></div>`, null);
+  $('#m-save').style.display='none';
+  $('#ov').classList.add('modal-wide');
+  _renderEstadoCtaBco(id);
+}
+window.verEstadoCuentaBanco=verEstadoCuentaBanco;
+window._ecbRango=function(tipo,id){
+  const n=new Date();
+  const iso=d=>d.toISOString().slice(0,10);
+  if(tipo==='mes'){$('#ecb-desde').value=iso(new Date(n.getFullYear(),n.getMonth(),1));$('#ecb-hasta').value=iso(n);}
+  else if(tipo==='anio'){$('#ecb-desde').value=iso(new Date(n.getFullYear(),0,1));$('#ecb-hasta').value=iso(n);}
+  else{$('#ecb-desde').value='';$('#ecb-hasta').value='';}
+  _renderEstadoCtaBco(id);
+};
+window._renderEstadoCtaBco=function(id){
+  const desde=$('#ecb-desde')?.value||'',hasta=$('#ecb-hasta')?.value||'';
+  const d=_estadoCuentaBancoData(id,desde,hasta);if(!d)return;
+  const cont=$('#ecb-cont');if(!cont)return;
+  const filasHTML=d.filas.length?d.filas.map(f=>`<tr>
+      <td style="color:var(--muted);white-space:nowrap">${f.fecha}</td>
+      <td>${f.concepto}${f.referencia?`<span style="color:var(--muted-2);font-size:11px"> · ${f.referencia}</span>`:''}</td>
+      <td><span class="badge b-muted" style="font-size:10px">${f.categoria}</span></td>
+      <td class="num" style="color:var(--ok)">${f.ent?money(f.ent):'—'}</td>
+      <td class="num" style="color:var(--danger)">${f.sal?money(f.sal):'—'}</td>
+      <td class="num" style="font-weight:700;color:${f.saldo>=0?'var(--ink)':'var(--danger)'}">${money(f.saldo)}</td>
+    </tr>`).join(''):'<tr><td colspan="6" class="empty">Sin movimientos en el rango seleccionado</td></tr>';
+  cont.innerHTML=`
+    <div class="kpis" style="margin-bottom:12px">${kpiHTML([
+      {ic:'i-muted',svg:'<path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11"/>',lbl:'Saldo inicial',val:money(d.saldoAntes)},
+      {ic:'i-green',svg:'<path d="M12 5v14M19 12l-7 7-7-7"/>',lbl:'Entradas',val:money(d.totEnt)},
+      {ic:'i-danger',svg:'<path d="M12 19V5M5 12l7-7 7 7"/>',lbl:'Salidas',val:money(d.totSal)},
+      {ic:(d.saldoFinal>=0?'i-blue':'i-danger'),svg:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',lbl:'Saldo final',val:money(d.saldoFinal)}])}</div>
+    <div style="overflow:auto;max-height:46vh;border:1px solid var(--line);border-radius:8px">
+    <table style="margin:0"><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Entrada</th><th>Salida</th><th>Saldo</th></tr></thead><tbody>
+      <tr style="background:var(--bg-soft,#f6f8f2)"><td colspan="5" style="font-weight:600;color:var(--muted)">Saldo inicial ${desde?('al '+desde):'(apertura de la cuenta)'}</td><td class="num" style="font-weight:700">${money(d.saldoAntes)}</td></tr>
+      ${filasHTML}
+      <tr style="border-top:2px solid var(--line-strong);font-weight:700"><td colspan="3">TOTALES DEL PERÍODO</td><td class="num" style="color:var(--ok)">${money(d.totEnt)}</td><td class="num" style="color:var(--danger)">${money(d.totSal)}</td><td class="num">${money(d.saldoFinal)}</td></tr>
+    </tbody></table></div>`;
+};
+// PDF del estado de cuenta bancario
+function estadoCuentaBancoPDF(id){
+  const desde=$('#ecb-desde')?.value||'',hasta=$('#ecb-hasta')?.value||'';
+  const d=_estadoCuentaBancoData(id,desde,hasta);if(!d)return;
+  const c=d.cuenta;
+  const periodo=(desde||hasta)?`${desde?fdate(desde):'inicio'} — ${hasta?fdate(hasta):'hoy'}`:'Historial completo';
+  const filas=d.filas.length?d.filas.map(f=>`<tr>
+    <td style="${_pdfTD()}">${f.fecha}</td>
+    <td style="${_pdfTD()}">${f.concepto}${f.referencia?' · '+f.referencia:''}</td>
+    <td style="${_pdfTD()}">${f.categoria}</td>
+    <td style="${_pdfTD('text-align:right;color:#2a7d2a')}">${f.ent?'Q '+f.ent.toLocaleString('es-GT',{minimumFractionDigits:2}):'—'}</td>
+    <td style="${_pdfTD('text-align:right;color:#BE4326')}">${f.sal?'Q '+f.sal.toLocaleString('es-GT',{minimumFractionDigits:2}):'—'}</td>
+    <td style="${_pdfTD('text-align:right;font-weight:700')}">Q ${f.saldo.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
+  </tr>`).join(''):'<tr><td colspan="6" style="padding:14px;text-align:center;color:#999">Sin movimientos en el período</td></tr>';
+  const body=`
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <div style="flex:1;min-width:240px">
+        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Cuenta</div>
+        <div style="font-size:17px;font-weight:700;margin-top:3px;color:#173916">${c.nombre||''}</div>
+        <div style="font-size:12px;color:#666B5C;margin-top:4px">${c.banco||''}${c.numero?' · No. '+c.numero:''}</div>
+        <div style="font-size:12px;color:#666B5C">Tipo: ${TIPO_CUENTA_LBL[c.tipo]||c.tipo}</div>
+        <div style="font-size:12px;color:#666B5C">Período: ${periodo}</div>
+      </div>
+      <div style="text-align:right;min-width:230px;background:#F4F7EF;border:1px solid #D6DCC9;border-radius:8px;padding:12px 16px">
+        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Saldo final</div>
+        <div style="font-size:28px;font-weight:800;color:${d.saldoFinal>=0?'#3B6D11':'#BE4326'};margin-top:2px">Q ${d.saldoFinal.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        <div style="font-size:11.5px;color:#666B5C;margin-top:8px">Entradas: Q ${d.totEnt.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+        <div style="font-size:11.5px;color:#666B5C">Salidas: Q ${d.totSal.toLocaleString('es-GT',{minimumFractionDigits:2})}</div>
+      </div>
+    </div>
+    ${_pdfSec('Movimientos con saldo corriente')}
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="${_pdfTH()}">Fecha</th><th style="${_pdfTH()}">Concepto</th><th style="${_pdfTH()}">Categoría</th>
+        <th style="${_pdfTH('text-align:right')}">Entrada</th><th style="${_pdfTH('text-align:right')}">Salida</th><th style="${_pdfTH('text-align:right')}">Saldo</th>
+      </tr></thead>
+      <tbody>
+        <tr><td colspan="5" style="${_pdfTD('font-weight:600;color:#555')}">Saldo inicial ${desde?('al '+fdate(desde)):'(apertura)'}</td><td style="${_pdfTD('text-align:right;font-weight:700')}">Q ${d.saldoAntes.toLocaleString('es-GT',{minimumFractionDigits:2})}</td></tr>
+        ${filas}
+        <tr style="background:#F4F7EF"><td colspan="3" style="${_pdfTD('font-weight:700')}">TOTALES</td><td style="${_pdfTD('text-align:right;font-weight:700;color:#2a7d2a')}">Q ${d.totEnt.toLocaleString('es-GT',{minimumFractionDigits:2})}</td><td style="${_pdfTD('text-align:right;font-weight:700;color:#BE4326')}">Q ${d.totSal.toLocaleString('es-GT',{minimumFractionDigits:2})}</td><td style="${_pdfTD('text-align:right;font-weight:800')}">Q ${d.saldoFinal.toLocaleString('es-GT',{minimumFractionDigits:2})}</td></tr>
+      </tbody>
+    </table>`;
+  _abrirPDF(_pdfShell({titulo:'ESTADO DE CUENTA BANCARIO',subtitulo:c.nombre||'',orientacion:'landscape',body}));
+}
+window.estadoCuentaBancoPDF=estadoCuentaBancoPDF;
+// Excel: balance general detallado (2 hojas: movimientos con saldo corriente + resumen por categoría)
+async function estadoCuentaBancoExcel(id){
+  const desde=$('#ecb-desde')?.value||'',hasta=$('#ecb-hasta')?.value||'';
+  const d=_estadoCuentaBancoData(id,desde,hasta);if(!d)return;
+  const c=d.cuenta;
+  try{
+    const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
+    // Hoja 1: Movimientos (libro mayor con saldo corriente)
+    const meta=[
+      ['SEFE — ESTADO DE CUENTA BANCARIO'],
+      ['Cuenta',c.nombre||''],
+      ['Banco',(c.banco||'')+(c.numero?' · No. '+c.numero:'')],
+      ['Tipo',TIPO_CUENTA_LBL[c.tipo]||c.tipo],
+      ['Período',(desde||'inicio')+' a '+(hasta||'hoy')],
+      ['Generado',new Date().toLocaleString('es-GT')],
+      []
+    ];
+    const cab=['Fecha','Concepto','Categoría','Referencia','Origen','Entrada','Salida','Saldo'];
+    const filas=[['','Saldo inicial'+(desde?(' al '+desde):' (apertura)'),'','','','','',d.saldoAntes]];
+    d.filas.forEach(f=>filas.push([f.fecha,f.concepto,f.categoria,f.referencia,f.origen==='manual'?'Manual':'Automático',f.ent||0,f.sal||0,f.saldo]));
+    filas.push(['','TOTALES','','','','',d.totEnt,d.totSal]);
+    filas.push(['','SALDO FINAL','','','','','',d.saldoFinal]);
+    const ws1=XLSX.utils.aoa_to_sheet(meta);
+    XLSX.utils.sheet_add_aoa(ws1,[cab],{origin:'A8'});
+    XLSX.utils.sheet_add_aoa(ws1,filas,{origin:'A9'});
+    ws1['!cols']=[{wch:12},{wch:40},{wch:16},{wch:16},{wch:12},{wch:14},{wch:14},{wch:16}];
+    // Hoja 2: Resumen por categoría
+    const resumen=[['RESUMEN POR CATEGORÍA'],[],['Categoría','Entradas','Salidas','Neto']];
+    Object.entries(d.porCat).sort((a,b)=>(b[1].ent+b[1].sal)-(a[1].ent+a[1].sal)).forEach(([k,o])=>{
+      resumen.push([CAT_MOV_LBL[k]||k,o.ent,o.sal,o.ent-o.sal]);
+    });
+    resumen.push([]);resumen.push(['TOTAL',d.totEnt,d.totSal,d.totEnt-d.totSal]);
+    resumen.push([]);resumen.push(['Saldo inicial',d.saldoAntes]);resumen.push(['Saldo final',d.saldoFinal]);
+    const ws2=XLSX.utils.aoa_to_sheet(resumen);
+    ws2['!cols']=[{wch:22},{wch:16},{wch:16},{wch:16}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws1,'Movimientos');
+    XLSX.utils.book_append_sheet(wb,ws2,'Resumen');
+    const fn=`SEFE_EstadoCuenta_${(c.nombre||'cuenta').replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb,fn);
+    toast('✓ Excel descargado',fn);
+  }catch(e){console.error('Error Excel estado cuenta:',e);toast('Error al generar Excel',e.message,true);}
+}
+window.estadoCuentaBancoExcel=estadoCuentaBancoExcel;
 function openAbonoProv(id){
   if(!canRegistrarAbono()){toast('Sin permiso','Solo Admin y Contabilidad registran pagos',true);return;}
   _compFoto=null;
