@@ -873,6 +873,15 @@
           <table><thead><tr><th>Cuenta</th><th>Banco</th><th>Número</th><th>Tipo</th><th>Saldo inicial</th><th>Movimientos</th><th>Saldo actual</th><th></th></tr></thead><tbody id="t-bancos"></tbody></table>
           <div class="empty" id="bancos-empty">Aún no hay cuentas. Creá la primera con "Nueva cuenta".</div>
         </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Movimientos recientes</h3><button class="btn btn-primary btn-sm" onclick="openMovimientoBanco()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Registrar movimiento / gasto</button></div>
+          <div class="tbl-toolbar">
+            <select id="mov-filtro-cuenta" onchange="renderBancos()" style="min-width:170px"><option value="">Todas las cuentas</option></select>
+            <select id="mov-filtro-tipo" onchange="renderBancos()"><option value="">Entradas y salidas</option><option value="entrada">Solo entradas</option><option value="salida">Solo salidas</option></select>
+          </div>
+          <table><thead><tr><th>Fecha</th><th>Cuenta</th><th>Concepto</th><th>Categoría</th><th>Entrada</th><th>Salida</th><th></th></tr></thead><tbody id="t-movimientos"></tbody></table>
+          <div class="empty" id="mov-empty">Aún no hay movimientos.</div>
+        </div>
       </section>
 
       <!-- PROVEEDORES -->
@@ -3921,6 +3930,8 @@ function registrarMovimientoBanco({cuentaId,tipo,monto,concepto,categoria,origen
   return mov;
 }
 const TIPO_CUENTA_LBL={monetaria:'Monetaria',ahorro:'Ahorro',efectivo:'Efectivo / Caja'};
+const CAT_MOV_LBL={cobro:'Cobro',proveedor:'Proveedor',planilla:'Planilla',servicios:'Servicios',alquiler:'Alquiler',impuestos:'Impuestos',transferencia:'Transferencia',ajuste:'Ajuste',otro:'Otro'};
+const CAT_MOV_OPCIONES=['proveedor','planilla','servicios','alquiler','impuestos','transferencia','ajuste','otro'];
 function renderBancos(){
   const lista=cuentasBanco.filter(c=>c.activo!==false);
   $('#bancos-empty').style.display=lista.length?'none':'block';
@@ -3946,6 +3957,32 @@ function renderBancos(){
     </tr>`;
   }).join('');
   enhanceTable('t-bancos');
+  // ── Movimientos recientes ──
+  const selCta=document.getElementById('mov-filtro-cuenta');
+  if(selCta){
+    const valPrev=selCta.value;
+    selCta.innerHTML='<option value="">Todas las cuentas</option>'+cuentasBanco.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+    selCta.value=valPrev;
+  }
+  const fCta=document.getElementById('mov-filtro-cuenta')?.value||'';
+  const fTipo=document.getElementById('mov-filtro-tipo')?.value||'';
+  let movs=movimientosBanco.filter(m=>!m.anulado);
+  if(fCta)movs=movs.filter(m=>String(m.cuentaId)===String(fCta));
+  if(fTipo)movs=movs.filter(m=>m.tipo===fTipo);
+  movs=movs.slice().sort((a,b)=>((b.fecha||'')+String(b.id||'')).localeCompare((a.fecha||'')+String(a.id||''))).slice(0,200);
+  const empM=document.getElementById('mov-empty');if(empM)empM.style.display=movs.length?'none':'block';
+  const nombreCuenta=id=>{const c=cuentasBanco.find(x=>x.id===id);return c?c.nombre:'—';};
+  const tb=document.getElementById('t-movimientos');
+  if(tb)tb.innerHTML=movs.map(m=>`<tr>
+      <td style="color:var(--muted)">${(m.fecha||'').slice(0,10)}</td>
+      <td>${nombreCuenta(m.cuentaId)}</td>
+      <td>${m.concepto||'—'}</td>
+      <td><span class="badge b-muted" style="font-size:10px">${CAT_MOV_LBL[m.categoria]||m.categoria||'otro'}</span></td>
+      <td class="num" style="color:var(--ok);font-weight:${m.tipo==='entrada'?'700':'400'}">${m.tipo==='entrada'?money(m.monto):'—'}</td>
+      <td class="num" style="color:var(--danger);font-weight:${m.tipo==='salida'?'700':'400'}">${m.tipo==='salida'?money(m.monto):'—'}</td>
+      <td><div class="acts">${m.origen==='manual'?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="anularMovimientoBancoUI(${m.id})" title="Anular">✕</button>`:`<span style="font-size:10.5px;color:var(--muted-2)">auto</span>`}</div></td>
+    </tr>`).join('');
+  if(tb)enhanceTable('t-movimientos');
 }
 function openCuentaBanco(id){
   const c=id?cuentasBanco.find(x=>x.id===id):null;
@@ -3982,6 +4019,40 @@ window.eliminarCuentaBancoUI=function(id){
     closeMod();renderBancos();
   });
 };
+
+// Registrar un movimiento manual (gasto, depósito, transferencia, ajuste)
+function openMovimientoBanco(){
+  if(!cuentasActivasBanco().length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
+  const hoy=new Date().toISOString().slice(0,10);
+  const cats=CAT_MOV_OPCIONES.map(k=>`<option value="${k}">${CAT_MOV_LBL[k]}</option>`).join('');
+  openMod('Registrar movimiento / gasto',
+    `<div class="row"><div><label>Tipo</label><select id="mv-tipo"><option value="salida">Salida (gasto/pago)</option><option value="entrada">Entrada (depósito/ingreso)</option></select></div><div><label>Monto</label><input id="mv-monto" type="number" step="0.01" placeholder="0.00"></div></div>
+     <div class="row"><div><label>Cuenta</label><select id="mv-cuenta">${cuentasActivasBanco().map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}</select></div><div><label>Fecha</label><input id="mv-fecha" type="date" value="${hoy}"></div></div>
+     <div class="row"><div><label>Categoría</label><select id="mv-cat">${cats}</select></div><div><label>Referencia</label><input id="mv-ref" placeholder="No. boleta / cheque (opcional)"></div></div>
+     <div class="row"><div><label>Concepto / descripción</label><input id="mv-concepto" placeholder="Ej. Pago de planilla quincena, luz, alquiler..."></div></div>
+     <div class="note n-danger" id="mv-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
+    ()=>{
+      const monto=Number($('#mv-monto').value);
+      const err=(msg)=>{$('#mv-err').style.display='flex';$('#mv-err').querySelector('span').textContent=msg;};
+      if(!(monto>0)){err('El monto debe ser mayor a cero');return;}
+      const concepto=$('#mv-concepto').value.trim();
+      if(!concepto){err('Escribí un concepto para el movimiento');return;}
+      registrarMovimientoBanco({cuentaId:$('#mv-cuenta').value,tipo:$('#mv-tipo').value,monto,
+        concepto,categoria:$('#mv-cat').value,origen:'manual',referencia:$('#mv-ref').value,fecha:$('#mv-fecha').value||hoy});
+      logAudit('Movimiento de banco',($('#mv-tipo').value)+' · '+money(monto)+' · '+concepto);
+      closeMod();renderBancos();toast('✓ Movimiento registrado',concepto+' · '+money(monto));
+    });
+}
+window.openMovimientoBanco=openMovimientoBanco;
+window.anularMovimientoBancoUI=function(id){
+  const m=movimientosBanco.find(x=>x.id===id);if(!m)return;
+  confirmar('¿Anular este movimiento?','Se revertirá su efecto en el saldo de la cuenta.',()=>{
+    m.anulado=true;
+    if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(m);
+    logAudit('Movimiento de banco anulado',(m.concepto||'')+' · '+money(m.monto));
+    closeMod();renderBancos();
+  });
+};
 function openAbonoProv(id){
   if(!canRegistrarAbono()){toast('Sin permiso','Solo Admin y Contabilidad registran pagos',true);return;}
   _compFoto=null;
@@ -3994,12 +4065,19 @@ function openAbonoProv(id){
      <div class="row"><div><label>Monto del pago</label><input id="pg-monto" type="number" step="0.01" value="${saldo.toFixed(2)}"></div><div><label>Fecha</label><input id="pg-fecha" type="date" value="${hoy}"></div></div>
      <div class="row"><div><label>No. de comprobante de egreso</label><input id="pg-recibo" value="${recSugerido}"></div><div><label>Método</label><select id="pg-met"><option>Transferencia</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option></select></div></div>
      <div class="row"><div><label>Referencia</label><input id="pg-ref" placeholder="No. boleta / cheque"></div></div>
+     <div class="row">${selectorCuentaBancoHTML('pg-cuenta','¿De qué cuenta salió el dinero?')}</div>
      ${compFotoHTML()}
      <div class="note n-danger" id="pg-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>{const monto=Number($('#pg-monto').value);
       if(!(monto>0)){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='El monto debe ser mayor a cero';return;}
       if(monto>saldo+0.001){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='El pago no puede superar el saldo de '+money(saldo);return;}
-      c.abonos=c.abonos||[];const _pago={fecha:$('#pg-fecha').value||hoy,monto,metodo:$('#pg-met').value,referencia:$('#pg-ref').value,noRecibo:$('#pg-recibo').value,comprobante:_compFoto,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};c.abonos.push(_pago);
+      c.abonos=c.abonos||[];const _pago={fecha:$('#pg-fecha').value||hoy,monto,metodo:$('#pg-met').value,referencia:$('#pg-ref').value,noRecibo:$('#pg-recibo').value,comprobante:_compFoto,cuentaBancoId:($('#pg-cuenta')?.value||null),registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};c.abonos.push(_pago);
+      // Movimiento de banco: salida de la cuenta elegida
+      if($('#pg-cuenta')?.value){
+        registrarMovimientoBanco({cuentaId:$('#pg-cuenta').value,tipo:'salida',monto,
+          concepto:'Pago a '+c.proveedorNombre+' · '+($('#pg-recibo').value||''),
+          categoria:'proveedor',origen:'pago_proveedor',origenId:c.id,referencia:$('#pg-ref').value,fecha:_pago.fecha});
+      }
       logAudit('Pago a proveedor','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+money(monto)+' · '+$('#pg-recibo').value);
       closeMod();renderPorPagar();renderCompras();toast('✓ Pago registrado',$('#pg-recibo').value+' · saldo '+money(apInfo(c).saldo));
       if(typeof guardarPagoProveedor==='function')guardarPagoProveedor(c.id,_pago);});

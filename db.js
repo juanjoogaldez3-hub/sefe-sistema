@@ -225,7 +225,7 @@ function mapCompraFromDB(c, todosPagos){
     fecha:p.fecha, monto:Number(p.monto), metodo:p.metodo, referencia:p.referencia,
     noRecibo:p.no_recibo, comprobante:p.comprobante, registradoPor:p.registrado_por,
     registradoEl:p.registrado_el, anulado:p.anulado, motivoAnulacion:p.motivo_anulacion,
-    esCierre:p.es_cierre, _id:p.id
+    esCierre:p.es_cierre, cuentaBancoId:p.cuenta_banco_id, _id:p.id
   }));
   return {
     id:c.id, proveedorId:c.proveedor_id, proveedorNombre:c.proveedor_nombre,
@@ -357,7 +357,8 @@ async function guardarPagoProveedor(compraId, pago){
     compra_id:compraId, fecha:pago.fecha, monto:pago.monto, metodo:pago.metodo,
     referencia:pago.referencia, no_recibo:pago.noRecibo, comprobante:pago.comprobante,
     registrado_por:pago.registradoPor, registrado_el:pago.registradoEl,
-    anulado:pago.anulado, motivo_anulacion:pago.motivoAnulacion, es_cierre:pago.esCierre
+    anulado:pago.anulado, motivo_anulacion:pago.motivoAnulacion, es_cierre:pago.esCierre,
+    cuenta_banco_id:pago.cuentaBancoId||null
   };
   const {data,error} = await sb.from('pagos_proveedor').insert(row).select().single();
   if(error)console.error('Error guardando pago a proveedor:',error); else pago._id = data.id;
