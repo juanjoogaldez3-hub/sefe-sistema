@@ -3904,14 +3904,53 @@ function selectorCuentaBancoHTML(idSel,label,sel){
   if(!cuentas.length)return `<div><label>${label}</label><div style="font-size:12px;color:var(--muted);padding:9px 0">Sin cuentas — creá una en la sección Bancos para registrar el movimiento.</div></div>`;
   return `<div><label>${label}</label><select id="${idSel}"><option value="">— Sin especificar —</option>${cuentas.map(c=>`<option value="${c.id}"${String(sel)===String(c.id)?' selected':''}>${c.nombre}</option>`).join('')}</select></div>`;
 }
-function registrarMovimientoBanco({cuentaId,tipo,monto,concepto,categoria,origen,origenId,referencia,fecha}){
+function registrarMovimientoBanco({cuentaId,tipo,monto,concepto,categoria,origen,origenId,referencia,fecha,beneficiario}){
   if(!cuentaId||!(monto>0))return null;
   const mov={cuentaId:Number(cuentaId),fecha:fecha||new Date().toISOString().slice(0,10),tipo,monto:Number(monto),
     concepto:concepto||'',categoria:categoria||'otro',origen:origen||'manual',origenId:origenId||null,
     referencia:referencia||null,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,_nuevo:true};
+  // Correlativo global de póliza de cheque para toda SALIDA
+  if(tipo==='salida'){
+    const maxPol=(movimientosBanco.reduce((m,x)=>Math.max(m,x.poliza||0),0)||0);
+    mov.poliza=maxPol+1;
+    if(beneficiario)mov.beneficiario=beneficiario;
+  }
   movimientosBanco.push(mov);
   if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mov);
+  // Abrir la póliza de cheque automáticamente para salidas
+  if(tipo==='salida'&&mov.poliza){setTimeout(()=>{try{polizaChequePDF(mov,beneficiario)}catch(e){console.error('poliza',e)}},150);}
   return mov;
+}
+// Convierte un número a letras en español (para el monto de la póliza)
+function _numLetras(n){
+  n=Math.floor(Math.abs(n));
+  if(n===0)return 'cero';
+  const U=['','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','trece','catorce','quince','dieciséis','diecisiete','dieciocho','diecinueve','veinte'];
+  const D=['','','','treinta','cuarenta','cincuenta','sesenta','setenta','ochenta','noventa'];
+  const C=['','ciento','doscientos','trescientos','cuatrocientos','quinientos','seiscientos','setecientos','ochocientos','novecientos'];
+  const chunk=x=>{
+    let s='';
+    const c=Math.floor(x/100),d=Math.floor((x%100)/10),u=x%10,dd=x%100;
+    if(x===100)return 'cien';
+    if(c)s+=C[c]+' ';
+    if(dd<=20)s+=U[dd];
+    else if(dd<30)s+='veinti'+U[u];
+    else{s+=D[d];if(u)s+=' y '+U[u];}
+    return s.trim();
+  };
+  let s='';
+  const millones=Math.floor(n/1000000),miles=Math.floor((n%1000000)/1000),resto=n%1000;
+  if(millones)s+=(millones===1?'un millón':chunk(millones)+' millones')+' ';
+  if(miles)s+=(miles===1?'mil':chunk(miles)+' mil')+' ';
+  if(resto)s+=chunk(resto);
+  return s.trim().replace(/\s+/g,' ');
+}
+function montoEnLetras(monto){
+  const ent=Math.floor(Math.abs(monto));
+  const cent=Math.round((Math.abs(monto)-ent)*100);
+  let txt=_numLetras(ent).toUpperCase();
+  txt+=' CON '+String(cent).padStart(2,'0')+'/100 QUETZALES';
+  return txt;
 }
 const TIPO_CUENTA_LBL={monetaria:'Monetaria',ahorro:'Ahorro',efectivo:'Efectivo / Caja'};
 const CAT_MOV_LBL={cobro:'Cobro',proveedor:'Proveedor',planilla:'Planilla',servicios:'Servicios',alquiler:'Alquiler',impuestos:'Impuestos',transferencia:'Transferencia',ajuste:'Ajuste',otro:'Otro'};
@@ -3963,7 +4002,7 @@ return `<tr>
       <td><span class="badge b-muted" style="font-size:10px">${CAT_MOV_LBL[m.categoria]||m.categoria||'otro'}</span></td>
       <td class="num" style="color:var(--ok);font-weight:${m.tipo==='entrada'?'700':'400'}">${m.tipo==='entrada'?money(m.monto):'—'}</td>
       <td class="num" style="color:var(--danger);font-weight:${m.tipo==='salida'?'700':'400'}">${m.tipo==='salida'?money(m.monto):'—'}</td>
-      <td><div class="acts">${m.origen==='manual'?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="anularMovimientoBancoUI(${m.id})" title="Anular">✕</button>`:`<span style="font-size:10.5px;color:var(--muted-2)">auto</span>`}</div></td>
+      <td><div class="acts">${m.poliza?`<button class="btn btn-ghost btn-sm" onclick="polizaChequeUI(${m.id})" title="Póliza de cheque POL-${String(m.poliza).padStart(6,'0')}">📄 Póliza</button>`:''}${m.origen==='manual'?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="anularMovimientoBancoUI(${m.id})" title="Anular">✕</button>`:(m.poliza?'':`<span style="font-size:10.5px;color:var(--muted-2)">auto</span>`)}</div></td>
     </tr>`).join('');
   if(tb)enhanceTable('t-movimientos');
 }
@@ -4010,7 +4049,8 @@ function openMovimientoBanco(){
   openMod('Registrar movimiento / gasto',
     `<div class="row"><div><label>Tipo</label><select id="mv-tipo"><option value="salida">Salida (gasto/pago)</option><option value="entrada">Entrada (depósito/ingreso)</option></select></div><div><label>Monto</label><input id="mv-monto" type="number" step="0.01" placeholder="0.00"></div></div>
      <div class="row"><div><label>Cuenta</label><select id="mv-cuenta">${cuentasActivasBanco().map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}</select></div><div><label>Fecha</label><input id="mv-fecha" type="date" value="${hoy}"></div></div>
-     <div class="row"><div><label>Categoría</label><select id="mv-cat">${cats}</select></div><div><label>Referencia</label><input id="mv-ref" placeholder="No. boleta / cheque (opcional)"></div></div>
+     <div class="row"><div><label>Categoría</label><select id="mv-cat">${cats}</select></div><div><label>No. cheque / autorización / transferencia</label><input id="mv-ref" placeholder="Según la forma de pago (opcional)"></div></div>
+     <div class="row"><div><label>Beneficiario / a favor de <span style="font-weight:400;color:var(--muted-2)">(para la póliza de cheque en salidas)</span></label><input id="mv-benef" placeholder="Nombre de a quién se le paga"></div></div>
      <div class="row"><div><label>Concepto / descripción</label><input id="mv-concepto" placeholder="Ej. Pago de planilla quincena, luz, alquiler..."></div></div>
      <div class="note n-danger" id="mv-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>{
@@ -4020,7 +4060,7 @@ function openMovimientoBanco(){
       const concepto=$('#mv-concepto').value.trim();
       if(!concepto){err('Escribí un concepto para el movimiento');return;}
       registrarMovimientoBanco({cuentaId:$('#mv-cuenta').value,tipo:$('#mv-tipo').value,monto,
-        concepto,categoria:$('#mv-cat').value,origen:'manual',referencia:$('#mv-ref').value,fecha:$('#mv-fecha').value||hoy});
+        concepto,categoria:$('#mv-cat').value,origen:'manual',referencia:$('#mv-ref').value,fecha:$('#mv-fecha').value||hoy,beneficiario:$('#mv-benef')?.value||''});
       logAudit('Movimiento de banco',($('#mv-tipo').value)+' · '+money(monto)+' · '+concepto);
       closeMod();renderBancos();toast('✓ Movimiento registrado',concepto+' · '+money(monto));
     });
@@ -4199,6 +4239,62 @@ async function estadoCuentaBancoExcel(id){
   }catch(e){console.error('Error Excel estado cuenta:',e);toast('Error al generar Excel',e.message,true);}
 }
 window.estadoCuentaBancoExcel=estadoCuentaBancoExcel;
+
+// ── PÓLIZA DE CHEQUE (comprobante de egreso) ────────────────
+function polizaChequePDF(mov,beneficiario){
+  if(!mov)return;
+  const c=cuentasBanco.find(x=>x.id===mov.cuentaId)||{};
+  const benef=(beneficiario||mov.beneficiario||'').trim()||(mov.concepto||'—');
+  const numPol='POL-'+String(mov.poliza||0).padStart(6,'0');
+  const fechaTxt=mov.fecha?fdate(mov.fecha):'—';
+  const montoNum='Q '+Number(mov.monto).toLocaleString('es-GT',{minimumFractionDigits:2});
+  const cajaFirma=(rol)=>`<td style="width:33.3%;padding:0 10px;text-align:center;vertical-align:bottom">
+      <div style="border-top:1px solid #555;margin-top:44px;padding-top:5px;font-size:10.5px;color:#555">${rol}</div></td>`;
+  const body=`
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;align-items:flex-start">
+      <div style="flex:1;min-width:230px">
+        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Cuenta / Banco</div>
+        <div style="font-size:15px;font-weight:700;margin-top:3px;color:#173916">${c.nombre||'—'}</div>
+        <div style="font-size:12px;color:#666B5C;margin-top:2px">${c.banco||''}${c.numero?' · No. cuenta '+c.numero:''}</div>
+        <div style="font-size:12px;color:#666B5C">No. cheque / autorización / transferencia: <b>${mov.referencia||'________'}</b></div>
+      </div>
+      <div style="text-align:right;min-width:200px">
+        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">No. de póliza</div>
+        <div style="font-size:20px;font-weight:800;color:#173916;margin-top:2px">${numPol}</div>
+        <div style="font-size:12px;color:#666B5C;margin-top:6px">Fecha: <b>${fechaTxt}</b></div>
+      </div>
+    </div>
+
+    <div style="margin-top:22px;border:1.5px solid #173916;border-radius:8px;overflow:hidden">
+      <div style="display:flex;border-bottom:1px solid #D6DCC9">
+        <div style="flex:1;padding:11px 14px">
+          <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Páguese a la orden de</div>
+          <div style="font-size:15px;font-weight:700;color:#173916;margin-top:2px">${benef}</div>
+        </div>
+        <div style="width:190px;padding:11px 14px;background:#F4F7EF;border-left:1px solid #D6DCC9;text-align:right">
+          <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Monto</div>
+          <div style="font-size:20px;font-weight:800;color:#173916;margin-top:2px">${montoNum}</div>
+        </div>
+      </div>
+      <div style="padding:11px 14px">
+        <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">La cantidad de</div>
+        <div style="font-size:13px;font-weight:600;color:#333;margin-top:2px;font-style:italic">${montoEnLetras(mov.monto)}</div>
+      </div>
+    </div>
+
+    ${_pdfSec('Concepto del egreso')}
+    <div style="font-size:12.5px;color:#333;padding:2px 2px 4px;min-height:34px">${mov.concepto||'—'}</div>
+    <div style="font-size:11px;color:#909584;margin-top:2px">Categoría: ${CAT_MOV_LBL[mov.categoria]||mov.categoria||'Otro'}</div>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:46px"><tr>
+      ${cajaFirma('Elaborado por')}
+      ${cajaFirma('Autorizado por')}
+      ${cajaFirma('Recibí conforme')}
+    </tr></table>`;
+  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:numPol+' · '+(c.nombre||''),orientacion:'portrait',body}));
+}
+window.polizaChequePDF=polizaChequePDF;
+window.polizaChequeUI=function(id){const m=movimientosBanco.find(x=>x.id===id);if(m)polizaChequePDF(m);};
 function openAbonoProv(id){
   if(!canRegistrarAbono()){toast('Sin permiso','Solo Admin y Contabilidad registran pagos',true);return;}
   _compFoto=null;
@@ -4210,7 +4306,7 @@ function openAbonoProv(id){
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${c.proveedorNombre} · Saldo pendiente: <b style="color:var(--ink)">${money(saldo)}</b></p>
      <div class="row"><div><label>Monto del pago</label><input id="pg-monto" type="number" step="0.01" value="${saldo.toFixed(2)}"></div><div><label>Fecha</label><input id="pg-fecha" type="date" value="${hoy}"></div></div>
      <div class="row"><div><label>No. de comprobante de egreso</label><input id="pg-recibo" value="${recSugerido}"></div><div><label>Método</label><select id="pg-met"><option>Transferencia</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option></select></div></div>
-     <div class="row"><div><label>Referencia</label><input id="pg-ref" placeholder="No. boleta / cheque"></div></div>
+     <div class="row"><div><label>No. cheque / autorización / transferencia</label><input id="pg-ref" placeholder="Según la forma de pago"></div></div>
      <div class="row">${selectorCuentaBancoHTML('pg-cuenta','¿De qué cuenta salió el dinero?')}</div>
      ${compFotoHTML()}
      <div class="note n-danger" id="pg-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
@@ -4221,7 +4317,7 @@ function openAbonoProv(id){
       if($('#pg-cuenta')?.value){
         registrarMovimientoBanco({cuentaId:$('#pg-cuenta').value,tipo:'salida',monto,
           concepto:'Pago a '+c.proveedorNombre+' · '+($('#pg-recibo').value||''),
-          categoria:'proveedor',origen:'pago_proveedor',origenId:c.id,referencia:$('#pg-ref').value,fecha:_pago.fecha});
+          categoria:'proveedor',origen:'pago_proveedor',origenId:c.id,referencia:$('#pg-ref').value,fecha:_pago.fecha,beneficiario:c.proveedorNombre});
       }
       logAudit('Pago a proveedor','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+money(monto)+' · '+$('#pg-recibo').value);
       closeMod();renderPorPagar();renderCompras();toast('✓ Pago registrado',$('#pg-recibo').value+' · saldo '+money(apInfo(c).saldo));

@@ -146,7 +146,7 @@ async function cargarTodo() {
       movimientosBanco = (rMovBanco.data||[]).map(m=>({
         id:m.id, cuentaId:m.cuenta_id, fecha:m.fecha, tipo:m.tipo, monto:Number(m.monto)||0,
         concepto:m.concepto, categoria:m.categoria, origen:m.origen, origenId:m.origen_id,
-        cuentaDestinoId:m.cuenta_destino_id, referencia:m.referencia, registradoPor:m.registrado_por,
+        cuentaDestinoId:m.cuenta_destino_id, referencia:m.referencia, poliza:m.poliza, registradoPor:m.registrado_por,
         registradoEl:m.registrado_el, anulado:m.anulado===true
       }));
     }
@@ -485,7 +485,7 @@ async function eliminarCuentaBanco(id){
 async function guardarMovimientoBanco(m){
   const row = {cuenta_id:m.cuentaId, fecha:m.fecha, tipo:m.tipo, monto:Number(m.monto)||0,
     concepto:m.concepto||null, categoria:m.categoria||null, origen:m.origen||'manual', origen_id:m.origenId||null,
-    cuenta_destino_id:m.cuentaDestinoId||null, referencia:m.referencia||null,
+    cuenta_destino_id:m.cuentaDestinoId||null, referencia:m.referencia||null, poliza:m.poliza||null,
     registrado_por:m.registradoPor||null, anulado:m.anulado===true};
   if (m._nuevo) {
     delete m._nuevo;
