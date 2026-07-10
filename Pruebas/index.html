@@ -759,6 +759,7 @@
           <button class="ct-tab" data-r="cprod">Compras por producto</button>
           <button class="ct-tab" data-r="cxc">Pendientes por cliente</button>
           <button class="ct-tab" data-r="estcta">Estado de cuenta general</button>
+          <button class="ct-tab" data-r="banco">Movimientos de banco</button>
           <button class="ct-tab" data-r="recibos">Recibos</button>
           <button class="ct-tab" data-r="pagos">Pagos por cliente</button>
         </div>
@@ -4778,13 +4779,14 @@ const MODULOS_PERMISOS=[
   {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes'},
   {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes'},
   {key:'rep_estcta',lbl:'Estado de cuenta general',grp:'Reportes'},
+  {key:'rep_banco',lbl:'Movimientos de banco',grp:'Reportes'},
   {key:'rep_recibos',lbl:'Recibos',grp:'Reportes'},
   {key:'rep_pagos',lbl:'Pagos por cliente',grp:'Reportes'},
 ];
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','dircli','factem','cardex','canalvend','cprov','cprod','cxc','estcta','recibos','pagos'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','dircli','factem','cardex','canalvend','cprov','cprod','cxc','estcta','banco','recibos','pagos'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
@@ -5172,7 +5174,7 @@ window.cvPreview=cvPreview;
 
 // ---- Reportería ----
 let repPeriod='mesant',repType='resumen';
-let repFiltros={cliente:'',vendedores:[],montoMin:'',montoMax:'',proveedor:'',soloVencidos:false,tiempoCredito:'',metodoRec:'',marca_prod:'',producto:''};
+let repFiltros={cliente:'',vendedores:[],montoMin:'',montoMax:'',proveedor:'',soloVencidos:false,tiempoCredito:'',metodoRec:'',marca_prod:'',producto:'',cuentaBanco:'',categoria:''};
 function repRange(){
   const d=$('#rep-desde')?.value,h=$('#rep-hasta')?.value;
   if(d||h)return {start:d?new Date(d):new Date(0),end:h?new Date(h+'T23:59:59'):new Date('2999-01-01')};
@@ -5281,6 +5283,14 @@ function renderRepFilters(){
     html=`<div class="rep-filter-bar">
       ${sel('rf-cli-rec','Cliente',cliOpts,repFiltros.cliente,'cliente')}
       ${sel('rf-met-rec','Método de pago',metOpts,repFiltros.metodoRec||'','metodoRec')}
+    </div>`;
+  }
+  else if(repType==='banco'){
+    const ctaOpts=(typeof cuentasBanco!=='undefined'?cuentasBanco:[]).map(c=>({v:String(c.id),l:c.nombre}));
+    const catOpts=(typeof CAT_MOV_LBL!=='undefined'?Object.keys(CAT_MOV_LBL):[]).map(k=>({v:k,l:CAT_MOV_LBL[k]}));
+    html=`<div class="rep-filter-bar">
+      ${sel('rf-cta-bco','Cuenta',ctaOpts,repFiltros.cuentaBanco,'cuentaBanco')}
+      ${sel('rf-cat-bco','Categoría',catOpts,repFiltros.categoria,'categoria')}
     </div>`;
   }
   f.innerHTML=html;
@@ -5969,6 +5979,51 @@ function renderReportes(){
       ${arr.length?`<tr style="border-top:2px solid var(--line-strong);font-weight:700"><td>TOTAL</td><td class="num">${money(T.b1)}</td><td class="num" style="color:#9A6B07">${money(T.b2)}</td><td class="num" style="color:var(--danger)">${money(T.b3)}</td><td class="num">${money(T.saldo)}</td></tr>`:''}
       </tbody></table></div>`;
   }
+  else if(repType==='banco'){
+    const r=repRange();
+    const enR=iso=>{if(!iso)return false;const t=new Date((iso+'').slice(0,10)+'T12:00:00');return t>=r.start&&t<=r.end;};
+    let movs=(typeof movimientosBanco!=='undefined'?movimientosBanco:[]).filter(m=>!m.anulado&&enR(m.fecha));
+    if(repFiltros.cuentaBanco)movs=movs.filter(m=>String(m.cuentaId)===String(repFiltros.cuentaBanco));
+    if(repFiltros.categoria)movs=movs.filter(m=>(m.categoria||'otro')===repFiltros.categoria);
+    let totEnt=0,totSal=0;
+    movs.forEach(m=>{if(m.tipo==='entrada')totEnt+=Number(m.monto||0);else totSal+=Number(m.monto||0);});
+    const neto=totEnt-totSal;
+    const saldoActualTotal=cuentasActivasBanco().filter(c=>!repFiltros.cuentaBanco||String(c.id)===String(repFiltros.cuentaBanco)).reduce((s,c)=>s+saldoCuenta(c.id),0);
+    // Por cuenta
+    const porCta={};
+    movs.forEach(m=>{const k=m.cuentaId;if(!porCta[k])porCta[k]={ent:0,sal:0};if(m.tipo==='entrada')porCta[k].ent+=Number(m.monto||0);else porCta[k].sal+=Number(m.monto||0);});
+    const filasCta=Object.entries(porCta).map(([id,o])=>({id:Number(id),nombre:(cuentasBanco.find(c=>c.id===Number(id))||{}).nombre||'—',ent:o.ent,sal:o.sal,neto:o.ent-o.sal,saldo:saldoCuenta(Number(id))})).sort((a,b)=>b.neto-a.neto);
+    // Por categoría
+    const porCat={};
+    movs.forEach(m=>{const k=m.categoria||'otro';if(!porCat[k])porCat[k]={ent:0,sal:0};if(m.tipo==='entrada')porCat[k].ent+=Number(m.monto||0);else porCat[k].sal+=Number(m.monto||0);});
+    const filasCat=Object.entries(porCat).map(([k,o])=>({cat:CAT_MOV_LBL[k]||k,ent:o.ent,sal:o.sal,neto:o.ent-o.sal})).sort((a,b)=>(b.ent+b.sal)-(a.ent+a.sal));
+    exportData=filasCta.map(f=>({Cuenta:f.nombre,Entradas:f.ent,Salidas:f.sal,Neto:f.neto,'Saldo actual':f.saldo}));
+    html+=`<div class="kpis stagger">${kpiHTML([
+      {ic:'i-green',svg:'<path d="M12 5v14M19 12l-7 7-7-7"/>',lbl:'Entradas del período',val:money(totEnt)},
+      {ic:'i-danger',svg:'<path d="M12 19V5M5 12l7-7 7 7"/>',lbl:'Salidas del período',val:money(totSal)},
+      {ic:(neto>=0?'i-green':'i-danger'),svg:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',lbl:'Neto del período',val:money(neto)},
+      {ic:'i-blue',svg:'<path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11"/>',lbl:'Saldo actual'+(repFiltros.cuentaBanco?'':' (todas)'),val:money(saldoActualTotal)}])}</div>
+      <div class="panel"><div class="panel-head"><h3>Entradas y salidas por cuenta</h3></div>
+      <table><thead><tr><th>Cuenta</th><th>Entradas</th><th>Salidas</th><th>Neto</th><th>Saldo actual</th></tr></thead><tbody>
+      ${filasCta.length?filasCta.map(f=>`<tr>
+        <td style="font-weight:600">${f.nombre}</td>
+        <td class="num" style="color:var(--ok)">${money(f.ent)}</td>
+        <td class="num" style="color:var(--danger)">${money(f.sal)}</td>
+        <td class="num" style="font-weight:700;color:${f.neto>=0?'var(--ok)':'var(--danger)'}">${money(f.neto)}</td>
+        <td class="num" style="font-weight:700">${money(f.saldo)}</td>
+      </tr>`).join(''):'<tr><td colspan="5" class="empty">Sin movimientos en el período</td></tr>'}
+      ${filasCta.length?`<tr style="border-top:2px solid var(--line-strong);font-weight:700"><td>TOTAL</td><td class="num" style="color:var(--ok)">${money(totEnt)}</td><td class="num" style="color:var(--danger)">${money(totSal)}</td><td class="num" style="color:${neto>=0?'var(--ok)':'var(--danger)'}">${money(neto)}</td><td class="num">${money(saldoActualTotal)}</td></tr>`:''}
+      </tbody></table></div>
+      <div class="panel"><div class="panel-head"><h3>Desglose por categoría</h3></div>
+      <table><thead><tr><th>Categoría</th><th>Entradas</th><th>Salidas</th><th>Neto</th></tr></thead><tbody>
+      ${filasCat.length?filasCat.map(f=>`<tr>
+        <td><span class="badge b-muted" style="font-size:10.5px">${f.cat}</span></td>
+        <td class="num" style="color:var(--ok)">${f.ent?money(f.ent):'—'}</td>
+        <td class="num" style="color:var(--danger)">${f.sal?money(f.sal):'—'}</td>
+        <td class="num" style="font-weight:600;color:${f.neto>=0?'var(--ok)':'var(--danger)'}">${money(f.neto)}</td>
+      </tr>`).join(''):'<tr><td colspan="4" class="empty">Sin movimientos en el período</td></tr>'}
+      </tbody></table></div>`;
+  }
   else if(repType==='recibos'){
     // Reporte de Recibos: cada abono como una fila con No. de recibo
     const filas=[];
@@ -6039,7 +6094,7 @@ function renderReportes(){
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],['Período:',repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
@@ -6091,7 +6146,7 @@ function _abrirPDF(html){
 }
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
