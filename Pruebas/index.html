@@ -4248,8 +4248,8 @@ function polizaChequePDF(mov,beneficiario){
   const numPol='POL-'+String(mov.poliza||0).padStart(6,'0');
   const fechaTxt=mov.fecha?fdate(mov.fecha):'—';
   const montoNum='Q '+Number(mov.monto).toLocaleString('es-GT',{minimumFractionDigits:2});
-  const cajaFirma=(rol)=>`<td style="width:33.3%;padding:0 10px;text-align:center;vertical-align:bottom">
-      <div style="border-top:1px solid #555;margin-top:44px;padding-top:5px;font-size:10.5px;color:#555">${rol}</div></td>`;
+  const cajaFirma=(rol)=>`<td style="width:33.3%;padding:0 8px;text-align:center;vertical-align:bottom">
+      <div style="border-top:1px solid #555;margin-top:34px;padding-top:5px;font-size:10px;color:#555">${rol}</div></td>`;
   const body=`
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;align-items:flex-start">
       <div style="flex:1;min-width:230px">
@@ -4286,12 +4286,12 @@ function polizaChequePDF(mov,beneficiario){
     <div style="font-size:12.5px;color:#333;padding:2px 2px 4px;min-height:34px">${mov.concepto||'—'}</div>
     <div style="font-size:11px;color:#909584;margin-top:2px">Categoría: ${CAT_MOV_LBL[mov.categoria]||mov.categoria||'Otro'}</div>
 
-    <table style="width:100%;border-collapse:collapse;margin-top:46px"><tr>
+    <table style="width:100%;border-collapse:collapse;margin-top:34px"><tr>
       ${cajaFirma('Elaborado por')}
       ${cajaFirma('Autorizado por')}
       ${cajaFirma('Recibí conforme')}
     </tr></table>`;
-  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:numPol+' · '+(c.nombre||''),orientacion:'portrait',body}));
+  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:numPol+' · '+(c.nombre||''),tamano:'5.5in 8.5in',margen:'10mm 10mm 12mm',body}));
 }
 window.polizaChequePDF=polizaChequePDF;
 window.polizaChequeUI=function(id){const m=movimientosBanco.find(x=>x.id===id);if(m)polizaChequePDF(m);};
@@ -6374,8 +6374,10 @@ function _pdfShell(o){
   const fecha=hoy.toLocaleDateString('es-GT',{day:'2-digit',month:'long',year:'numeric'});
   const hora=hoy.toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'});
   const usuario=(typeof currentUser!=='undefined'&&currentUser)?currentUser:'';
+  const pageSize=o.tamano?o.tamano:('letter '+(o.orientacion||'portrait'));
+  const pageMargin=o.margen||'13mm 12mm 18mm';
   return `
-  <style>@page{size:letter ${o.orientacion||'portrait'};margin:13mm 12mm 18mm}</style>
+  <style>@page{size:${pageSize};margin:${pageMargin}}</style>
   <div style="font-family:Inter,Arial,sans-serif;color:#1c1f17;-webkit-print-color-adjust:exact;print-color-adjust:exact">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
       <div>
