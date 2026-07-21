@@ -754,6 +754,8 @@
           <button class="ct-tab" data-r="dircli">Listado de clientes</button>
           <button class="ct-tab" data-r="factem">Facturas emitidas</button>
           <button class="ct-tab" data-r="cardex">Cardex de inventario</button>
+          <button class="ct-tab" data-r="invactual">Inventario actual</button>
+          <button class="ct-tab" data-r="invcosto">Inventario valorizado</button>
           <button class="ct-tab" data-r="canalvend">Ventas por canal (Whaticket)</button>
           <button class="ct-tab" data-r="cprov">Compras por proveedor</button>
           <button class="ct-tab" data-r="cprod">Compras por producto</button>
@@ -5395,10 +5397,8 @@ window.toggleUsuario=toggleUsuario;
 function renderProd(){
   // Botón "Nuevo" en el encabezado (según permiso)
   const acc=$('#inv-acciones');
-  const btnsExport=`<button class="btn btn-ghost btn-sm" onclick="exportarInventarioPDF()" title="Descargar inventario en PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>PDF</button> `+
-    `<button class="btn btn-ghost btn-sm" onclick="exportarInventarioExcel()" title="Descargar inventario en Excel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13l2 4 2-4"/><path d="M16 13v4"/></svg>Excel</button>`;
   if(acc)acc.innerHTML=(canEditInventario()?`<button class="btn btn-ghost btn-sm" onclick="openProd()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
-    ` <button class="btn btn-ghost btn-sm" id="btn-ver-inactivos" onclick="toggleVerInactivos()" style="color:var(--muted)">${_verInactivos?'Ocultar inactivos':'Ver inactivos'}</button> `:'')+filtroMarcaInv()+btnsExport;
+    ` <button class="btn btn-ghost btn-sm" id="btn-ver-inactivos" onclick="toggleVerInactivos()" style="color:var(--muted)">${_verInactivos?'Ocultar inactivos':'Ver inactivos'}</button> `:'')+filtroMarcaInv();
   let lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
   // Filtrar por marca si está seleccionada
   if(_filtroMarca)lista=lista.filter(p=>(p.marca||'')===_filtroMarca);
@@ -6524,6 +6524,29 @@ function renderReportes(){
       <table><thead><tr><th>No. Recibo</th><th>Factura</th><th>Fecha</th><th>Monto</th><th>Método</th></tr></thead><tbody>
       ${arr[0][1].abonos.map(a=>`<tr><td style="font-weight:700;color:var(--green)">${a.noRecibo||'—'}</td><td style="color:var(--muted)">${a.factura}</td><td style="color:var(--muted)">${fdate(a.fecha)}</td><td class="num" style="font-weight:600">${money(a.monto)}</td><td>${a.metodo||'—'}</td></tr>`).join('')}</tbody></table></div>`:''}`
   }
+  else if(repType==='invactual'){
+    const _stk=p=>p.tipoEmpaque==='caja_unidad'?(Number(p.stock)||0)+(Number(p.stockCajas)||0)*(Number(p.unidadesPorCaja)||0):(Number(p.stock)||0);
+    const lista=productos.filter(p=>p.activo!==false).slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
+    exportData=lista.map(p=>({Producto:p.nombre||'',Marca:p.marca||'',Unidad:p.unidad||'',Existencias:_stk(p)}));
+    const totU=lista.reduce((s,p)=>s+_stk(p),0);
+    html+=`<div class="panel"><div class="panel-head"><h3>Inventario actual</h3><span style="font-size:12px;color:var(--muted)">${lista.length} producto(s)</span></div>
+      <table><thead><tr><th>Producto</th><th>Marca</th><th>Unidad</th><th>Existencias</th></tr></thead><tbody>
+      ${lista.length?lista.map(p=>`<tr><td style="font-weight:600">${p.nombre||'—'}</td><td style="color:var(--muted)">${p.marca||'—'}</td><td style="color:var(--muted)">${p.unidad||'—'}</td><td class="num">${_stk(p).toLocaleString('es-GT')}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">Sin productos</td></tr>'}
+      </tbody></table>
+      ${lista.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:14px;font-weight:600;border-top:1.5px solid var(--line-strong)">Total existencias: ${totU.toLocaleString('es-GT')}</div>`:''}</div>`;
+  }
+  else if(repType==='invcosto'){
+    const _stk=p=>p.tipoEmpaque==='caja_unidad'?(Number(p.stock)||0)+(Number(p.stockCajas)||0)*(Number(p.unidadesPorCaja)||0):(Number(p.stock)||0);
+    const lista=productos.filter(p=>p.activo!==false).slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
+    const filas=lista.map(p=>{const ex=_stk(p);const co=Number(costoActual(p))||0;return {p,ex,co,tot:co*ex};});
+    exportData=filas.map(({p,ex,co,tot})=>({Producto:p.nombre||'',Marca:p.marca||'',Costo:co,Existencia:ex,'Costo Total':tot}));
+    const granTotal=filas.reduce((s,f)=>s+f.tot,0);
+    html+=`<div class="panel"><div class="panel-head"><h3>Inventario valorizado</h3><span style="font-size:12px;color:var(--muted)">${lista.length} producto(s)</span></div>
+      <table><thead><tr><th>Producto</th><th>Marca</th><th>Costo</th><th>Existencia</th><th>Costo total</th></tr></thead><tbody>
+      ${filas.length?filas.map(({p,ex,co,tot})=>`<tr><td style="font-weight:600">${p.nombre||'—'}</td><td style="color:var(--muted)">${p.marca||'—'}</td><td class="num">${money(co)}</td><td class="num">${ex.toLocaleString('es-GT')}</td><td class="num" style="font-weight:600">${money(tot)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Sin productos</td></tr>'}
+      </tbody></table>
+      ${filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:15px;font-weight:700;border-top:1.5px solid var(--line-strong)">Valor total del inventario: ${money(granTotal)}</div>`:''}</div>`;
+  }
   repLastData=exportData;
   $('#rep-body').innerHTML=html;
   // Si es el reporte cliente/producto, aplicar el estado de colapso guardado
@@ -6534,7 +6557,7 @@ function renderReportes(){
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],['Período:',repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
@@ -6588,10 +6611,10 @@ function _abrirPDF(html){
 }
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
+  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
   const ths=cols.map(c=>`<th style="${_pdfTH(esNum(c)?'text-align:right':'')}">${c}</th>`).join('');
   const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="${_pdfTD(esNum(c)?'text-align:right;font-variant-numeric:tabular-nums':'')}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
   const body=`${_pdfSec((TIPO_NOMBRES[repType]||repType)+' · '+repLastData.length+' registros')}
