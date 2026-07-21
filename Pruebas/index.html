@@ -3039,6 +3039,7 @@ function agregarSeguimiento(cliId){
   if(typeof guardarCliente==='function')guardarCliente(c);
   logAudit('Seguimiento de cobro',c.nombre+' · '+((RESULT_SEG[resultado]||[])[0]||resultado));
   renderCliDet();
+  if(typeof actualizarBellRecordatorios==='function')actualizarBellRecordatorios();
   toast('✓ Seguimiento agregado',c.nombre);
 }
 window.agregarSeguimiento=agregarSeguimiento;
@@ -7789,6 +7790,8 @@ async function verificarSesion(){
         setTimeout(_redibujar, 1800);
         // Recuperar el borrador DESPUÉS de los redibujados, para que no lo borren
         setTimeout(recuperarBorrador, 2000);
+        // Recordatorios de cobro: mostrar el pop-up también al restaurar sesión (F5)
+        _recDismissed=false;setTimeout(()=>{try{mostrarRecordatoriosHoy();}catch(e){console.error(e);}},2200);
       }
     }
   }catch(e){ /* si falla, se queda en el login normal */ }
