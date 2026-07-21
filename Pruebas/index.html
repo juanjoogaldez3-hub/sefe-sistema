@@ -948,6 +948,14 @@
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closePagoGlobal()">Cancelar</button><button class="btn btn-primary" id="pg-save" onclick="guardarPagoGlobal()">Registrar pago</button></div>
 </div></div>
 
+<!-- Pop-up de recordatorios de cobro (solo admin y cobros) -->
+<div class="overlay" id="ov-rec" style="align-items:flex-start;padding-top:40px"><div class="modal" style="max-width:560px">
+  <div class="modal-head"><h3>🔔 Recordatorios de cobro para hoy</h3><button class="x" onclick="cerrarRecordatorios()">×</button></div>
+  <div class="modal-body" id="rec-body" style="max-height:68vh;overflow:auto"></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="cerrarRecordatorios()">Cerrar</button></div>
+</div></div>
+<button id="bell-rec" onclick="mostrarRecordatoriosHoy(true)" title="Recordatorios de cobro de hoy" style="display:none;position:fixed;bottom:22px;right:22px;z-index:80;align-items:center;gap:7px;background:var(--warn);color:#fff;border:none;border-radius:999px;padding:11px 16px;font-weight:700;font-size:13px;box-shadow:var(--shadow-lg);cursor:pointer">🔔 <span id="bell-rec-n"></span></button>
+
 <div class="doc-overlay" id="docov">
   <div class="doc-wrap">
     <div class="doc-bar no-print">
@@ -1375,6 +1383,7 @@ async function doLoginAuth(){
     aplicarPermisosUI();
     entrarVistaInicial();
     setTimeout(recuperarBorrador,300);
+    _recDismissed=false;setTimeout(()=>{try{mostrarRecordatoriosHoy();}catch(e){console.error(e);}},700);
     ocultarLoader();
     btn.disabled=false;btn.textContent='Ingresar';
   }catch(e){
@@ -1387,6 +1396,8 @@ window.doLoginAuth=doLoginAuth;
 async function logoutAuth(){
   try{ if(typeof sb!=='undefined'&&sb.auth)await sb.auth.signOut(); }catch(e){}
   currentUser=null;currentRole=null;
+  const _b=document.getElementById('bell-rec');if(_b)_b.style.display='none';
+  const _o=document.getElementById('ov-rec');if(_o)_o.classList.remove('show');
   $('#app-layout').style.display='none';$('#login-screen').style.display='flex';
   const e=$('#login-email'),p=$('#login-pass');if(e)e.value='';if(p)p.value='';
 }
@@ -3039,6 +3050,75 @@ function borrarSeguimiento(cliId,segId){
   toast('Seguimiento eliminado');
 }
 window.borrarSeguimiento=borrarSeguimiento;
+// ---- Recordatorios de cobro: pop-up en la pantalla principal ----
+// Solo los ve el admin y el rol de cobros/contabilidad. Muestra los
+// "próximo seguimiento" cuya fecha es HOY y que aún no se atendieron.
+let _recDismissed=false;
+function puedeVerRecordatorios(){return currentRole==='admin'||['cobros','contabilidad'].includes(currentRole);}
+function sumarDiasFecha(fechaStr,n){const p=String(fechaStr||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!p)return fechaStr;const dt=new Date(+p[1],+p[2]-1,+p[3]+n);const z=x=>String(x).padStart(2,'0');return dt.getFullYear()+'-'+z(dt.getMonth()+1)+'-'+z(dt.getDate());}
+function recordatoriosDeHoy(){
+  const hoy=fechaHoyGT();const out=[];
+  clientes.forEach(c=>{(c.seguimientos||[]).forEach(s=>{if(s.proximaFecha===hoy&&!s.hecho)out.push({cliente:c,seg:s});});});
+  return out;
+}
+function actualizarBellRecordatorios(){
+  const bell=document.getElementById('bell-rec');if(!bell)return;
+  const n=puedeVerRecordatorios()?recordatoriosDeHoy().length:0;
+  if(n>0){bell.style.display='inline-flex';const s=document.getElementById('bell-rec-n');if(s)s.textContent=n;}
+  else bell.style.display='none';
+}
+window.actualizarBellRecordatorios=actualizarBellRecordatorios;
+function mostrarRecordatoriosHoy(forzar){
+  actualizarBellRecordatorios();
+  if(!puedeVerRecordatorios())return;
+  const lista=recordatoriosDeHoy();
+  if(!lista.length){$('#ov-rec')?.classList.remove('show');return;}
+  if(!forzar&&_recDismissed)return;
+  const body=$('#rec-body');if(!body)return;
+  body.innerHTML=lista.map(({cliente,seg})=>{
+    const r=RESULT_SEG[seg.resultado]||['—','b-muted'];
+    const tel=cliente.contactoPagos&&cliente.contactoPagos.telefono?cliente.contactoPagos.telefono:'';
+    const cont=cliente.contactoPagos&&cliente.contactoPagos.nombre?cliente.contactoPagos.nombre:'';
+    return `<div style="border:1px solid var(--line);border-radius:10px;padding:12px 13px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div style="font-family:var(--disp);font-weight:700;font-size:15px">${escHtml(cliente.nombre)}</div>
+        <span class="badge ${r[1]}">${r[0]}</span>
+      </div>
+      ${seg.nota?`<div style="font-size:13px;color:var(--muted);margin-top:5px">${escHtml(seg.nota)}</div>`:''}
+      ${tel?`<div style="font-size:12.5px;color:var(--muted-2);margin-top:4px">☎ ${escHtml(tel)}${cont?' · '+escHtml(cont):''}</div>`:''}
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-primary btn-sm" onclick="abrirClienteDesdeRec(${cliente.id})">Abrir cliente</button>
+        <button class="btn btn-ghost btn-sm" onclick="posponerRecordatorio(${cliente.id},${seg.id})">Posponer a mañana</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--ok)" onclick="marcarRecordatorioHecho(${cliente.id},${seg.id})">✓ Hecho</button>
+      </div>
+    </div>`;
+  }).join('');
+  $('#ov-rec').classList.add('show');
+}
+window.mostrarRecordatoriosHoy=mostrarRecordatoriosHoy;
+function cerrarRecordatorios(){_recDismissed=true;$('#ov-rec')?.classList.remove('show');}
+window.cerrarRecordatorios=cerrarRecordatorios;
+function _segDe(cliId,segId){const c=clientes.find(x=>x.id===cliId);if(!c)return null;const s=(c.seguimientos||[]).find(x=>x.id===segId);return s?{c,s}:null;}
+function _refrescarRec(){const l=recordatoriosDeHoy();actualizarBellRecordatorios();if($('#ov-rec')?.classList.contains('show')){if(!l.length)$('#ov-rec').classList.remove('show');else mostrarRecordatoriosHoy(true);}}
+function _reRenderCliSiAbierto(cliId){if(cliActual===cliId&&$('#v-clientedet')?.classList.contains('active'))renderCliDet();}
+function marcarRecordatorioHecho(cliId,segId){
+  const r=_segDe(cliId,segId);if(!r)return;
+  r.s.hecho=true;r.s.hechoPor=currentUser;r.s.hechoEl=new Date().toISOString();
+  if(typeof guardarCliente==='function')guardarCliente(r.c);
+  toast('✓ Recordatorio atendido',r.c.nombre);
+  _reRenderCliSiAbierto(cliId);_refrescarRec();
+}
+window.marcarRecordatorioHecho=marcarRecordatorioHecho;
+function posponerRecordatorio(cliId,segId){
+  const r=_segDe(cliId,segId);if(!r)return;
+  r.s.proximaFecha=sumarDiasFecha(r.s.proximaFecha||fechaHoyGT(),1);
+  if(typeof guardarCliente==='function')guardarCliente(r.c);
+  toast('Recordatorio pospuesto para mañana',r.c.nombre);
+  _reRenderCliSiAbierto(cliId);_refrescarRec();
+}
+window.posponerRecordatorio=posponerRecordatorio;
+function abrirClienteDesdeRec(cliId){_recDismissed=true;$('#ov-rec')?.classList.remove('show');abrirCliente(cliId);setTimeout(()=>cliSetTab('seguimiento'),40);}
+window.abrirClienteDesdeRec=abrirClienteDesdeRec;
 function renderCliDet(){
   const c=clientes.find(x=>x.id===cliActual);if(!c)return;
   // Si es un cliente PRINCIPAL (paraguas) con sedes, mostrar vista consolidada del grupo
@@ -3122,9 +3202,9 @@ function renderCliDet(){
         <td style="color:var(--muted);white-space:nowrap">${s.fecha?fdate(s.fecha):'—'}</td>
         <td><span class="badge ${r[1]}">${r[0]}</span></td>
         <td>${s.nota?escHtml(s.nota):'<span style="color:var(--muted-2)">—</span>'}</td>
-        <td style="color:var(--muted);white-space:nowrap">${s.proximaFecha?fdate(s.proximaFecha):'—'}</td>
+        <td style="color:var(--muted);white-space:nowrap">${s.proximaFecha?fdate(s.proximaFecha)+(s.hecho?' <span style="color:var(--ok)" title="Atendido">✓</span>':(s.proximaFecha===fechaHoyGT()?' <span style="color:var(--warn)" title="Recordatorio para hoy">🔔</span>':'')):'—'}</td>
         <td style="color:var(--muted-2);font-size:11.5px">${escHtml(s.usuario)||'—'}</td>
-        <td>${puedeEditar?`<button class="x" onclick="borrarSeguimiento(${c.id},${s.id})">×</button>`:''}</td>
+        <td style="white-space:nowrap">${puedeEditar?`${(s.proximaFecha&&!s.hecho)?`<button class="btn btn-ghost btn-sm" style="color:var(--ok);padding:4px 8px" title="Marcar recordatorio como atendido" onclick="marcarRecordatorioHecho(${c.id},${s.id})">✓</button> `:''}<button class="x" onclick="borrarSeguimiento(${c.id},${s.id})">×</button>`:''}</td>
       </tr>`;
     }).join(''):'<tr><td colspan="6" class="empty">Sin seguimientos registrados todavía</td></tr>';
     body=`<div class="panel">
