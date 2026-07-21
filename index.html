@@ -4447,28 +4447,20 @@ function polizaChequePDF(mov,beneficiario){
   const body=`
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;align-items:flex-start">
       <div style="flex:1;min-width:230px">
-        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Cuenta / Banco</div>
-        <div style="font-size:15px;font-weight:700;margin-top:3px;color:#173916">${c.nombre||'—'}</div>
-        <div style="font-size:12px;color:#666B5C;margin-top:2px">${c.banco||''}${c.numero?' · No. cuenta '+c.numero:''}</div>
-        <div style="font-size:12px;color:#666B5C">No. cheque / autorización / transferencia: <b>${mov.referencia||'________'}</b></div>
+        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Fecha</div>
+        <div style="font-size:15px;font-weight:700;margin-top:3px;color:#173916">Guatemala, ${fechaTxt}</div>
+        <div style="font-size:12px;color:#666B5C;margin-top:4px">No. de póliza: <b>${numPol}</b></div>
       </div>
       <div style="text-align:right;min-width:200px">
-        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">No. de póliza</div>
-        <div style="font-size:20px;font-weight:800;color:#173916;margin-top:2px">${numPol}</div>
-        <div style="font-size:12px;color:#666B5C;margin-top:6px">Fecha: <b>${fechaTxt}</b></div>
+        <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Monto</div>
+        <div style="font-size:22px;font-weight:800;color:#173916;margin-top:2px">${montoNum}</div>
       </div>
     </div>
 
     <div style="margin-top:22px;border:1.5px solid #173916;border-radius:8px;overflow:hidden">
-      <div style="display:flex;border-bottom:1px solid #D6DCC9">
-        <div style="flex:1;padding:11px 14px">
-          <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Páguese a la orden de</div>
-          <div style="font-size:15px;font-weight:700;color:#173916;margin-top:2px">${benef}</div>
-        </div>
-        <div style="width:190px;padding:11px 14px;background:#F4F7EF;border-left:1px solid #D6DCC9;text-align:right">
-          <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Monto</div>
-          <div style="font-size:20px;font-weight:800;color:#173916;margin-top:2px">${montoNum}</div>
-        </div>
+      <div style="padding:11px 14px;border-bottom:1px solid #D6DCC9">
+        <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Páguese a la orden de</div>
+        <div style="font-size:16px;font-weight:700;color:#173916;margin-top:2px">${benef}</div>
       </div>
       <div style="padding:11px 14px">
         <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">La cantidad de</div>
@@ -4477,8 +4469,20 @@ function polizaChequePDF(mov,beneficiario){
     </div>
 
     ${_pdfSec('Concepto del egreso')}
-    <div style="font-size:12.5px;color:#333;padding:2px 2px 4px;min-height:34px">${mov.concepto||'—'}</div>
+    <div style="font-size:12.5px;color:#333;padding:2px 2px 4px;min-height:30px">${mov.concepto||'—'}</div>
     <div style="font-size:11px;color:#909584;margin-top:2px">Categoría: ${CAT_MOV_LBL[mov.categoria]||mov.categoria||'Otro'}</div>
+
+    ${_pdfSec('Cuenta de banco / Forma de pago')}
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;align-items:flex-start">
+      <div style="flex:1;min-width:230px">
+        <div style="font-size:14px;font-weight:700;color:#173916">${c.numero?c.numero+' / ':''}${c.banco||c.nombre||'—'}</div>
+        ${c.nombre?`<div style="font-size:12px;color:#666B5C;margin-top:2px">${c.nombre}</div>`:''}
+      </div>
+      <div style="text-align:right;min-width:200px">
+        <div style="font-size:11px;color:#666B5C">No. cheque / autorización / transferencia:</div>
+        <div style="font-size:14px;font-weight:700;color:#173916;margin-top:2px">${mov.referencia||'________'}</div>
+      </div>
+    </div>
 
     <table style="width:100%;border-collapse:collapse;margin-top:34px"><tr>
       ${cajaFirma('Elaborado por')}
