@@ -2845,7 +2845,7 @@ function renderCli(){
   if(acc)acc.innerHTML=canCrearCliente()?`<button class="btn btn-ghost btn-sm" id="btn-nuevo-cli" onclick="openCli()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
     ` <button class="btn btn-ghost btn-sm" onclick="completarRazonSocial()" title="Consultar SAT y rellenar razón social de clientes que no la tienen" style="color:var(--blue)">Completar razón social</button>`:'';
   const listaBase=esVentas()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
-  const filasCli=listaBase.map(c=>{const saldo=saldoCliente(c);
+  const filasCli=listaBase.slice().reverse().map(c=>{const saldo=saldoCliente(c);
   const esSede=!!c.sedesDe;const padre=esSede?clientes.find(x=>x.id===c.sedesDe):null;
   const nSedes=clientes.filter(x=>x.sedesDe===c.id).length;
   return `<tr style="cursor:pointer" onclick="abrirCliente(${c.id})">
@@ -4625,7 +4625,7 @@ function abrirAnularCompra(id){
   $('#m-save').textContent='Anular compra';$('#m-save').className='btn btn-primary';$('#m-save').style.background='var(--danger)';
 }
 window.abrirAnularCompra=abrirAnularCompra;
-function renderProveedores(){$('#t-prov').innerHTML=proveedores.map(p=>{
+function renderProveedores(){$('#t-prov').innerHTML=proveedores.slice().reverse().map(p=>{
   const n=productos.filter(pr=>(pr.proveedorIds||[]).includes(p.id)).length;
   return `<tr style="cursor:pointer" onclick="abrirProveedor(${p.id})"><td style="font-weight:600">${p.nombre}</td><td style="color:var(--muted)">${p.razonSocial||'—'}</td><td class="num">${p.nit||'—'}</td><td style="color:var(--muted)">${p.telefono||'—'}</td><td>${p.diasCredito>0?p.diasCredito+' días':'Contado'}</td><td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirProveedor(${p.id},'productos')">${n} producto${n===1?'':'s'}</button></td><td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openProveedor(${p.id})">Editar</button></td></tr>`;}).join('');enhanceTable('t-prov');}
 
@@ -5250,7 +5250,7 @@ function renderProd(){
   let lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
   // Filtrar por marca si está seleccionada
   if(_filtroMarca)lista=lista.filter(p=>(p.marca||'')===_filtroMarca);
-  const filasProd=lista.map(p=>{
+  const filasProd=lista.slice().reverse().map(p=>{
   const inactivo=p.activo===false;
   const provs=(p.proveedorIds||[]).map(id=>proveedores.find(x=>x.id===id)).filter(Boolean);
   const provTxt=provs.length?provs.map(pv=>pv.nombre).join(', '):'<span style="color:var(--muted-2)">Sin asignar</span>';
