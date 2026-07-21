@@ -3346,7 +3346,15 @@ function arInfo(f){
   const vencido=estado!=='pagado'&&venc&&new Date()>venc;
   return {abon,saldo,estado,vencido,venc,cr,totalAjustado};
 }
-function fdate(d){return d?new Date(d).toLocaleDateString('es-GT',{day:'2-digit',month:'short',year:'2-digit'}):'—';}
+function fdate(d){
+  if(!d)return '—';
+  // Un string "YYYY-MM-DD" (solo fecha) lo interpreta JS como medianoche UTC,
+  // y al mostrarlo en zona GT (UTC-6) se corre un día hacia atrás. Para evitarlo
+  // lo construimos como fecha LOCAL usando sus componentes.
+  const m=(typeof d==='string')&&d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const fecha=m?new Date(+m[1],+m[2]-1,+m[3]):new Date(d);
+  return fecha.toLocaleDateString('es-GT',{day:'2-digit',month:'short',year:'2-digit'});
+}
 function cobrosEnFiltro(f,ai){
   const cli=$('#cb-cliente')?.value,est=$('#cb-estado')?.value,met=$('#cb-metodo')?.value,desde=$('#cb-desde')?.value,hasta=$('#cb-hasta')?.value;
   if(cli&&String(f.clienteId)!==cli)return false;
