@@ -171,7 +171,8 @@ function mapClienteFromDB(c){
     direccionEntrega:c.direccion_entrega, fechaAlta:c.fecha_alta,
     nitsSecundarios:c.nits_secundarios||[],
     contactoPagos:c.contacto_pagos||{}, contactoCompras:c.contacto_compras||{},
-    precios:c.precios||{}
+    precios:c.precios||{},
+    cobroInfo:c.cobro_info||{}, seguimientos:c.seguimientos||[]
   };
 }
 function mapProductoFromDB(p){
@@ -256,7 +257,8 @@ async function guardarCliente(cli){
     vendedor_id:cli.vendedorId, sedes_de:cli.sedesDe,
     direccion_entrega:cli.direccionEntrega, fecha_alta:cli.fechaAlta,
     nits_secundarios:cli.nitsSecundarios,
-    contacto_pagos:cli.contactoPagos, contacto_compras:cli.contactoCompras, precios:cli.precios
+    contacto_pagos:cli.contactoPagos, contacto_compras:cli.contactoCompras, precios:cli.precios,
+    cobro_info:cli.cobroInfo||{}, seguimientos:cli.seguimientos||[]
   };
   if (cli._nuevo) {
     delete cli._nuevo;

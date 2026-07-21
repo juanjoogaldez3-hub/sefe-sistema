@@ -3013,6 +3013,43 @@ function renderGrupoConsolidado(c){
       <tbody>${filasSedes||'<tr><td colspan="6" class="empty">Sin sedes</td></tr>'}</tbody></table>
     </div>`;
 }
+// ---- Cobros: configuración y seguimiento de cobro del cliente ----
+const DIAS_COBRO=[['lun','Lun'],['mar','Mar'],['mie','Mié'],['jue','Jue'],['vie','Vie'],['sab','Sáb'],['dom','Dom']];
+const RESULT_SEG={pago:['Pagó','b-ok'],parcial:['Abono parcial','b-info'],promesa:['Prometió pago','b-warn'],noestaba:['No estaba','b-muted'],sinrespuesta:['Sin respuesta','b-muted'],reprogramado:['Reprogramado','b-info'],otro:['Otro','b-muted']};
+function escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function guardarCobroInfo(cliId){
+  const c=clientes.find(x=>x.id===cliId);if(!c)return;
+  const dias=Array.from(document.querySelectorAll('.co-dia:checked')).map(x=>x.value);
+  c.cobroInfo={dias,horario:($('#co-horario')?.value||'').trim(),frecuencia:$('#co-frec')?.value||'',notas:($('#co-notas')?.value||'').trim()};
+  if(typeof guardarCliente==='function')guardarCliente(c);
+  logAudit('Config. de cobro actualizada',c.nombre);
+  toast('✓ Configuración de cobro guardada',c.nombre);
+}
+window.guardarCobroInfo=guardarCobroInfo;
+function agregarSeguimiento(cliId){
+  const c=clientes.find(x=>x.id===cliId);if(!c)return;
+  const fecha=$('#sg-fecha')?.value||fechaHoyGT();
+  const resultado=$('#sg-result')?.value||'otro';
+  const nota=($('#sg-nota')?.value||'').trim();
+  const proximaFecha=$('#sg-prox')?.value||'';
+  if(!nota&&!proximaFecha){toast('Falta información','Escribí una nota o una fecha de próximo seguimiento',true);return;}
+  c.seguimientos=Array.isArray(c.seguimientos)?c.seguimientos:[];
+  const nid=c.seguimientos.reduce((m,s)=>Math.max(m,s.id||0),0)+1;
+  c.seguimientos.push({id:nid,fecha,resultado,nota,proximaFecha,usuario:currentUser,registrado:new Date().toISOString()});
+  if(typeof guardarCliente==='function')guardarCliente(c);
+  logAudit('Seguimiento de cobro',c.nombre+' · '+((RESULT_SEG[resultado]||[])[0]||resultado));
+  renderCliDet();
+  toast('✓ Seguimiento agregado',c.nombre);
+}
+window.agregarSeguimiento=agregarSeguimiento;
+function borrarSeguimiento(cliId,segId){
+  const c=clientes.find(x=>x.id===cliId);if(!c)return;
+  c.seguimientos=(c.seguimientos||[]).filter(s=>s.id!==segId);
+  if(typeof guardarCliente==='function')guardarCliente(c);
+  renderCliDet();
+  toast('Seguimiento eliminado');
+}
+window.borrarSeguimiento=borrarSeguimiento;
 function renderCliDet(){
   const c=clientes.find(x=>x.id===cliActual);if(!c)return;
   // Si es un cliente PRINCIPAL (paraguas) con sedes, mostrar vista consolidada del grupo
@@ -3067,6 +3104,56 @@ function renderCliDet(){
       <table><thead><tr><th>No.</th><th>Fecha</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>
       ${prestamos.length?prestamos.slice().reverse().map(f=>`<tr><td style="font-weight:600">PED-${padn(f.numero)}</td><td style="color:var(--muted)">${fdate(f.creada)}</td><td class="num" style="font-weight:600">${money(f.totales.total)}</td><td><span class="badge ${f.estado==='pendiente'?'b-warn':(f.estado==='facturado'?'b-ok':'b-info')}">${f.estado}</span></td><td><button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button></td></tr>`).join(''):'<tr><td colspan="5" class="empty">Sin órdenes de préstamo</td></tr>'}
       </tbody></table></div>`;
+  }else if(cliTab==='cobros'){
+    const ci=c.cobroInfo||{};
+    const puedeEditar=canRegistrarAbono()||canCrearCliente();
+    const diasSel=Array.isArray(ci.dias)?ci.dias:[];
+    const chkDias=DIAS_COBRO.map(([k,l])=>`<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none"><input type="checkbox" class="co-dia" value="${k}" ${diasSel.includes(k)?'checked':''} ${puedeEditar?'':'disabled'}>${l}</label>`).join('');
+    const frecOpts=[['','—'],['semanal','Semanal'],['quincenal','Quincenal'],['mensual','Mensual']].map(([v,l])=>`<option value="${v}" ${ci.frecuencia===v?'selected':''}>${l}</option>`).join('');
+    body=`<div class="panel">
+      <div class="panel-head"><h3>Configuración de cobro</h3>${puedeEditar?`<button class="btn btn-primary btn-sm" onclick="guardarCobroInfo(${c.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Guardar</button>`:''}</div>
+      <div class="panel-body">
+        <label>Días de cobro</label>
+        <div style="display:flex;flex-wrap:wrap;gap:14px;margin:6px 0 16px">${chkDias}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div><label>Horario de cobro</label><input id="co-horario" placeholder="Ej. 8:00 – 12:00" value="${escHtml(ci.horario)}" ${puedeEditar?'':'disabled'}></div>
+          <div><label>Frecuencia</label><select id="co-frec" ${puedeEditar?'':'disabled'}>${frecOpts}</select></div>
+        </div>
+        <label style="display:block;margin-top:14px">Notas / instrucciones de cobro</label>
+        <textarea id="co-notas" rows="3" placeholder="Instrucciones especiales, referencia, con quién dejar el cobro, etc." ${puedeEditar?'':'disabled'}>${escHtml(ci.notas)}</textarea>
+      </div>
+    </div>`;
+  }else if(cliTab==='seguimiento'){
+    const puedeEditar=canRegistrarAbono()||canCrearCliente();
+    const segs=Array.isArray(c.seguimientos)?c.seguimientos:[];
+    const resultOpts=Object.entries(RESULT_SEG).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');
+    const filas=segs.length?segs.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||((b.id||0)-(a.id||0))).map(s=>{
+      const r=RESULT_SEG[s.resultado]||['—','b-muted'];
+      return `<tr>
+        <td style="color:var(--muted);white-space:nowrap">${s.fecha?fdate(s.fecha):'—'}</td>
+        <td><span class="badge ${r[1]}">${r[0]}</span></td>
+        <td>${s.nota?escHtml(s.nota):'<span style="color:var(--muted-2)">—</span>'}</td>
+        <td style="color:var(--muted);white-space:nowrap">${s.proximaFecha?fdate(s.proximaFecha):'—'}</td>
+        <td style="color:var(--muted-2);font-size:11.5px">${escHtml(s.usuario)||'—'}</td>
+        <td>${puedeEditar?`<button class="x" onclick="borrarSeguimiento(${c.id},${s.id})">×</button>`:''}</td>
+      </tr>`;
+    }).join(''):'<tr><td colspan="6" class="empty">Sin seguimientos registrados todavía</td></tr>';
+    body=`<div class="panel">
+      <div class="panel-head"><h3>Seguimiento de cobro</h3><span style="font-size:12px;color:var(--muted)">${segs.length} anotación(es)</span></div>
+      ${puedeEditar?`<div class="panel-body" style="border-bottom:1px solid var(--line)">
+        <div style="display:grid;grid-template-columns:140px 1fr 160px;gap:11px;align-items:end">
+          <div><label>Fecha</label><input type="date" id="sg-fecha" value="${fechaHoyGT()}"></div>
+          <div><label>Resultado</label><select id="sg-result">${resultOpts}</select></div>
+          <div><label>Próximo seguimiento</label><input type="date" id="sg-prox"></div>
+        </div>
+        <label style="display:block;margin-top:12px">Nota</label>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <textarea id="sg-nota" rows="2" placeholder="¿Qué pasó en la gestión de cobro?" style="flex:1"></textarea>
+          <button class="btn btn-primary" style="white-space:nowrap" onclick="agregarSeguimiento(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
+        </div>
+      </div>`:''}
+      <table><thead><tr><th>Fecha</th><th>Resultado</th><th>Nota</th><th>Próximo</th><th>Registró</th><th></th></tr></thead><tbody>${filas}</tbody></table>
+    </div>`;
   }else{
     // Reportes de ventas del cliente
     const facs=facturas;
@@ -3118,7 +3205,7 @@ function renderCliDet(){
       </div>
     </div></div>
     ${fichaIntegral(c,st)}
-    <div class="ct-tabs">${tabBtn('precios','Precios')}${tabBtn('facturas','Facturas Cambiarias')}${tabBtn('prestamos','Órdenes de préstamo')}${tabBtn('reportes','Reportes de ventas')}</div>
+    <div class="ct-tabs">${tabBtn('precios','Precios')}${tabBtn('facturas','Facturas Cambiarias')}${tabBtn('prestamos','Órdenes de préstamo')}${tabBtn('cobros','Cobros')}${tabBtn('seguimiento','Seguimiento')}${tabBtn('reportes','Reportes de ventas')}</div>
     ${body}`;
 }
 function cliSetTab(t){cliTab=t;renderCliDet();}
