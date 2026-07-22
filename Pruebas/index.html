@@ -6070,6 +6070,11 @@ function renderReportes(){
       meses.forEach(m=>{filaSub[mesLbl(m)]=subt[m];});
       filaSub['Total']=subTotalVend;
       expFilas.push(filaSub);
+      // fila en blanco para separar cada bloque de vendedor en el Excel/PDF
+      const filaBlank={Vendedor:'',Cliente:''};
+      meses.forEach(m=>{filaBlank[mesLbl(m)]='';});
+      filaBlank['Total']='';
+      expFilas.push(filaBlank);
       // subtotal vendedor
       let celdasSub='';
       meses.forEach(m=>{celdasSub+=`<td class="num" style="font-weight:700">${money(subt[m])}</td>`;});
