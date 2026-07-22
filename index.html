@@ -6598,11 +6598,11 @@ function renderReportes(){
     if(repFiltros.marca_prod)base=base.filter(p=>(p.marca||'')===repFiltros.marca_prod);
     base=base.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
     const filas=base.map(p=>{const ex=exDe(p);const co=Number(costoActual(p))||0;return {p,ex,co,tot:co*ex};});
-    exportData=filas.map(({p,ex,co,tot})=>({Producto:p.nombre||'',Marca:p.marca||'',Costo:co,Existencia:ex,'Costo Total':tot}));
+    exportData=filas.map(({p,ex,co,tot})=>({'Código':p.codigo||'','Unidad de medida':p.unidad||'','Descripción':p.nombre||'','Cantidad':ex,'Costo unitario':co,'Costo total':tot}));
     const granTotal=filas.reduce((s,f)=>s+f.tot,0);
     html+=`<div class="panel"><div class="panel-head"><h3>Inventario valorizado</h3><span style="font-size:12px;color:var(--muted)">${esHoy?'Al día de hoy':'Al '+fdate(corte)} · ${base.length} producto(s)${repFiltros.marca_prod?' · '+repFiltros.marca_prod:''}</span></div>
-      <table><thead><tr><th>Producto</th><th>Marca</th><th>Costo</th><th>Existencia</th><th>Costo total</th></tr></thead><tbody>
-      ${filas.length?filas.map(({p,ex,co,tot})=>`<tr><td style="font-weight:600">${p.nombre||'—'}</td><td style="color:var(--muted)">${p.marca||'—'}</td><td class="num">${money(co)}</td><td class="num">${ex.toLocaleString('es-GT')}</td><td class="num" style="font-weight:600">${money(tot)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Sin productos</td></tr>'}
+      <table><thead><tr><th>Código</th><th>Unidad de medida</th><th>Descripción</th><th>Cantidad</th><th>Costo unitario</th><th>Costo total</th></tr></thead><tbody>
+      ${filas.length?filas.map(({p,ex,co,tot})=>`<tr><td style="color:var(--muted)">${p.codigo||'—'}</td><td style="color:var(--muted)">${p.unidad||'—'}</td><td style="font-weight:600">${p.nombre||'—'}</td><td class="num">${ex.toLocaleString('es-GT')}</td><td class="num">${money(co)}</td><td class="num" style="font-weight:600">${money(tot)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin productos</td></tr>'}
       </tbody></table>
       ${filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:15px;font-weight:700;border-top:1.5px solid var(--line-strong)">Valor total del inventario: ${money(granTotal)}</div>`:''}
       ${esHoy?'':'<div style="font-size:11px;color:var(--muted-2);padding:8px 4px 0">Existencias reconstruidas del historial; el costo usado es el costo actual del producto.</div>'}</div>`;
@@ -6675,7 +6675,7 @@ function exportarPDF(){
   const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
+  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia','Cantidad','Costo unitario','Costo total'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
   const ths=cols.map(c=>`<th style="${_pdfTH(esNum(c)?'text-align:right':'')}">${c}</th>`).join('');
   const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="${_pdfTD(esNum(c)?'text-align:right;font-variant-numeric:tabular-nums':'')}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
   const _invFch=(repType==='invactual'||repType==='invcosto')&&repFiltros.invFecha&&repFiltros.invFecha<fechaHoyGT()?' · al '+fdate(repFiltros.invFecha):'';
