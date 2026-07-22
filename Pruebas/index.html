@@ -4579,7 +4579,7 @@ function addCompraProducto(){
   let p=productos.find(x=>{const sku=(x.skuProveedor||x.codigo).toLowerCase();const nom=(x.nombreProveedor||x.nombre).toLowerCase();
     return `${sku} — ${nom}`===q||q.startsWith(sku)||q.includes(sku);});
   if(!p)p=buscarProducto(v);
-  if(!p){toast('✗ Producto no encontrado','Buscá por SKU interno, SKU proveedor o nombre',true);return;}
+  if(!p){toast('✗ Producto no encontrado','Buscá por Código, SKU proveedor o nombre',true);return;}
   const ex=compraCart.find(c=>c.id===p.id);
   if(ex)ex.cantidad++;else compraCart.push({id:p.id,codigo:p.codigo,skuProveedor:p.skuProveedor||p.codigo,nombre:p.nombre,nombreProveedor:p.nombreProveedor||p.nombre,costo:p.costo||0,cantidad:1});
   inp.value='';renderCompraForm();
@@ -6998,7 +6998,7 @@ function openProd(id){
   prodProvSel=p?[...(p.proveedorIds||[])]:[];
   const tipoEmp=p?(p.tipoEmpaque||'unidad'):'unidad';
   openMod(p?'Editar producto':'Nuevo producto',`
-  <div class="row"><div style="flex:2"><label>Nombre interno</label><input id="p-nom" value="${p?p.nombre:''}"></div><div><label>SKU interno</label><input id="p-cod" value="${p?p.codigo:''}"></div></div>
+  <div class="row"><div style="flex:2"><label>Nombre interno</label><input id="p-nom" value="${p?p.nombre:''}"></div><div><label>Código</label><input id="p-cod" value="${p?p.codigo:''}"></div></div>
   <div class="row"><div style="flex:1"><label>Marca</label><input id="p-marca" placeholder="Opcional" value="${p?(p.marca||''):''}"></div></div>
   <div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin:2px 0 8px">Nomenclatura del proveedor</div>
   <div class="row"><div style="flex:2"><label>Nombre del proveedor</label><input id="p-nom-prov" placeholder="Opcional" value="${p?(p.nombreProveedor||''):''}"></div><div><label>SKU del proveedor</label><input id="p-sku-prov" placeholder="Ej. QV-DES-1GL" value="${p?(p.skuProveedor||''):''}"></div></div>
