@@ -6561,11 +6561,11 @@ function renderReportes(){
     let lista=productos.filter(p=>p.activo!==false);
     if(repFiltros.marca_prod)lista=lista.filter(p=>(p.marca||'')===repFiltros.marca_prod);
     lista=lista.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
-    exportData=lista.map(p=>({Producto:p.nombre||'',Marca:p.marca||'',Unidad:p.unidad||'',Existencias:exDe(p)}));
+    exportData=lista.map(p=>({'Código':p.codigo||'',Producto:p.nombre||'',Marca:p.marca||'',Unidad:p.unidad||'',Existencias:exDe(p)}));
     const totU=lista.reduce((s,p)=>s+exDe(p),0);
     html+=`<div class="panel"><div class="panel-head"><h3>Inventario actual</h3><span style="font-size:12px;color:var(--muted)">${esHoy?'Existencias actuales':'Existencias al '+fdate(corte)} · ${lista.length} producto(s)${repFiltros.marca_prod?' · '+repFiltros.marca_prod:''}</span></div>
-      <table><thead><tr><th>Producto</th><th>Marca</th><th>Unidad</th><th>Existencias</th></tr></thead><tbody>
-      ${lista.length?lista.map(p=>`<tr><td style="font-weight:600">${p.nombre||'—'}</td><td style="color:var(--muted)">${p.marca||'—'}</td><td style="color:var(--muted)">${p.unidad||'—'}</td><td class="num">${exDe(p).toLocaleString('es-GT')}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">Sin productos</td></tr>'}
+      <table><thead><tr><th>Código</th><th>Producto</th><th>Marca</th><th>Unidad</th><th>Existencias</th></tr></thead><tbody>
+      ${lista.length?lista.map(p=>`<tr><td style="color:var(--muted)">${p.codigo||'—'}</td><td style="font-weight:600">${p.nombre||'—'}</td><td style="color:var(--muted)">${p.marca||'—'}</td><td style="color:var(--muted)">${p.unidad||'—'}</td><td class="num">${exDe(p).toLocaleString('es-GT')}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Sin productos</td></tr>'}
       </tbody></table>
       ${lista.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:14px;font-weight:600;border-top:1.5px solid var(--line-strong)">Total existencias: ${totU.toLocaleString('es-GT')}</div>`:''}
       ${esHoy?'':'<div style="font-size:11px;color:var(--muted-2);padding:8px 4px 0">Existencias reconstruidas del historial de compras y ventas; pueden variar por ajustes manuales de stock.</div>'}</div>`;
