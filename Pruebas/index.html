@@ -5733,6 +5733,11 @@ function renderRepFilters(){
       ${sel('rf-cat-bco','Categoría',catOpts,repFiltros.categoria,'categoria')}
     </div>`;
   }
+  else if(repType==='invactual'||repType==='invcosto'){
+    const marcas=[...new Set(productos.filter(p=>p.activo!==false).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
+    const marcaOpts=marcas.map(m=>({v:m,l:m}));
+    html=`<div class="rep-filter-bar">${sel('rf-marca-inv','Marca',marcaOpts,repFiltros.marca_prod,'marca_prod')}<div><label>Existencias al día</label><input type="date" style="margin-top:4px" value="${repFiltros.invFecha||fechaHoyGT()}" onchange="setRepFiltro('invFecha',this.value)"></div></div>`;
+  }
   f.innerHTML=html;
 }
 function bindRep(){
@@ -5812,6 +5817,15 @@ function aplicarColapso(){
 window.aplicarColapso=aplicarColapso;
 
 
+// Movimientos de inventario (entradas de compras, salidas de documentos) con fecha POSTERIOR al corte.
+// Se usa para reconstruir el stock que había a una fecha: stockHoy - entradas_después + salidas_después.
+function _movsInvDespuesDe(corte){
+  const m={};
+  const add=(cod,campo,cant)=>{if(!cod)return;(m[cod]=m[cod]||{entra:0,sale:0})[campo]+=cant;};
+  documentos.forEach(d=>{if(d.estado==='anulada'||d.anulado)return;if((d.creada||'').slice(0,10)<=corte)return;(d.items||[]).forEach(it=>add(it.codigo,'sale',Number(it.cantidad)||0));});
+  compras.forEach(c=>{if(c.anulado)return;if((c.fecha||'').slice(0,10)<=corte)return;(c.items||[]).forEach(it=>{const r=Number(it.recibido||0);if(r>0)add(it.codigo,'entra',r);});});
+  return m;
+}
 function renderReportes(){
   bindRep();renderRepFilters();
   const r=repRange();
@@ -6526,26 +6540,38 @@ function renderReportes(){
   }
   else if(repType==='invactual'){
     const _stk=p=>p.tipoEmpaque==='caja_unidad'?(Number(p.stock)||0)+(Number(p.stockCajas)||0)*(Number(p.unidadesPorCaja)||0):(Number(p.stock)||0);
-    const lista=productos.filter(p=>p.activo!==false).slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
-    exportData=lista.map(p=>({Producto:p.nombre||'',Marca:p.marca||'',Unidad:p.unidad||'',Existencias:_stk(p)}));
-    const totU=lista.reduce((s,p)=>s+_stk(p),0);
-    html+=`<div class="panel"><div class="panel-head"><h3>Inventario actual</h3><span style="font-size:12px;color:var(--muted)">${lista.length} producto(s)</span></div>
+    const corte=repFiltros.invFecha||fechaHoyGT();const esHoy=corte>=fechaHoyGT();
+    const movs=_movsInvDespuesDe(corte);
+    const exDe=p=>{const mm=movs[p.codigo];return Math.max(0,_stk(p)-((mm&&mm.entra)||0)+((mm&&mm.sale)||0));};
+    let lista=productos.filter(p=>p.activo!==false);
+    if(repFiltros.marca_prod)lista=lista.filter(p=>(p.marca||'')===repFiltros.marca_prod);
+    lista=lista.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
+    exportData=lista.map(p=>({Producto:p.nombre||'',Marca:p.marca||'',Unidad:p.unidad||'',Existencias:exDe(p)}));
+    const totU=lista.reduce((s,p)=>s+exDe(p),0);
+    html+=`<div class="panel"><div class="panel-head"><h3>Inventario actual</h3><span style="font-size:12px;color:var(--muted)">${esHoy?'Existencias actuales':'Existencias al '+fdate(corte)} · ${lista.length} producto(s)${repFiltros.marca_prod?' · '+repFiltros.marca_prod:''}</span></div>
       <table><thead><tr><th>Producto</th><th>Marca</th><th>Unidad</th><th>Existencias</th></tr></thead><tbody>
-      ${lista.length?lista.map(p=>`<tr><td style="font-weight:600">${p.nombre||'—'}</td><td style="color:var(--muted)">${p.marca||'—'}</td><td style="color:var(--muted)">${p.unidad||'—'}</td><td class="num">${_stk(p).toLocaleString('es-GT')}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">Sin productos</td></tr>'}
+      ${lista.length?lista.map(p=>`<tr><td style="font-weight:600">${p.nombre||'—'}</td><td style="color:var(--muted)">${p.marca||'—'}</td><td style="color:var(--muted)">${p.unidad||'—'}</td><td class="num">${exDe(p).toLocaleString('es-GT')}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">Sin productos</td></tr>'}
       </tbody></table>
-      ${lista.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:14px;font-weight:600;border-top:1.5px solid var(--line-strong)">Total existencias: ${totU.toLocaleString('es-GT')}</div>`:''}</div>`;
+      ${lista.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:14px;font-weight:600;border-top:1.5px solid var(--line-strong)">Total existencias: ${totU.toLocaleString('es-GT')}</div>`:''}
+      ${esHoy?'':'<div style="font-size:11px;color:var(--muted-2);padding:8px 4px 0">Existencias reconstruidas del historial de compras y ventas; pueden variar por ajustes manuales de stock.</div>'}</div>`;
   }
   else if(repType==='invcosto'){
     const _stk=p=>p.tipoEmpaque==='caja_unidad'?(Number(p.stock)||0)+(Number(p.stockCajas)||0)*(Number(p.unidadesPorCaja)||0):(Number(p.stock)||0);
-    const lista=productos.filter(p=>p.activo!==false).slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
-    const filas=lista.map(p=>{const ex=_stk(p);const co=Number(costoActual(p))||0;return {p,ex,co,tot:co*ex};});
+    const corte=repFiltros.invFecha||fechaHoyGT();const esHoy=corte>=fechaHoyGT();
+    const movs=_movsInvDespuesDe(corte);
+    const exDe=p=>{const mm=movs[p.codigo];return Math.max(0,_stk(p)-((mm&&mm.entra)||0)+((mm&&mm.sale)||0));};
+    let base=productos.filter(p=>p.activo!==false);
+    if(repFiltros.marca_prod)base=base.filter(p=>(p.marca||'')===repFiltros.marca_prod);
+    base=base.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
+    const filas=base.map(p=>{const ex=exDe(p);const co=Number(costoActual(p))||0;return {p,ex,co,tot:co*ex};});
     exportData=filas.map(({p,ex,co,tot})=>({Producto:p.nombre||'',Marca:p.marca||'',Costo:co,Existencia:ex,'Costo Total':tot}));
     const granTotal=filas.reduce((s,f)=>s+f.tot,0);
-    html+=`<div class="panel"><div class="panel-head"><h3>Inventario valorizado</h3><span style="font-size:12px;color:var(--muted)">${lista.length} producto(s)</span></div>
+    html+=`<div class="panel"><div class="panel-head"><h3>Inventario valorizado</h3><span style="font-size:12px;color:var(--muted)">${esHoy?'Al día de hoy':'Al '+fdate(corte)} · ${base.length} producto(s)${repFiltros.marca_prod?' · '+repFiltros.marca_prod:''}</span></div>
       <table><thead><tr><th>Producto</th><th>Marca</th><th>Costo</th><th>Existencia</th><th>Costo total</th></tr></thead><tbody>
       ${filas.length?filas.map(({p,ex,co,tot})=>`<tr><td style="font-weight:600">${p.nombre||'—'}</td><td style="color:var(--muted)">${p.marca||'—'}</td><td class="num">${money(co)}</td><td class="num">${ex.toLocaleString('es-GT')}</td><td class="num" style="font-weight:600">${money(tot)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Sin productos</td></tr>'}
       </tbody></table>
-      ${filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:15px;font-weight:700;border-top:1.5px solid var(--line-strong)">Valor total del inventario: ${money(granTotal)}</div>`:''}</div>`;
+      ${filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:15px;font-weight:700;border-top:1.5px solid var(--line-strong)">Valor total del inventario: ${money(granTotal)}</div>`:''}
+      ${esHoy?'':'<div style="font-size:11px;color:var(--muted-2);padding:8px 4px 0">Existencias reconstruidas del historial; el costo usado es el costo actual del producto.</div>'}</div>`;
   }
   repLastData=exportData;
   $('#rep-body').innerHTML=html;
@@ -6558,7 +6584,8 @@ async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
   const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
-  const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],['Período:',repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
+  const _esInv=(repType==='invactual'||repType==='invcosto');
+  const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,TIPO_NOMBRES[repType]||'Reporte');
@@ -6617,9 +6644,10 @@ function exportarPDF(){
   const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
   const ths=cols.map(c=>`<th style="${_pdfTH(esNum(c)?'text-align:right':'')}">${c}</th>`).join('');
   const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="${_pdfTD(esNum(c)?'text-align:right;font-variant-numeric:tabular-nums':'')}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
-  const body=`${_pdfSec((TIPO_NOMBRES[repType]||repType)+' · '+repLastData.length+' registros')}
+  const _invFch=(repType==='invactual'||repType==='invcosto')&&repFiltros.invFecha&&repFiltros.invFecha<fechaHoyGT()?' · al '+fdate(repFiltros.invFecha):'';
+  const body=`${_pdfSec((TIPO_NOMBRES[repType]||repType)+_invFch+' · '+repLastData.length+' registros')}
     <table style="width:100%;border-collapse:collapse"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
-  _abrirPDF(_pdfShell({titulo:'REPORTE',subtitulo:TIPO_NOMBRES[repType]||repType,orientacion:cols.length>6?'landscape':'portrait',body}));
+  _abrirPDF(_pdfShell({titulo:'REPORTE',subtitulo:(TIPO_NOMBRES[repType]||repType)+_invFch,orientacion:cols.length>6?'landscape':'portrait',body}));
 }
 window.exportarPDF=exportarPDF;
 
