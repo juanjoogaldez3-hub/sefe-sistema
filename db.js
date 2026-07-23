@@ -182,7 +182,7 @@ function mapProductoFromDB(p){
     proveedorIds:p.proveedor_ids||[], skuProveedor:p.sku_proveedor, nombreProveedor:p.nombre_proveedor,
     marca:p.marca||'', activo:p.activo!==false,
     tipoEmpaque:p.tipo_empaque||'unidad', unidadesPorCaja:p.unidades_por_caja, stockCajas:Number(p.stock_cajas||0),
-    precioCaja:Number(p.precio_caja)||0
+    precioUnidad:Number(p.precio_unidad)||0
   };
 }
 function mapProveedorFromDB(p){
@@ -374,7 +374,7 @@ async function guardarProducto(p){
     sku_proveedor:p.skuProveedor, nombre_proveedor:p.nombreProveedor,
     marca:p.marca||null, activo:p.activo!==false,
     tipo_empaque:p.tipoEmpaque||'unidad', unidades_por_caja:p.unidadesPorCaja, stock_cajas:p.stockCajas||0,
-    precio_caja:p.precioCaja||0
+    precio_unidad:p.precioUnidad||0
   };
   if (p._nuevo) {
     // Producto nuevo: INSERT, y Supabase genera el id real
