@@ -5708,7 +5708,7 @@ function renderRepFilters(){
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
     if(repType!=='producto')html+=sel('rf-cli','Cliente',cliOpts,repFiltros.cliente,'cliente');
-    if(repType!=='producto')html+=sel('rf-vend','Vendedor',vendOpts,repFiltros.vendedores[0]||'','vendedor_simple');
+    if(repType!=='producto')html+=sel('rf-vend','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple');
     if(repType==='producto'){
       // Filtros de cliente y marca para el reporte de ventas por producto
       html+=sel('rf-cli-prod','Cliente',cliOpts,repFiltros.cliente,'cliente');
@@ -5730,7 +5730,7 @@ function renderRepFilters(){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     html=`<div class="rep-filter-bar">
-      ${sel('rf-vend-cp','Vendedor',vendOpts,repFiltros.vendedores[0]||'','vendedor_simple')}
+      ${sel('rf-vend-cp','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}
       ${sel('rf-cli-cp','Cliente',cliOpts,repFiltros.cliente,'cliente')}
       <div style="display:flex;align-items:flex-end;gap:8px">
         <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(true)" title="Expandir todo">⊞ Expandir</button>
@@ -5740,7 +5740,7 @@ function renderRepFilters(){
   }
   else if(repType==='climes'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
-    html=`<div class="rep-filter-bar">${sel('rf-vend-cm','Vendedor',vendOpts,repFiltros.vendedores[0]||'','vendedor_simple')}
+    html=`<div class="rep-filter-bar">${sel('rf-vend-cm','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}
       <div style="display:flex;align-items:flex-end;gap:8px">
         <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(true)" title="Expandir todo">⊞ Expandir</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(false)" title="Colapsar todo">⊟ Colapsar</button>
@@ -5749,7 +5749,7 @@ function renderRepFilters(){
   }
   else if(repType==='dircli'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
-    html=`<div class="rep-filter-bar">${sel('rf-vend-dc','Vendedor',vendOpts,repFiltros.vendedores[0]||'','vendedor_simple')}
+    html=`<div class="rep-filter-bar">${sel('rf-vend-dc','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}
       <div style="display:flex;align-items:flex-end;gap:8px">
         <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(true)" title="Expandir todo">⊞ Expandir</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(false)" title="Colapsar todo">⊟ Colapsar</button>
@@ -6654,15 +6654,17 @@ function renderReportes(){
 // ---- Exportación Excel ----
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
+  try{
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
   const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const _esInv=(repType==='invactual'||repType==='invcosto');
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,TIPO_NOMBRES[repType]||'Reporte');
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,String(TIPO_NOMBRES[repType]||'Reporte').replace(/[\\\/?*\[\]:]/g,' ').slice(0,31));
   XLSX.writeFile(wb,`SEFE_${repType}_${new Date().toISOString().slice(0,10)}.xlsx`);
   toast('✓ Excel descargado','SEFE_'+repType+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  }catch(e){console.error('Error exportando Excel:',e);toast('No se pudo generar el Excel',e.message||String(e),true);}
 }
 window.exportarExcel=exportarExcel;
 
