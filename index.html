@@ -2028,7 +2028,7 @@ window.updLive=(i,k,v)=>{
 };
 window.rm=i=>{cart.splice(i,1);render();};
 
-$('#f-go').onclick=()=>{
+$('#f-go').onclick=async()=>{
   const cli=clientes.find(c=>c.id===Number($('#f-cli').value));
   if(!cli){toast('Seleccioná un cliente','Buscá por nombre o NIT en el campo de cliente',true);return;}
   if(esVentas()&&cli.vendedorId!==miVendedorId()){toast('Cliente no asignado','Solo podés crear pedidos para tus clientes',true);return;}
@@ -2057,13 +2057,18 @@ $('#f-go').onclick=()=>{
     cart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,-it.cantidad,it.modoVenta);});
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
     const subVend=(esVendedorCanal(vend?.nombre)&&$('#f-subvend'))?($('#f-subvend').value||null):null;
-    const nuevoId=(documentos.reduce((m,d)=>Math.max(m,d.id||0),0)||0)+1;
+    // Id temporal NEGATIVO: los ids reales de la base son positivos, así que un
+    // temporal nunca puede coincidir con otro documento (evita facturar el equivocado).
+    const nuevoId=-Date.now();
     const doc={id:nuevoId,numero:corr,tipoDoc:'pedido',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend?.id,vendedorNombre:vend?.nombre,subVendedorNombre:subVend,
       items:cart.map(it=>({...it})),totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',_nuevo:true};
     documentos.push(doc);corr++;
     logAudit('Pedido creado','PED-'+padn(doc.numero)+' · '+cli.nombre+' · '+money(totales.total));
-    if(typeof guardarDocumento==='function')guardarDocumento(doc);
-    toast('✓ Pedido ingresado','PED-'+padn(doc.numero)+' · inventario rebajado. Facturalo o convertilo en Documentos.');
+    // Esperamos el id real de la base ANTES de dibujar la lista, para que los
+    // botones (Ver / Facturar) nazcan apuntando al documento correcto.
+    if(typeof guardarDocumento==='function')await guardarDocumento(doc);
+    if(doc.id<0)toast('⚠ Pedido guardado solo en pantalla','No se pudo confirmar con la base. Recargá y verificá antes de facturarlo.',true);
+    else toast('✓ Pedido ingresado','PED-'+padn(doc.numero)+' · inventario rebajado. Facturalo o convertilo en Documentos.');
   }
   cart=[];$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';limpiarBorrador();initForm();render();go('documentos');
 };
@@ -2558,15 +2563,18 @@ function openNotaCD(facturaId){
     });
 }
 window.openNotaCD=openNotaCD;
-function crearNotaCD(f,monto,motivo,fecha){
+async function crearNotaCD(f,monto,motivo,fecha){
   const uuid='SIM-'+Math.random().toString(36).slice(2,10).toUpperCase();
-  const nuevoIdNC=(documentos.reduce((m,d)=>Math.max(m,d.id||0),0)||0)+1;
+  // Id temporal negativo (no puede chocar con un id real de la base). El número
+  // de DTE simulado se deriva del correlativo, que es estable y no depende del id.
+  const nuevoIdNC=-Date.now();
   const doc={id:nuevoIdNC,numero:corr,tipoDoc:'notaCredito',clienteId:f.clienteId,clienteNombre:f.clienteNombre,clienteComercial:f.clienteComercial,clienteNit:f.clienteNit,
     items:[],totales:{total:monto,baseSinIva:monto/1.12,iva:monto-monto/1.12},estado:'certificada',
-    autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+nuevoIdNC),
+    autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+corr),
     creada:new Date(/^\d{4}-\d{2}-\d{2}$/.test(fecha)?fecha+'T12:00:00':fecha).toISOString(),facturaOrigenId:f.id,motivo,creadoPor:currentUser,_nuevo:true};
   documentos.push(doc);corr++;
-  if(typeof guardarDocumento==='function')guardarDocumento(doc);
+  // Esperamos el id real antes de seguir, para que los botones no queden con el temporal
+  if(typeof guardarDocumento==='function')await guardarDocumento(doc);
   const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
   closeMod();renderDocs();
   toast('✓ Nota de Crédito generada',money(monto)+' · saldo de la factura: '+money(nuevo.saldo));
