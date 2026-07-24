@@ -1927,6 +1927,18 @@ function agregarProductoPorId(id){
   agregarAlCart(p);render();
 }
 window.agregarProductoPorId=agregarProductoPorId;
+// ── Movimiento de stock: fuente única ────────────────────────
+// Aplica un cambio de existencias al "bucket" correcto según el empaque
+// y el modo de venta. delta>0 reingresa, delta<0 descuenta.
+// Solo un producto caja_unidad vendido POR CAJA mueve stockCajas;
+// todo lo demás mueve stock.
+function aplicarStock(p,delta,modoVenta){
+  if(!p||!delta)return;
+  if(p.tipoEmpaque==='caja_unidad'&&modoVenta==='caja')p.stockCajas=(Number(p.stockCajas)||0)+delta;
+  else p.stock=(Number(p.stock)||0)+delta;
+  if(typeof guardarProducto==='function')guardarProducto(p);
+}
+window.aplicarStock=aplicarStock;
 // Lógica común de agregar al carrito
 function agregarAlCart(p){
   const ex=cart.find(c=>c.id===p.id&&c.modoVenta===(p.tipoEmpaque==='caja'?'caja':'unidad'));
@@ -1960,7 +1972,8 @@ function render(){
   // Disponibilidad según el modo de venta de la línea
   const avail=it=>{
     const p=productos.find(x=>x.id===it.id);if(!p)return 0;
-    const oldQ=editId?(editOldMap[it.id]||0):0;
+    const _prev=editId?editOldMap[it.id]:null;
+    const oldQ=(_prev&&_prev.modo===it.modoVenta)?(_prev.q||0):0;
     if(it.modoVenta==='caja'){
       // vende cajas: disponibles son las cajas cerradas
       return (p.tipoEmpaque==='caja'?p.stock:(p.stockCajas||0))+oldQ;
@@ -2014,7 +2027,15 @@ $('#f-go').onclick=()=>{
   if(editId){
     const f=documentos.find(d=>d.id===editId);
     const ids=new Set([...Object.keys(editOldMap).map(Number),...cart.map(it=>it.id)]);
-    ids.forEach(id=>{const oldQ=editOldMap[id]||0;const ci=cart.find(it=>it.id===id);const newQ=ci?ci.cantidad:0;const p=productos.find(x=>x.id===id);if(p)p.stock-=(newQ-oldQ);});
+    ids.forEach(id=>{
+      const prev=editOldMap[id]||{q:0,modo:undefined};
+      const ci=cart.find(it=>it.id===id);
+      const p=productos.find(x=>x.id===id);if(!p)return;
+      const newQ=ci?ci.cantidad:0, newModo=ci?ci.modoVenta:prev.modo;
+      // Si cambió el modo (caja↔unidad) hay que devolver al bucket viejo y descontar del nuevo
+      if(prev.modo===newModo)aplicarStock(p,-(newQ-(prev.q||0)),newModo);
+      else{aplicarStock(p,prev.q||0,prev.modo);aplicarStock(p,-newQ,newModo);}
+    });
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
     const subVendEd=(esVendedorCanal(vend?.nombre)&&$('#f-subvend'))?($('#f-subvend').value||null):null;
     Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,subVendedorNombre:subVendEd,items:cart.map(it=>({...it})),totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||''});
@@ -2023,11 +2044,7 @@ $('#f-go').onclick=()=>{
     if(typeof guardarDocumento==='function')guardarDocumento(f);
     editId=null;editOldMap={};
   }else{
-    cart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(!p)return;
-      if(it.modoVenta==='caja'&&p.tipoEmpaque==='caja_unidad')p.stockCajas=(p.stockCajas||0)-it.cantidad;
-      else p.stock-=it.cantidad;
-      if(typeof guardarProducto==='function')guardarProducto(p);
-    });
+    cart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,-it.cantidad,it.modoVenta);});
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
     const subVend=(esVendedorCanal(vend?.nombre)&&$('#f-subvend'))?($('#f-subvend').value||null):null;
     const nuevoId=(documentos.reduce((m,d)=>Math.max(m,d.id||0),0)||0)+1;
@@ -2397,7 +2414,7 @@ function generarNota(id,type){
 window.generarNota=generarNota;
 function cancelarPedido(id){
   const f=documentos.find(d=>d.id===id);
-  if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p){p.stock+=it.cantidad;if(typeof guardarProducto==='function')guardarProducto(p);}});f.inventarioRebajado=false;}
+  if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});f.inventarioRebajado=false;}
   f.estado='anulada';closeMod();renderDocs();
   toast('✓ Pedido cancelado','Inventario reintegrado');
   logAudit('Pedido cancelado','PED-'+padn(f.numero)+' · '+(f.clienteComercial||f.clienteNombre));
@@ -2405,7 +2422,7 @@ function cancelarPedido(id){
 }
 window.cancelarPedido=cancelarPedido;
 
-window.devolver=id=>{const f=documentos.find(d=>d.id===id);if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p){p.stock+=it.cantidad;if(typeof guardarProducto==='function')guardarProducto(p);}});f.inventarioRebajado=false;}
+window.devolver=id=>{const f=documentos.find(d=>d.id===id);if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});f.inventarioRebajado=false;}
   f.estado='devuelto';closeMod();renderDocs();toast('✓ Préstamo devuelto','Inventario reingresado');logAudit('Préstamo devuelto','PED-'+padn(f.numero));if(typeof guardarDocumento==='function')guardarDocumento(f);};
 // Abre un diálogo que pide el motivo y luego anula ante EcoFactura
 function abrirAnular(id){
@@ -2478,7 +2495,7 @@ async function anularFacturaReal(id,motivo){
 
   // EcoFactura confirmó (o era simulada): anular en el sistema y reintegrar inventario
   if(f.inventarioRebajado){
-    f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p){p.stock+=it.cantidad;if(typeof guardarProducto==='function')guardarProducto(p);}});
+    f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});
     f.inventarioRebajado=false;
   }
   f.estado='anulada';f.motivo=motivo;f.anuladoFecha=new Date().toISOString();
@@ -2489,10 +2506,10 @@ async function anularFacturaReal(id,motivo){
 }
 window.anularFacturaReal=anularFacturaReal;
 
-window.anular=id=>{const f=documentos.find(d=>d.id===id);if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p){p.stock+=it.cantidad;if(typeof guardarProducto==='function')guardarProducto(p);}});f.inventarioRebajado=false;}
+window.anular=id=>{const f=documentos.find(d=>d.id===id);if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});f.inventarioRebajado=false;}
   f.estado='anulada';closeMod();renderDocs();toast('✓ Anulado','Inventario reingresado');logAudit('Documento anulado',(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero)));if(typeof guardarDocumento==='function')guardarDocumento(f);};
 window.editarPedido=id=>{const f=documentos.find(d=>d.id===id);if(f.tipoDoc!=='pedido'||f.estado!=='abierto')return;
-  editId=id;editOldMap={};f.items.forEach(it=>editOldMap[it.id]=it.cantidad);
+  editId=id;editOldMap={};f.items.forEach(it=>editOldMap[it.id]={q:it.cantidad,modo:it.modoVenta});
   cart=f.items.map(it=>({...it}));
   initForm();
   const cli=clientes.find(c=>c.id===f.clienteId);
@@ -4642,7 +4659,7 @@ $('#co-go').onclick=()=>{
 
   // Compra especial: subir inventario de inmediato
   if(esEspecial){
-    compraCart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p){if(p.tipoEmpaque==='caja_unidad')p.stockCajas=(p.stockCajas||0)+it.cantidad;else p.stock+=it.cantidad;if(typeof guardarProducto==='function')guardarProducto(p);}});
+    compraCart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,'caja');});
     toast('✓ Compra especial creada','CMP-'+padn(c.id)+' · inventario actualizado · recordatorio antes de fin de mes');
     logAudit('Compra especial creada','CMP-'+padn(c.id)+' · '+prov.nombre+' · '+money(total)+' · mes '+mes);
   }else{
@@ -4697,7 +4714,7 @@ function updEspecialItem(compraId,idx,val){
   const nuevaCant=Math.max(1,Number(val)||1);
   const delta=nuevaCant-it.cantidad;
   const prod=productos.find(p=>p.id===it.id);
-  if(prod)prod.stock+=delta;
+  if(prod)aplicarStock(prod,delta,'caja');
   it.cantidad=nuevaCant;it.recibido=nuevaCant;
   c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
   $('#esp-rows').innerHTML=c.items.map((it,i)=>`<tr>
@@ -4714,7 +4731,7 @@ function quitarEspecialItem(compraId,idx){
   const c=compras.find(x=>x.id===compraId);if(!c)return;
   const it=c.items[idx];
   const prod=productos.find(p=>p.id===it.id);
-  if(prod)prod.stock-=it.cantidad;
+  if(prod)aplicarStock(prod,-it.cantidad,'caja');
   c.items.splice(idx,1);
   c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
   if(!c.items.length){toast('Sin productos — la compra especial quedó vacía');closeMod();renderCompras();return;}
@@ -4728,9 +4745,9 @@ function addEspecialItem(compraId){
   const p=productos.find(x=>`${x.skuProveedor||x.codigo} — ${x.nombreProveedor||x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase().includes(v.toLowerCase()));
   if(!p){toast('✗ Producto no encontrado',null,true);return;}
   const ex=c.items.find(it=>it.id===p.id);
-  if(ex){ex.cantidad++;ex.recibido++;if(productos.find(x=>x.id===p.id))productos.find(x=>x.id===p.id).stock++;}
+  if(ex){ex.cantidad++;ex.recibido++;aplicarStock(productos.find(x=>x.id===p.id),1,'caja');}
   else{c.items.push({id:p.id,codigo:p.codigo,skuProveedor:p.skuProveedor||p.codigo,nombre:p.nombre,nombreProveedor:p.nombreProveedor||p.nombre,costo:p.costo||0,cantidad:1,recibido:1});
-    const prod=productos.find(x=>x.id===p.id);if(prod)prod.stock++;}
+    const prod=productos.find(x=>x.id===p.id);if(prod)aplicarStock(prod,1,'caja');}
   c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
   $('#esp-add').value='';
   editarCompraEspecial(compraId);
