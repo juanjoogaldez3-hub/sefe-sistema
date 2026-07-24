@@ -2028,6 +2028,12 @@ function render(){
 window.upd=(i,k,v)=>{cart[i][k]=Number(v)||0;render();};
 window.updLive=(i,k,v)=>{
   cart[i][k]=Number(v)||0;
+  // El descuento no puede superar el importe de la línea (dejaba totales negativos)
+  if(k==='descuento'||k==='cantidad'||k==='precio'){
+    const it=cart[i], tope=(Number(it.cantidad)||0)*(Number(it.precio)||0);
+    if((Number(it.descuento)||0)>tope)it.descuento=Math.round(tope*100)/100;
+    if((Number(it.descuento)||0)<0)it.descuento=0;
+  }
   // Recalcula solo los totales y el subtotal de la fila, sin redibujar inputs
   const total=cart.reduce((s,it)=>s+(it.cantidad*it.precio-it.descuento),0);
   if($('#s-base'))$('#s-base').textContent=money(total/1.12);
@@ -4118,7 +4124,9 @@ function openFacturaProv(id){
     ()=>{const tipoPago=$('#fp-pago').value;const dias=Number($('#fp-dias').value)||0;const fechaF=$('#fp-fecha').value?new Date($('#fp-fecha').value+'T12:00:00').toISOString():new Date().toISOString();
       Object.assign(c,{facturada:true,docProv:$('#fp-doc').value||'—',tipoPago,diasCredito:tipoPago==='credito'?dias:0,
         vencimiento:tipoPago==='credito'?new Date(new Date(fechaF).getTime()+dias*86400000).toISOString():null,
-        abonos:tipoPago==='contado'?[{fecha:fechaF.slice(0,10),monto:c.total,metodo:'Contado'}]:[]});
+        abonos:tipoPago==='contado'?[{fecha:fechaF.slice(0,10),monto:c.total,metodo:'Contado',registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false}]:[]});
+      // El abono de contado vive en pagos_proveedor: si no se guarda ahí, se pierde al recargar
+      if(tipoPago==='contado'&&c.abonos[0]&&typeof guardarPagoProveedor==='function')guardarPagoProveedor(c.id,c.abonos[0]);
       closeMod();renderCompras();
       toast('✓ Factura registrada',tipoPago==='credito'?('Cuenta por pagar · vence en '+dias+' días'):'Pagada de contado');
       logAudit('Factura de proveedor','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+tipoPago);
