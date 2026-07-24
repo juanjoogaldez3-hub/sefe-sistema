@@ -1475,8 +1475,8 @@ function renderPanel(){
   const activos=productos.filter(p=>p.activo!==false);
   const stockBajo=activos.filter(p=>{const s=stockEfectivo(p);return s<=10&&s>0;});
   const sinStock=activos.filter(p=>stockEfectivo(p)===0);
-  const ocPend=compras.filter(c=>!c.anulada&&c.estadoRecepcion!=='recibida');
-  const espPend=compras.filter(c=>c.especial&&!c.oficializada&&!c.anulada);
+  const ocPend=compras.filter(c=>!c.anulado&&c.estadoRecepcion!=='recibida');
+  const espPend=compras.filter(c=>c.especial&&!c.oficializada&&!c.anulado);
   const porVencer=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&!arInfo(d).vencido&&new Date(d.vencimiento)<=semana&&arInfo(d).saldo>0);
   const diasFinMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate()-hoy.getDate();
   const docsFacturar=documentos.filter(d=>['pedido','envio','prestamo'].includes(d.tipoDoc)&&d.estado==='abierto');
@@ -2225,8 +2225,8 @@ async function facturarPedido(id,dias){
 
   // Modo real: llamar al backend FEL
   toast('⏳ Emitiendo factura...','Conectando con EcoFactura (puede tardar un momento)');
-  const hoy=new Date().toISOString().slice(0,10);
-  const venc=new Date(Date.now()+dias*86400000).toISOString().slice(0,10);
+  const hoy=fechaHoyGT();
+  const venc=sumarDiasFecha(fechaHoyGT(),dias);
   // Datos comerciales extra para los campos adicionales del XML (TrnCampAd):
   // condición de pago, vendedor y fecha de vencimiento en formato dd/mm/aaaa
   const condicionPago=(dias>0)?'CREDITO':'CONTADO';
@@ -2355,8 +2355,8 @@ async function facturarPedidoExento(id,dias,escenario){
 
   // Modo real: llamar al backend con los datos de exención
   toast('⏳ Emitiendo factura exenta...','Conectando con EcoFactura');
-  const hoy=new Date().toISOString().slice(0,10);
-  const venc=new Date(Date.now()+dias*86400000).toISOString().slice(0,10);
+  const hoy=fechaHoyGT();
+  const venc=sumarDiasFecha(fechaHoyGT(),dias);
   const condicionPago=(dias>0)?'CREDITO':'CONTADO';
   const vendedorIniciales=inicialesVendedor(f.vendedorNombre||currentUser||'');
   const vencDDMMAAAA=(()=>{const d=new Date(Date.now()+dias*86400000);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();})();
@@ -3976,7 +3976,7 @@ function renderCompras(){
   }
   const fProv=$('#cmp-prov')?.value,fRec=$('#cmp-rec')?.value,fDesde=$('#cmp-desde')?.value,fHasta=$('#cmp-hasta')?.value;
   const filtradas=compras.filter(c=>{
-    if(c.anulada)return false; // ocultar anuladas por defecto
+    if(c.anulado)return false; // ocultar anuladas por defecto
     if(fProv&&String(c.proveedorId)!==fProv)return false;
     if(fRec&&c.estadoRecepcion!==fRec)return false;
     if(fDesde&&new Date(c.fecha)<new Date(fDesde))return false;
@@ -4056,7 +4056,7 @@ function openFacturaProv(id){
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${c.proveedorNombre} · Total: <b style="color:var(--ink)">${money(c.total)}</b></p>
      <div class="row"><div><label>No. de factura del proveedor</label><input id="fp-doc" placeholder="FACT-…"></div><div><label>Fecha</label><input id="fp-fecha" type="date" value="${hoy}"></div></div>
      <div class="row"><div><label>Forma de pago</label><select id="fp-pago"><option value="contado">Contado (pagada)</option><option value="credito" ${prov.diasCredito>0?'selected':''}>Crédito</option></select></div><div id="fp-dias-wrap" style="${prov.diasCredito>0?'':'display:none'}"><label>Días de crédito</label><input id="fp-dias" type="number" value="${prov.diasCredito||30}"></div></div>`,
-    ()=>{const tipoPago=$('#fp-pago').value;const dias=Number($('#fp-dias').value)||0;const fechaF=$('#fp-fecha').value?new Date($('#fp-fecha').value).toISOString():new Date().toISOString();
+    ()=>{const tipoPago=$('#fp-pago').value;const dias=Number($('#fp-dias').value)||0;const fechaF=$('#fp-fecha').value?new Date($('#fp-fecha').value+'T12:00:00').toISOString():new Date().toISOString();
       Object.assign(c,{facturada:true,docProv:$('#fp-doc').value||'—',tipoPago,diasCredito:tipoPago==='credito'?dias:0,
         vencimiento:tipoPago==='credito'?new Date(new Date(fechaF).getTime()+dias*86400000).toISOString():null,
         abonos:tipoPago==='contado'?[{fecha:fechaF.slice(0,10),monto:c.total,metodo:'Contado'}]:[]});
@@ -4646,7 +4646,7 @@ $('#co-especial').onchange=()=>{
 $('#co-go').onclick=()=>{
   const prov=proveedores.find(p=>p.id===Number($('#co-prov').value));
   const total=compraCart.reduce((s,it)=>s+it.cantidad*it.costo,0);
-  const fecha=$('#co-fecha').value?new Date($('#co-fecha').value).toISOString():new Date().toISOString();
+  const fecha=$('#co-fecha').value?new Date($('#co-fecha').value+'T12:00:00').toISOString():new Date().toISOString();
   const esEspecial=$('#co-especial').checked;
   const ahora=new Date();
   const mes=ahora.getFullYear()+'-'+(ahora.getMonth()+1);
@@ -4796,14 +4796,20 @@ function abrirAnularCompra(id){
     ()=>{
       const motivo=$('#ca-motivo').value.trim();
       if(!motivo){$('#ca-err').style.display='flex';return;}
-      // Revertir inventario
+      // Revertir inventario (respetando caja/unidad) y persistir el stock
       c.items.forEach(it=>{
         const cant=it.recibido||0;if(!cant)return;
-        const p=productos.find(x=>x.id===it.id);if(p)p.stock-=cant;
+        const p=productos.find(x=>x.id===it.id);
+        if(p){if(p.tipoEmpaque==='caja_unidad')p.stockCajas=(p.stockCajas||0)-cant;else p.stock-=cant;if(typeof guardarProducto==='function')guardarProducto(p);}
       });
-      c.anulada=true;c.motivoAnulacion=motivo;c.anuladoPor=currentUser;c.anuladoFecha=new Date().toISOString();
-      // Si tenía cuenta por pagar, marcarla como anulada también
-      if(c.facturada&&c.tipoPago==='credito'&&apInfo(c).saldo>0.001)c.abonos.push({fecha:new Date().toISOString().slice(0,10),monto:apInfo(c).saldo,metodo:'Cierre por anulación',referencia:'Compra anulada',noRecibo:'—',registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,esCierre:true});
+      c.anulado=true;c.motivoAnulacion=motivo;c.anuladoPor=currentUser;c.anuladoFecha=new Date().toISOString();
+      // Si tenía cuenta por pagar, cerrarla con un abono de cierre (y persistirlo)
+      if(c.facturada&&c.tipoPago==='credito'&&apInfo(c).saldo>0.001){
+        const cierre={fecha:fechaHoyGT(),monto:apInfo(c).saldo,metodo:'Cierre por anulación',referencia:'Compra anulada',noRecibo:'—',registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,esCierre:true};
+        c.abonos.push(cierre);
+        if(typeof guardarPagoProveedor==='function')guardarPagoProveedor(c.id,cierre);
+      }
+      if(typeof guardarCompra==='function')guardarCompra(c);
       logAudit('Compra anulada','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+money(c.total)+' · Motivo: '+motivo);
       cerrarTodo();renderCompras();renderPanel();
       toast('✓ Compra anulada','Inventario revertido · CMP-'+padn(c.id));
@@ -4932,7 +4938,7 @@ function openProveedor(id){const p=id?proveedores.find(x=>x.id===id):null;
   <div class="row"><div><label>Teléfono</label><input id="pv-tel" value="${p?(p.telefono||''):''}"></div><div><label>Correo</label><input id="pv-mail" value="${p?(p.correo||''):''}"></div></div>`,()=>{
     const nom=$('#pv-nom').value.trim();if(!nom)return;
     const datos={nombre:nom,razonSocial:$('#pv-rs').value.trim()||nom,nit:$('#pv-nit').value,telefono:$('#pv-tel').value,correo:$('#pv-mail').value,diasCredito:Number($('#pv-dias').value)||0};
-    if(p){Object.assign(p,datos);toast('✓ Proveedor actualizado');}else{proveedores.push({id:provN++,...datos});toast('✓ Proveedor agregado');}
+    if(p){Object.assign(p,datos);if(typeof guardarProveedor==='function')guardarProveedor(p);toast('✓ Proveedor actualizado');}else{const nuevoProv={id:provN++,...datos,_nuevo:true};proveedores.push(nuevoProv);if(typeof guardarProveedor==='function')guardarProveedor(nuevoProv);toast('✓ Proveedor agregado');}
     closeMod();renderProveedores();initCompra();});}
 window.openProveedor=openProveedor;
 

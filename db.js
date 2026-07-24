@@ -467,6 +467,21 @@ async function guardarPiloto(p){
   }
 }
 
+// Guardar/actualizar un proveedor
+async function guardarProveedor(pr){
+  const row = {nombre:pr.nombre, razon_social:pr.razonSocial, nit:pr.nit, telefono:pr.telefono, correo:pr.correo, dias_credito:pr.diasCredito};
+  if (pr._nuevo) {
+    delete pr._nuevo;
+    const {data,error} = await sb.from('proveedores').insert(row).select().single();
+    if(error){console.error('Error guardando proveedor:',error); pr._nuevo=true;}
+    else pr.id = data.id;
+  } else {
+    const {error} = await sb.from('proveedores').update(row).eq('id', pr.id);
+    if(error)console.error('Error actualizando proveedor:',error);
+  }
+}
+if(typeof window!=='undefined')window.guardarProveedor=guardarProveedor;
+
 // ── Cuentas de banco ──────────────────────────────────────
 async function guardarCuentaBanco(c){
   const row = {nombre:c.nombre, banco:c.banco||null, numero:c.numero||null, tipo:c.tipo||'monetaria',
