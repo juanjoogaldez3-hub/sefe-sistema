@@ -930,6 +930,7 @@
       <div><label>Fecha</label><input id="pg-fecha" type="date"></div>
       <div><label>Método de pago</label><select id="pg-met"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>Depósito</option><option>Tarjeta</option></select></div>
       <div style="grid-column:span 2"><label>Referencia</label><input id="pg-ref" placeholder="No. boleta, cheque, transferencia…"></div>
+      <div style="grid-column:span 2" id="pg-cuenta-wrap"></div>
     </div>
     <!-- totales en vivo -->
     <div style="display:flex;gap:16px;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:14px">
@@ -3761,8 +3762,9 @@ function openPagoGlobal(){
   if(list)list.innerHTML=clientes.map(c=>`<option value="${c.nombre} · ${c.nit}">`).join('');
   $('#pg-cli-search').value='';$('#pg-cli-id').value='';
   $('#pg-recibo').value='REC-'+String(Date.now()).slice(-6);
-  $('#pg-fecha').value=new Date().toISOString().slice(0,10);
+  $('#pg-fecha').value=fechaHoyGT();
   $('#pg-met').value='Efectivo';$('#pg-ref').value='';
+  const _cw=$('#pg-cuenta-wrap');if(_cw)_cw.innerHTML=selectorCuentaBancoHTML('pg-cuenta','¿A qué cuenta entró el dinero?');
   $('#pg-facturas-wrap').innerHTML='<div class="empty">Seleccioná un cliente para ver sus facturas pendientes.</div>';
   $('#pg-distribuido').textContent='Q 0.00';$('#pg-restante').textContent='—';
   $('#pg-err').style.display='none';
@@ -3870,15 +3872,16 @@ function guardarPagoGlobal(){
     const monto=Number(inp.value);const saldo=Number(inp.dataset.saldo);
     if(monto>saldo+0.001){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent=`El monto supera el saldo de la factura (máx. ${money(saldo)})`;return;}
   }
-  const fecha=$('#pg-fecha').value||new Date().toISOString().slice(0,10);
+  const fecha=$('#pg-fecha').value||fechaHoyGT();
   const metodo=$('#pg-met').value;const referencia=$('#pg-ref').value;
+  const cuentaBancoId=$('#pg-cuenta')?.value||null;
   const hoy=new Date().toISOString();
   let facturasAbonadas=0;
   inputs.forEach(inp=>{
     const docId=Number(inp.dataset.id);const monto=Number(inp.value);
     const f=documentos.find(d=>d.id===docId);if(!f)return;
     f.abonos=f.abonos||[];
-    const _ab={fecha,monto,metodo,referencia,noRecibo:recibo,
+    const _ab={fecha,monto,metodo,referencia,noRecibo:recibo,cuentaBancoId,
       registradoPor:currentUser,registradoEl:hoy,anulado:false};
     f.abonos.push(_ab);
     const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
@@ -3887,6 +3890,13 @@ function guardarPagoGlobal(){
     if(typeof guardarDocumento==='function')guardarDocumento(f);
   });
   const totalDist=inputs.reduce((s,i)=>s+(Number(i.value)||0),0);
+  // Movimiento de banco: una sola entrada por el total cobrado
+  if(cuentaBancoId&&typeof registrarMovimientoBanco==='function'){
+    const _cli=clientes.find(c=>String(c.id)===String(cliId));
+    registrarMovimientoBanco({cuentaId:cuentaBancoId,tipo:'entrada',monto:totalDist,
+      concepto:'Cobro '+recibo+' · '+((_cli&&_cli.nombre)||'Cliente'),
+      categoria:'cobro',origen:'cobro',origenId:Number(cliId)||null,referencia,fecha});
+  }
   closePagoGlobal();renderCobros();
   logAudit('Pago global','Recibo '+recibo+' · '+money(totalDist)+' en '+facturasAbonadas+' factura'+(facturasAbonadas!==1?'s':''));
   toast('✓ Pago registrado','Recibo '+recibo+' · '+money(totalDist)+' distribuidos en '+facturasAbonadas+' factura'+(facturasAbonadas!==1?'s':''));
@@ -3927,6 +3937,12 @@ function openAnularAbono(facturaId,abonoIdx){
       const motivo=$('#an-motivo').value.trim();
       if(!motivo){$('#an-err').style.display='flex';return;}
       a.anulado=true;a.motivoAnulacion=motivo;a.anuladoPor=currentUser;a.anuladoFecha=new Date().toISOString();
+      // Si el cobro había entrado a una cuenta de banco, revertirlo con una salida compensatoria
+      if(a.cuentaBancoId&&typeof registrarMovimientoBanco==='function'){
+        registrarMovimientoBanco({cuentaId:a.cuentaBancoId,tipo:'salida',monto:a.monto,
+          concepto:'Reversa de cobro anulado '+(a.noRecibo||'')+' · '+(f.clienteComercial||f.clienteNombre),
+          categoria:'cobro',origen:'cobro_anulado',origenId:f.id,referencia:a.referencia,fecha:fechaHoyGT(),sinPoliza:true});
+      }
       const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
       openHistorialAbonos(facturaId);renderCobros();
       logAudit('Abono anulado','Factura '+f.serie+'-'+f.numeroDte+' · '+money(a.monto)+' · Motivo: '+motivo);
@@ -4130,13 +4146,13 @@ function selectorCuentaBancoHTML(idSel,label,sel){
   return `<div><label>${label}</label><select id="${idSel}"><option value="">— Sin especificar —</option>${cuentas.map(c=>`<option value="${c.id}"${String(sel)===String(c.id)?' selected':''}>${c.nombre}</option>`).join('')}</select></div>`;
 }
 // Registra un movimiento de banco (entrada/salida) ligado a un origen (cobro, pago, gasto)
-function registrarMovimientoBanco({cuentaId,tipo,monto,concepto,categoria,origen,origenId,referencia,fecha,beneficiario}){
+function registrarMovimientoBanco({cuentaId,tipo,monto,concepto,categoria,origen,origenId,referencia,fecha,beneficiario,sinPoliza}){
   if(!cuentaId||!(monto>0))return null;
-  const mov={cuentaId:Number(cuentaId),fecha:fecha||new Date().toISOString().slice(0,10),tipo,monto:Number(monto),
+  const mov={cuentaId:Number(cuentaId),fecha:fecha||fechaHoyGT(),tipo,monto:Number(monto),
     concepto:concepto||'',categoria:categoria||'otro',origen:origen||'manual',origenId:origenId||null,
     referencia:referencia||null,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,_nuevo:true};
-  // Correlativo global de póliza de cheque para toda SALIDA
-  if(tipo==='salida'){
+  // Correlativo global de póliza de cheque para toda SALIDA (las reversas no llevan póliza)
+  if(tipo==='salida'&&!sinPoliza){
     const maxPol=(movimientosBanco.reduce((m,x)=>Math.max(m,x.poliza||0),0)||0);
     mov.poliza=maxPol+1;
     if(beneficiario)mov.beneficiario=beneficiario;
