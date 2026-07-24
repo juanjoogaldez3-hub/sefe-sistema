@@ -866,8 +866,8 @@
       <section class="view" id="v-porpagar">
         <div class="kpis stagger" id="pp-kpis"></div>
         <div class="panel">
-          <div class="panel-head"><h3>Cuentas por pagar</h3></div>
-          <table><thead><tr><th>Compra</th><th>Proveedor</th><th>Fecha</th><th>Vence</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="t-pp"></tbody></table>
+          <div class="panel-head"><h3>Cuentas por pagar</h3><div id="pp-filtros"></div></div>
+          <table><thead><tr><th>Compra</th><th>Factura</th><th>Proveedor</th><th>Fecha</th><th>Vence</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="t-pp"></tbody></table>
           <div class="empty" id="pp-empty">No hay cuentas por pagar.</div>
         </div>
       </section>
@@ -4092,8 +4092,18 @@ function openFacturaProv(id){
   setTimeout(()=>{const s=$('#fp-pago');if(s)s.onchange=()=>{$('#fp-dias-wrap').style.display=s.value==='credito'?'block':'none';};},0);
 }
 window.openFacturaProv=openFacturaProv;
+let _ppProv='';
+function setPpProv(v){_ppProv=v;renderPorPagar();}
+window.setPpProv=setPpProv;
 function renderPorPagar(){
-  const info=compras.map(c=>({c,...apInfo(c)})).filter(x=>x.c.facturada&&x.c.tipoPago==='credito');
+  // Excluye compras anuladas (antes aparecían como deuda)
+  const todas=compras.map(c=>({c,...apInfo(c)})).filter(x=>x.c.facturada&&x.c.tipoPago==='credito'&&!x.c.anulado);
+  // Filtro por proveedor
+  const provIds=[...new Set(todas.map(x=>x.c.proveedorId))];
+  const opts=provIds.map(id=>{const p=proveedores.find(v=>v.id===id);return {v:String(id),l:(p&&p.nombre)||'Sin proveedor'};}).sort((a,b)=>a.l.localeCompare(b.l,'es'));
+  const fil=$('#pp-filtros');
+  if(fil)fil.innerHTML=`<select onchange="setPpProv(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:240px"><option value="">Todos los proveedores</option>${opts.map(o=>`<option value="${o.v}"${_ppProv===o.v?' selected':''}>${o.l}</option>`).join('')}</select>`;
+  const info=_ppProv?todas.filter(x=>String(x.c.proveedorId)===String(_ppProv)):todas;
   const porPagar=info.reduce((s,x)=>s+Math.max(0,x.saldo),0);
   const vencidoM=info.filter(x=>x.vencido).reduce((s,x)=>s+x.saldo,0);
   const pend=info.filter(x=>x.saldo>0.001).length;
@@ -4111,7 +4121,7 @@ function renderPorPagar(){
     let acts=`<button class="btn btn-ghost btn-sm" onclick="verCompra(${c.id})">Ver</button>`;
     if((c.abonos||[]).filter(a=>!a.anulado).length)acts=`<button class="btn btn-ghost btn-sm" onclick="histPagosProv(${c.id})">Historial</button>`+acts;
     if(x.saldo>0.001&&canRegistrarAbono())acts=`<button class="btn btn-primary btn-sm" onclick="openAbonoProv(${c.id})">Registrar pago</button>`+acts;
-    return `<tr><td style="font-weight:600">CMP-${padn(c.id)}</td><td>${c.proveedorNombre}</td><td style="color:var(--muted)">${fdate(c.fecha)}</td><td style="color:${x.vencido?'var(--danger)':'var(--muted)'};font-weight:${x.vencido?'600':'400'}">${fdate(c.vencimiento)}</td><td class="num">${money(c.total)}</td><td class="num" style="color:var(--ok)">${money(x.abon)}</td><td class="num" style="font-weight:700">${money(x.saldo)}</td><td><span class="badge ${ec}">${en}</span></td><td><div class="acts">${acts}</div></td></tr>`;
+    return `<tr><td style="font-weight:600">CMP-${padn(c.id)}</td><td style="font-weight:600;color:var(--blue)">${c.docProv||'—'}</td><td>${c.proveedorNombre}</td><td style="color:var(--muted)">${fdate(c.fecha)}</td><td style="color:${x.vencido?'var(--danger)':'var(--muted)'};font-weight:${x.vencido?'600':'400'}">${fdate(c.vencimiento)}</td><td class="num">${money(c.total)}</td><td class="num" style="color:var(--ok)">${money(x.abon)}</td><td class="num" style="font-weight:700">${money(x.saldo)}</td><td><span class="badge ${ec}">${en}</span></td><td><div class="acts">${acts}</div></td></tr>`;
   }).join('');
   enhanceTable('t-pp');
 }
