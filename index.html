@@ -1004,6 +1004,14 @@ window.normalizarNit=normalizarNit;
 // Fecha de HOY en hora de Guatemala (UTC-6), formato aaaa-mm-dd.
 // Usamos esto en vez de new Date().toISOString() porque ese usa UTC
 // y de noche podía guardar la fecha del día siguiente (o del anterior).
+// Fecha (YYYY-MM-DD) de un timestamp guardado, en hora local. Se usa para comparar
+// contra fechaHoyGT(): los timestamps se guardan en UTC y de noche cambian de día.
+function fechaLocalDe(iso){
+  if(!iso)return '';
+  const d=new Date(iso);if(isNaN(d))return String(iso).slice(0,10);
+  const z=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate());
+}
 function fechaHoyGT(){
   const ahora=new Date();
   const gt=new Date(ahora.getTime()-6*60*60*1000); // Guatemala es UTC-6 todo el año
@@ -1493,7 +1501,7 @@ function renderPanel(){
   const porVencerMonto=porVencer.reduce((s,d)=>s+arInfo(d).saldo,0);
 
   // ── Resumen del día ──────────────────────────────────────
-  const hoyStr=new Date().toISOString().slice(0,10);
+  const hoyStr=fechaHoyGT();
   const hojE=new Date();
   const saludo=hojE.getHours()<12?'Buenos días':hojE.getHours()<19?'Buenas tardes':'Buenas noches';
   const fechaLarga=hojE.toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -2145,7 +2153,7 @@ function docsEnRango(d){
   const tipo=$('#docs-tipo')?.value;
   if(tipo&&d.tipoDoc!==tipo)return false;
   const desde=$('#docs-desde')?.value,hasta=$('#docs-hasta')?.value;
-  if(desde&&new Date(d.creada)<new Date(desde))return false;
+  if(desde&&new Date(d.creada)<new Date(desde+'T00:00:00'))return false;
   if(hasta&&new Date(d.creada)>new Date(hasta+'T23:59:59'))return false;
   return true;
 }
@@ -2550,7 +2558,7 @@ window.regresar=id=>{const f=documentos.find(d=>d.id===id);if(!['envio','prestam
 // ---- Nota de Crédito ----
 function openNotaCD(facturaId){
   const f=documentos.find(d=>d.id===facturaId);
-  const ai=arInfo(f);const hoy=new Date().toISOString().slice(0,10);
+  const ai=arInfo(f);const hoy=fechaHoyGT();
   const maxCred=Math.max(0,ai.totalAjustado);
   openMod('Nota de Crédito · '+f.serie+'-'+f.numeroDte,
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:13px">${f.clienteComercial||f.clienteNombre} · Total: <b style="color:var(--ink)">${money(f.totales.total)}</b>${ai.cr?` · Saldo ajustado: <b>${money(ai.totalAjustado)}</b>`:''}</p>
@@ -3297,7 +3305,7 @@ function renderCliDet(){
     const topProd=Object.values(prodMap).sort((a,b)=>b.total-a.total);
     // Ventas por mes
     const mesMap={};
-    facs.forEach(f=>{const m=new Date(f.creada).toISOString().slice(0,7);mesMap[m]=(mesMap[m]||0)+f.totales.total;});
+    facs.forEach(f=>{const _d=new Date(f.creada);const m=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0');mesMap[m]=(mesMap[m]||0)+f.totales.total;});
     const meses=Object.keys(mesMap).sort();
     const maxMes=Math.max(1,...Object.values(mesMap));
     const prodRows=topProd.length?topProd.map(p=>`<tr><td style="font-weight:600">${p.nombre}<div style="font-size:10.5px;color:var(--muted)">${p.codigo}</div></td><td class="num">${p.cant}</td><td class="num" style="font-weight:600">${money(p.total)}</td></tr>`).join(''):'<tr><td colspan="3" class="empty">Sin compras registradas</td></tr>';
@@ -3578,7 +3586,7 @@ function cobrosEnFiltro(f,ai){
   if(cli&&String(f.clienteId)!==cli)return false;
   if(est){if(est==='vencido'){if(!ai.vencido)return false;}else if(ai.estado!==est||ai.vencido)return false;}
   if(met&&!(f.abonos||[]).some(a=>!a.anulado&&a.metodo===met))return false;
-  if(desde&&f.vencimiento&&new Date(f.vencimiento)<new Date(desde))return false;
+  if(desde&&f.vencimiento&&new Date(f.vencimiento)<new Date(desde+'T00:00:00'))return false;
   if(hasta&&f.vencimiento&&new Date(f.vencimiento)>new Date(hasta+'T23:59:59'))return false;
   return true;
 }
@@ -3736,7 +3744,7 @@ window.verComprobante=verComprobante;
 function openAbono(id){
   _compFoto=null;
   const f=documentos.find(d=>d.id===id);const ai=arInfo(f);const saldo=ai.saldo;
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=fechaHoyGT();
   const nextRecibo=String(Date.now()).slice(-6);
   openMod('Registrar abono · '+f.serie+'-'+f.numeroDte,
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${f.clienteNombre} · Saldo pendiente: <b style="color:var(--ink)">${money(saldo)}</b></p>
@@ -4030,7 +4038,7 @@ function renderCompras(){
     if(c.anulado)return false; // ocultar anuladas por defecto
     if(fProv&&String(c.proveedorId)!==fProv)return false;
     if(fRec&&c.estadoRecepcion!==fRec)return false;
-    if(fDesde&&new Date(c.fecha)<new Date(fDesde))return false;
+    if(fDesde&&new Date(c.fecha)<new Date(fDesde+'T00:00:00'))return false;
     if(fHasta&&new Date(c.fecha)>new Date(fHasta+'T23:59:59'))return false;
     return true;
   });
@@ -4101,7 +4109,7 @@ function openRecibir(id){
 }
 window.openRecibir=openRecibir;
 function openFacturaProv(id){
-  const c=compras.find(x=>x.id===id);const hoy=new Date().toISOString().slice(0,10);
+  const c=compras.find(x=>x.id===id);const hoy=fechaHoyGT();
   const prov=proveedores.find(p=>p.id===c.proveedorId);
   openMod('Registrar factura del proveedor · CMP-'+padn(c.id),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${c.proveedorNombre} · Total: <b style="color:var(--ink)">${money(c.total)}</b></p>
@@ -4227,7 +4235,7 @@ function renderBancos(){
   const lista=cuentasBanco.filter(c=>c.activo!==false);
   $('#bancos-empty').style.display=lista.length?'none':'block';
   const saldoTotal=lista.reduce((s,c)=>s+saldoCuenta(c.id),0);
-  const hoyStr=new Date().toISOString().slice(0,10);
+  const hoyStr=fechaHoyGT();
   let entHoy=0,salHoy=0;
   movimientosBanco.forEach(m=>{if(m.anulado)return;if((m.fecha||'').slice(0,10)===hoyStr){if(m.tipo==='entrada')entHoy+=Number(m.monto||0);else salHoy+=Number(m.monto||0);}});
   $('#bancos-kpis').innerHTML=kpiHTML([
@@ -4314,7 +4322,7 @@ window.eliminarCuentaBancoUI=function(id){
 // Registrar un movimiento manual (gasto, depósito, transferencia, ajuste)
 function openMovimientoBanco(){
   if(!cuentasActivasBanco().length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=fechaHoyGT();
   const cats=CAT_MOV_OPCIONES.map(k=>`<option value="${k}">${CAT_MOV_LBL[k]}</option>`).join('');
   openMod('Registrar movimiento / gasto',
     `<div class="row"><div><label>Tipo</label><select id="mv-tipo"><option value="salida">Salida (gasto/pago)</option><option value="entrada">Entrada (depósito/ingreso)</option></select></div><div><label>Monto</label><input id="mv-monto" type="number" step="0.01" placeholder="0.00"></div></div>
@@ -4503,7 +4511,7 @@ async function estadoCuentaBancoExcel(id){
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws1,'Movimientos');
     XLSX.utils.book_append_sheet(wb,ws2,'Resumen');
-    const fn=`SEFE_EstadoCuenta_${(c.nombre||'cuenta').replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    const fn=`SEFE_EstadoCuenta_${(c.nombre||'cuenta').replace(/[^a-zA-Z0-9]/g,'_')}_${fechaHoyGT()}.xlsx`;
     XLSX.writeFile(wb,fn);
     toast('✓ Excel descargado',fn);
   }catch(e){console.error('Error Excel estado cuenta:',e);toast('Error al generar Excel',e.message,true);}
@@ -4572,7 +4580,7 @@ window.polizaChequeUI=function(id){const m=movimientosBanco.find(x=>x.id===id);i
 function openAbonoProv(id){
   if(!canRegistrarAbono()){toast('Sin permiso','Solo Admin y Contabilidad registran pagos',true);return;}
   _compFoto=null;
-  const c=compras.find(x=>x.id===id);const ai=apInfo(c);const saldo=ai.saldo;const hoy=new Date().toISOString().slice(0,10);
+  const c=compras.find(x=>x.id===id);const ai=apInfo(c);const saldo=ai.saldo;const hoy=fechaHoyGT();
   // Sugerir número de recibo de egreso
   const totalPagos=compras.reduce((s,x)=>s+(x.abonos||[]).filter(a=>!a.anulado).length,0);
   const recSugerido='EG-'+String(totalPagos+1).padStart(4,'0');
@@ -4663,7 +4671,7 @@ function initCompra(){
     const sku=p.skuProveedor?p.skuProveedor:p.codigo;
     return `<option value="${sku} — ${p.nombreProveedor||p.nombre}"><option value="${p.codigo} — ${p.nombre}">`;
   }).join('');
-  $('#co-fecha').value=new Date().toISOString().slice(0,10);
+  $('#co-fecha').value=fechaHoyGT();
 }
 function addCompraProducto(){
   const inp=$('#co-add');const v=(inp.value||'').trim();if(!v)return;
@@ -5097,7 +5105,7 @@ function openTalonario(id){
     `<div class="row"><div><label>Número inicial</label><input id="tal-ini" type="number" value="${t?t.numeroInicial:''}" placeholder="28001" oninput="talCalcFin()"></div>
       <div><label>Número final <span style="color:var(--muted);font-weight:400">(automático)</span></label><input id="tal-fin" type="number" value="${t?t.numeroFinal:''}" readonly style="background:var(--surface-2)"></div></div>
      <div class="row"><div><label>Asignado a</label><select id="tal-asig">${vendOpts}</select></div>
-      <div><label>Fecha de entrega</label><input id="tal-fecha" type="date" value="${t&&t.fechaEntrega?String(t.fechaEntrega).slice(0,10):new Date().toISOString().slice(0,10)}"></div></div>
+      <div><label>Fecha de entrega</label><input id="tal-fecha" type="date" value="${t&&t.fechaEntrega?String(t.fechaEntrega).slice(0,10):fechaHoyGT()}"></div></div>
      <div class="row"><div><label>Descripción <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="tal-desc" value="${t?(t.descripcion||''):''}" placeholder="Ej. Talón Oficina 1"></div></div>
      <div class="row"><div><label>Estado</label><select id="tal-estado"><option value="activo"${!t||t.estado==='activo'?' selected':''}>Activo</option><option value="cerrado"${t&&t.estado==='cerrado'?' selected':''}>Cerrado</option></select></div></div>
      ${id?`<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="eliminarTalonarioUI(${id})">Eliminar talonario</button></div>`:''}
@@ -6738,8 +6746,8 @@ async function exportarExcel(){
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,String(TIPO_NOMBRES[repType]||'Reporte').replace(/[\\\/?*\[\]:]/g,' ').slice(0,31));
-  XLSX.writeFile(wb,`SEFE_${repType}_${new Date().toISOString().slice(0,10)}.xlsx`);
-  toast('✓ Excel descargado','SEFE_'+repType+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb,`SEFE_${repType}_${fechaHoyGT()}.xlsx`);
+  toast('✓ Excel descargado','SEFE_'+repType+'_'+fechaHoyGT()+'.xlsx');
   }catch(e){console.error('Error exportando Excel:',e);toast('No se pudo generar el Excel',e.message||String(e),true);}
 }
 window.exportarExcel=exportarExcel;
@@ -6821,7 +6829,7 @@ async function exportarInventarioExcel(){
   XLSX.utils.sheet_add_json(ws,data,{origin:'A7'});
   ws['!cols']=[{wch:14},{wch:48},{wch:16},{wch:30},{wch:18}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Inventario');
-  const fn=`SEFE_Inventario_${new Date().toISOString().slice(0,10)}.xlsx`;
+  const fn=`SEFE_Inventario_${fechaHoyGT()}.xlsx`;
   XLSX.writeFile(wb,fn);
   toast('✓ Excel descargado',fn);
 }
@@ -7318,7 +7326,7 @@ function renderDespachos(){
   const activos=todos.filter(d=>estadoEntrega(d)!=='entregado'); // los que realmente falta despachar
   const sinAsig=todos.filter(d=>estadoEntrega(d)==='sin').length;
   const enRuta=todos.filter(d=>estadoEntrega(d)==='ruta').length;
-  const entregadosHoy=todos.filter(d=>estadoEntrega(d)==='entregado'&&d.entregaInfo?.fecha?.slice(0,10)===new Date().toISOString().slice(0,10)).length;
+  const entregadosHoy=todos.filter(d=>estadoEntrega(d)==='entregado'&&fechaLocalDe(d.entregaInfo?.fecha)===fechaHoyGT()).length;
   const k=[
     {ic:sinAsig?'i-warn':'i-lime',svg:'<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',lbl:'Sin asignar',val:sinAsig,sub:'esperan piloto'},
     {ic:'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'En ruta',val:enRuta,sub:'en camino'},
@@ -7409,7 +7417,7 @@ function procesarCobro(id){
   const d=documentos.find(x=>x.id===c.docId);if(!d){toast('Documento no encontrado',null,true);return;}
   _compFoto=null;
   const ai=arInfo(d);const saldo=ai.saldo;
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=fechaHoyGT();
   const docNum=d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
   const metodoCobro=c.modo==='efectivo'?'Efectivo':'Cheque';
   const refDefault='Cobrado en ruta · Boleta '+c.noBoleta+(c.cheque?' · Cheque '+c.cheque:'');
@@ -7525,12 +7533,12 @@ window.renderMisEntregas=renderMisEntregas;
 
 // ---- Corte de caja del piloto (del día) ----
 function corteCajaHTML(entregas){
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=fechaHoyGT();
   const pilName=esPiloto()?currentUser:null;
   // Cobros en ruta de hoy (de este piloto si es piloto, o todos si es logística/contabilidad)
   const cobrosHoy=cobrosRuta.filter(c=>c.fecha.slice(0,10)===hoy&&(!pilName||c.piloto===pilName));
   // Contraseñas y créditos de hoy desde entregaInfo
-  const entregadasHoy=entregas.filter(d=>estadoEntrega(d)==='entregado'&&d.entregaInfo?.fecha?.slice(0,10)===hoy);
+  const entregadasHoy=entregas.filter(d=>estadoEntrega(d)==='entregado'&&fechaLocalDe(d.entregaInfo?.fecha)===hoy);
   const contrasenas=[],credito=[];
   entregadasHoy.forEach(d=>{const ei=d.entregaInfo||{};const dn=d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
     if(ei.modoPago==='contrasena')contrasenas.push({dn,cliente:d.clienteComercial||d.clienteNombre,contra:ei.contrasena});
@@ -7772,7 +7780,7 @@ function renderAuditoria(){
   let rows=auditLog.filter(e=>{
     if(fUsr&&e.usuario!==fUsr)return false;
     if(fAcc&&e.accion!==fAcc)return false;
-    if(fDesde&&new Date(e.fecha)<new Date(fDesde))return false;
+    if(fDesde&&new Date(e.fecha)<new Date(fDesde+'T00:00:00'))return false;
     if(fHasta&&new Date(e.fecha)>new Date(fHasta+'T23:59:59'))return false;
     return true;
   });
@@ -7805,7 +7813,7 @@ async function exportarAuditoria(){
   const data=auditLog.map(e=>({'Fecha/Hora':new Date(e.fecha).toLocaleString('es-GT'),Usuario:e.usuario,Rol:e.rol,Acción:e.accion,Detalle:e.detalle}));
   const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Auditoría');
-  XLSX.writeFile(wb,`SEFE_Auditoria_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb,`SEFE_Auditoria_${fechaHoyGT()}.xlsx`);
   toast('✓ Excel descargado');
 }
 window.exportarAuditoria=exportarAuditoria;
