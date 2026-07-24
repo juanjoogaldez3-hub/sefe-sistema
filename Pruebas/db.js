@@ -356,6 +356,12 @@ async function guardarCompra(c){
   }
 }
 
+async function borrarCompra(id){
+  const {error} = await sb.from('compras').delete().eq('id', id);
+  if(error)console.error('Error eliminando compra:',error);
+}
+if(typeof window!=='undefined')window.borrarCompra=borrarCompra;
+
 // Guardar un pago a proveedor (abono sobre una compra)
 async function guardarPagoProveedor(compraId, pago){
   const row = {

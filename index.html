@@ -4839,6 +4839,7 @@ function eliminarCompra(id){
   const idx=compras.findIndex(x=>x.id===id);if(idx<0)return;
   const c=compras[idx];
   compras.splice(idx,1);
+  if(typeof borrarCompra==='function')borrarCompra(id); // antes solo se quitaba de la pantalla
   logAudit('Compra eliminada','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+money(c.total));
   renderCompras();toast('✓ Compra eliminada','CMP-'+padn(c.id));
 }
@@ -4901,7 +4902,7 @@ function abrirProveedor(id,tab){
 }
 window.abrirProveedor=abrirProveedor;
 function proveedorStats(id){
-  const todas=compras.filter(c=>c.proveedorId===id);
+  const todas=compras.filter(c=>c.proveedorId===id&&!c.anulado); // excluye anuladas (inflaban el estado de cuenta)
   const creditoFacturadas=todas.filter(c=>c.facturada&&c.tipoPago==='credito');
   const rval=c=>{const v=(c.items||[]).reduce((s,it)=>s+(it.recibido||0)*(it.costo||it.precio||0),0);return v>0?v:Number(c.total||0);};
   const totalComprado=todas.reduce((s,c)=>s+rval(c),0);
@@ -4989,6 +4990,7 @@ function addProveedorProd(provId){
   p.proveedorIds=p.proveedorIds||[];
   if(p.proveedorIds.includes(provId)){toast('Ese producto ya está asignado');return;}
   p.proveedorIds.push(provId);
+  if(typeof guardarProducto==='function')guardarProducto(p);
   renderProveedorDet();renderProveedores();renderProd();
   toast('✓ Producto asignado',p.nombre);
 }
@@ -4996,6 +4998,7 @@ window.addProveedorProd=addProveedorProd;
 function quitarProveedorProd(provId,prodId){
   const p=productos.find(x=>x.id===prodId);if(!p)return;
   p.proveedorIds=(p.proveedorIds||[]).filter(x=>x!==provId);
+  if(typeof guardarProducto==='function')guardarProducto(p);
   renderProveedorDet();renderProveedores();renderProd();
 }
 window.quitarProveedorProd=quitarProveedorProd;
