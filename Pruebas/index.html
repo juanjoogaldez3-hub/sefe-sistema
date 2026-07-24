@@ -2062,7 +2062,7 @@ $('#f-go').onclick=()=>{
 function rowDoc(withActions){
   return f=>{
     const [lbl,cls]=TIPO_LBL[f.tipoDoc]||['Documento','p-ped'];
-    const lblFinal=f.esExenta?lbl+' <span style="font-size:10px;background:var(--warn-bg);color:var(--warn);padding:1px 6px;border-radius:8px;font-weight:700;vertical-align:middle">EXENTA</span>':lbl;
+    const lblFinal=(f.exenta||f.esExenta)?lbl+' <span style="font-size:10px;background:var(--warn-bg);color:var(--warn);padding:1px 6px;border-radius:8px;font-weight:700;vertical-align:middle">EXENTA</span>':lbl;
     const E={abierto:['Abierto','b-warn'],pendiente:['Pendiente de facturar','b-warn'],certificada:['Certificada','b-ok'],facturado:['Facturado','b-ok'],anulada:['Anulada','b-muted'],devuelto:['Devuelto','b-info']};
     const [en,ec]=E[f.estado]||['—','b-muted'];
     const origen=f.facturaOrigenId?(()=>{const fo=documentos.find(x=>x.id===f.facturaOrigenId);return `<div class="sub-origen">Aplica a: ${fo?fo.serie+'-'+fo.numeroDte:'factura'}</div>`;})():(f.tipoDoc!=='pedido'?`<div class="sub-origen">Origen: PED-${padn(f.numero)}</div>`:'');
@@ -2348,13 +2348,18 @@ window.abrirFacturarExenta=abrirFacturarExenta;
 async function facturarPedidoExento(id,dias,escenario){
   const f=documentos.find(d=>d.id===id);
   if(!f){toast('Pedido no encontrado',null,true);return;}
+  // EXENTA: el precio de lista incluye IVA, así que se factura la BASE (se le quita el 12%).
+  // Se bajan también los precios de línea para que el detalle cuadre con el total ante SAT.
+  const _IVA=1.12, _r2=n=>Math.round((Number(n)||0)*100)/100;
+  const itemsEx=(f.items||[]).map(it=>({...it,precio:_r2((Number(it.precio)||0)/_IVA),descuento:_r2((Number(it.descuento)||0)/_IVA)}));
+  const totalEx=_r2(itemsEx.reduce((s,it)=>s+((Number(it.cantidad)||0)*(Number(it.precio)||0)-(Number(it.descuento)||0)),0));
 
   // Modo simulado si no hay backend configurado
   if(typeof FEL_BACKEND_URL==='undefined' || FEL_BACKEND_URL.includes('TU-BACKEND')){
     const uuid='SIM-'+Math.random().toString(36).slice(2,10).toUpperCase();
     Object.assign(f,{tipoDoc:'cambiaria',estado:'certificada',autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+f.id),
       diasCredito:dias,vencimiento:new Date(Date.now()+dias*86400000).toISOString(),abonos:[],estadoPago:'pendiente',
-      esExenta:true,escExenta:escenario,totales:{...f.totales,iva:0,baseSinIva:f.totales.total}});
+      exenta:true,escenarioExenta:escenario,items:itemsEx,totales:{...f.totales,total:totalEx,baseSinIva:totalEx,iva:0}});
     closeMod();renderDocs();
     toast('✓ Factura Exenta SIMULADA','Configurá el backend para emitir de verdad');
     if(typeof guardarDocumento==='function')guardarDocumento(f);
@@ -2371,8 +2376,8 @@ async function facturarPedidoExento(id,dias,escenario){
   const payload={
     numero:f.numero, fecha:hoy,
     cliente:{nit:f.nitFacturado||f.clienteNit||'CF', nombre:f.nombreFacturado||f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:f.clienteDireccion||'Ciudad', email:f.clienteEmail||''},
-    items:(f.items||[]).map(it=>({codigo:it.codigo||'GEN', nombre:it.nombre, cantidad:it.cantidad, precio:it.precio, descuento:it.descuento||0, unidad:it.unidad||'UNI', tipo:'B'})),
-    total:f.totales.total, vencimiento:venc, observaciones:f.observaciones||'',
+    items:itemsEx.map(it=>({codigo:it.codigo||'GEN', nombre:it.nombre, cantidad:it.cantidad, precio:it.precio, descuento:it.descuento||0, unidad:it.unidad||'UNI', tipo:'B'})),
+    total:totalEx, vencimiento:venc, observaciones:f.observaciones||'',
     // Datos de exención
     exenta:true, fraseTipo:4, escenario:escenario,
     // Campos comerciales extra (para TrnCampAd en el backend)
@@ -2390,7 +2395,7 @@ async function facturarPedidoExento(id,dias,escenario){
         fechaCertificacion:data.fechaCert, pdfBase64:data.pdfBase64, xmlBase64:data.xmlBase64,
         diasCredito:dias, vencimiento:new Date(Date.now()+dias*86400000).toISOString(),
         abonos:[], estadoPago:'pendiente',
-        esExenta:true, escExenta:escenario, totales:{...f.totales,iva:0,baseSinIva:f.totales.total}});
+        exenta:true, escenarioExenta:escenario, items:itemsEx, totales:{...f.totales,total:totalEx,baseSinIva:totalEx,iva:0}});
       closeMod();renderDocs();
       toast('✓ Factura Exenta CERTIFICADA','Autorización SAT: '+data.uuid);
       logAudit('Factura Exenta emitida (FEL real)',f.serie+'-'+f.numeroDte+' · Esc.'+escenario+' · '+money(f.totales.total));
@@ -2788,7 +2793,7 @@ function verDoc(id){
     <table class="ds-table"><thead><tr><th>Descripción</th><th style="text-align:center">Cant.</th><th style="text-align:right">Precio</th><th style="text-align:right">Total</th></tr></thead>
     <tbody>${tablaBody}</tbody></table>
     <div class="ds-tot">
-      ${f.esExenta?`<div class="r"><span style="color:var(--warn);font-weight:600">⚡ Exenta de IVA</span><span style="font-size:11px;color:var(--muted)">Esc.${f.escExenta} — ${ESCENARIOS_EXENTA?.find(e=>e.cod===f.escExenta)?.desc||''}</span></div>
+      ${(f.exenta||f.esExenta)?`<div class="r"><span style="color:var(--warn);font-weight:600">⚡ Exenta de IVA</span><span style="font-size:11px;color:var(--muted)">Esc.${f.escenarioExenta||f.escExenta} — ${ESCENARIOS_EXENTA?.find(e=>e.cod===(f.escenarioExenta||f.escExenta))?.desc||''}</span></div>
       <div class="r"><span>Base</span><span class="num">${money(f.totales.total)}</span></div>
       <div class="r"><span>IVA</span><span class="num" style="color:var(--muted)">Q 0.00 (Exenta)</span></div>`
       :`<div class="r"><span>Base (sin IVA)</span><span class="num">${money(f.totales.baseSinIva)}</span></div>
