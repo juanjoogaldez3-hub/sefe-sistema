@@ -1951,10 +1951,13 @@ function aplicarStock(p,delta,modoVenta){
 window.aplicarStock=aplicarStock;
 // Lógica común de agregar al carrito
 function agregarAlCart(p){
-  const ex=cart.find(c=>c.id===p.id&&c.modoVenta===(p.tipoEmpaque==='caja'?'caja':'unidad'));
+  // Todo producto que se maneja por caja entra al pedido POR CAJA por defecto
+  // (se puede cambiar a "por unidad" en el selector de la línea).
+  const modoDefault=(p.tipoEmpaque==='caja'||p.tipoEmpaque==='caja_unidad')?'caja':'unidad';
+  const ex=cart.find(c=>c.id===p.id&&c.modoVenta===modoDefault);
   if(ex)ex.cantidad++;
   else{
-    const modoVenta=p.tipoEmpaque==='caja'?'caja':'unidad';
+    const modoVenta=modoDefault;
     const pc=precioCliente(clienteSel(),p);
     const precio0=(p.tipoEmpaque==='caja_unidad'&&modoVenta==='unidad')?(Number(p.precioUnidad)||(p.unidadesPorCaja?+(pc/Number(p.unidadesPorCaja)).toFixed(2):pc)):pc;
     cart.push({id:p.id,codigo:p.codigo,nombre:p.nombre,precio:precio0,unidad:p.unidad,cantidad:1,descuento:0,stock:p.stock,
