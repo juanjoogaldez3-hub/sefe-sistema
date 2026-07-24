@@ -2541,8 +2541,9 @@ function crearNotaCD(f,monto,motivo,fecha){
   const doc={id:nuevoIdNC,numero:corr,tipoDoc:'notaCredito',clienteId:f.clienteId,clienteNombre:f.clienteNombre,clienteComercial:f.clienteComercial,clienteNit:f.clienteNit,
     items:[],totales:{total:monto,baseSinIva:monto/1.12,iva:monto-monto/1.12},estado:'certificada',
     autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+nuevoIdNC),
-    creada:new Date(fecha).toISOString(),facturaOrigenId:f.id,motivo,creadoPor:currentUser};
+    creada:new Date(/^\d{4}-\d{2}-\d{2}$/.test(fecha)?fecha+'T12:00:00':fecha).toISOString(),facturaOrigenId:f.id,motivo,creadoPor:currentUser,_nuevo:true};
   documentos.push(doc);corr++;
+  if(typeof guardarDocumento==='function')guardarDocumento(doc);
   const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
   closeMod();renderDocs();
   toast('✓ Nota de Crédito generada',money(monto)+' · saldo de la factura: '+money(nuevo.saldo));
@@ -2551,6 +2552,7 @@ function crearNotaCD(f,monto,motivo,fecha){
 window.crearNotaCD=crearNotaCD;
 window.anularNotaCD=id=>{const d=documentos.find(x=>x.id===id);if(!d)return;
   d.estado='anulada';d.anuladoPor=currentUser;d.anuladoFecha=new Date().toISOString();
+  if(typeof guardarDocumento==='function')guardarDocumento(d);
   const f=documentos.find(x=>x.id===d.facturaOrigenId);
   if(f){const nuevo=arInfo(f);f.estadoPago=nuevo.estado;toast('✓ '+(TIPO_LBL[d.tipoDoc]||['Documento'])[0]+' anulada','Saldo de la factura recalculado: '+money(nuevo.saldo));}
   else toast('✓ '+(TIPO_LBL[d.tipoDoc]||['Documento'])[0]+' anulada');

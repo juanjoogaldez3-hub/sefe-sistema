@@ -210,6 +210,7 @@ function mapDocumentoFromDB(d, todosAbonos){
     pilotoId:d.piloto_id, ordenRuta:d.orden_ruta, estadoEntrega:d.estado_entrega,
     entregaInfo:d.entrega_info, anulado:d.anulado, motivoAnulacion:d.motivo_anulacion,
     pdfBase64:d.pdf_base64, xmlBase64:d.xml_base64, fechaCertificacion:d.fecha_certificacion,
+    facturaOrigenId:d.factura_origen_id, nitFacturado:d.nit_facturado, nombreFacturado:d.nombre_facturado,
     creada:d.creada, abonos
   };
 }
@@ -291,6 +292,7 @@ async function guardarDocumento(d){
     piloto_id:d.pilotoId, orden_ruta:d.ordenRuta, estado_entrega:d.estadoEntrega,
     entrega_info:d.entregaInfo, anulado:d.anulado, motivo_anulacion:d.motivoAnulacion,
     pdf_base64:d.pdfBase64, xml_base64:d.xmlBase64, fecha_certificacion:d.fechaCertificacion,
+    factura_origen_id:d.facturaOrigenId||null, nit_facturado:d.nitFacturado||null, nombre_facturado:d.nombreFacturado||null,
     creada:d.creada
   };
   if (d._nuevo) {
