@@ -5768,6 +5768,9 @@ function convertirCajas(id){
       if(n>p.stockCajas){toast('No hay tantas cajas','Solo tenés '+p.stockCajas+' cajas',true);return;}
       p.stockCajas-=n;
       p.stock+=n*upc;
+      // Registrar la conversión para que aparezca en el cardex (trazabilidad de cuándo se rompió una caja)
+      if(!Array.isArray(p.conversiones))p.conversiones=[];
+      p.conversiones.push({fecha:new Date().toISOString(),cajas:n,unidades:n*upc,usuario:currentUser});
       logAudit('Cajas convertidas a unidades',p.nombre+' · '+n+' caja(s) → '+(n*upc)+' '+p.unidad+' · Quedan '+p.stockCajas+' cajas, '+p.stock+' unidades');
       closeMod();renderProd();
       toast('✓ Convertido',n+' caja(s) → '+(n*upc)+' '+p.unidad);
@@ -6446,6 +6449,21 @@ function renderReportes(){
         }
       });
     });
+    // CONVERSIONES: caja(s) abierta(s) a unidades sueltas. Neto cero en unidades (informativo, para trazabilidad).
+    productos.forEach(pp=>{
+      if(prodSel&&pp.id!==prodSel.id)return;
+      (pp.conversiones||[]).forEach(cv=>{
+        if(!enRango(cv.fecha,r))return;
+        const _cj=Number(cv.cajas)||0,_un=Number(cv.unidades)||0;
+        movs.push({
+          fecha:cv.fecha, tipo:'conversion', prodId:pp.id,
+          prodNombre:pp.nombre, prodCodigo:pp.codigo, cantidad:0,
+          detalle:_cj+' caja(s) → '+_un+' und',
+          doc:'Conversión', docTipo:'Interno', tercero:'—',
+          usuario:cv.usuario||'—', usuarioLbl:'Convirtió'
+        });
+      });
+    });
     // 2) Ordenar por fecha
     movs.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
     const expFilas=[];
@@ -6456,16 +6474,16 @@ function renderReportes(){
       // así que mostramos el saldo corriente partiendo de 0 en el rango y sumando/restando)
       let saldo=0;
       const filas=movs.map(m=>{
-        saldo+=(m.tipo==='ingreso'?m.cantidad:-m.cantidad);
+        saldo+=(m.tipo==='ingreso'?m.cantidad:m.tipo==='salida'?-m.cantidad:0);
         expFilas.push({
           Fecha:fdate(m.fecha), Documento:m.doc, Tipo:m.docTipo,
           'Entra':m.tipo==='ingreso'?m.cantidad:'', 'Sale':m.tipo==='salida'?m.cantidad:'',
-          Saldo:saldo, Tercero:m.tercero, Usuario:m.usuario
+          Saldo:saldo, Tercero:m.tipo==='conversion'?m.detalle:m.tercero, Usuario:m.usuario
         });
         return `<tr style="border-bottom:1px solid var(--line)">
           <td style="font-size:11.5px;color:var(--muted)">${fdate(m.fecha)}</td>
           <td style="font-size:11.5px;font-weight:600">${m.doc}<div style="font-size:10px;color:var(--muted-2)">${m.docTipo}</div></td>
-          <td style="font-size:11.5px">${m.tercero}</td>
+          <td style="font-size:11.5px">${m.tipo==='conversion'?m.detalle:m.tercero}</td>
           <td class="num" style="font-size:11.5px;color:var(--ok);font-weight:${m.tipo==='ingreso'?'700':'400'}">${m.tipo==='ingreso'?'+'+m.cantidad:'—'}</td>
           <td class="num" style="font-size:11.5px;color:var(--danger);font-weight:${m.tipo==='salida'?'700':'400'}">${m.tipo==='salida'?'−'+m.cantidad:'—'}</td>
           <td class="num" style="font-size:11.5px;font-weight:700;background:#fafdf5">${saldo}</td>
@@ -6484,15 +6502,15 @@ function renderReportes(){
       const filas=movs.map(m=>{
         expFilas.push({
           Fecha:fdate(m.fecha), Producto:m.prodNombre, Codigo:m.prodCodigo,
-          Movimiento:m.tipo==='ingreso'?'Ingreso':'Salida',
-          Cantidad:m.cantidad, Documento:m.doc, Tipo:m.docTipo,
-          'Cliente/Proveedor':m.tercero, Usuario:m.usuario
+          Movimiento:m.tipo==='ingreso'?'Ingreso':m.tipo==='salida'?'Salida':'Conversión',
+          Cantidad:m.tipo==='conversion'?m.detalle:m.cantidad, Documento:m.doc, Tipo:m.docTipo,
+          'Cliente/Proveedor':m.tipo==='conversion'?'—':m.tercero, Usuario:m.usuario
         });
         return `<tr style="border-bottom:1px solid var(--line)">
           <td style="font-size:11px;color:var(--muted)">${fdate(m.fecha)}</td>
           <td style="font-size:11.5px;font-weight:600">${m.prodNombre}<div style="font-size:10px;color:var(--muted-2)">${m.prodCodigo}</div></td>
-          <td style="font-size:11px"><span class="badge ${m.tipo==='ingreso'?'b-ok':'b-danger'}" style="font-size:10px">${m.tipo==='ingreso'?'▲ Ingreso':'▼ Salida'}</span></td>
-          <td class="num" style="font-size:11.5px;font-weight:700;color:${m.tipo==='ingreso'?'var(--ok)':'var(--danger)'}">${m.tipo==='ingreso'?'+':'−'}${m.cantidad}</td>
+          <td style="font-size:11px">${m.tipo==='conversion'?'<span class="badge b-muted" style="font-size:10px">⇄ Conversión</span>':'<span class="badge '+(m.tipo==='ingreso'?'b-ok':'b-danger')+'" style="font-size:10px">'+(m.tipo==='ingreso'?'▲ Ingreso':'▼ Salida')+'</span>'}</td>
+          <td class="num" style="font-size:11.5px;font-weight:700;color:${m.tipo==='conversion'?'var(--muted)':(m.tipo==='ingreso'?'var(--ok)':'var(--danger)')}">${m.tipo==='conversion'?m.detalle:(m.tipo==='ingreso'?'+':'−')+m.cantidad}</td>
           <td style="font-size:11.5px;font-weight:600">${m.doc}<div style="font-size:10px;color:var(--muted-2)">${m.docTipo}</div></td>
           <td style="font-size:11px">${m.tercero}</td>
           <td style="font-size:11px;color:var(--muted)">${m.usuarioLbl}: ${m.usuario}</td>
