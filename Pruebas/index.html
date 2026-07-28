@@ -5595,6 +5595,10 @@ window.toggleVerInactivos=toggleVerInactivos;
 function trazabilidadProducto(prod){
   const cod=prod.codigo;
   const movs=[];
+  // Normaliza la cantidad a la MEDIDA del producto (cajas para tipos caja).
+  // Una salida por unidad de un caja_unidad viene en unidades → se pasa a cajas.
+  const esCU=prod.tipoEmpaque==='caja_unidad', upc=Number(prod.unidadesPorCaja)||1;
+  const enMedida=(cant,modo)=>(esCU&&(modo||'unidad')!=='caja')?cant/upc:cant;
   // SALIDAS: documentos (pedidos, facturas, notas) que contienen el producto
   documentos.forEach(d=>{
     if(d.estado==='anulada'||d.anulado)return;
@@ -5607,7 +5611,7 @@ function trazabilidadProducto(prod){
         tipo:'salida',
         doc:docRef,
         detalle:tipo+(d.clienteComercial?' · '+d.clienteComercial:''),
-        cant:Number(it.cantidad)||0
+        cant:enMedida(Number(it.cantidad)||0,it.modoVenta)
       });
     });
   });
@@ -5650,7 +5654,7 @@ window.verTrazabilidad=function(id){
       <td>${badge}</td>
       <td style="font-weight:600">${m.doc}</td>
       <td style="font-size:12px;color:var(--muted)">${m.detalle}</td>
-      <td class="num" style="font-weight:700;color:${color}">${signo}${m.cant}</td>
+      <td class="num" style="font-weight:700;color:${color}">${signo}${fmtCajas(m.cant)}</td>
     </tr>`;
   }).join(''):'<tr><td colspan="5" class="empty">Sin movimientos registrados para este producto</td></tr>';
 
@@ -5662,10 +5666,10 @@ window.verTrazabilidad=function(id){
          <div style="font-weight:700">${p.codigo}</div></div>
        <div style="flex:1;min-width:90px;background:#E8F5E9;border-radius:8px;padding:10px 12px">
          <div style="font-size:11px;color:#1a7f37">Total entradas</div>
-         <div style="font-weight:700;color:#1a7f37">+${totalEntra}</div></div>
+         <div style="font-weight:700;color:#1a7f37">+${fmtCajas(totalEntra)}</div></div>
        <div style="flex:1;min-width:90px;background:#FDECEA;border-radius:8px;padding:10px 12px">
          <div style="font-size:11px;color:#c0392b">Total salidas</div>
-         <div style="font-weight:700;color:#c0392b">−${totalSale}</div></div>
+         <div style="font-weight:700;color:#c0392b">−${fmtCajas(totalSale)}</div></div>
        <div style="flex:1;min-width:90px;background:var(--surface-2);border-radius:8px;padding:10px 12px">
          <div style="font-size:11px;color:var(--muted)">Stock actual</div>
          <div style="font-weight:700">${p.tipoEmpaque==='caja_unidad'?fmtCajas(existenciaCajas(p))+' caja'+(existenciaCajas(p)!==1?'s':''):existenciaTotal(p).toLocaleString('es-GT')}</div>${p.tipoEmpaque==='caja_unidad'?`<div style="font-size:10px;color:var(--muted-2);margin-top:2px">${existenciaDesglose(p)}</div>`:''}</div>
@@ -5677,7 +5681,7 @@ window.verTrazabilidad=function(id){
            <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted)">TIPO</th>
            <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted)">DOCUMENTO</th>
            <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--muted)">DETALLE</th>
-           <th style="text-align:right;padding:8px 10px;font-size:11px;color:var(--muted)">UNIDADES</th>
+           <th style="text-align:right;padding:8px 10px;font-size:11px;color:var(--muted)">${(p.tipoEmpaque==='caja_unidad'||p.tipoEmpaque==='caja')?'CAJAS':'UNIDADES'}</th>
          </tr></thead>
          <tbody>${filas}</tbody>
        </table>
@@ -6364,6 +6368,9 @@ function renderReportes(){
     // Salidas: facturas (cambiaria) que rebajaron inventario
     // Ingresos: compras recibidas (con historial de recepciones)
     const prodSel=repFiltros.producto?productos.find(p=>String(p.id)===String(repFiltros.producto)):null;
+    // Normaliza toda cantidad a UNIDADES (el saldo corriente y el stock actual van en unidades).
+    // En caja_unidad, las compras y las ventas POR CAJA vienen en cajas → se multiplican por el factor.
+    const _aUnid=(prodId,cant,modo)=>{const pp=productos.find(x=>x.id===prodId);return (pp&&pp.tipoEmpaque==='caja_unidad'&&modo==='caja')?cant*(Number(pp.unidadesPorCaja)||1):cant;};
     // 1) Reunir todos los movimientos
     const movs=[];
     // SALIDAS: facturas certificadas/facturadas (no anuladas) que rebajaron stock
@@ -6373,7 +6380,7 @@ function renderReportes(){
         movs.push({
           fecha:f.creada, tipo:'salida', prodId:it.id,
           prodNombre:it.nombre, prodCodigo:it.codigo,
-          cantidad:Number(it.cantidad)||0,
+          cantidad:_aUnid(it.id,Number(it.cantidad)||0,it.modoVenta||'unidad'),
           doc:(f.serie||'')+'-'+(f.numeroDte||''),
           docTipo:'Factura', tercero:f.clienteComercial||f.clienteNombre||'—',
           usuario:f.vendedorNombre||'—', usuarioLbl:'Facturó'
@@ -6391,7 +6398,7 @@ function renderReportes(){
             movs.push({
               fecha:rc.fecha, tipo:'ingreso', prodId:it.id,
               prodNombre:it.nombre, prodCodigo:it.codigo,
-              cantidad:Number(rc.cantidad)||0,
+              cantidad:_aUnid(it.id,Number(rc.cantidad)||0,'caja'),
               doc:'CMP-'+padn(c.id), docTipo:'Compra',
               tercero:c.proveedorNombre||'—',
               usuario:rc.recibidoPor||'—', usuarioLbl:'Recibió'
@@ -6401,7 +6408,7 @@ function renderReportes(){
           movs.push({
             fecha:c.fecha, tipo:'ingreso', prodId:it.id,
             prodNombre:it.nombre, prodCodigo:it.codigo,
-            cantidad:Number(it.recibido)||0,
+            cantidad:_aUnid(it.id,Number(it.recibido)||0,'caja'),
             doc:'CMP-'+padn(c.id), docTipo:'Compra',
             tercero:c.proveedorNombre||'—',
             usuario:'—', usuarioLbl:'Recibió'
