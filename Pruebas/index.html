@@ -1064,7 +1064,8 @@ function _pintarMasFilas(tbodyId){
 }
 window._pintarMasFilas=_pintarMasFilas;
 
-function enhanceTable(tbodyId){
+function enhanceTable(tbodyId,opts){
+  const _doSort=!opts||opts.sort!==false;
   const tbody=document.getElementById(tbodyId);if(!tbody)return;
   const table=tbody.closest('table');if(!table)return;
   if(!table.dataset.enhanced){
@@ -1074,7 +1075,7 @@ function enhanceTable(tbodyId){
     wrap.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input class="tbl-search" placeholder="Buscar en la tabla…"><span class="tbl-count"></span>';
     table.parentNode.insertBefore(wrap,table);
     wrap.querySelector('.tbl-search').oninput=()=>applyTableFilter(table);
-    Array.from(table.querySelectorAll('thead th')).forEach((th,idx)=>{
+    if(_doSort)Array.from(table.querySelectorAll('thead th')).forEach((th,idx)=>{
       const txt=th.textContent.trim();if(!txt)return;
       th.classList.add('sortable');th.dataset.dir='0';
       th.innerHTML=txt+' <span class="sort-arrow">⇕</span>';
@@ -5797,10 +5798,27 @@ function toggleVend(nombre){const i=repFiltros.vendedores.indexOf(nombre);if(i>=
 window.toggleVend=toggleVend;
 function setRepFiltro(k,v){repFiltros[k]=v;renderReportes();}
 window.setRepFiltro=setRepFiltro;
+// Filtros escribibles: el usuario teclea el nombre (label) y aquí se resuelve al valor guardado.
+let _repSelOpts={};
+function setRepFiltroBusca(k,id){
+  const inp=document.getElementById(id);if(!inp)return;
+  const txt=(inp.value||'').trim();
+  const opts=_repSelOpts[k]||[];
+  if(!txt){setRepFiltro(k,'');return;}
+  let hit=opts.find(o=>(o.l||'').toLowerCase()===txt.toLowerCase());
+  if(!hit){const part=opts.filter(o=>(o.l||'').toLowerCase().includes(txt.toLowerCase()));if(part.length===1)hit=part[0];}
+  setRepFiltro(k,hit?hit.v:'');
+}
+window.setRepFiltroBusca=setRepFiltroBusca;
 function renderRepFilters(){
   const f=$('#rep-filters');if(!f)return;
   let html='';
-  const sel=(id,lbl,opts,val,k)=>`<div><label>${lbl}</label><select style="margin-top:4px" onchange="setRepFiltro('${k}',this.value)"><option value="">Todos</option>${opts.map(o=>`<option value="${o.v}" ${val===o.v?'selected':''}>${o.l}</option>`).join('')}</select></div>`;
+  const sel=(id,lbl,opts,val,k)=>{
+    _repSelOpts[k]=opts;
+    const cur=opts.find(o=>o.v===val);
+    const dl=opts.map(o=>`<option value="${(o.l||'').replace(/"/g,'&quot;')}"></option>`).join('');
+    return `<div><label>${lbl}</label><input list="${id}-dl" id="${id}" style="margin-top:4px" placeholder="Todos — escribí para buscar" value="${cur?(cur.l||'').replace(/"/g,'&quot;'):''}" onchange="setRepFiltroBusca('${k}','${id}')"><datalist id="${id}-dl">${dl}</datalist></div>`;
+  };
   if(repType==='resumen'||repType==='costos'||repType==='producto'){
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
@@ -5987,6 +6005,19 @@ function _movsInvDespuesDe(corte){
   documentos.forEach(d=>{if(d.estado==='anulada'||d.anulado)return;if((d.creada||'').slice(0,10)<=corte)return;(d.items||[]).forEach(it=>add(it.codigo,'sale',aUnidades(it.codigo,Number(it.cantidad)||0,it.modoVenta||'unidad')));});
   compras.forEach(c=>{if(c.anulado)return;if((c.fecha||'').slice(0,10)<=corte)return;(c.items||[]).forEach(it=>{const r=Number(it.recibido||0);if(r>0)add(it.codigo,'entra',aUnidades(it.codigo,r,'caja'));});});
   return m;
+}
+// Agrega un buscador ("Buscar en la tabla…") a cada tabla de reporte. Se omite en los
+// reportes agrupados/colapsables (cliprod, dircli, climes), donde chocaría con expandir/colapsar.
+function enhanceRepTables(){
+  if(['cliprod','dircli','climes'].includes(repType))return;
+  const body=document.getElementById('rep-body');if(!body)return;
+  let i=0;
+  body.querySelectorAll('table').forEach(table=>{
+    const tb=table.querySelector('tbody');if(!tb)return;
+    if(tb.querySelectorAll('tr').length<5)return; // tablas chicas no necesitan buscador
+    if(!tb.id)tb.id='rep-tbl-'+(i++);
+    enhanceTable(tb.id,{sort:false});
+  });
 }
 function renderReportes(){
   bindRep();renderRepFilters();
@@ -6774,6 +6805,7 @@ function renderReportes(){
   $('#rep-body').innerHTML=html;
   // Si es el reporte cliente/producto, aplicar el estado de colapso guardado
   if(repType==='cliprod'||repType==='dircli'||repType==='climes')aplicarColapso();
+  enhanceRepTables();
 }
 
 // ---- Exportación Excel ----
