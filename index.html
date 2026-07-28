@@ -7468,6 +7468,7 @@ function procesarCobro(id){
       const monto=Number($('#ab-monto').value);
       if(!(monto>0)){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El monto debe ser mayor a cero';return;}
       if(monto>saldo+0.001){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El abono no puede superar el saldo de '+money(saldo);return;}
+      if(!($('#ab-cuenta')?.value)){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='Elegí la cuenta de banco a la que entró el dinero';return;}
       d.abonos=d.abonos||[];
       const _ab={fecha:$('#ab-fecha').value||hoy,monto,metodo:$('#ab-met').value,referencia:$('#ab-ref').value,
         noRecibo:$('#ab-recibo').value.trim(),comprobante:_compFoto,cuentaBancoId:($('#ab-cuenta')?.value||null),
