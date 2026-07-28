@@ -2689,7 +2689,7 @@ function notaEnvioHTML(f){
   const dirEntrega=cli.direccionEntrega||dirFiscal;
   const cc=cli.contactoCompras||{};
   const fechaLarga=f.creada?new Date(f.creada).toLocaleDateString('es-GT',{day:'numeric',month:'long',year:'numeric'}):'';
-  const firmante=f.vendedorNombre||currentUser||'Soluciones Efectivas';
+  const firmante='Gerencia General';
   let totalGen=0;
   const filas=(f.items||[]).map(it=>{
     const cant=Number(it.cantidad)||0;
