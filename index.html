@@ -2236,6 +2236,7 @@ function abrirFacturar(id){
 }
 window.abrirFacturar=abrirFacturar;
 async function facturarPedido(id,dias){
+  if(!canFacturar()){toast('Sin permiso','Tu rol no puede facturar',true);return;}
   const f=documentos.find(d=>d.id===id);
   if(!f){toast('✗ Pedido no encontrado',null,true);return;}
 
@@ -2483,6 +2484,7 @@ window.abrirAnular=abrirAnular;
 
 // Anula la factura: primero en EcoFactura (si es real), luego en el sistema
 async function anularFacturaReal(id,motivo){
+  if(!canAnular()){toast('Sin permiso','Tu rol no puede anular',true);return;}
   const f=documentos.find(d=>d.id===id);
   if(!f)return;
   const esRealFEL=f.autorizacion && !String(f.autorizacion).startsWith('SIM-');
@@ -4649,6 +4651,7 @@ function histPagosProv(id){
 window.histPagosProv=histPagosProv;
 
 function anularPagoProv(compraId,idx){
+  if(!canAnular()){toast('Sin permiso','Tu rol no puede anular',true);return;}
   const c=compras.find(x=>x.id===compraId);if(!c)return;
   const a=c.abonos[idx];if(!a||a.anulado)return;
   openMod('Anular pago · '+(a.noRecibo||''),
@@ -4861,6 +4864,7 @@ window.oficializarCompraEspecial=oficializarCompraEspecial;
 
 // ---- Eliminar compra (sin inventario afectado — OC sin recibir) ----
 function eliminarCompra(id){
+  if(!canAnular()){toast('Sin permiso','Tu rol no puede eliminar compras',true);return;}
   const idx=compras.findIndex(x=>x.id===id);if(idx<0)return;
   const c=compras[idx];
   compras.splice(idx,1);
