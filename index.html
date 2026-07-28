@@ -1165,13 +1165,16 @@ const ROLES={
   admin:{label:'Administrador',views:'ALL',anular:true,facturar:true,crearCliente:true,editarInventario:true,registrarAbono:true,readonly:false,compraEspecial:true},
   gerencia:{label:'Gerencia',views:['panel','pedido','documentos','cobros','clientes','inventario','reportes','compras','nuevacompra','proveedores','despachos'],anular:false,facturar:true,crearCliente:true,editarInventario:true,registrarAbono:false,readonly:false,compraEspecial:true,asignarPiloto:true},
   ventas:{label:'Ventas',views:['panel','pedido','documentos','clientes','inventario'],anular:false,facturar:false,crearCliente:false,editarInventario:false,registrarAbono:false,readonly:false,compraEspecial:false},
-  cobros:{label:'Contabilidad',views:['panel','documentos','cobros','compras','reportes','despachos'],anular:true,facturar:true,crearCliente:false,editarInventario:false,registrarAbono:true,readonly:false,compraEspecial:false},
   bodega:{label:'Bodega',views:['panel','inventario','compras','nuevacompra','porpagar','proveedores'],anular:false,facturar:true,crearCliente:false,editarInventario:true,registrarAbono:false,readonly:false,compraEspecial:false},
   contabilidad:{label:'Contabilidad',views:['panel','documentos','cobros','compras','reportes','despachos'],anular:true,facturar:true,crearCliente:false,editarInventario:false,registrarAbono:true,readonly:false,compraEspecial:false},
   auditoria:{label:'Auditoría',views:'ALL',anular:false,facturar:false,crearCliente:false,editarInventario:false,registrarAbono:false,readonly:true,compraEspecial:false},
   facturador:{label:'Facturador / Logística',views:['panel','pedido','documentos','clientes','despachos'],anular:false,facturar:true,crearCliente:false,editarInventario:false,registrarAbono:false,readonly:false,compraEspecial:false,asignarPiloto:true},
   piloto:{label:'Piloto / Despachador',views:['panel','misentregas'],anular:false,facturar:false,crearCliente:false,editarInventario:false,registrarAbono:false,readonly:false,compraEspecial:false,asignarPiloto:false},
 };
+// M7: 'cobros' es un rol legacy idéntico a 'contabilidad'. Se mantiene como ALIAS del mismo
+// objeto para que cualquier usuario existente con rol='cobros' siga funcionando y para que
+// ambos nunca puedan divergir. Migrar usuarios a 'contabilidad' con el SQL y luego se puede quitar.
+ROLES.cobros=ROLES.contabilidad;
 let usuarios=[
   {id:1,nombre:'Juanjo',correo:'juanjo@sefe.gt',rol:'admin',activo:true,vendedorId:null},
   {id:2,nombre:'Sofía Castillo',correo:'sofia@sefe.gt',rol:'gerencia',activo:true,vendedorId:null},

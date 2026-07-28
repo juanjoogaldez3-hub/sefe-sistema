@@ -235,7 +235,7 @@ function mapCompraFromDB(c, todosPagos){
     items:c.items||[], total:Number(c.total), fecha:c.fecha,
     estadoRecepcion:c.estado_recepcion, facturada:c.facturada, docProv:c.doc_prov,
     tipoPago:c.tipo_pago, diasCredito:c.dias_credito, vencimiento:c.vencimiento,
-    especial:c.especial, oficializada:c.oficializada,
+    especial:c.especial, oficializada:c.oficializada, mes:c.mes,
     anulado:c.anulado, motivoAnulacion:c.motivo_anulacion, abonos
   };
 }
@@ -343,7 +343,7 @@ async function guardarCompra(c){
     items:c.items, total:c.total, fecha:c.fecha, estado_recepcion:c.estadoRecepcion,
     facturada:c.facturada, doc_prov:c.docProv, tipo_pago:c.tipoPago,
     dias_credito:c.diasCredito, vencimiento:c.vencimiento, especial:c.especial,
-    oficializada:c.oficializada, anulado:c.anulado, motivo_anulacion:c.motivoAnulacion
+    oficializada:c.oficializada, mes:c.mes, anulado:c.anulado, motivo_anulacion:c.motivoAnulacion
   };
   if (c._nuevo) {
     delete c._nuevo;
