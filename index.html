@@ -1843,20 +1843,12 @@ function actualizarVendedorInfo(cli){
   let nombreVend=null;
   if(!cli||!cli.vendedorId){el.textContent='Sin vendedor asignado';el.style.color='var(--muted-2)';}
   else{const v=vendedores.find(x=>x.id===cli.vendedorId);nombreVend=v?v.nombre:null;el.textContent=v?v.nombre:'—';el.style.color='var(--ink)';el.style.fontWeight='600';}
-  // Mostrar el selector de sub-vendedor solo si el vendedor del cliente es un canal (Whaticket)
-  const wrap=$('#f-subvend-wrap'),sel=$('#f-subvend');
-  if(wrap&&sel){
-    if(esVendedorCanal(nombreVend)){
-      // llenar opciones una sola vez
-      if(sel.dataset.built!=='1'){
-        sel.innerHTML='<option value="">— Sin especificar —</option>'+SUBVENDEDORES_WHATICKET.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">${n}</option>`).join('');
-        sel.dataset.built='1';
-      }
-      wrap.style.display='';
-    }else{
-      wrap.style.display='none';
-      sel.value='';
-    }
+  // El sub-vendedor de Whaticket ahora es FIJO por cliente (se elige en la ficha del cliente,
+  // no en el pedido). Aquí solo se oculta el selector viejo y se muestra a título informativo.
+  const wrap=$('#f-subvend-wrap');
+  if(wrap)wrap.style.display='none';
+  if(el&&esVendedorCanal(nombreVend)&&cli&&cli.subVendedorNombre){
+    el.textContent=(nombreVend||'—')+' · vende: '+cli.subVendedorNombre;
   }
   mostrarAlertaSaldo(cli);
 }
@@ -2067,7 +2059,7 @@ $('#f-go').onclick=async()=>{
       else{aplicarStock(p,prev.q||0,prev.modo);aplicarStock(p,-newQ,newModo);}
     });
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
-    const subVendEd=(esVendedorCanal(vend?.nombre)&&$('#f-subvend'))?($('#f-subvend').value||null):null;
+    const subVendEd=esVendedorCanal(vend?.nombre)?(cli.subVendedorNombre||null):null;
     Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,subVendedorNombre:subVendEd,items:cart.map(it=>({...it})),totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||''});
     toast('✓ Pedido actualizado','PED-'+padn(f.numero)+' · inventario ajustado');
     logAudit('Pedido editado','PED-'+padn(f.numero)+' · '+cli.nombre+' · '+money(totales.total));
@@ -2076,7 +2068,7 @@ $('#f-go').onclick=async()=>{
   }else{
     cart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,-it.cantidad,it.modoVenta);});
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
-    const subVend=(esVendedorCanal(vend?.nombre)&&$('#f-subvend'))?($('#f-subvend').value||null):null;
+    const subVend=esVendedorCanal(vend?.nombre)?(cli.subVendedorNombre||null):null;
     // Id temporal NEGATIVO: los ids reales de la base son positivos, así que un
     // temporal nunca puede coincidir con otro documento (evita facturar el equivocado).
     const nuevoId=-Date.now();
@@ -6966,6 +6958,11 @@ function openCli(id){
     ${vendedores.map(v=>`<option value="${v.id}" ${c&&c.vendedorId===v.id?'selected':''}>${v.nombre}</option>`).join('')}
     </select></div>
   </div>
+  <div class="row" id="c-subvend-wrap" style="display:none"><div><label>Sub-vendedor por Whaticket <span style="font-weight:400;color:var(--muted-2)">(quién le vende a este cliente por el canal)</span></label><select id="c-subvend">
+    <option value="">— Sin especificar —</option>
+    ${SUBVENDEDORES_WHATICKET.map(n=>`<option value="${n.replace(/"/g,'&quot;')}" ${c&&c.subVendedorNombre===n?'selected':''}>${n}</option>`).join('')}
+    </select></div>
+  </div>
   <div class="row"><div><label>Esta es una sede de <span style="font-weight:400;color:var(--muted-2)">(opcional — mismo NIT, distinta ubicación)</span></label><select id="c-sede">
     <option value="">No es sede (cliente independiente)</option>
     ${clientes.filter(x=>!x.sedesDe&&x.id!==(c?.id)).map(x=>`<option value="${x.id}" ${c&&c.sedesDe===x.id?'selected':''}>${x.nombre} — ${x.nit}</option>`).join('')}
@@ -6982,13 +6979,19 @@ function openCli(id){
     const tiempoCredito=tcSel==='custom'?(Number($('#c-tc-custom').value)||0):Number(tcSel);
     const vendedorId=$('#c-vend').value?Number($('#c-vend').value):null;
     const sedesDe=$('#c-sede').value?Number($('#c-sede').value):null;
-    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:normalizarNit($('#c-nit').value)||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),tiempoCredito,vendedorId,sedesDe,nitsSecundarios:leerNitsSecundarios(),
+    const _vendSel=vendedores.find(v=>v.id===vendedorId);
+    const subVendedorNombre=esVendedorCanal(_vendSel?.nombre)?($('#c-subvend')?.value||null):null;
+    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:normalizarNit($('#c-nit').value)||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),tiempoCredito,vendedorId,subVendedorNombre,sedesDe,nitsSecundarios:leerNitsSecundarios(),
       contactoPagos:{nombre:$('#cp-nom').value,telefono:$('#cp-tel').value,correo:$('#cp-mail').value},
       contactoCompras:{nombre:$('#cc-nom').value,telefono:$('#cc-tel').value,correo:$('#cc-mail').value}};
     if(c){Object.assign(c,datos);logAudit('Cliente editado',nom+' · NIT '+datos.nit);toast('✓ Cliente actualizado');if(typeof guardarCliente==='function')guardarCliente(c);}
     else{const nuevo={id:cliN++,...datos,fechaAlta:fechaHoyGT(),precios:{},_nuevo:true};clientes.push(nuevo);logAudit('Cliente creado',nom+' · NIT '+datos.nit);toast('✓ Cliente agregado');if(typeof guardarCliente==='function')guardarCliente(nuevo);}
     closeMod();initForm();renderCli();if(cliActual&&$('#v-clientedet').classList.contains('active'))renderCliDet();});
-  setTimeout(()=>{const s=$('#c-tc');if(s)s.onchange=()=>{$('#c-tc-custom-wrap').style.display=s.value==='custom'?'block':'none';};},0);
+  setTimeout(()=>{const s=$('#c-tc');if(s)s.onchange=()=>{$('#c-tc-custom-wrap').style.display=s.value==='custom'?'block':'none';};
+    const cv=$('#c-vend'),sw=$('#c-subvend-wrap');
+    const toggleSub=()=>{if(!sw)return;const vn=vendedores.find(v=>v.id===Number(cv.value));sw.style.display=esVendedorCanal(vn?.nombre)?'':'none';};
+    if(cv){cv.onchange=toggleSub;toggleSub();}
+  },0);
 }
 window.openCli=openCli;
 // Agregar una fila vacía de NIT secundario en el formulario del cliente

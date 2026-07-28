@@ -167,7 +167,7 @@ function mapClienteFromDB(c){
   return {
     id:c.id, nit:c.nit, nombre:c.nombre, razonSocial:c.razon_social,
     direccion:c.direccion, email:c.email, tiempoCredito:c.tiempo_credito,
-    vendedorId:c.vendedor_id, sedesDe:c.sedes_de,
+    vendedorId:c.vendedor_id, subVendedorNombre:c.sub_vendedor_nombre, sedesDe:c.sedes_de,
     direccionEntrega:c.direccion_entrega, fechaAlta:c.fecha_alta,
     nitsSecundarios:c.nits_secundarios||[],
     contactoPagos:c.contacto_pagos||{}, contactoCompras:c.contacto_compras||{},
@@ -256,7 +256,7 @@ async function guardarCliente(cli){
   const row = {
     nit:cli.nit, nombre:cli.nombre, razon_social:cli.razonSocial,
     direccion:cli.direccion, email:cli.email, tiempo_credito:cli.tiempoCredito,
-    vendedor_id:cli.vendedorId, sedes_de:cli.sedesDe,
+    vendedor_id:cli.vendedorId, sub_vendedor_nombre:cli.subVendedorNombre, sedes_de:cli.sedesDe,
     direccion_entrega:cli.direccionEntrega, fecha_alta:cli.fechaAlta,
     nits_secundarios:cli.nitsSecundarios,
     contacto_pagos:cli.contactoPagos, contacto_compras:cli.contactoCompras, precios:cli.precios,
