@@ -2439,9 +2439,12 @@ async function facturarPedidoExento(id,dias,escenario){
 window.facturarPedidoExento=facturarPedidoExento;
 function generarNota(id,type){
   const f=documentos.find(d=>d.id===id);
+  if(!f)return;
   Object.assign(f,{tipoDoc:type,estado:'pendiente'});
   renderDocs();
   toast('✓ '+(TIPO_LBL[type]||['Documento'])[0]+' generada','PED-'+padn(f.numero));
+  logAudit((TIPO_LBL[type]||['Documento'])[0]+' generada','PED-'+padn(f.numero)+' · '+(f.clienteComercial||f.clienteNombre));
+  if(typeof guardarDocumento==='function')guardarDocumento(f);
 }
 window.generarNota=generarNota;
 function cancelarPedido(id){
