@@ -999,6 +999,8 @@ function inicialesVendedor(nombre){
   return nombre.trim().split(/\s+/).map(p=>p.charAt(0).toUpperCase()).join('');
 }
 const padn=n=>String(n).padStart(4,'0');
+// Referencia del documento según su tipo: NP- préstamo, NE- envío, serie-DTE facturas, PED- resto.
+const refPed=f=>{if(!f)return '';if(f.serie&&f.numeroDte)return f.serie+'-'+f.numeroDte;return (f.tipoDoc==='prestamo'?'NP-':f.tipoDoc==='envio'?'NE-':'PED-')+padn(f.numero);};
 // Normaliza un NIT quitando el guión y espacios (deja "CF" como CF).
 // Así todos los NITs quedan uniformes y no hay problemas de comparación.
 function normalizarNit(nit){
@@ -1612,7 +1614,7 @@ function renderPanel(){
     let titulo='Pedidos abiertos',rows='';
     if(esVentasRol||['admin','gerencia','auditoria'].includes(rol)){
       titulo=esVentasRol?'Mis pedidos abiertos':'Pedidos abiertos';
-      rows=pedAbiertos.slice(0,5).map(d=>`<tr style="cursor:pointer" onclick="verDoc(${d.id})"><td style="font-weight:600;font-size:12px">PED-${padn(d.numero)}</td><td style="font-size:12px;color:var(--muted)">${d.clienteComercial||d.clienteNombre}</td><td class="num" style="font-weight:700;font-size:12px">${money(d.totales.total)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty" style="font-size:12px">Sin pedidos abiertos</td></tr>';
+      rows=pedAbiertos.slice(0,5).map(d=>`<tr style="cursor:pointer" onclick="verDoc(${d.id})"><td style="font-weight:600;font-size:12px">${refPed(d)}</td><td style="font-size:12px;color:var(--muted)">${d.clienteComercial||d.clienteNombre}</td><td class="num" style="font-weight:700;font-size:12px">${money(d.totales.total)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty" style="font-size:12px">Sin pedidos abiertos</td></tr>';
     }else if(esBodega){
       titulo='Compras especiales activas';
       rows=espPend.slice(0,5).map(c=>`<tr onclick="go('compras')" style="cursor:pointer"><td style="font-weight:600;font-size:12px">CMP-${padn(c.id)}</td><td style="font-size:12px;color:var(--muted)">${c.proveedorNombre}</td><td class="num" style="font-weight:700;font-size:12px">${money(c.total)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty" style="font-size:12px">Sin compras especiales activas</td></tr>';
@@ -1621,7 +1623,7 @@ function renderPanel(){
       rows=clientes.map(c=>({c,saldo:saldoCliente(c)})).filter(x=>x.saldo>0).sort((a,b)=>b.saldo-a.saldo).slice(0,5).map(({c,saldo})=>`<tr onclick="go('cobros')" style="cursor:pointer"><td style="font-weight:600;font-size:12px">${c.nombre}</td><td style="font-size:12px;color:var(--muted)">${c.nit}</td><td class="num" style="font-weight:700;font-size:12px;color:var(--warn)">${money(saldo)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty" style="font-size:12px">Sin saldos pendientes</td></tr>';
     }else if(esFacturador){
       titulo='Documentos sin facturar';
-      rows=docsFacturar.slice(0,5).map(d=>`<tr style="cursor:pointer" onclick="verDoc(${d.id})"><td style="font-weight:600;font-size:12px">PED-${padn(d.numero)}</td><td style="font-size:12px;color:var(--muted)">${d.clienteComercial||d.clienteNombre}</td><td class="num" style="font-weight:700;font-size:12px">${money(d.totales.total)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty" style="font-size:12px">Sin documentos pendientes</td></tr>';
+      rows=docsFacturar.slice(0,5).map(d=>`<tr style="cursor:pointer" onclick="verDoc(${d.id})"><td style="font-weight:600;font-size:12px">${refPed(d)}</td><td style="font-size:12px;color:var(--muted)">${d.clienteComercial||d.clienteNombre}</td><td class="num" style="font-weight:700;font-size:12px">${money(d.totales.total)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty" style="font-size:12px">Sin documentos pendientes</td></tr>';
     }
     $('#panel-ped-title').textContent=titulo;
     $('#panel-pedidos').innerHTML=rows;
@@ -2056,8 +2058,8 @@ $('#f-go').onclick=async()=>{
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
     const subVendEd=esVendedorCanal(vend?.nombre)?(cli.subVendedorNombre||null):null;
     Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,subVendedorNombre:subVendEd,items:cart.map(it=>({...it})),totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||''});
-    toast('✓ Pedido actualizado','PED-'+padn(f.numero)+' · inventario ajustado');
-    logAudit('Pedido editado','PED-'+padn(f.numero)+' · '+cli.nombre+' · '+money(totales.total));
+    toast('✓ Pedido actualizado',refPed(f)+' · inventario ajustado');
+    logAudit('Pedido editado',refPed(f)+' · '+cli.nombre+' · '+money(totales.total));
     if(typeof guardarDocumento==='function')guardarDocumento(f);
     editId=null;editOldMap={};
   }else{
@@ -2094,22 +2096,22 @@ function rowDoc(withActions){
 
       if(f.tipoDoc==='pedido'&&f.estado==='abierto'){
         items.push('<div class="act-sep"></div>');
-        if(canFacturar())items.push(`<button class="act-primary" onclick="confirmar('Facturar pedido','Vas a generar la Factura Cambiaria de PED-${padn(f.numero)} por ${money(f.totales.total)}. Esta acción certifica el documento ante SAT.','Facturar',()=>abrirFacturar(${f.id}))">Facturar</button>`);
+        if(canFacturar())items.push(`<button class="act-primary" onclick="confirmar('Facturar pedido','Vas a generar la Factura Cambiaria de ${refPed(f)} por ${money(f.totales.total)}. Esta acción certifica el documento ante SAT.','Facturar',()=>abrirFacturar(${f.id}))">Facturar</button>`);
         if(canFacturar()&&canAnular())items.push(`<button class="act-warn" onclick="abrirFacturarExenta(${f.id})">⚡ Factura exenta de IVA</button>`);
         items.push('<div class="act-sep"></div>');
         items.push(`<button onclick="generarNota(${f.id},'envio')">Nota de envío</button>`);
         items.push(`<button onclick="generarNota(${f.id},'prestamo')">Nota de préstamo</button>`);
         items.push(`<button onclick="editarPedido(${f.id})">Editar pedido</button>`);
-        if(canAnular()){items.push('<div class="act-sep"></div>');items.push(`<button class="act-danger" onclick="confirmar('Cancelar pedido','Se cancelará PED-${padn(f.numero)} y se reintegrará el inventario rebajado. Esta acción no se puede deshacer.','Cancelar pedido',()=>cancelarPedido(${f.id}))">Cancelar pedido</button>`);}
+        if(canAnular()){items.push('<div class="act-sep"></div>');items.push(`<button class="act-danger" onclick="confirmar('Cancelar pedido','Se cancelará ${refPed(f)} y se reintegrará el inventario rebajado. Esta acción no se puede deshacer.','Cancelar pedido',()=>cancelarPedido(${f.id}))">Cancelar pedido</button>`);}
       }
       if((f.tipoDoc==='envio'||f.tipoDoc==='prestamo')&&f.estado==='pendiente'){
         items.push('<div class="act-sep"></div>');
-        if(canFacturar())items.push(`<button class="act-primary" onclick="confirmar('Facturar','Vas a generar la Factura Cambiaria de PED-${padn(f.numero)} por ${money(f.totales.total)}. Esta acción certifica el documento ante SAT.','Facturar',()=>abrirFacturar(${f.id}))">Facturar</button>`);
+        if(canFacturar())items.push(`<button class="act-primary" onclick="confirmar('Facturar','Vas a generar la Factura Cambiaria de ${refPed(f)} por ${money(f.totales.total)}. Esta acción certifica el documento ante SAT.','Facturar',()=>abrirFacturar(${f.id}))">Facturar</button>`);
         if(canFacturar()&&canAnular())items.push(`<button class="act-warn" onclick="abrirFacturarExenta(${f.id})">⚡ Factura exenta de IVA</button>`);
-        items.push(`<button onclick="confirmar('Regresar a pedido','PED-${padn(f.numero)} volverá a estado Pedido y podrás editarlo o generar otro documento.','Regresar a pedido',()=>regresar(${f.id}))">Regresar a pedido</button>`);
+        items.push(`<button onclick="confirmar('Regresar a pedido','${refPed(f)} volverá a estado Pedido y podrás editarlo o generar otro documento.','Regresar a pedido',()=>regresar(${f.id}))">Regresar a pedido</button>`);
       }
       if(f.tipoDoc==='prestamo'&&f.estado==='pendiente')
-        items.push(`<button onclick="confirmar('Devolver préstamo','El inventario de PED-${padn(f.numero)} se reintegrará y la nota quedará marcada como devuelta.','Devolver',()=>devolver(${f.id}))">Devolver</button>`);
+        items.push(`<button onclick="confirmar('Devolver préstamo','El inventario de ${refPed(f)} se reintegrará y la nota quedará marcada como devuelta.','Devolver',()=>devolver(${f.id}))">Devolver</button>`);
       if(f.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(f.estado)){
         items.push('<div class="act-sep"></div>');
         if(canAnular())items.push(`<button onclick="openNotaCD(${f.id})">Nota de crédito</button>`);
@@ -2120,7 +2122,7 @@ function rowDoc(withActions){
         items.push(`<button class="act-danger" onclick="confirmar('Anular ${(TIPO_LBL[f.tipoDoc]||["Documento"])[0]}','Vas a anular ${f.serie}-${f.numeroDte} por ${money(f.totales.total)}. El saldo de la factura origen se recalculará. Esta acción no se puede deshacer.','Anular',()=>anularNotaCD(${f.id}))">Anular nota</button>`);
       }
     }
-    const noCol=(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero));
+    const noCol=(f.serie?f.serie+'-'+f.numeroDte:refPed(f));
     const dropId='drop-'+f.id;
     return `<tr>
       <td style="font-weight:600">${noCol}</td>
@@ -2307,7 +2309,7 @@ async function facturarPedido(id,dias){
       // EcoFactura devolvió un error
       const msg=data.mensaje||data.error||'Error desconocido';
       toast('✗ EcoFactura rechazó la factura',msg,true);
-      logAudit('Error al facturar','PED-'+padn(f.numero)+' · '+msg);
+      logAudit('Error al facturar',refPed(f)+' · '+msg);
     }
   }catch(err){
     toast('✗ No se pudo conectar con el servidor FEL','¿Está el backend andando? '+err.message,true);
@@ -2347,7 +2349,7 @@ function abrirFacturarExenta(id){
       <span><b>Solo para casos especiales autorizados por SAT.</b> Esta factura no genera IVA para el receptor. Usá este tipo únicamente si el escenario aplica según la Ley del IVA. Una factura exenta emitida incorrectamente genera inconsistencias fiscales.</span>
     </div>
     <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">
-      Pedido <b style="color:var(--ink)">PED-${padn(f.numero)}</b> por <b style="color:var(--ink)">${money(f.totales.total)}</b> · ${f.clienteComercial||f.clienteNombre}
+      Pedido <b style="color:var(--ink)">${refPed(f)}</b> por <b style="color:var(--ink)">${money(f.totales.total)}</b> · ${f.clienteComercial||f.clienteNombre}
     </p>
     <label>Escenario de exención <span style="color:var(--danger)">*</span></label>
     <select id="ex-esc" style="margin-bottom:0"><option value="">— Seleccioná el escenario que aplica —</option>${opts}</select>${selectorNitHTML(f,clientes.find(c=>c.id===f.clienteId))}`,
@@ -2426,7 +2428,7 @@ async function facturarPedidoExento(id,dias,escenario){
     }else{
       const msg=data.mensaje||data.error||'Error desconocido';
       toast('✗ EcoFactura rechazó la factura exenta',msg,true);
-      logAudit('Error al facturar exenta','PED-'+padn(f.numero)+' · '+msg);
+      logAudit('Error al facturar exenta',refPed(f)+' · '+msg);
     }
   }catch(err){
     toast('✗ No se pudo conectar con el servidor FEL','¿Está el backend andando? '+err.message,true);
@@ -2438,8 +2440,8 @@ function generarNota(id,type){
   if(!f)return;
   Object.assign(f,{tipoDoc:type,estado:'pendiente'});
   renderDocs();
-  toast('✓ '+(TIPO_LBL[type]||['Documento'])[0]+' generada','PED-'+padn(f.numero));
-  logAudit((TIPO_LBL[type]||['Documento'])[0]+' generada','PED-'+padn(f.numero)+' · '+(f.clienteComercial||f.clienteNombre));
+  toast('✓ '+(TIPO_LBL[type]||['Documento'])[0]+' generada',refPed(f));
+  logAudit((TIPO_LBL[type]||['Documento'])[0]+' generada',refPed(f)+' · '+(f.clienteComercial||f.clienteNombre));
   if(typeof guardarDocumento==='function')guardarDocumento(f);
 }
 window.generarNota=generarNota;
@@ -2448,20 +2450,20 @@ function cancelarPedido(id){
   if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});f.inventarioRebajado=false;}
   f.estado='anulada';closeMod();renderDocs();
   toast('✓ Pedido cancelado','Inventario reintegrado');
-  logAudit('Pedido cancelado','PED-'+padn(f.numero)+' · '+(f.clienteComercial||f.clienteNombre));
+  logAudit('Pedido cancelado',refPed(f)+' · '+(f.clienteComercial||f.clienteNombre));
   if(typeof guardarDocumento==='function')guardarDocumento(f);
 }
 window.cancelarPedido=cancelarPedido;
 
 window.devolver=id=>{const f=documentos.find(d=>d.id===id);let reintegrado=false;if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});f.inventarioRebajado=false;reintegrado=true;}
-  f.estado='devuelto';closeMod();renderDocs();toast('✓ Préstamo devuelto',reintegrado?'Inventario reingresado':'El inventario no estaba rebajado; no se modificó el stock');logAudit('Préstamo devuelto','PED-'+padn(f.numero)+(reintegrado?'':' · sin reintegro (no estaba rebajado)'));if(typeof guardarDocumento==='function')guardarDocumento(f);};
+  f.estado='devuelto';closeMod();renderDocs();toast('✓ Préstamo devuelto',reintegrado?'Inventario reingresado':'El inventario no estaba rebajado; no se modificó el stock');logAudit('Préstamo devuelto',refPed(f)+(reintegrado?'':' · sin reintegro (no estaba rebajado)'));if(typeof guardarDocumento==='function')guardarDocumento(f);};
 // Abre un diálogo que pide el motivo y luego anula ante EcoFactura
 function abrirAnular(id){
   const f=documentos.find(d=>d.id===id);
   if(!f){toast('Documento no encontrado',null,true);return;}
   // Si es una factura ya certificada ante SAT (tiene UUID real), hay que anular en EcoFactura
   const esRealFEL=f.autorizacion && !String(f.autorizacion).startsWith('SIM-');
-  openMod('Anular '+(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero)),
+  openMod('Anular '+(f.serie?f.serie+'-'+f.numeroDte:refPed(f)),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:6px">Vas a anular esta factura por <b style="color:var(--ink)">${money(f.totales.total)}</b>.</p>
      ${esRealFEL?'<p style="font-size:12px;color:var(--danger);margin-bottom:12px">⚠️ Esta factura está certificada ante SAT. Se anulará también en EcoFactura. Esta acción no se puede deshacer.</p>':'<p style="font-size:12px;color:var(--muted);margin-bottom:12px">El inventario se reintegrará.</p>'}
      <label>Motivo de la anulación</label>
@@ -2533,13 +2535,13 @@ async function anularFacturaReal(id,motivo){
   f.estado='anulada';f.motivo=motivo;f.anuladoFecha=new Date().toISOString();
   closeMod();renderDocs();
   toast('✓ Factura anulada',esRealFEL?'Anulada ante SAT · '+(f.serie||''):'Inventario reingresado');
-  logAudit('Factura anulada',(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero))+' · '+motivo);
+  logAudit('Factura anulada',(f.serie?f.serie+'-'+f.numeroDte:refPed(f))+' · '+motivo);
   if(typeof guardarDocumento==='function')guardarDocumento(f);
 }
 window.anularFacturaReal=anularFacturaReal;
 
 window.anular=id=>{const f=documentos.find(d=>d.id===id);if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});f.inventarioRebajado=false;}
-  f.estado='anulada';closeMod();renderDocs();toast('✓ Anulado','Inventario reingresado');logAudit('Documento anulado',(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero)));if(typeof guardarDocumento==='function')guardarDocumento(f);};
+  f.estado='anulada';closeMod();renderDocs();toast('✓ Anulado','Inventario reingresado');logAudit('Documento anulado',(f.serie?f.serie+'-'+f.numeroDte:refPed(f)));if(typeof guardarDocumento==='function')guardarDocumento(f);};
 window.editarPedido=id=>{const f=documentos.find(d=>d.id===id);if(f.tipoDoc!=='pedido'||f.estado!=='abierto')return;
   editId=id;editOldMap={};f.items.forEach(it=>editOldMap[it.id]={q:it.cantidad,modo:it.modoVenta});
   cart=f.items.map(it=>({...it}));
@@ -2553,7 +2555,7 @@ window.cancelarEdicion=()=>{editId=null;editOldMap={};cart=[];$('#f-oc').value='
 window.regresar=id=>{const f=documentos.find(d=>d.id===id);if(!['envio','prestamo'].includes(f.tipoDoc)||f.estado!=='pendiente')return;
   Object.assign(f,{tipoDoc:'pedido',estado:'abierto'});delete f.autorizacion;delete f.serie;delete f.numeroDte;
   closeMod();renderDocs();
-  toast('✓ Regresado a pedido','PED-'+padn(f.numero)+' · ahora podés editarlo o facturarlo de nuevo');};
+  toast('✓ Regresado a pedido',refPed(f)+' · ahora podés editarlo o facturarlo de nuevo');};
 
 // ---- Nota de Crédito ----
 function openNotaCD(facturaId){
@@ -2623,7 +2625,7 @@ function notaPrestamoHTML(f){
       <div style="text-align:right;flex-shrink:0">
         <div style="display:inline-block;background:var(--green);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.3px;padding:8px 16px;border-radius:8px">NOTA DE PRÉSTAMO</div>
         <div style="margin-top:14px;font-size:12px;color:#7a7f6e">Referencia</div>
-        <div style="font-family:var(--disp);font-size:20px;font-weight:700;letter-spacing:-.3px">PED-${padn(f.numero)}</div>
+        <div style="font-family:var(--disp);font-size:20px;font-weight:700;letter-spacing:-.3px">${refPed(f)}</div>
         <div style="margin-top:10px;font-size:12px;color:#3a3f33">Guatemala, ${fechaLarga}</div>
       </div>
     </div>
@@ -2702,7 +2704,7 @@ function notaEnvioHTML(f){
       <div style="text-align:right;flex-shrink:0">
         <div style="display:inline-block;background:var(--green);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.3px;padding:8px 16px;border-radius:8px">NOTA DE ENVÍO</div>
         <div style="margin-top:14px;font-size:12px;color:#7a7f6e">Referencia</div>
-        <div style="font-family:var(--disp);font-size:20px;font-weight:700;letter-spacing:-.3px">PED-${padn(f.numero)}</div>
+        <div style="font-family:var(--disp);font-size:20px;font-weight:700;letter-spacing:-.3px">${refPed(f)}</div>
         <div style="margin-top:10px;font-size:12px;color:#3a3f33">Guatemala, ${fechaLarga}</div>
       </div>
     </div>
@@ -2752,7 +2754,7 @@ function verDoc(id){
 
   // Si la factura tiene el PDF oficial de EcoFactura, mostrarlo directamente
   if(f.pdfBase64){
-    const numeroTit=(f.serie?f.serie+'-'+f.numeroDte:'PED-'+padn(f.numero));
+    const numeroTit=(f.serie?f.serie+'-'+f.numeroDte:refPed(f));
     const esAnulada=f.estado==='anulada';
     $('#doc-bar-t').textContent=TIPO_TIT[f.tipoDoc]+'  ·  '+numeroTit+(esAnulada?'  ·  ANULADA':'');
     const pdfMostrar=(esAnulada&&f.pdfAnulacionBase64)?f.pdfAnulacionBase64:f.pdfBase64;
@@ -2806,7 +2808,7 @@ function verDoc(id){
   if(cert)felBox=`<div class="ds-fel"><div class="ft">Documento Tributario Electrónico Certificado</div><p>Número de autorización: <b>${f.autorizacion}</b><br>Serie: ${f.serie} &nbsp; Número: ${f.numeroDte}<br>Certificado por EcoFactura ante SAT</p>${f.pdfBase64?`<button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="verFacturaPDF(${f.id})">📄 Ver PDF de la factura</button>`:''}</div>`;
   else if(f.tipoDoc==='pedido')felBox=`<div class="ds-foot">Pedido de venta. Facturalo o generá una nota de envío o préstamo desde Documentos.</div>`;
   else if(!fiscal)felBox=`<div class="ds-foot">${f.tipoDoc==='envio'?'Nota de envío para control de despacho. Puede facturarse posteriormente.':'Nota de préstamo de mercadería. Puede facturarse o devolverse.'}</div>`;
-  const numeroTit=esNotaCD?(f.serie+'-'+f.numeroDte):('PED-'+padn(f.numero));
+  const numeroTit=esNotaCD?(f.serie+'-'+f.numeroDte):(refPed(f));
   $('#doc-bar-t').textContent=TIPO_TIT[f.tipoDoc]+'  ·  '+numeroTit;
   const docTypeRef=esNotaCD?`Ref. ${f.serie} · ${f.numeroDte}${origenDoc?`<br>Aplica a: ${origenDoc.serie}-${origenDoc.numeroDte}`:''}`:(f.tipoDoc==='pedido'?'No. pedido: PED-'+padn(f.numero):'Pedido: PED-'+padn(f.numero)+(f.serie?`<br>Serie ${f.serie} · ${f.numeroDte}`:''));
   const tablaBody=esNotaCD?
@@ -3242,7 +3244,7 @@ function renderCliDet(){
   }else if(cliTab==='prestamos'){
     body=`<div class="panel"><div class="panel-head"><h3>Órdenes de préstamo emitidas</h3></div>
       <table><thead><tr><th>No.</th><th>Fecha</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>
-      ${prestamos.length?prestamos.slice().reverse().map(f=>`<tr><td style="font-weight:600">PED-${padn(f.numero)}</td><td style="color:var(--muted)">${fdate(f.creada)}</td><td class="num" style="font-weight:600">${money(f.totales.total)}</td><td><span class="badge ${f.estado==='pendiente'?'b-warn':(f.estado==='facturado'?'b-ok':'b-info')}">${f.estado}</span></td><td><button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button></td></tr>`).join(''):'<tr><td colspan="5" class="empty">Sin órdenes de préstamo</td></tr>'}
+      ${prestamos.length?prestamos.slice().reverse().map(f=>`<tr><td style="font-weight:600">${refPed(f)}</td><td style="color:var(--muted)">${fdate(f.creada)}</td><td class="num" style="font-weight:600">${money(f.totales.total)}</td><td><span class="badge ${f.estado==='pendiente'?'b-warn':(f.estado==='facturado'?'b-ok':'b-info')}">${f.estado}</span></td><td><button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button></td></tr>`).join(''):'<tr><td colspan="5" class="empty">Sin órdenes de préstamo</td></tr>'}
       </tbody></table></div>`;
   }else if(cliTab==='cobros'){
     const ci=c.cobroInfo||{};
@@ -5251,7 +5253,7 @@ window.verAbonoPorRecibo=function(num){
   let cuerpo,docId=null;
   if(encontrado.abono){
     const d=encontrado.doc,a=encontrado.abono;docId=d.id;
-    const facturaRef=d.serie&&d.numeroDte?`${d.serie}-${d.numeroDte}`:`PED-${padn(d.numero)}`;
+    const facturaRef=d.serie&&d.numeroDte?`${d.serie}-${d.numeroDte}`:`${refPed(d)}`;
     cuerpo=`<div style="background:var(--surface-2);border-radius:10px;padding:14px 16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-family:monospace;font-weight:700;font-size:15px;color:#1a7f37">Recibo ${a.noRecibo||num}</span>
@@ -5611,7 +5613,7 @@ function trazabilidadProducto(prod){
     if(d.estado==='anulada'||d.anulado)return;
     (d.items||[]).forEach(it=>{
       if(it.codigo!==cod)return;
-      const docRef=d.serie&&d.numeroDte?`${d.serie}-${d.numeroDte}`:`PED-${padn(d.numero)}`;
+      const docRef=d.serie&&d.numeroDte?`${d.serie}-${d.numeroDte}`:`${refPed(d)}`;
       const tipo=(TIPO_LBL[d.tipoDoc]?TIPO_LBL[d.tipoDoc][0]:d.tipoDoc)||'Documento';
       movs.push({
         fecha:d.creada,
@@ -6442,10 +6444,10 @@ function renderReportes(){
         const lbl=(TIPO_LBL[f.tipoDoc]?TIPO_LBL[f.tipoDoc][0]:'Documento');
         const cant=_aUnid(it.id,Number(it.cantidad)||0,it.modoVenta||'unidad');
         movs.push({fecha:f.creada, tipo:'salida', prodId:it.id, prodNombre:it.nombre, prodCodigo:it.codigo, cantidad:cant,
-          doc:'PED-'+padn(f.numero), docTipo:lbl, tercero:f.clienteComercial||f.clienteNombre||'—',
+          doc:refPed(f), docTipo:lbl, tercero:f.clienteComercial||f.clienteNombre||'—',
           usuario:f.vendedorNombre||'—', usuarioLbl:'Entregó'});
         if(f.estado==='devuelto')movs.push({fecha:f.devueltoFecha||f.creada, tipo:'ingreso', prodId:it.id, prodNombre:it.nombre, prodCodigo:it.codigo, cantidad:cant,
-          doc:'PED-'+padn(f.numero), docTipo:'Devolución', tercero:f.clienteComercial||f.clienteNombre||'—',
+          doc:refPed(f), docTipo:'Devolución', tercero:f.clienteComercial||f.clienteNombre||'—',
           usuario:f.vendedorNombre||'—', usuarioLbl:'Devolvió'});
       });
     });
