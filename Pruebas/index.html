@@ -5620,6 +5620,14 @@ function trazabilidadProducto(prod){
         detalle:tipo+(d.clienteComercial?' · '+d.clienteComercial:''),
         cant:enMedida(Number(it.cantidad)||0,it.modoVenta)
       });
+      // Préstamo/envío devuelto: el inventario volvió → entrada de devolución (queda neto 0)
+      if(d.estado==='devuelto')movs.push({
+        fecha:d.devueltoFecha||d.creada,
+        tipo:'entrada',
+        doc:docRef,
+        detalle:'Devolución · '+tipo,
+        cant:enMedida(Number(it.cantidad)||0,it.modoVenta)
+      });
     });
   });
   // ENTRADAS: compras recibidas que contienen el producto
