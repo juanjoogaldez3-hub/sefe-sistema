@@ -6456,15 +6456,17 @@ function renderReportes(){
         });
       });
     });
-    // SALIDAS: préstamos y envíos (rebajan inventario). Si están devueltos, suman su ingreso (neto 0).
-    documentos.filter(d=>['prestamo','envio'].includes(d.tipoDoc)&&d.estado!=='anulada'&&!d.anulado&&enRango(d.creada,r)).forEach(f=>{
+    // SALIDAS: pedidos abiertos, préstamos y envíos (todos rebajan stock al crearse; la factura ya
+    // se cuenta arriba, y como al facturar el tipo pasa a 'cambiaria' no hay doble conteo).
+    // Los préstamos/envíos devueltos suman su ingreso (neto 0).
+    documentos.filter(d=>['pedido','prestamo','envio'].includes(d.tipoDoc)&&d.estado!=='anulada'&&!d.anulado&&enRango(d.creada,r)).forEach(f=>{
       (f.items||[]).forEach(it=>{
         if(prodSel&&it.id!==prodSel.id)return;
         const lbl=(TIPO_LBL[f.tipoDoc]?TIPO_LBL[f.tipoDoc][0]:'Documento');
         const cant=_aUnid(it.id,Number(it.cantidad)||0,it.modoVenta||'unidad');
         movs.push({fecha:f.creada, tipo:'salida', prodId:it.id, prodNombre:it.nombre, prodCodigo:it.codigo, cantidad:cant,
           doc:refPed(f), docTipo:lbl, tercero:f.clienteComercial||f.clienteNombre||'—',
-          usuario:f.vendedorNombre||'—', usuarioLbl:'Entregó'});
+          usuario:f.vendedorNombre||'—', usuarioLbl:f.tipoDoc==='pedido'?'Vendió':'Entregó'});
         if(f.estado==='devuelto')movs.push({fecha:f.devueltoFecha||f.creada, tipo:'ingreso', prodId:it.id, prodNombre:it.nombre, prodCodigo:it.codigo, cantidad:cant,
           doc:refPed(f), docTipo:'Devolución', tercero:f.clienteComercial||f.clienteNombre||'—',
           usuario:f.vendedorNombre||'—', usuarioLbl:'Devolvió'});
