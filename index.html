@@ -2095,7 +2095,9 @@ function rowDoc(withActions){
     const [lbl,cls]=TIPO_LBL[f.tipoDoc]||['Documento','p-ped'];
     const lblFinal=(f.exenta||f.esExenta)?lbl+' <span style="font-size:10px;background:var(--warn-bg);color:var(--warn);padding:1px 6px;border-radius:8px;font-weight:700;vertical-align:middle">EXENTA</span>':lbl;
     const E={abierto:['Abierto','b-warn'],pendiente:['Pendiente de facturar','b-warn'],certificada:['Certificada','b-ok'],facturado:['Facturado','b-ok'],anulada:['Anulada','b-muted'],devuelto:['Devuelto','b-info']};
-    const [en,ec]=E[f.estado]||['—','b-muted'];
+    let [en,ec]=E[f.estado]||['—','b-muted'];
+    if(f.estado==='pendiente'&&f.tipoDoc==='prestamo')en='En préstamo';
+    else if(f.estado==='pendiente'&&f.tipoDoc==='envio')en='Enviado';
     const origen=f.facturaOrigenId?(()=>{const fo=documentos.find(x=>x.id===f.facturaOrigenId);return `<div class="sub-origen">Aplica a: ${fo?fo.serie+'-'+fo.numeroDte:'factura'}</div>`;})():(f.tipoDoc!=='pedido'?`<div class="sub-origen">Origen: PED-${padn(f.numero)}</div>`:'');
     let items=[];
     if(withActions){
