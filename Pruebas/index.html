@@ -2453,8 +2453,8 @@ function cancelarPedido(id){
 }
 window.cancelarPedido=cancelarPedido;
 
-window.devolver=id=>{const f=documentos.find(d=>d.id===id);if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});f.inventarioRebajado=false;}
-  f.estado='devuelto';closeMod();renderDocs();toast('✓ Préstamo devuelto','Inventario reingresado');logAudit('Préstamo devuelto','PED-'+padn(f.numero));if(typeof guardarDocumento==='function')guardarDocumento(f);};
+window.devolver=id=>{const f=documentos.find(d=>d.id===id);let reintegrado=false;if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});f.inventarioRebajado=false;reintegrado=true;}
+  f.estado='devuelto';closeMod();renderDocs();toast('✓ Préstamo devuelto',reintegrado?'Inventario reingresado':'El inventario no estaba rebajado; no se modificó el stock');logAudit('Préstamo devuelto','PED-'+padn(f.numero)+(reintegrado?'':' · sin reintegro (no estaba rebajado)'));if(typeof guardarDocumento==='function')guardarDocumento(f);};
 // Abre un diálogo que pide el motivo y luego anula ante EcoFactura
 function abrirAnular(id){
   const f=documentos.find(d=>d.id===id);
