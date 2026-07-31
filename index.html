@@ -4150,11 +4150,23 @@ function openFacturaProv(id){
 }
 window.openFacturaProv=openFacturaProv;
 let _ppProv='';
-let _ppEstado='',_ppExport=[];
+let _ppEstado='',_ppPeriodo='',_ppExport=[];
 function setPpProv(v){_ppProv=v;renderPorPagar();}
 window.setPpProv=setPpProv;
 function setPpEstado(v){_ppEstado=v;renderPorPagar();}
 window.setPpEstado=setPpEstado;
+function setPpPeriodo(v){_ppPeriodo=v;renderPorPagar();}
+window.setPpPeriodo=setPpPeriodo;
+function ppEnPeriodo(fecha){
+  if(!_ppPeriodo)return true;
+  const f=new Date(fecha); if(isNaN(f))return true;
+  const hoy=new Date(fechaHoyGT()+'T00:00:00');const y=hoy.getFullYear(),m=hoy.getMonth();
+  if(_ppPeriodo==='mes')return f>=new Date(y,m,1);
+  if(_ppPeriodo==='mesant')return f>=new Date(y,m-1,1)&&f<new Date(y,m,1);
+  if(_ppPeriodo==='2m')return f>=new Date(y,m-1,1);
+  if(_ppPeriodo==='3m')return f>=new Date(y,m-2,1);
+  return true;
+}
 function renderPorPagar(){
   // Excluye compras anuladas (antes aparecían como deuda)
   const todas=compras.map(c=>({c,...apInfo(c)})).filter(x=>x.c.facturada&&x.c.tipoPago==='credito'&&!x.c.anulado);
@@ -4165,10 +4177,12 @@ function renderPorPagar(){
   if(fil)fil.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     <select onchange="setPpProv(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:220px"><option value="">Todos los proveedores</option>${opts.map(o=>`<option value="${o.v}"${_ppProv===o.v?' selected':''}>${o.l}</option>`).join('')}</select>
     <select onchange="setPpEstado(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:180px"><option value="">Todos los estados</option>${['vencido','pendiente','parcial','pagado'].map(e=>`<option value="${e}"${_ppEstado===e?' selected':''}>${({vencido:'Vencido',pendiente:'Pendiente',parcial:'Parcial',pagado:'Pagado'})[e]}</option>`).join('')}</select>
+    <select onchange="setPpPeriodo(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:180px"><option value="">Todo el tiempo</option>${[['mes','Este mes'],['mesant','Mes anterior'],['2m','Últimos 2 meses'],['3m','Últimos 3 meses']].map(([v,l])=>`<option value="${v}"${_ppPeriodo===v?' selected':''}>${l}</option>`).join('')}</select>
     <button class="btn btn-ghost btn-sm" onclick="exportarPorPagarExcel()"><svg viewBox="0 0 24 24" style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Excel</button>
   </div>`;
   let info=_ppProv?todas.filter(x=>String(x.c.proveedorId)===String(_ppProv)):todas;
   if(_ppEstado)info=info.filter(x=>(x.vencido?'vencido':x.estado)===_ppEstado);
+  if(_ppPeriodo)info=info.filter(x=>ppEnPeriodo(x.c.fecha));
   const porPagar=info.reduce((s,x)=>s+Math.max(0,x.saldo),0);
   const vencidoM=info.filter(x=>x.vencido).reduce((s,x)=>s+x.saldo,0);
   const pend=info.filter(x=>x.saldo>0.001).length;
@@ -4198,7 +4212,8 @@ async function exportarPorPagarExcel(){
     const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
     const prov=_ppProv?(proveedores.find(p=>String(p.id)===String(_ppProv))?.nombre||'—'):'Todos';
     const est=_ppEstado?({vencido:'Vencido',pendiente:'Pendiente',parcial:'Parcial',pagado:'Pagado'})[_ppEstado]:'Todos';
-    const meta=[['Reporte:','CUENTAS POR PAGAR'],['Proveedor:',prov],['Estado:',est],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
+    const per=_ppPeriodo?({mes:'Este mes',mesant:'Mes anterior','2m':'Últimos 2 meses','3m':'Últimos 3 meses'})[_ppPeriodo]:'Todo el tiempo';
+    const meta=[['Reporte:','CUENTAS POR PAGAR'],['Proveedor:',prov],['Estado:',est],['Período:',per],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
     const ws=XLSX.utils.aoa_to_sheet(meta);
     XLSX.utils.sheet_add_json(ws,_ppExport,{origin:-1});
     const totSaldo=Math.round(_ppExport.reduce((s,r)=>s+(Number(r.Saldo)||0),0)*100)/100;
