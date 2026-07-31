@@ -4150,11 +4150,13 @@ function openFacturaProv(id){
 }
 window.openFacturaProv=openFacturaProv;
 let _ppProv='';
-let _ppEstados=new Set(),_ppPeriodo='',_ppExport=[];
+let _ppEstados=new Set(),_ppPeriodo='',_ppExport=[],_ppFilterOpen=false;
 function setPpProv(v){_ppProv=v;renderPorPagar();}
 window.setPpProv=setPpProv;
 function togglePpEstado(v){if(_ppEstados.has(v))_ppEstados.delete(v);else _ppEstados.add(v);renderPorPagar();}
 window.togglePpEstado=togglePpEstado;
+function togglePpFilter(){_ppFilterOpen=!_ppFilterOpen;renderPorPagar();}
+window.togglePpFilter=togglePpFilter;
 function setPpPeriodo(v){_ppPeriodo=v;renderPorPagar();}
 window.setPpPeriodo=setPpPeriodo;
 function ppEnPeriodo(fecha){
@@ -4176,7 +4178,11 @@ function renderPorPagar(){
   const fil=$('#pp-filtros');
   if(fil)fil.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     <select onchange="setPpProv(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:220px"><option value="">Todos los proveedores</option>${opts.map(o=>`<option value="${o.v}"${_ppProv===o.v?' selected':''}>${o.l}</option>`).join('')}</select>
-    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12.5px">${[['vencido','Vencido'],['pendiente','Pendiente'],['parcial','Parcial'],['pagado','Pagado']].map(([v,l])=>`<label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap"><input type="checkbox" ${_ppEstados.has(v)?'checked':''} onchange="togglePpEstado('${v}')" style="width:auto;margin:0">${l}</label>`).join('')}</div>
+    <div style="position:relative">
+      <button class="btn btn-ghost btn-sm" onclick="togglePpFilter()"><svg viewBox="0 0 24 24" style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Filtrar${_ppEstados.size?' ('+_ppEstados.size+')':''}</button>
+      <div style="display:${_ppFilterOpen?'block':'none'};position:absolute;top:100%;left:0;z-index:50;margin-top:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-lg);padding:6px;min-width:180px">${[['vencido','Vencido'],['pendiente','Pendiente'],['parcial','Parcial'],['pagado','Pagado']].map(([v,l])=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:13px;cursor:pointer;border-radius:6px">
+        <input type="checkbox" ${_ppEstados.has(v)?'checked':''} onchange="togglePpEstado('${v}')" style="width:auto;margin:0">${l}</label>`).join('')}</div>
+    </div>
     <select onchange="setPpPeriodo(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:180px"><option value="">Todo el tiempo</option>${[['mes','Este mes'],['mesant','Mes anterior'],['2m','Últimos 2 meses'],['3m','Últimos 3 meses']].map(([v,l])=>`<option value="${v}"${_ppPeriodo===v?' selected':''}>${l}</option>`).join('')}</select>
     <button class="btn btn-ghost btn-sm" onclick="exportarPorPagarExcel()"><svg viewBox="0 0 24 24" style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Excel</button>
   </div>`;
