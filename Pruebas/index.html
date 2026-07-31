@@ -656,6 +656,7 @@
             </select>
             <label style="margin:0;font-size:11.5px;white-space:nowrap">Desde</label><input type="date" id="docs-desde" style="max-width:150px">
             <label style="margin:0;font-size:11.5px;white-space:nowrap">Hasta</label><input type="date" id="docs-hasta" style="max-width:150px">
+            <button class="btn btn-ghost btn-sm" onclick="esteMesDocs()">Este mes</button>
             <button class="btn btn-ghost btn-sm" onclick="limpiarFechaDocs()">Limpiar</button>
           </div>
           <table><thead><tr><th>No.</th><th>Tipo</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="t-docs"></tbody></table>
@@ -2161,6 +2162,8 @@ function docsEnRango(d){
 }
 function limpiarFechaDocs(){$('#docs-tipo').value='';$('#docs-desde').value='';$('#docs-hasta').value='';renderDocs();}
 window.limpiarFechaDocs=limpiarFechaDocs;
+function esteMesDocs(){const hoy=fechaHoyGT();$('#docs-desde').value=hoy.slice(0,7)+'-01';$('#docs-hasta').value=hoy;renderDocs();}
+window.esteMesDocs=esteMesDocs;
 function renderDocs(){
   let filtrados=documentos.filter(docsEnRango);
   if(esVentas()&&miVendedorId())filtrados=filtrados.filter(d=>d.vendedorId===miVendedorId());
