@@ -4612,6 +4612,7 @@ function polizaChequePDF(mov,beneficiario){
   const c=cuentasBanco.find(x=>x.id===mov.cuentaId)||{};
   const benef=(beneficiario||mov.beneficiario||'').trim()||(mov.concepto||'—');
   const numPol='POL-'+String(mov.poliza||0).padStart(6,'0');
+  const numChq=(mov.referencia||'').toString().trim();
   const fechaTxt=mov.fecha?fdate(mov.fecha):'—';
   const montoNum='Q '+Number(mov.monto).toLocaleString('es-GT',{minimumFractionDigits:2});
   const sec=t=>`<div style="font-size:10px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.7px;margin:11px 0 4px;display:flex;align-items:center;gap:8px"><span>${t}</span><span style="flex:1;height:1px;background:#D6DCC9"></span></div>`;
@@ -4662,7 +4663,7 @@ function polizaChequePDF(mov,beneficiario){
       ${cajaFirma('Recibí conforme')}
     </tr></table>`;
   // Carta vertical; la póliza va compacta en la mitad de arriba (horizontal) para cortar la hoja al medio.
-  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:numPol+' · '+(c.nombre||''),orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
+  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:(numChq?('Cheque/Aut. No. '+numChq):numPol)+' · '+(c.nombre||''),orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
 }
 window.polizaChequePDF=polizaChequePDF;
 window.polizaChequeUI=function(id){const m=movimientosBanco.find(x=>x.id===id);if(m)polizaChequePDF(m);};
