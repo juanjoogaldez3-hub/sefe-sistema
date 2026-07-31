@@ -867,7 +867,8 @@
       <section class="view" id="v-porpagar">
         <div class="kpis stagger" id="pp-kpis"></div>
         <div class="panel">
-          <div class="panel-head"><h3>Cuentas por pagar</h3><div id="pp-filtros"></div></div>
+          <div class="panel-head"><h3>Cuentas por pagar</h3></div>
+          <div id="pp-filtros" style="padding:2px 16px 12px"></div>
           <table><thead><tr><th>Compra</th><th>Factura</th><th>Proveedor</th><th>Fecha</th><th>Vence</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="t-pp"></tbody></table>
           <div class="empty" id="pp-empty">No hay cuentas por pagar.</div>
         </div>
@@ -4163,7 +4164,7 @@ function renderPorPagar(){
   const fil=$('#pp-filtros');
   if(fil)fil.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     <select onchange="setPpProv(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:220px"><option value="">Todos los proveedores</option>${opts.map(o=>`<option value="${o.v}"${_ppProv===o.v?' selected':''}>${o.l}</option>`).join('')}</select>
-    <select onchange="setPpEstado(this.value)" style="font-size:12.5px;padding:6px 10px"><option value="">Todos los estados</option>${['vencido','pendiente','parcial','pagado'].map(e=>`<option value="${e}"${_ppEstado===e?' selected':''}>${({vencido:'Vencido',pendiente:'Pendiente',parcial:'Parcial',pagado:'Pagado'})[e]}</option>`).join('')}</select>
+    <select onchange="setPpEstado(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:180px"><option value="">Todos los estados</option>${['vencido','pendiente','parcial','pagado'].map(e=>`<option value="${e}"${_ppEstado===e?' selected':''}>${({vencido:'Vencido',pendiente:'Pendiente',parcial:'Parcial',pagado:'Pagado'})[e]}</option>`).join('')}</select>
     <button class="btn btn-ghost btn-sm" onclick="exportarPorPagarExcel()"><svg viewBox="0 0 24 24" style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Excel</button>
   </div>`;
   let info=_ppProv?todas.filter(x=>String(x.c.proveedorId)===String(_ppProv)):todas;
