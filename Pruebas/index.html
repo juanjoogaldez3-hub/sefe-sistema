@@ -4591,7 +4591,7 @@ function polizaChequePDF(mov,beneficiario){
       ${cajaFirma('Recibí conforme')}
     </tr></table>`;
   // Carta vertical, pero la póliza ocupa solo la mitad de arriba (horizontal) para cortar la hoja al medio.
-  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:numPol+' · '+(c.nombre||''),orientacion:'portrait',margen:'8mm 12mm',body}));
+  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:numPol+' · '+(c.nombre||''),orientacion:'portrait',margen:'8mm 12mm',sinPie:true,body}));
 }
 window.polizaChequePDF=polizaChequePDF;
 window.polizaChequeUI=function(id){const m=movimientosBanco.find(x=>x.id===id);if(m)polizaChequePDF(m);};
@@ -6888,10 +6888,10 @@ function _pdfShell(o){
     <div style="height:3px;background:#173916;margin-top:14px"></div>
     <div style="height:2px;background:#A8C038;margin-top:2px;margin-bottom:16px"></div>
     ${o.body}
-    <div style="position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #D6DCC9;padding-top:5px;display:flex;justify-content:space-between;font-size:9px;color:#909584">
+    ${o.sinPie?'':`<div style="position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #D6DCC9;padding-top:5px;display:flex;justify-content:space-between;font-size:9px;color:#909584">
       <span>Soluciones Efectivas, S.A. · NIT 1234567-8 · Guatemala, C.A.</span>
       <span>SEFE · Sistema de Pedidos y Facturación · ${hoy.toLocaleDateString('es-GT')}</span>
-    </div>
+    </div>`}
   </div>`;
 }
 function _abrirPDF(html){
