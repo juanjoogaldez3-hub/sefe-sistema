@@ -4135,8 +4135,11 @@ function openFacturaProv(id){
 }
 window.openFacturaProv=openFacturaProv;
 let _ppProv='';
+let _ppEstado='',_ppExport=[];
 function setPpProv(v){_ppProv=v;renderPorPagar();}
 window.setPpProv=setPpProv;
+function setPpEstado(v){_ppEstado=v;renderPorPagar();}
+window.setPpEstado=setPpEstado;
 function renderPorPagar(){
   // Excluye compras anuladas (antes aparecían como deuda)
   const todas=compras.map(c=>({c,...apInfo(c)})).filter(x=>x.c.facturada&&x.c.tipoPago==='credito'&&!x.c.anulado);
@@ -4144,8 +4147,13 @@ function renderPorPagar(){
   const provIds=[...new Set(todas.map(x=>x.c.proveedorId))];
   const opts=provIds.map(id=>{const p=proveedores.find(v=>v.id===id);return {v:String(id),l:(p&&p.nombre)||'Sin proveedor'};}).sort((a,b)=>a.l.localeCompare(b.l,'es'));
   const fil=$('#pp-filtros');
-  if(fil)fil.innerHTML=`<select onchange="setPpProv(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:240px"><option value="">Todos los proveedores</option>${opts.map(o=>`<option value="${o.v}"${_ppProv===o.v?' selected':''}>${o.l}</option>`).join('')}</select>`;
-  const info=_ppProv?todas.filter(x=>String(x.c.proveedorId)===String(_ppProv)):todas;
+  if(fil)fil.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <select onchange="setPpProv(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:220px"><option value="">Todos los proveedores</option>${opts.map(o=>`<option value="${o.v}"${_ppProv===o.v?' selected':''}>${o.l}</option>`).join('')}</select>
+    <select onchange="setPpEstado(this.value)" style="font-size:12.5px;padding:6px 10px"><option value="">Todos los estados</option>${['vencido','pendiente','parcial','pagado'].map(e=>`<option value="${e}"${_ppEstado===e?' selected':''}>${({vencido:'Vencido',pendiente:'Pendiente',parcial:'Parcial',pagado:'Pagado'})[e]}</option>`).join('')}</select>
+    <button class="btn btn-ghost btn-sm" onclick="exportarPorPagarExcel()"><svg viewBox="0 0 24 24" style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Excel</button>
+  </div>`;
+  let info=_ppProv?todas.filter(x=>String(x.c.proveedorId)===String(_ppProv)):todas;
+  if(_ppEstado)info=info.filter(x=>(x.vencido?'vencido':x.estado)===_ppEstado);
   const porPagar=info.reduce((s,x)=>s+Math.max(0,x.saldo),0);
   const vencidoM=info.filter(x=>x.vencido).reduce((s,x)=>s+x.saldo,0);
   const pend=info.filter(x=>x.saldo>0.001).length;
@@ -4159,7 +4167,9 @@ function renderPorPagar(){
   $('#pp-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
   $('#pp-empty').style.display=info.length?'none':'block';
   const EST={pagado:['Pagado','b-ok'],parcial:['Parcial','b-info'],pendiente:['Pendiente','b-warn']};
-  $('#t-pp').innerHTML=info.sort((a,b)=>(b.vencido?1:0)-(a.vencido?1:0)).map(x=>{const c=x.c;const [en,ec]=x.vencido?['Vencido','b-danger']:EST[x.estado];
+  const infoOrd=info.slice().sort((a,b)=>(b.vencido?1:0)-(a.vencido?1:0));
+  _ppExport=infoOrd.map(x=>({Compra:'CMP-'+padn(x.c.id),Factura:x.c.docProv||'',Proveedor:x.c.proveedorNombre,Fecha:fdate(x.c.fecha),Vence:fdate(x.c.vencimiento),Total:x.c.total,Abonado:x.abon,Saldo:x.saldo,Estado:x.vencido?'Vencido':({pagado:'Pagado',parcial:'Parcial',pendiente:'Pendiente'})[x.estado]}));
+  $('#t-pp').innerHTML=infoOrd.map(x=>{const c=x.c;const [en,ec]=x.vencido?['Vencido','b-danger']:EST[x.estado];
     let acts=`<button class="btn btn-ghost btn-sm" onclick="verCompra(${c.id})">Ver</button>`;
     if((c.abonos||[]).filter(a=>!a.anulado).length)acts=`<button class="btn btn-ghost btn-sm" onclick="histPagosProv(${c.id})">Historial</button>`+acts;
     if(x.saldo>0.001&&canRegistrarAbono())acts=`<button class="btn btn-primary btn-sm" onclick="openAbonoProv(${c.id})">Registrar pago</button>`+acts;
@@ -4167,6 +4177,23 @@ function renderPorPagar(){
   }).join('');
   enhanceTable('t-pp');
 }
+async function exportarPorPagarExcel(){
+  if(!_ppExport.length){toast('Sin datos para exportar',null,true);return;}
+  try{
+    const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
+    const prov=_ppProv?(proveedores.find(p=>String(p.id)===String(_ppProv))?.nombre||'—'):'Todos';
+    const est=_ppEstado?({vencido:'Vencido',pendiente:'Pendiente',parcial:'Parcial',pagado:'Pagado'})[_ppEstado]:'Todos';
+    const meta=[['Reporte:','CUENTAS POR PAGAR'],['Proveedor:',prov],['Estado:',est],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
+    const ws=XLSX.utils.aoa_to_sheet(meta);
+    XLSX.utils.sheet_add_json(ws,_ppExport,{origin:-1});
+    const totSaldo=Math.round(_ppExport.reduce((s,r)=>s+(Number(r.Saldo)||0),0)*100)/100;
+    XLSX.utils.sheet_add_aoa(ws,[[],['','','','','','','TOTAL SALDO:',totSaldo]],{origin:-1});
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Por pagar');
+    XLSX.writeFile(wb,'SEFE_por_pagar_'+fechaHoyGT()+'.xlsx');
+    toast('✓ Excel descargado','SEFE_por_pagar_'+fechaHoyGT()+'.xlsx');
+  }catch(e){console.error(e);toast('No se pudo generar el Excel',e.message||String(e),true);}
+}
+window.exportarPorPagarExcel=exportarPorPagarExcel;
 
 // ===== BANCOS: cuentas =====
 // Saldo actual de una cuenta = saldo inicial + entradas - salidas (movimientos no anulados)
@@ -4631,13 +4658,19 @@ window.openAbonoProv=openAbonoProv;
 function histPagosProv(id){
   const c=compras.find(x=>x.id===id);if(!c)return;
   const ai=apInfo(c);
+  const det=a=>{
+    if(a.registradoPor==='migracion'||a.metodo==='Migracion'){
+      return 'Migración · '+((a.referencia||'').toLowerCase().includes('ajuste')?'Ajuste de saldo':'Saldo inicial');
+    }
+    return `${a.metodo||''}${a.referencia?' · '+a.referencia:''}${a.registradoPor?`<div style="color:var(--muted-2)">por ${a.registradoPor}</div>`:''}`;
+  };
   const rows=(c.abonos||[]).map((a,i)=>{
-    if(a.anulado)return `<tr style="opacity:.5"><td style="color:var(--muted)">${fdate(a.fecha)}</td><td style="font-weight:600;color:var(--danger)">${a.noRecibo||'—'} · ANULADO</td><td class="num" style="text-decoration:line-through">${money(a.monto)}</td><td style="color:var(--muted);font-size:11.5px">${a.metodo}${a.referencia?' · '+a.referencia:''}<div style="color:var(--danger)">Motivo: ${a.motivoAnulacion||'—'}</div></td><td></td></tr>`;
-    return `<tr><td style="color:var(--muted)">${fdate(a.fecha)}</td><td style="font-weight:600;color:var(--green)">${a.noRecibo||'—'}</td><td class="num" style="font-weight:600">${money(a.monto)}</td><td style="color:var(--muted);font-size:11.5px">${a.metodo}${a.referencia?' · '+a.referencia:''}${a.registradoPor?'<div style="color:var(--muted-2)">por '+a.registradoPor+'</div>':''}</td><td style="white-space:nowrap">${a.comprobante?`<button class="btn btn-ghost btn-sm" onclick="verComprobante('compra',${id},${i})">📷 Ver</button>`:''}${canAnular()?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="anularPagoProv(${id},${i})">Anular</button>`:''}</td></tr>`;
+    if(a.anulado)return `<tr style="opacity:.5"><td style="color:var(--muted)">${fdate(a.fecha)}</td><td style="font-weight:600;color:var(--danger)">${a.noRecibo||'—'} · ANULADO</td><td class="num" style="text-decoration:line-through">${money(a.monto)}</td><td style="color:var(--muted);font-size:11.5px">${det(a)}<div style="color:var(--danger)">Motivo: ${a.motivoAnulacion||'—'}</div></td><td></td></tr>`;
+    return `<tr><td style="color:var(--muted)">${fdate(a.fecha)}</td><td style="font-weight:600;color:var(--green)">${a.noRecibo||'—'}</td><td class="num" style="font-weight:600">${money(a.monto)}</td><td style="color:var(--muted);font-size:11.5px">${det(a)}</td><td style="white-space:nowrap;text-align:right">${a.comprobante?`<button class="btn btn-ghost btn-sm" onclick="verComprobante('compra',${id},${i})">📷 Ver</button>`:''}${canAnular()?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="anularPagoProv(${id},${i})">Anular</button>`:''}</td></tr>`;
   }).join('');
   openMod('Historial de pagos · CMP-'+padn(c.id),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:13px">${c.proveedorNombre} · Total ${money(c.total)} · Abonado ${money(ai.abon)} · Saldo <b style="color:var(--ink)">${money(ai.saldo)}</b></p>
-     <table style="width:100%"><thead><tr><th style="text-align:left;font-size:10.5px;color:var(--muted-2);padding:6px 0">Fecha</th><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Comprobante</th><th style="text-align:right;font-size:10.5px;color:var(--muted-2)">Monto</th><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Detalle</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="empty">Sin pagos registrados</td></tr>'}</tbody></table>`,
+     <div style="overflow-x:auto"><table style="width:100%;min-width:420px"><thead><tr><th style="text-align:left;font-size:10.5px;color:var(--muted-2);padding:6px 0">Fecha</th><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Comprobante</th><th style="text-align:right;font-size:10.5px;color:var(--muted-2)">Monto</th><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Detalle</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="empty">Sin pagos registrados</td></tr>'}</tbody></table></div>`,
     ()=>closeMod());
   $('#m-save').textContent='Cerrar';$('#m-save').className='btn btn-ghost';
 }
