@@ -5416,28 +5416,31 @@ const MODULOS_PERMISOS=[
   {key:'__convertirCajas',lbl:'Convertir cajas a unidades',grp:'Sub-permisos'},
   {key:'__compraEspecial',lbl:'Crear compras especiales',grp:'Sub-permisos'},
   {key:'__readonly',lbl:'Solo lectura (sin acciones)',grp:'Sub-permisos'},
-  {key:'rep_resumen',lbl:'Resumen',grp:'Reportes'},
-  {key:'rep_costos',lbl:'Costos vs ventas',grp:'Reportes'},
-  {key:'rep_vendedor',lbl:'Ventas por vendedor',grp:'Reportes'},
-  {key:'rep_producto',lbl:'Ventas por producto',grp:'Reportes'},
-  {key:'rep_cliprod',lbl:'Ventas cliente/producto',grp:'Reportes'},
-  {key:'rep_climes',lbl:'Ventas cliente/mes',grp:'Reportes'},
-  {key:'rep_dircli',lbl:'Listado de clientes',grp:'Reportes'},
-  {key:'rep_factem',lbl:'Facturas emitidas',grp:'Reportes'},
-  {key:'rep_cardex',lbl:'Cardex de inventario',grp:'Reportes'},
-  {key:'rep_canalvend',lbl:'Ventas por canal (Whaticket)',grp:'Reportes'},
-  {key:'rep_cprov',lbl:'Compras por proveedor',grp:'Reportes'},
-  {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes'},
-  {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes'},
-  {key:'rep_estcta',lbl:'Estado de cuenta general',grp:'Reportes'},
-  {key:'rep_banco',lbl:'Movimientos de banco',grp:'Reportes'},
-  {key:'rep_recibos',lbl:'Recibos',grp:'Reportes'},
-  {key:'rep_pagos',lbl:'Pagos por cliente',grp:'Reportes'},
+  {key:'rep_resumen',lbl:'Resumen',grp:'Reportes · Ventas'},
+  {key:'rep_costos',lbl:'Costos vs ventas',grp:'Reportes · Ventas'},
+  {key:'rep_vendedor',lbl:'Ventas por vendedor',grp:'Reportes · Ventas'},
+  {key:'rep_producto',lbl:'Ventas por producto',grp:'Reportes · Ventas'},
+  {key:'rep_cliprod',lbl:'Ventas cliente/producto',grp:'Reportes · Ventas'},
+  {key:'rep_climes',lbl:'Ventas cliente/mes',grp:'Reportes · Ventas'},
+  {key:'rep_climescomp',lbl:'Comparativa cliente/mes',grp:'Reportes · Ventas'},
+  {key:'rep_canalvend',lbl:'Ventas por canal (Whaticket)',grp:'Reportes · Ventas'},
+  {key:'rep_factem',lbl:'Facturas emitidas',grp:'Reportes · Ventas'},
+  {key:'rep_dircli',lbl:'Listado de clientes',grp:'Reportes · Clientes y cobros'},
+  {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes · Clientes y cobros'},
+  {key:'rep_estcta',lbl:'Estado de cuenta general',grp:'Reportes · Clientes y cobros'},
+  {key:'rep_recibos',lbl:'Recibos',grp:'Reportes · Clientes y cobros'},
+  {key:'rep_pagos',lbl:'Pagos por cliente',grp:'Reportes · Clientes y cobros'},
+  {key:'rep_cardex',lbl:'Cardex de inventario',grp:'Reportes · Inventario'},
+  {key:'rep_invactual',lbl:'Inventario actual',grp:'Reportes · Inventario'},
+  {key:'rep_invcosto',lbl:'Inventario valorizado',grp:'Reportes · Inventario'},
+  {key:'rep_cprov',lbl:'Compras por proveedor',grp:'Reportes · Compras y bancos'},
+  {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes · Compras y bancos'},
+  {key:'rep_banco',lbl:'Movimientos de banco',grp:'Reportes · Compras y bancos'},
 ];
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','dircli','factem','cardex','canalvend','cprov','cprod','cxc','estcta','banco','recibos','pagos'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','dircli','factem','cardex','invactual','invcosto','canalvend','cprov','cprod','cxc','estcta','banco','recibos','pagos'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
