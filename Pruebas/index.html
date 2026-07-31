@@ -4596,54 +4596,55 @@ function polizaChequePDF(mov,beneficiario){
   const numPol='POL-'+String(mov.poliza||0).padStart(6,'0');
   const fechaTxt=mov.fecha?fdate(mov.fecha):'—';
   const montoNum='Q '+Number(mov.monto).toLocaleString('es-GT',{minimumFractionDigits:2});
+  const sec=t=>`<div style="font-size:10px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.7px;margin:11px 0 4px;display:flex;align-items:center;gap:8px"><span>${t}</span><span style="flex:1;height:1px;background:#D6DCC9"></span></div>`;
   const cajaFirma=(rol)=>`<td style="width:33.3%;padding:0 8px;text-align:center;vertical-align:bottom">
-      <div style="border-top:1px solid #555;margin-top:24px;padding-top:5px;font-size:10px;color:#555">${rol}</div></td>`;
+      <div style="border-top:1px solid #555;margin-top:16px;padding-top:5px;font-size:10px;color:#555">${rol}</div></td>`;
   const body=`
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;align-items:flex-start">
       <div style="flex:1;min-width:230px">
         <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Fecha</div>
-        <div style="font-size:15px;font-weight:700;margin-top:3px;color:#173916">Guatemala, ${fechaTxt}</div>
-        <div style="font-size:12px;color:#666B5C;margin-top:4px">No. de póliza: <b>${numPol}</b></div>
+        <div style="font-size:14px;font-weight:700;margin-top:2px;color:#173916">Guatemala, ${fechaTxt}</div>
+        <div style="font-size:11.5px;color:#666B5C;margin-top:3px">No. de póliza: <b>${numPol}</b></div>
       </div>
       <div style="text-align:right;min-width:200px">
         <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Monto</div>
-        <div style="font-size:22px;font-weight:800;color:#173916;margin-top:2px">${montoNum}</div>
+        <div style="font-size:21px;font-weight:800;color:#173916;margin-top:1px">${montoNum}</div>
       </div>
     </div>
 
-    <div style="margin-top:14px;border:1.5px solid #173916;border-radius:8px;overflow:hidden">
-      <div style="padding:9px 14px;border-bottom:1px solid #D6DCC9">
+    <div style="margin-top:10px;border:1.5px solid #173916;border-radius:8px;overflow:hidden">
+      <div style="padding:7px 14px;border-bottom:1px solid #D6DCC9">
         <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Páguese a la orden de</div>
-        <div style="font-size:16px;font-weight:700;color:#173916;margin-top:2px">${benef}</div>
+        <div style="font-size:15px;font-weight:700;color:#173916;margin-top:1px">${benef}</div>
       </div>
-      <div style="padding:9px 14px">
+      <div style="padding:7px 14px">
         <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">La cantidad de</div>
-        <div style="font-size:13px;font-weight:600;color:#333;margin-top:2px;font-style:italic">${montoEnLetras(mov.monto)}</div>
+        <div style="font-size:12.5px;font-weight:600;color:#333;margin-top:1px;font-style:italic">${montoEnLetras(mov.monto)}</div>
       </div>
     </div>
 
     <div style="display:flex;gap:22px;align-items:flex-start">
       <div style="flex:1;min-width:0">
-        ${_pdfSec('Concepto del egreso')}
-        <div style="font-size:12.5px;color:#333;padding:2px 2px 4px;min-height:26px">${mov.concepto||'—'}</div>
+        ${sec('Concepto del egreso')}
+        <div style="font-size:12px;color:#333;padding:2px 2px 4px;min-height:22px">${mov.concepto||'—'}</div>
         <div style="font-size:11px;color:#909584;margin-top:2px">Categoría: ${CAT_MOV_LBL[mov.categoria]||mov.categoria||'Otro'}</div>
       </div>
       <div style="flex:1;min-width:0">
-        ${_pdfSec('Cuenta de banco / Forma de pago')}
-        <div style="font-size:14px;font-weight:700;color:#173916">${c.numero?c.numero+' / ':''}${c.banco||c.nombre||'—'}</div>
-        ${c.nombre?`<div style="font-size:12px;color:#666B5C;margin-top:2px">${c.nombre}</div>`:''}
-        <div style="font-size:11px;color:#666B5C;margin-top:6px">No. cheque / autorización / transferencia:</div>
-        <div style="font-size:14px;font-weight:700;color:#173916;margin-top:2px">${mov.referencia||'________'}</div>
+        ${sec('Cuenta de banco / Forma de pago')}
+        <div style="font-size:13.5px;font-weight:700;color:#173916">${c.numero?c.numero+' / ':''}${c.banco||c.nombre||'—'}</div>
+        ${c.nombre?`<div style="font-size:12px;color:#666B5C;margin-top:1px">${c.nombre}</div>`:''}
+        <div style="font-size:11px;color:#666B5C;margin-top:5px">No. cheque / autorización / transferencia:</div>
+        <div style="font-size:13.5px;font-weight:700;color:#173916;margin-top:1px">${mov.referencia||'________'}</div>
       </div>
     </div>
 
-    <table style="width:100%;border-collapse:collapse;margin-top:20px"><tr>
+    <table style="width:100%;border-collapse:collapse;margin-top:12px"><tr>
       ${cajaFirma('Elaborado por')}
       ${cajaFirma('Autorizado por')}
       ${cajaFirma('Recibí conforme')}
     </tr></table>`;
-  // Carta vertical, pero la póliza ocupa solo la mitad de arriba (horizontal) para cortar la hoja al medio.
-  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:numPol+' · '+(c.nombre||''),orientacion:'portrait',margen:'8mm 12mm',sinPie:true,body}));
+  // Carta vertical; la póliza va compacta en la mitad de arriba (horizontal) para cortar la hoja al medio.
+  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:numPol+' · '+(c.nombre||''),orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
 }
 window.polizaChequePDF=polizaChequePDF;
 window.polizaChequeUI=function(id){const m=movimientosBanco.find(x=>x.id===id);if(m)polizaChequePDF(m);};
@@ -6932,22 +6933,23 @@ function _pdfShell(o){
   const usuario=(typeof currentUser!=='undefined'&&currentUser)?currentUser:'';
   const pageSize=o.tamano?o.tamano:('letter '+(o.orientacion||'portrait'));
   const pageMargin=o.margen||'13mm 12mm 18mm';
+  const cmp=o.compacto;
   return `
   <style>@page{size:${pageSize};margin:${pageMargin}}</style>
   <div style="font-family:Inter,Arial,sans-serif;color:#1c1f17;-webkit-print-color-adjust:exact;print-color-adjust:exact">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
       <div>
-        <img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:150px;height:auto;display:block">
-        <div style="font-size:10.5px;color:#666B5C;margin-top:6px;line-height:1.55">Soluciones Efectivas, S.A.<br>NIT 1234567-8 · Guatemala, C.A.</div>
+        <img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:${cmp?108:150}px;height:auto;display:block">
+        ${cmp?'':`<div style="font-size:10.5px;color:#666B5C;margin-top:6px;line-height:1.55">Soluciones Efectivas, S.A.<br>NIT 1234567-8 · Guatemala, C.A.</div>`}
       </div>
       <div style="text-align:right">
-        <div style="display:inline-block;background:#173916;color:#fff;padding:8px 18px;border-radius:6px;font-weight:700;font-size:14px;letter-spacing:.5px">${o.titulo}</div>
-        ${o.subtitulo?`<div style="font-size:12.5px;color:#444;margin-top:8px;font-weight:600">${o.subtitulo}</div>`:''}
-        <div style="font-size:11px;color:#666B5C;margin-top:6px">Emitido el ${fecha} · ${hora}${usuario?'<br>Por: '+usuario:''}</div>
+        <div style="display:inline-block;background:#173916;color:#fff;padding:${cmp?'5px 14px':'8px 18px'};border-radius:6px;font-weight:700;font-size:${cmp?13:14}px;letter-spacing:.5px">${o.titulo}</div>
+        ${o.subtitulo?`<div style="font-size:12.5px;color:#444;margin-top:${cmp?4:8}px;font-weight:600">${o.subtitulo}</div>`:''}
+        <div style="font-size:11px;color:#666B5C;margin-top:${cmp?3:6}px">Emitido el ${fecha} · ${hora}${usuario?(cmp?' · Por: '+usuario:'<br>Por: '+usuario):''}</div>
       </div>
     </div>
-    <div style="height:3px;background:#173916;margin-top:14px"></div>
-    <div style="height:2px;background:#A8C038;margin-top:2px;margin-bottom:16px"></div>
+    <div style="height:3px;background:#173916;margin-top:${cmp?8:14}px"></div>
+    <div style="height:2px;background:#A8C038;margin-top:2px;margin-bottom:${cmp?9:16}px"></div>
     ${o.body}
     ${o.sinPie?'':`<div style="position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #D6DCC9;padding-top:5px;display:flex;justify-content:space-between;font-size:9px;color:#909584">
       <span>Soluciones Efectivas, S.A. · NIT 1234567-8 · Guatemala, C.A.</span>
