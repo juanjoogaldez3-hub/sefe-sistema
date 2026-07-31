@@ -6894,14 +6894,23 @@ function renderReportes(){
     let lista=productos.filter(p=>p.activo!==false);
     if(repFiltros.marca_prod)lista=lista.filter(p=>(p.marca||'')===repFiltros.marca_prod);
     lista=lista.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
-    const _cant=p=>{const e=exDe(p);return p.tipoEmpaque==='caja_unidad'?e/(Number(p.unidadesPorCaja)||1):e;};
-    exportData=lista.map(p=>({'Código':p.codigo||'',Producto:p.nombre||'',Marca:p.marca||'','Unidad de medida':medidaProducto(p),Existencias:p.tipoEmpaque==='caja_unidad'?desgloseCajasUnid(p,exDe(p)):_cant(p)}));
-    const totU=lista.reduce((s,p)=>s+_cant(p),0);
+    // Cada producto es una fila; los caja/unidad se parten en 2 filas: cajas (código) y unidades sueltas (subcódigo -U).
+    const _filas=[];
+    lista.forEach(p=>{
+      const e=exDe(p);
+      if(p.tipoEmpaque==='caja_unidad'){
+        const upc=Number(p.unidadesPorCaja)||1,cj=Math.floor(e/upc),un=Math.max(0,Math.round(e-cj*upc));
+        _filas.push({codigo:p.codigo||'',nombre:p.nombre||'',marca:p.marca||'',medida:'Caja',cant:cj});
+        _filas.push({codigo:(p.codigo||'')+'-U',nombre:p.nombre||'',marca:p.marca||'',medida:'Unidad',cant:un});
+      }else _filas.push({codigo:p.codigo||'',nombre:p.nombre||'',marca:p.marca||'',medida:medidaProducto(p),cant:Math.round(e)});
+    });
+    exportData=_filas.map(f=>({'Código':f.codigo,Producto:f.nombre,Marca:f.marca,'Unidad de medida':f.medida,Existencias:f.cant}));
+    const totU=_filas.reduce((s,f)=>s+f.cant,0);
     html+=`<div class="panel"><div class="panel-head"><h3>Inventario actual</h3><span style="font-size:12px;color:var(--muted)">${esHoy?'Existencias actuales':'Existencias al '+fdate(corte)} · ${lista.length} producto(s)${repFiltros.marca_prod?' · '+repFiltros.marca_prod:''}</span></div>
       <table><thead><tr><th>Código</th><th>Producto</th><th>Marca</th><th>Unidad de medida</th><th>Existencias</th></tr></thead><tbody>
-      ${lista.length?lista.map(p=>`<tr><td style="color:var(--muted)">${p.codigo||'—'}</td><td style="font-weight:600">${p.nombre||'—'}</td><td style="color:var(--muted)">${p.marca||'—'}</td><td style="color:var(--muted)">${medidaProducto(p)}</td><td class="num">${p.tipoEmpaque==='caja_unidad'?desgloseCajasUnid(p,exDe(p)):fmtCajas(_cant(p))}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Sin productos</td></tr>'}
+      ${_filas.length?_filas.map(f=>`<tr><td style="color:var(--muted)">${f.codigo||'—'}</td><td style="font-weight:600">${f.nombre||'—'}</td><td style="color:var(--muted)">${f.marca||'—'}</td><td style="color:var(--muted)">${f.medida}</td><td class="num">${f.cant.toLocaleString('es-GT')}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Sin productos</td></tr>'}
       </tbody></table>
-      ${lista.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:14px;font-weight:600;border-top:1.5px solid var(--line-strong)">Total existencias: ${totU.toLocaleString('es-GT')}</div>`:''}
+      ${_filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:14px;font-weight:600;border-top:1.5px solid var(--line-strong)">Total existencias: ${totU.toLocaleString('es-GT')}</div>`:''}
       ${esHoy?'':'<div style="font-size:11px;color:var(--muted-2);padding:8px 4px 0">Existencias reconstruidas del historial de compras y ventas; pueden variar por ajustes manuales de stock.</div>'}</div>`;
   }
   else if(repType==='invcosto'){
@@ -6912,13 +6921,21 @@ function renderReportes(){
     let base=productos.filter(p=>p.activo!==false);
     if(repFiltros.marca_prod)base=base.filter(p=>(p.marca||'')===repFiltros.marca_prod);
     base=base.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
-    const _cant=p=>{const e=exDe(p);return p.tipoEmpaque==='caja_unidad'?e/(Number(p.unidadesPorCaja)||1):e;};
-    const filas=base.map(p=>{const ex=_cant(p);const co=Number(costoActual(p))||0;return {p,ex,co,tot:co*ex};});
-    exportData=filas.map(({p,ex,co,tot})=>({'Código':p.codigo||'','Unidad de medida':medidaProducto(p),'Descripción':p.nombre||'','Cantidad':p.tipoEmpaque==='caja_unidad'?desgloseCajasUnid(p,exDe(p)):ex,'Costo unitario':co,'Costo total':tot}));
+    // Cada caja/unidad se parte en 2 filas: cajas (código, costo por caja) y unidades sueltas (subcódigo -U, costo por unidad).
+    const filas=[];
+    base.forEach(p=>{
+      const e=exDe(p),co=Number(costoActual(p))||0;
+      if(p.tipoEmpaque==='caja_unidad'){
+        const upc=Number(p.unidadesPorCaja)||1,cj=Math.floor(e/upc),un=Math.max(0,Math.round(e-cj*upc)),cou=co/upc;
+        filas.push({codigo:p.codigo||'',medida:'Caja',desc:p.nombre||'',cant:cj,co:co,tot:co*cj});
+        filas.push({codigo:(p.codigo||'')+'-U',medida:'Unidad',desc:p.nombre||'',cant:un,co:cou,tot:cou*un});
+      }else{const c=Math.round(e);filas.push({codigo:p.codigo||'',medida:medidaProducto(p),desc:p.nombre||'',cant:c,co:co,tot:co*c});}
+    });
+    exportData=filas.map(f=>({'Código':f.codigo,'Unidad de medida':f.medida,'Descripción':f.desc,'Cantidad':f.cant,'Costo unitario':f.co,'Costo total':f.tot}));
     const granTotal=filas.reduce((s,f)=>s+f.tot,0);
     html+=`<div class="panel"><div class="panel-head"><h3>Inventario valorizado</h3><span style="font-size:12px;color:var(--muted)">${esHoy?'Al día de hoy':'Al '+fdate(corte)} · ${base.length} producto(s)${repFiltros.marca_prod?' · '+repFiltros.marca_prod:''}</span></div>
       <table><thead><tr><th>Código</th><th>Unidad de medida</th><th>Descripción</th><th>Cantidad</th><th>Costo unitario</th><th>Costo total</th></tr></thead><tbody>
-      ${filas.length?filas.map(({p,ex,co,tot})=>`<tr><td style="color:var(--muted)">${p.codigo||'—'}</td><td style="color:var(--muted)">${medidaProducto(p)}</td><td style="font-weight:600">${p.nombre||'—'}</td><td class="num">${p.tipoEmpaque==='caja_unidad'?desgloseCajasUnid(p,exDe(p)):fmtCajas(ex)}</td><td class="num">${money(co)}</td><td class="num" style="font-weight:600">${money(tot)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin productos</td></tr>'}
+      ${filas.length?filas.map(f=>`<tr><td style="color:var(--muted)">${f.codigo||'—'}</td><td style="color:var(--muted)">${f.medida}</td><td style="font-weight:600">${f.desc||'—'}</td><td class="num">${f.cant.toLocaleString('es-GT')}</td><td class="num">${money(f.co)}</td><td class="num" style="font-weight:600">${money(f.tot)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin productos</td></tr>'}
       </tbody></table>
       ${filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:15px;font-weight:700;border-top:1.5px solid var(--line-strong)">Valor total del inventario: ${money(granTotal)}</div>`:''}
       ${esHoy?'':'<div style="font-size:11px;color:var(--muted-2);padding:8px 4px 0">Existencias reconstruidas del historial; el costo usado es el costo actual del producto.</div>'}</div>`;
