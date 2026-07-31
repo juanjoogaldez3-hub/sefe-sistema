@@ -5910,7 +5910,8 @@ function renderRepFilters(){
     html=`<div class="rep-filter-bar">${html}</div>`;
   }
   else if(repType==='vendedor'){
-    const checks=vendedores.map(v=>`<button class="vend-chk ${repFiltros.vendedores.includes(v.nombre)?'on':''}" onclick="toggleVend('${v.nombre}')">${v.nombre}</button>`).join('');
+    const nombresV=[...new Set(documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').map(d=>d.vendedorNombre||'Sin asignar'))].sort((a,b)=>a.localeCompare(b,'es'));
+    const checks=nombresV.map(n=>`<button class="vend-chk ${repFiltros.vendedores.includes(n)?'on':''}" onclick="toggleVend('${n.replace(/'/g,"\\'")}')">${n}</button>`).join('');
     html=`<div class="rep-filter-bar"><div style="width:100%"><label>Vendedores a comparar <span style="color:var(--muted-2);font-weight:400">(seleccioná uno o más — vacío muestra todos)</span></label><div class="vend-checks">${checks}</div></div></div>`;
   }
   else if(repType==='cprov'||repType==='cprod'){
@@ -6145,7 +6146,7 @@ function renderReportes(){
       ${mv.map((m,i)=>{const mg=m.v-mc[i].v;return `<tr><td style="font-weight:600">${m.lbl}</td><td class="num">${money(m.v)}</td><td class="num" style="color:var(--muted)">${money(mc[i].v)}</td><td class="num" style="font-weight:600">${money(mg)}</td><td class="num">${m.v?(mg/m.v*100).toFixed(0):0}%</td></tr>`;}).join('')}</tbody></table></div>`;
   }
   else if(repType==='vendedor'){
-    const seleccionados=repFiltros.vendedores.length?repFiltros.vendedores:vendedores.map(v=>v.nombre);
+    const seleccionados=repFiltros.vendedores.length?repFiltros.vendedores:[...new Set(ventas.map(d=>d.vendedorNombre||'Sin asignar'))];
     const colores={};seleccionados.forEach((n,i)=>colores[n]=VEND_COLORS[i%VEND_COLORS.length]);
     // por vendedor: monto total y por mes
     const datos={};const ejeVend=mesesEje(ventas,d=>d.creada);seleccionados.forEach(n=>{datos[n]={v:0,c:0,n:0,meses:mesesSerie(ventas.filter(d=>d.vendedorNombre===n),d=>d.creada,d=>d.totales.total,ejeVend)};});
