@@ -756,6 +756,7 @@
           <button class="ct-tab" data-r="producto">Ventas por producto</button>
           <button class="ct-tab" data-r="cliprod">Ventas cliente/producto</button>
           <button class="ct-tab" data-r="climes">Ventas cliente/mes</button>
+          <button class="ct-tab" data-r="climescomp">Comparativa cliente/mes</button>
           <button class="ct-tab" data-r="dircli">Listado de clientes</button>
           <button class="ct-tab" data-r="factem">Facturas emitidas</button>
           <button class="ct-tab" data-r="cardex">Cardex de inventario</button>
@@ -5417,7 +5418,7 @@ const MODULOS_PERMISOS=[
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','dircli','factem','cardex','canalvend','cprov','cprod','cxc','estcta','banco','recibos','pagos'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','dircli','factem','cardex','canalvend','cprov','cprod','cxc','estcta','banco','recibos','pagos'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
@@ -5948,6 +5949,11 @@ function renderRepFilters(){
       </div>
     </div>`;
   }
+  else if(repType==='climescomp'){
+    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    html=`<div class="rep-filter-bar">${sel('rf-vend-cc','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}${sel('rf-cli-cc','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
+  }
   else if(repType==='dircli'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-vend-dc','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}
@@ -6381,6 +6387,68 @@ function renderReportes(){
       html+=`<div class="panel"><div class="panel-head"><h3>Ventas por cliente y mes</h3><span style="font-size:12px;color:var(--muted)">Montos con IVA · ${nClientes} cliente${nClientes!==1?'s':''}</span></div>
         <table style="font-size:12.5px"><thead><tr><th>Vendedor / Cliente</th>${ths}<th class="num" style="background:#f0f5e8">Total</th></tr></thead>
         <tbody>${cuerpo}</tbody></table></div>`;
+    }
+  }
+  else if(repType==='climescomp'){
+    // COMPARATIVA CLIENTE MES CON MES — clientes en filas, meses en columnas + variación del último mes vs. el anterior
+    const mesKey=d=>{const f=new Date(d.creada);return f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0');};
+    const MESES_ES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const mesLbl=k=>{const [a,m]=k.split('-');return MESES_ES[Number(m)-1]+' '+a;};
+    const mesAbbr=k=>{const [a,m]=k.split('-');return MESES_ES[Number(m)-1].slice(0,3)+' '+a.slice(2);};
+    const mesesSet=new Set();
+    ventas.forEach(d=>mesesSet.add(mesKey(d)));
+    const meses=[...mesesSet].sort();
+    const porCli={};
+    ventas.forEach(d=>{
+      const cli=d.clienteComercial||d.clienteNombre||'Sin cliente';
+      const mk=mesKey(d),monto=Number(d.totales?.total||0);
+      if(!porCli[cli])porCli[cli]={meses:{},total:0};
+      porCli[cli].meses[mk]=(porCli[cli].meses[mk]||0)+monto;
+      porCli[cli].total+=monto;
+    });
+    const ultM=meses[meses.length-1],prevM=meses[meses.length-2],hayComp=meses.length>=2;
+    const filas=Object.entries(porCli).sort((a,b)=>b[1].total-a[1].total);
+    const totalesGen={};meses.forEach(m=>totalesGen[m]=0);let granTotal=0;
+    const expFilas=[];let cuerpo='';
+    const varTd=(dif,pv,peso)=>{
+      const col=dif>0.005?'var(--green)':(dif<-0.005?'var(--danger)':'var(--muted)');
+      const arr=dif>0.005?'▲':(dif<-0.005?'▼':'▬');
+      const pct=pv?Math.abs(dif/pv*100):(Math.abs(dif)>0.005?100:0);
+      return `<td class="num" style="color:${col};font-weight:${peso};white-space:nowrap">${arr} ${money(Math.abs(dif))}${pv?` <span style="font-size:10.5px">(${dif>=0?'+':'-'}${pct.toFixed(0)}%)</span>`:''}</td>`;
+    };
+    filas.forEach(([cli,info])=>{
+      let celdas='';const filaExp={Cliente:cli};
+      meses.forEach(m=>{
+        const val=info.meses[m]||0;totalesGen[m]+=val;
+        celdas+=`<td class="num">${val?money(val):'<span style="color:var(--muted-2)">—</span>'}</td>`;
+        filaExp[mesLbl(m)]=val;
+      });
+      granTotal+=info.total;
+      let varCell='';
+      if(hayComp){
+        const u=info.meses[ultM]||0,pv=info.meses[prevM]||0,dif=u-pv;
+        varCell=varTd(dif,pv,600);
+        filaExp['Δ '+mesLbl(ultM)]=dif;filaExp['Var %']=pv?Number((dif/pv*100).toFixed(1)):'';
+      }
+      filaExp['Total']=info.total;expFilas.push(filaExp);
+      cuerpo+=`<tr style="border-bottom:1px solid var(--line)"><td style="font-weight:600">${cli}</td>${celdas}${varCell}<td class="num" style="font-weight:600;background:#fafdf5">${money(info.total)}</td></tr>`;
+    });
+    let celdasGen='';meses.forEach(m=>{celdasGen+=`<td class="num" style="font-weight:800">${money(totalesGen[m])}</td>`;});
+    let varGen='';
+    if(hayComp){const dif=(totalesGen[ultM]||0)-(totalesGen[prevM]||0);varGen=varTd(dif,totalesGen[prevM]||0,800);}
+    const filaGen={Cliente:'TOTAL GENERAL'};meses.forEach(m=>{filaGen[mesLbl(m)]=totalesGen[m];});
+    if(hayComp){filaGen['Δ '+mesLbl(ultM)]=(totalesGen[ultM]||0)-(totalesGen[prevM]||0);filaGen['Var %']='';}
+    filaGen['Total']=granTotal;expFilas.push(filaGen);
+    exportData=expFilas;
+    const ths=meses.map(m=>`<th class="num">${mesLbl(m)}</th>`).join('');
+    if(!meses.length){
+      html+=`<div class="panel"><div class="panel-body"><p class="empty">No hay ventas en el período seleccionado.</p></div></div>`;
+    }else{
+      const aviso=hayComp?'':'<div style="font-size:12px;color:#b26a00;padding:2px 4px 10px">Elegí un período con varios meses (ej. «Este año» o un rango de fechas) para poder comparar mes con mes.</div>';
+      html+=`<div class="panel"><div class="panel-head"><h3>Comparativa cliente mes con mes</h3><span style="font-size:12px;color:var(--muted)">Montos con IVA · ${filas.length} cliente${filas.length!==1?'s':''}${hayComp?' · variación '+mesLbl(prevM)+' → '+mesLbl(ultM):''}</span></div>
+        ${aviso}
+        <div style="overflow-x:auto"><table style="font-size:12.5px;min-width:${420+meses.length*110}px"><thead><tr><th>Cliente</th>${ths}${hayComp?`<th class="num" style="background:#eef6ff">Δ ${mesAbbr(ultM)}</th>`:''}<th class="num" style="background:#f0f5e8">Total</th></tr></thead>
+        <tbody>${cuerpo}<tr style="border-top:3px solid var(--green);background:#eaf0e0"><td style="padding:11px 12px;font-weight:800;font-size:13px">TOTAL GENERAL</td>${celdasGen}${varGen}<td class="num" style="font-weight:800">${money(granTotal)}</td></tr></tbody></table></div></div>`;
     }
   }
   else if(repType==='dircli'){
@@ -6934,7 +7002,7 @@ async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   try{
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const _esInv=(repType==='invactual'||repType==='invcosto');
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
@@ -6991,7 +7059,7 @@ function _abrirPDF(html){
 }
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia','Cantidad','Costo unitario','Costo total',
