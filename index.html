@@ -370,6 +370,9 @@
   .comp-col .bar-wrap{display:flex;gap:3px;align-items:flex-end;width:100%;justify-content:center}
   @media print{
     body *{visibility:hidden}
+    /* Sacar del flujo todo lo que NO se imprime (si no, la app deja hojas en blanco) */
+    body > *:not(#docov):not(#rep-print-area){display:none !important}
+    #docov{position:static !important;background:none !important;padding:0 !important}
     #rep-print-area,#rep-print-area *,
     #doc-sheet,#doc-sheet *{visibility:visible}
     #rep-print-area{position:absolute;left:0;top:0;width:100%;padding:0}
