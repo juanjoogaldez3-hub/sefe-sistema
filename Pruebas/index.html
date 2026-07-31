@@ -6145,15 +6145,17 @@ function renderReportes(){
       ${mv.map((m,i)=>{const mg=m.v-mc[i].v;return `<tr><td style="font-weight:600">${m.lbl}</td><td class="num">${money(m.v)}</td><td class="num" style="color:var(--muted)">${money(mc[i].v)}</td><td class="num" style="font-weight:600">${money(mg)}</td><td class="num">${m.v?(mg/m.v*100).toFixed(0):0}%</td></tr>`;}).join('')}</tbody></table></div>`;
   }
   else if(repType==='vendedor'){
-    const activos=repFiltros.vendedores.length?repFiltros.vendedores:vendedores.map(v=>v.nombre);
-    const colores={};activos.forEach((n,i)=>colores[n]=VEND_COLORS[i%VEND_COLORS.length]);
+    const seleccionados=repFiltros.vendedores.length?repFiltros.vendedores:vendedores.map(v=>v.nombre);
+    const colores={};seleccionados.forEach((n,i)=>colores[n]=VEND_COLORS[i%VEND_COLORS.length]);
     // por vendedor: monto total y por mes
-    const datos={};const ejeVend=mesesEje(ventas,d=>d.creada);activos.forEach(n=>{datos[n]={v:0,c:0,n:0,meses:mesesSerie(ventas.filter(d=>d.vendedorNombre===n),d=>d.creada,d=>d.totales.total,ejeVend)};});
-    ventas.filter(d=>activos.includes(d.vendedorNombre||'Sin asignar')).forEach(d=>{const k=d.vendedorNombre||'Sin asignar';if(datos[k]){datos[k].v+=d.totales.total;datos[k].n++;
+    const datos={};const ejeVend=mesesEje(ventas,d=>d.creada);seleccionados.forEach(n=>{datos[n]={v:0,c:0,n:0,meses:mesesSerie(ventas.filter(d=>d.vendedorNombre===n),d=>d.creada,d=>d.totales.total,ejeVend)};});
+    ventas.filter(d=>seleccionados.includes(d.vendedorNombre||'Sin asignar')).forEach(d=>{const k=d.vendedorNombre||'Sin asignar';if(datos[k]){datos[k].v+=d.totales.total;datos[k].n++;
       // costo de lo vendido por este vendedor (costo promedio del mes de la venta)
       const dtV=new Date(d.creada);d.items.forEach(it=>{datos[k].c+=costoProductoMes(it.id,dtV.getFullYear(),dtV.getMonth())*it.cantidad;});
     }});
-    const arr=Object.entries(datos).sort((a,b)=>b[1].v-a[1].v);
+    // Ocultar vendedores sin ventas en el período (salvo que se hayan elegido explícitamente)
+    const activos=repFiltros.vendedores.length?seleccionados:seleccionados.filter(n=>datos[n].n>0);
+    const arr=activos.map(n=>[n,datos[n]]).sort((a,b)=>b[1].v-a[1].v);
     // Export estilo Crystal: Vendedor | Ventas | Costos | Ganancia
     // Comisión: 5% sobre las ventas sin IVA (ventas / 1.12 * 0.05)
     const COMISION_PCT=0.05, IVA=1.12;
