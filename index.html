@@ -1276,7 +1276,10 @@ const TIPO_LBL={pedido:['Pedido','p-ped'],cambiaria:['Factura Cambiaria','p-cam'
 const TIPO_TIT={pedido:'PEDIDO',cambiaria:'FACTURA CAMBIARIA',envio:'NOTA DE ENVÍO',prestamo:'NOTA DE PRÉSTAMO',notaCredito:'NOTA DE CRÉDITO'};
 const FISCAL={cambiaria:1};
 
+// Módulos desactivados temporalmente (no pulidos para producción). Reactivar = quitar de esta lista.
+const MODULOS_DESACTIVADOS=['despachos','misentregas'];
 function tienePermiso(v){
+  if(MODULOS_DESACTIVADOS.includes(v))return false;
   const r=ROLES[currentRole];if(!r)return true;
   return r.views==='ALL'||r.views.includes(v);
 }
@@ -8224,7 +8227,7 @@ function aplicarPermisosUI(){
     return;
   }
   document.querySelectorAll('.nav button[data-view]').forEach(b=>{
-    const ok=r.views==='ALL'||(Array.isArray(r.views)&&r.views.includes(b.dataset.view));
+    const ok=(r.views==='ALL'||(Array.isArray(r.views)&&r.views.includes(b.dataset.view)))&&!MODULOS_DESACTIVADOS.includes(b.dataset.view);
     b.style.display=ok?'':'none';
   });
   const esAdmin=currentRole==='admin';
