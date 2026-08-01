@@ -753,6 +753,7 @@
           <button class="ct-tab" data-r="cliprod">Ventas cliente/producto</button>
           <button class="ct-tab" data-r="climes">Ventas cliente/mes</button>
           <button class="ct-tab" data-r="climescomp">Comparativa cliente/mes</button>
+          <button class="ct-tab" data-r="comision">Comisiones</button>
           <button class="ct-tab" data-r="dircli">Listado de clientes</button>
           <button class="ct-tab" data-r="factem">Facturas emitidas</button>
           <button class="ct-tab" data-r="cardex">Cardex de inventario</button>
@@ -5423,6 +5424,7 @@ const MODULOS_PERMISOS=[
   {key:'rep_cliprod',lbl:'Ventas cliente/producto',grp:'Reportes · Ventas'},
   {key:'rep_climes',lbl:'Ventas cliente/mes',grp:'Reportes · Ventas'},
   {key:'rep_climescomp',lbl:'Comparativa cliente/mes',grp:'Reportes · Ventas'},
+  {key:'rep_comision',lbl:'Comisiones',grp:'Reportes · Ventas'},
   {key:'rep_canalvend',lbl:'Ventas por canal (Whaticket)',grp:'Reportes · Ventas'},
   {key:'rep_factem',lbl:'Facturas emitidas',grp:'Reportes · Ventas'},
   {key:'rep_dircli',lbl:'Listado de clientes',grp:'Reportes · Clientes y cobros'},
@@ -5440,7 +5442,7 @@ const MODULOS_PERMISOS=[
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','dircli','factem','cardex','invactual','invcosto','canalvend','cprov','cprod','cxc','estcta','banco','recibos','pagos'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','comision','dircli','factem','cardex','invactual','invcosto','canalvend','cprov','cprod','cxc','estcta','banco','recibos','pagos'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
@@ -5971,7 +5973,7 @@ function renderRepFilters(){
       </div>
     </div>`;
   }
-  else if(repType==='climescomp'){
+  else if(repType==='climescomp'||repType==='comision'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-vend-cc','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}${sel('rf-cli-cc','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
@@ -6472,6 +6474,75 @@ function renderReportes(){
         <div style="overflow-x:auto"><table style="font-size:12.5px;min-width:${420+meses.length*110}px"><thead><tr><th>Cliente</th>${ths}${hayComp?`<th class="num" style="background:#eef6ff">Δ ${mesAbbr(ultM)}</th>`:''}<th class="num" style="background:#f0f5e8">Total</th></tr></thead>
         <tbody>${cuerpo}<tr style="border-top:3px solid var(--green);background:#eaf0e0"><td style="padding:11px 12px;font-weight:800;font-size:13px">TOTAL GENERAL</td>${celdasGen}${varGen}<td class="num" style="font-weight:800">${money(granTotal)}</td></tr></tbody></table></div></div>`;
     }
+  }
+  else if(repType==='comision'){
+    // COMISIONES POR PRODUCTO — replica el reporte de comisiones (Excel). Comisión 5% sobre la venta sin IVA.
+    // it.precio ya incluye IVA (convención GT): Precio Final = Σ(cant·precio − desc) con IVA; Venta sin IVA = /1.12.
+    const COMISION_PCT=5, IVA=1.12, r2=n=>Math.round((Number(n)||0)*100)/100;
+    const porProd={};
+    ventas.forEach(d=>{
+      const dt=new Date(d.creada);
+      (d.items||[]).forEach(it=>{
+        const key=it.id||it.codigo;
+        if(!porProd[key]){
+          const p=productos.find(x=>x.id===it.id)||productos.find(x=>x.codigo===it.codigo);
+          porProd[key]={codigo:it.codigo||(p&&p.codigo)||'',nombre:it.nombre||(p&&p.nombre)||'',cant:0,costoTotal:0,precioFinal:0,valorUnit:(p&&Number(p.precio))||Number(it.precio)||0};
+        }
+        const g=porProd[key],cant=Number(it.cantidad)||0;
+        g.cant+=cant;
+        g.precioFinal+=cant*(Number(it.precio)||0)-(Number(it.descuento)||0);
+        g.costoTotal+=costoProductoMes(it.id,dt.getFullYear(),dt.getMonth())*cant;
+      });
+    });
+    const arr=Object.values(porProd).filter(g=>g.cant>0);
+    arr.forEach(g=>{
+      g.costoUnit=g.cant?g.costoTotal/g.cant:0;
+      g.precioLista=g.cant*g.valorUnit;
+      g.ventaSinIva=g.precioFinal/IVA;
+      g.pctDesc=g.precioLista?(g.precioLista-g.precioFinal)/g.precioLista*100:0;
+      g.valorComision=g.ventaSinIva*COMISION_PCT/100;
+      g.ganancia=g.precioFinal-g.costoTotal-g.valorComision;
+      g.pctGan=g.precioFinal?g.ganancia/g.precioFinal*100:0;
+    });
+    arr.sort((a,b)=>b.valorComision-a.valorComision);
+    const T={cant:0,costoTotal:0,precioLista:0,precioFinal:0,ventaSinIva:0,valorComision:0,ganancia:0};
+    arr.forEach(g=>{T.cant+=g.cant;T.costoTotal+=g.costoTotal;T.precioLista+=g.precioLista;T.precioFinal+=g.precioFinal;T.ventaSinIva+=g.ventaSinIva;T.valorComision+=g.valorComision;T.ganancia+=g.ganancia;});
+    exportData=arr.map(g=>({'Código':g.codigo,'NombreProducto':g.nombre,'Cantidad':g.cant,'Costo Unitario Promedio':r2(g.costoUnit),'Costo Total':r2(g.costoTotal),'Valor Unitario':r2(g.valorUnit),'Precio Lista':r2(g.precioLista),'Precio Final':r2(g.precioFinal),'Porcentaje Descuento':r2(g.pctDesc),'Venta Total sin IVA':r2(g.ventaSinIva),'Comision':COMISION_PCT,'Valor Comision':r2(g.valorComision),'Ganancia':r2(g.ganancia),'Porcentaje Ganancia':r2(g.pctGan)}));
+    if(arr.length)exportData.push({'Código':'','NombreProducto':'TOTAL','Cantidad':T.cant,'Costo Unitario Promedio':'','Costo Total':r2(T.costoTotal),'Valor Unitario':'','Precio Lista':r2(T.precioLista),'Precio Final':r2(T.precioFinal),'Porcentaje Descuento':'','Venta Total sin IVA':r2(T.ventaSinIva),'Comision':'','Valor Comision':r2(T.valorComision),'Ganancia':r2(T.ganancia),'Porcentaje Ganancia':''});
+    const filasHtml=arr.map(g=>`<tr>
+      <td style="color:var(--muted);font-size:11px">${g.codigo||'—'}</td>
+      <td style="font-weight:600">${g.nombre||'—'}</td>
+      <td class="num">${g.cant}</td>
+      <td class="num" style="color:var(--muted)">${money(g.costoUnit)}</td>
+      <td class="num" style="color:var(--muted)">${money(g.costoTotal)}</td>
+      <td class="num" style="color:var(--muted)">${money(g.valorUnit)}</td>
+      <td class="num">${money(g.precioLista)}</td>
+      <td class="num" style="font-weight:600">${money(g.precioFinal)}</td>
+      <td class="num" style="color:${g.pctDesc<0?'var(--danger)':'var(--muted)'}">${g.pctDesc.toFixed(1)}%</td>
+      <td class="num">${money(g.ventaSinIva)}</td>
+      <td class="num" style="color:var(--muted)">${COMISION_PCT}%</td>
+      <td class="num" style="font-weight:700;color:var(--green)">${money(g.valorComision)}</td>
+      <td class="num" style="color:${g.ganancia<0?'var(--danger)':'var(--ink)'}">${money(g.ganancia)}</td>
+      <td class="num" style="color:${g.pctGan<0?'var(--danger)':'var(--muted)'}">${g.pctGan.toFixed(1)}%</td></tr>`).join('');
+    const totalRow=arr.length?`<tr style="border-top:3px solid var(--green);background:#eaf0e0;font-weight:800">
+      <td colspan="2" style="padding:10px 12px">TOTAL · ${arr.length} producto(s)</td>
+      <td class="num">${T.cant}</td><td></td>
+      <td class="num">${money(T.costoTotal)}</td><td></td>
+      <td class="num">${money(T.precioLista)}</td>
+      <td class="num">${money(T.precioFinal)}</td><td></td>
+      <td class="num">${money(T.ventaSinIva)}</td><td></td>
+      <td class="num" style="color:var(--green)">${money(T.valorComision)}</td>
+      <td class="num">${money(T.ganancia)}</td><td></td></tr>`:'';
+    html+=`<div class="kpis stagger">${kpiHTML([
+      {ic:'i-green',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Comisión total ('+COMISION_PCT+'%)',val:money(T.valorComision),sub:arr.length+' producto(s)'},
+      {ic:'i-blue',svg:'<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/>',lbl:'Venta sin IVA',val:money(T.ventaSinIva)},
+      {ic:'i-lime',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>',lbl:'Ganancia',val:money(T.ganancia)},
+      {ic:'i-blue',svg:'<path d="M20 7 9 18l-5-5"/>',lbl:'Costo total',val:money(T.costoTotal)}
+    ])}</div>
+    <div class="panel"><div class="panel-head"><h3>Comisiones por producto</h3><span style="font-size:12px;color:var(--muted)">${periodoLabel} · comisión ${COMISION_PCT}% sobre venta sin IVA${repFiltros.vendedor_simple?' · '+repFiltros.vendedor_simple:''}</span></div>
+      <div style="overflow-x:auto"><table style="font-size:11.5px;min-width:1180px"><thead><tr>
+        <th>Código</th><th>Producto</th><th class="num">Cant.</th><th class="num">Costo U.</th><th class="num">Costo Total</th><th class="num">Valor U.</th><th class="num">Precio Lista</th><th class="num">Precio Final</th><th class="num">% Desc</th><th class="num">Venta s/IVA</th><th class="num">Com.</th><th class="num">Valor Com.</th><th class="num">Ganancia</th><th class="num">% Gan.</th>
+      </tr></thead><tbody>${filasHtml||'<tr><td colspan="14" class="empty">Sin ventas en el período</td></tr>'}${totalRow}</tbody></table></div></div>`;
   }
   else if(repType==='dircli'){
     // LISTADO DE CLIENTES — directorio de contactos agrupado por vendedor
@@ -7023,7 +7094,7 @@ async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   try{
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const _esInv=(repType==='invactual'||repType==='invcosto');
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
@@ -7080,7 +7151,7 @@ function _abrirPDF(html){
 }
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia','Cantidad','Costo unitario','Costo total',
