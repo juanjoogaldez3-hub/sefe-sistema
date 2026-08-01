@@ -4340,7 +4340,7 @@ function renderBancos(){
   let movs=movimientosBanco.filter(m=>!m.anulado);
   if(fCta)movs=movs.filter(m=>String(m.cuentaId)===String(fCta));
   if(fTipo)movs=movs.filter(m=>m.tipo===fTipo);
-  movs=movs.slice().sort((a,b)=>((b.fecha||'')+String(b.id||'')).localeCompare((a.fecha||'')+String(a.id||''))).slice(0,200);
+  movs=movs.slice().sort((a,b)=>{const d=(b.fecha||'').localeCompare(a.fecha||'');return d!==0?d:((Number(b.id)||0)-(Number(a.id)||0));}).slice(0,200);
   const empM=document.getElementById('mov-empty');if(empM)empM.style.display=movs.length?'none':'block';
   const nombreCuenta=id=>{const c=cuentasBanco.find(x=>x.id===id);return c?c.nombre:'—';};
   const tb=document.getElementById('t-movimientos');
