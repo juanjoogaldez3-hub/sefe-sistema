@@ -6463,15 +6463,18 @@ function renderReportes(){
     const porProd={};
     ventas.forEach(d=>{
       const dt=new Date(d.creada);
+      // Exenta: la venta ya viene SIN IVA (no dividir /1.12). Si no, el importe incluye IVA.
+      const exenta=!!(d.exenta||d.esExenta)||(d.totales&&Number(d.totales.iva||0)<=0.001&&Number(d.totales.total||0)>0.001);
       (d.items||[]).forEach(it=>{
         const key=it.id||it.codigo;
         if(!porProd[key]){
           const p=productos.find(x=>x.id===it.id)||productos.find(x=>x.codigo===it.codigo);
-          porProd[key]={codigo:it.codigo||(p&&p.codigo)||'',nombre:it.nombre||(p&&p.nombre)||'',cant:0,costoTotal:0,precioFinal:0,valorUnit:(p&&Number(p.precio))||Number(it.precio)||0};
+          porProd[key]={codigo:it.codigo||(p&&p.codigo)||'',nombre:it.nombre||(p&&p.nombre)||'',cant:0,costoTotal:0,precioFinal:0,ventaSinIva:0,valorUnit:(p&&Number(p.precio))||Number(it.precio)||0};
         }
-        const g=porProd[key],cant=Number(it.cantidad)||0;
+        const g=porProd[key],cant=Number(it.cantidad)||0,linea=cant*(Number(it.precio)||0)-(Number(it.descuento)||0);
         g.cant+=cant;
-        g.precioFinal+=cant*(Number(it.precio)||0)-(Number(it.descuento)||0);
+        g.precioFinal+=linea;
+        g.ventaSinIva+=exenta?linea:linea/IVA;
         g.costoTotal+=costoProductoMes(it.id,dt.getFullYear(),dt.getMonth())*cant;
       });
     });
@@ -6479,7 +6482,6 @@ function renderReportes(){
     arr.forEach(g=>{
       g.costoUnit=g.cant?g.costoTotal/g.cant:0;
       g.precioLista=g.cant*g.valorUnit;
-      g.ventaSinIva=g.precioFinal/IVA;
       g.pctDesc=g.precioLista?(g.precioLista-g.precioFinal)/g.precioLista*100:0;
       g.valorComision=g.ventaSinIva*COMISION_PCT/100;
       g.ganancia=g.precioFinal-g.costoTotal-g.valorComision;
