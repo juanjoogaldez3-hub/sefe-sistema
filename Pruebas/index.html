@@ -2214,6 +2214,13 @@ function selectorNitHTML(f,cli){
       <div style="font-size:11px;color:var(--muted);margin-top:5px">La factura sale al NIT elegido, pero la venta queda registrada en ${esc(nitPrincipalNombre)}.</div>
     </div>`;
 }
+// Alerta de nota interna para mostrar ANTES de facturar (a veces marca pendientes: faltó inventario, dato por confirmar).
+function notaInternaAlertHTML(f){
+  const nota=((f&&f.notaInterna)||'').trim();
+  if(!nota)return '';
+  const esc=String(nota).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return `<div class="note n-danger" style="margin:0 0 14px"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span><b>📌 Nota interna:</b> ${esc}<br><span style="font-size:11px;opacity:.85">Revisá que no quede nada pendiente (inventario, datos) antes de facturar.</span></span></div>`;
+}
 function abrirFacturar(id){
   const f=documentos.find(d=>d.id===id);
   const esCF=String(f.clienteNit).toUpperCase().replace(/[-\s]/g,'')==='CF';
@@ -2228,7 +2235,7 @@ function abrirFacturar(id){
   // El sub-vendedor de Whaticket ahora se captura al generar el pedido, no al facturar.
   const selectorSubVend='';
   openMod('Facturar PED-'+padn(f.numero),
-    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Se generará la Factura Cambiaria por <b style="color:var(--ink)">${money(f.totales.total)}</b>.</p>
+    notaInternaAlertHTML(f)+`<p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Se generará la Factura Cambiaria por <b style="color:var(--ink)">${money(f.totales.total)}</b>.</p>
      <div style="background:var(--surface-2);border-radius:8px;padding:12px 14px;font-size:12.5px">
        <div style="color:var(--muted)">Condición de pago del cliente:</div>
        <div style="font-weight:600;color:var(--ink);margin-top:2px">${creditoTxt}</div>
@@ -2355,7 +2362,7 @@ function abrirFacturarExenta(id){
   const f=documentos.find(d=>d.id===id);
   const opts=ESCENARIOS_EXENTA.map(e=>`<option value="${e.cod}">${e.cod}. ${e.desc}</option>`).join('');
   openMod('⚡ Factura Exenta de IVA — PED-'+padn(f.numero),
-    `<div class="note n-danger" style="margin-bottom:16px">
+    notaInternaAlertHTML(f)+`<div class="note n-danger" style="margin-bottom:16px">
       <svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
       <span><b>Solo para casos especiales autorizados por SAT.</b> Esta factura no genera IVA para el receptor. Usá este tipo únicamente si el escenario aplica según la Ley del IVA. Una factura exenta emitida incorrectamente genera inconsistencias fiscales.</span>
     </div>
