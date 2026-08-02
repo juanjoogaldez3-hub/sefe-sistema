@@ -18,7 +18,11 @@ if (!SUPABASE_URL || SUPABASE_URL.includes('TU-PROYECTO') || !SUPABASE_KEY || SU
 }
 
 // Cliente de Supabase (se carga la librería desde el HTML)
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Sesión por navegador: se guarda en sessionStorage → al CERRAR el navegador se borra y vuelve a pedir
+// login (más seguro en PC compartida). Recargar la pestaña mantiene la sesión; abrir otra pestaña pide login.
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true }
+});
 
 // ============================================================
 // fetchAll — trae TODAS las filas de una tabla, paginando.
