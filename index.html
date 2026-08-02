@@ -2224,12 +2224,14 @@ function selectorNitHTML(f,cli){
       <div style="font-size:11px;color:var(--muted);margin-top:5px">La factura sale al NIT elegido, pero la venta queda registrada en ${esc(nitPrincipalNombre)}.</div>
     </div>`;
 }
-// Alerta de nota interna para mostrar ANTES de facturar (a veces marca pendientes: faltó inventario, dato por confirmar).
+// Alerta de nota interna para mostrar ANTES de facturar. Devuelve el banner + un checkbox
+// que OBLIGA a confirmar (deshabilita el botón Facturar hasta marcarlo). Vacío si no hay nota.
 function notaInternaAlertHTML(f){
   const nota=((f&&f.notaInterna)||'').trim();
   if(!nota)return '';
   const esc=String(nota).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  return `<div class="note n-danger" style="margin:0 0 14px"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span><b>📌 Nota interna:</b> ${esc}<br><span style="font-size:11px;opacity:.85">Revisá que no quede nada pendiente (inventario, datos) antes de facturar.</span></span></div>`;
+  return `<div class="note n-danger" style="margin:0 0 10px"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span><b>📌 Nota interna:</b> ${esc}<br><span style="font-size:11px;opacity:.85">Revisá que no quede nada pendiente (inventario, datos) antes de facturar.</span></span></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--danger);margin:0 0 14px;cursor:pointer"><input type="checkbox" id="nota-ack" onchange="var b=document.getElementById('m-save');if(b)b.disabled=!this.checked" style="width:16px;height:16px;cursor:pointer"> Entendido, ya revisé lo pendiente de la nota</label>`;
 }
 function abrirFacturar(id){
   const f=documentos.find(d=>d.id===id);
@@ -2249,8 +2251,10 @@ function abrirFacturar(id){
      <div style="background:var(--surface-2);border-radius:8px;padding:12px 14px;font-size:12.5px">
        <div style="color:var(--muted)">Condición de pago del cliente:</div>
        <div style="font-weight:600;color:var(--ink);margin-top:2px">${creditoTxt}</div>
-     </div>${selectorNit}${selectorSubVend}`,
+     </div>${selectorNit}${selectorSubVend}
+     <div style="margin-top:16px;padding-top:13px;border-top:1px solid var(--line);text-align:center"><button class="btn btn-ghost btn-sm" onclick="cerrarTodo();editarPedido(${f.id})">✏️ Editar pedido antes de facturar</button></div>`,
     ()=>facturarPedido(id,dias));
+  if(((f.notaInterna)||'').trim())$('#m-save').disabled=true;
 }
 window.abrirFacturar=abrirFacturar;
 async function facturarPedido(id,dias){
@@ -2378,7 +2382,8 @@ function abrirFacturarExenta(id){
       Pedido <b style="color:var(--ink)">${refPed(f)}</b> por <b style="color:var(--ink)">${money(f.totales.total)}</b> · ${f.clienteComercial||f.clienteNombre}
     </p>
     <label>Escenario de exención <span style="color:var(--danger)">*</span></label>
-    <select id="ex-esc" style="margin-bottom:0"><option value="">— Seleccioná el escenario que aplica —</option>${opts}</select>${selectorNitHTML(f,clientes.find(c=>c.id===f.clienteId))}`,
+    <select id="ex-esc" style="margin-bottom:0"><option value="">— Seleccioná el escenario que aplica —</option>${opts}</select>${selectorNitHTML(f,clientes.find(c=>c.id===f.clienteId))}
+    <div style="margin-top:16px;padding-top:13px;border-top:1px solid var(--line);text-align:center"><button class="btn btn-ghost btn-sm" onclick="cerrarTodo();editarPedido(${f.id})">✏️ Editar pedido antes de facturar</button></div>`,
     ()=>{
       const esc=Number($('#ex-esc').value);
       if(!esc){toast('Seleccioná el escenario de exención',null,true);return;}
@@ -2394,6 +2399,7 @@ function abrirFacturarExenta(id){
     });
   $('#m-save').textContent='Generar Factura Exenta';
   $('#m-save').style.background='var(--warn)';
+  if(((f.notaInterna)||'').trim())$('#m-save').disabled=true;
 }
 window.abrirFacturarExenta=abrirFacturarExenta;
 async function facturarPedidoExento(id,dias,escenario){
