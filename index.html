@@ -1866,12 +1866,27 @@ function actualizarVendedorInfo(cli){
   }
   mostrarAlertaSaldo(cli);
 }
+// Ids del grupo de un cliente: sus sedes (por sedesDe) + registros con el MISMO NIT real
+// (mismo contribuyente). Protege Consumidor Final / NIT genérico para no agruparlos a todos.
+// Un cliente normal sin sedes ni NIT compartido → solo su propio id.
+function grupoSedesIds(cli){
+  if(!cli)return new Set();
+  const ids=new Set([cli.id]);
+  clientes.forEach(c=>{
+    if(c.id===cli.id||c.sedesDe===cli.id||(cli.sedesDe&&(c.id===cli.sedesDe||c.sedesDe===cli.sedesDe)))ids.add(c.id);
+  });
+  const nit=(cli.nit||'').toString().replace(/[^0-9A-Za-z]/g,'').toUpperCase();
+  const generico=!nit||['CF','CF0','CONSUMIDORFINAL'].includes(nit);
+  if(!generico)clientes.forEach(c=>{
+    if((c.nit||'').toString().replace(/[^0-9A-Za-z]/g,'').toUpperCase()===nit)ids.add(c.id);
+  });
+  return ids;
+}
 function mostrarAlertaSaldo(cli){
   const box=$('#f-saldo-alert');if(!box)return;
   if(!cli){box.style.display='none';return;}
-  // Considerar todas las sedes del mismo NIT
-  const grupo=clientes.filter(c=>c.id===cli.id||c.sedesDe===cli.id||(cli.sedesDe&&(c.id===cli.sedesDe||c.sedesDe===cli.sedesDe)));
-  const ids=new Set(grupo.map(c=>c.id));
+  // Considerar todas las sedes del mismo grupo
+  const ids=grupoSedesIds(cli);
   const facturas=documentos.filter(d=>ids.has(d.clienteId)&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada');
   const vencidas=facturas.filter(f=>arInfo(f).vencido);
   const saldoTotal=facturas.reduce((s,f)=>s+arInfo(f).saldo,0);
@@ -2970,7 +2985,9 @@ function contactoCard(tit,c){return `<div class="panel" style="margin:0"><div cl
   <div style="font-size:12px;color:var(--muted);margin-top:5px">${c&&c.telefono?'☎ '+c.telefono:''}</div>
   <div style="font-size:12px;color:var(--muted)">${c&&c.correo?'✉ '+c.correo:''}</div></div></div>`;}
 function clienteStats(c){
-  const facturas=documentos.filter(d=>d.clienteId===c.id&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').sort((a,b)=>new Date(a.creada)-new Date(b.creada));
+  // Considerar todo el grupo de sedes (matriz + sedes), igual que la alerta de saldo del pedido.
+  const _ids=grupoSedesIds(c);
+  const facturas=documentos.filter(d=>_ids.has(d.clienteId)&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').sort((a,b)=>new Date(a.creada)-new Date(b.creada));
   const totalFacturado=facturas.reduce((s,f)=>s+f.totales.total,0);
   const totalCobrado=facturas.reduce((s,f)=>s+arInfo(f).abon,0);
   const saldoActual=facturas.reduce((s,f)=>s+arInfo(f).saldo,0);
@@ -5548,7 +5565,7 @@ async function togglePermiso(rol,key,val){
     // válidas. (Antes se armaba con la unión de los otros roles, y se perdían en
     // silencio las que solo tienen los roles con acceso total: bancos, talonarios,
     // usuarios y auditoría.)
-    if(!val){r.views=VISTAS_VALIDAS.filter(v=>v!==key);}
+    if(!val){r.views=VISTAS_VALIDAS.concat(REP_TIPOS.map(t=>'rep_'+t)).filter(v=>v!==key);}
   }
   else{
     if(val){if(!r.views.includes(key))r.views.push(key);}
