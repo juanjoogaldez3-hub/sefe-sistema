@@ -1866,34 +1866,17 @@ function actualizarVendedorInfo(cli){
   }
   mostrarAlertaSaldo(cli);
 }
-// Ids del grupo de un cliente: sus sedes (por sedesDe) + registros con el MISMO NIT real
-// (mismo contribuyente). Protege Consumidor Final / NIT genérico para no agruparlos a todos.
-// Un cliente normal sin sedes ni NIT compartido → solo su propio id.
-function grupoSedesIds(cli){
-  if(!cli)return new Set();
-  const ids=new Set([cli.id]);
-  clientes.forEach(c=>{
-    if(c.id===cli.id||c.sedesDe===cli.id||(cli.sedesDe&&(c.id===cli.sedesDe||c.sedesDe===cli.sedesDe)))ids.add(c.id);
-  });
-  const nit=(cli.nit||'').toString().replace(/[^0-9A-Za-z]/g,'').toUpperCase();
-  const generico=!nit||['CF','CF0','CONSUMIDORFINAL'].includes(nit);
-  if(!generico)clientes.forEach(c=>{
-    if((c.nit||'').toString().replace(/[^0-9A-Za-z]/g,'').toUpperCase()===nit)ids.add(c.id);
-  });
-  return ids;
-}
 function mostrarAlertaSaldo(cli){
   const box=$('#f-saldo-alert');if(!box)return;
   if(!cli){box.style.display='none';return;}
-  // Considerar todas las sedes del mismo grupo
-  const ids=grupoSedesIds(cli);
-  const facturas=documentos.filter(d=>ids.has(d.clienteId)&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada');
+  // Cada cliente/sede maneja su propia cuenta (independiente).
+  const facturas=documentos.filter(d=>d.clienteId===cli.id&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada');
   const vencidas=facturas.filter(f=>arInfo(f).vencido);
   const saldoTotal=facturas.reduce((s,f)=>s+arInfo(f).saldo,0);
   const saldoVencido=vencidas.reduce((s,f)=>s+arInfo(f).saldo,0);
   if(saldoVencido>0.001){
     box.style.display='block';
-    box.innerHTML=`<div class="note n-danger" style="margin:0;cursor:pointer" onclick="abrirCliente(${cli.sedesDe||cli.id})">
+    box.innerHTML=`<div class="note n-danger" style="margin:0;cursor:pointer" onclick="abrirCliente(${cli.id})">
       <svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
       <span><b>⚠ Cliente con saldo vencido:</b> ${money(saldoVencido)} en ${vencidas.length} factura${vencidas.length!==1?'s':''} vencida${vencidas.length!==1?'s':''}. Saldo total pendiente: ${money(saldoTotal)}. Confirmá con cobros antes de despachar.</span></div>`;
   }else if(saldoTotal>0.001){
@@ -2985,9 +2968,8 @@ function contactoCard(tit,c){return `<div class="panel" style="margin:0"><div cl
   <div style="font-size:12px;color:var(--muted);margin-top:5px">${c&&c.telefono?'☎ '+c.telefono:''}</div>
   <div style="font-size:12px;color:var(--muted)">${c&&c.correo?'✉ '+c.correo:''}</div></div></div>`;}
 function clienteStats(c){
-  // Considerar todo el grupo de sedes (matriz + sedes), igual que la alerta de saldo del pedido.
-  const _ids=grupoSedesIds(c);
-  const facturas=documentos.filter(d=>_ids.has(d.clienteId)&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').sort((a,b)=>new Date(a.creada)-new Date(b.creada));
+  // Cada cliente/sede maneja su propia cuenta (independiente): solo sus propias facturas.
+  const facturas=documentos.filter(d=>d.clienteId===c.id&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').sort((a,b)=>new Date(a.creada)-new Date(b.creada));
   const totalFacturado=facturas.reduce((s,f)=>s+f.totales.total,0);
   const totalCobrado=facturas.reduce((s,f)=>s+arInfo(f).abon,0);
   const saldoActual=facturas.reduce((s,f)=>s+arInfo(f).saldo,0);
