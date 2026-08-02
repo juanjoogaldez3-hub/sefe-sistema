@@ -5627,13 +5627,6 @@ function existenciaDesglose(p){
   }
   return '';
 }
-// Desglose "X cajas y Y unidades" a partir de un total de UNIDADES (para reportes que reconstruyen existencia).
-function desgloseCajasUnid(p,totalUnid){
-  const upc=Number(p&&p.unidadesPorCaja)||1;
-  const t=Math.max(0,Math.round(Number(totalUnid)||0));
-  const cj=Math.floor(t/upc),un=t-cj*upc;
-  return `${cj.toLocaleString('es-GT')} caja${cj!==1?'s':''} y ${un} unidad${un!==1?'es':''}`;
-}
 // Existencia expresada en CAJAS (para productos manejados por caja)
 function existenciaCajas(p){
   if(!p)return 0;
@@ -6487,21 +6480,31 @@ function renderReportes(){
       const exenta=!!(d.exenta||d.esExenta)||(d.totales&&Number(d.totales.iva||0)<=0.001&&Number(d.totales.total||0)>0.001);
       (d.items||[]).forEach(it=>{
         const key=it.id||it.codigo;
+        const p=productos.find(x=>x.id===it.id)||productos.find(x=>x.codigo===it.codigo);
+        const cajaUnidad=!!(p&&p.tipoEmpaque==='caja_unidad'),upc=Number(p&&p.unidadesPorCaja)||1;
         if(!porProd[key]){
-          const p=productos.find(x=>x.id===it.id)||productos.find(x=>x.codigo===it.codigo);
-          porProd[key]={codigo:it.codigo||(p&&p.codigo)||'',nombre:it.nombre||(p&&p.nombre)||'',cant:0,costoTotal:0,precioFinal:0,ventaSinIva:0,valorUnit:(p&&Number(p.precio))||Number(it.precio)||0};
+          // En caja_unidad se normaliza TODO a UNIDADES (cantidad, valor y costo por unidad) para no mezclar cajas y unidades.
+          porProd[key]={codigo:it.codigo||(p&&p.codigo)||'',nombre:it.nombre||(p&&p.nombre)||'',cant:0,costoTotal:0,precioFinal:0,ventaSinIva:0,precioLista:0,
+            valorUnit:cajaUnidad?((Number(p.precio)||0)/upc):((p&&Number(p.precio))||Number(it.precio)||0)};
         }
         const g=porProd[key],cant=Number(it.cantidad)||0,linea=cant*(Number(it.precio)||0)-(Number(it.descuento)||0);
-        g.cant+=cant;
+        // costoProductoMes viene POR CAJA en caja_unidad; usar p.id (soporta items sin it.id).
+        const costoBase=costoProductoMes(p?p.id:it.id,dt.getFullYear(),dt.getMonth());
+        let cantNorm,costoLinea;
+        if(cajaUnidad){
+          const unidades=(it.modoVenta==='caja')?cant*upc:cant;      // llevar a unidades
+          cantNorm=unidades; costoLinea=(costoBase/upc)*unidades;      // costo por unidad × unidades
+        }else{ cantNorm=cant; costoLinea=costoBase*cant; }
+        g.cant+=cantNorm;
         g.precioFinal+=linea;
         g.ventaSinIva+=exenta?linea:linea/IVA;
-        g.costoTotal+=costoProductoMes(it.id,dt.getFullYear(),dt.getMonth())*cant;
+        g.costoTotal+=costoLinea;
+        g.precioLista+=cantNorm*(exenta?g.valorUnit/IVA:g.valorUnit);  // lista comparable (exenta sin IVA)
       });
     });
     const arr=Object.values(porProd).filter(g=>g.cant>0);
     arr.forEach(g=>{
       g.costoUnit=g.cant?g.costoTotal/g.cant:0;
-      g.precioLista=g.cant*g.valorUnit;
       g.pctDesc=g.precioLista?(g.precioLista-g.precioFinal)/g.precioLista*100:0;
       g.valorComision=g.ventaSinIva*COMISION_PCT/100;
       g.ganancia=g.precioFinal-g.costoTotal-g.valorComision;
@@ -7048,7 +7051,7 @@ function renderReportes(){
         const upc=Number(p.unidadesPorCaja)||1,cj=Math.floor(e/upc),un=Math.max(0,Math.round(e-cj*upc));
         _filas.push({codigo:p.codigo||'',nombre:p.nombre||'',marca:p.marca||'',medida:'Caja',cant:cj});
         _filas.push({codigo:(p.codigo||'')+'-U',nombre:p.nombre||'',marca:p.marca||'',medida:'Unidad',cant:un});
-      }else _filas.push({codigo:p.codigo||'',nombre:p.nombre||'',marca:p.marca||'',medida:medidaProducto(p),cant:Math.round(e)});
+      }else _filas.push({codigo:p.codigo||'',nombre:p.nombre||'',marca:p.marca||'',medida:medidaProducto(p),cant:e});
     });
     exportData=_filas.map(f=>({'Código':f.codigo,Producto:f.nombre,Marca:f.marca,'Unidad de medida':f.medida,Existencias:f.cant}));
     const totU=_filas.reduce((s,f)=>s+f.cant,0);
@@ -7075,7 +7078,7 @@ function renderReportes(){
         const upc=Number(p.unidadesPorCaja)||1,cj=Math.floor(e/upc),un=Math.max(0,Math.round(e-cj*upc)),cou=co/upc;
         filas.push({codigo:p.codigo||'',medida:'Caja',desc:p.nombre||'',cant:cj,co:co,tot:co*cj});
         filas.push({codigo:(p.codigo||'')+'-U',medida:'Unidad',desc:p.nombre||'',cant:un,co:cou,tot:cou*un});
-      }else{const c=Math.round(e);filas.push({codigo:p.codigo||'',medida:medidaProducto(p),desc:p.nombre||'',cant:c,co:co,tot:co*c});}
+      }else{filas.push({codigo:p.codigo||'',medida:medidaProducto(p),desc:p.nombre||'',cant:e,co:co,tot:co*e});}
     });
     exportData=filas.map(f=>({'Código':f.codigo,'Unidad de medida':f.medida,'Descripción':f.desc,'Cantidad':f.cant,'Costo unitario':f.co,'Costo total':f.tot}));
     const granTotal=filas.reduce((s,f)=>s+f.tot,0);
