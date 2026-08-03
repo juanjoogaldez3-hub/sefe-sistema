@@ -4995,15 +4995,15 @@ function renderCompraForm(){
   $('#co-empty').style.display=compraCart.length?'none':'block';
   $('#co-items').innerHTML=compraCart.map((it,i)=>{const _p=productos.find(x=>x.id===it.id);const _esCaja=_p&&(_p.tipoEmpaque==='caja_unidad'||_p.tipoEmpaque==='caja');return `<div class="li">
     <div><div class="nm">${it.nombreProveedor||it.nombre}<span style="font-size:10px;color:var(--muted);font-weight:400"> · ${it.nombre}</span>${_esCaja?' <span class="badge b-info" style="font-size:9px">cantidad en CAJAS</span>':''}</div><div class="sk">SKU prov: ${it.skuProveedor||it.codigo}</div></div>
-    <input type="number" min="1" value="${it.cantidad}" oninput="updCompra(${i},'cantidad',this.value)">
-    <input type="number" min="0" step="0.01" value="${it.costo}" oninput="updCompra(${i},'costo',this.value)">
-    <div style="text-align:right;font-weight:600;grid-column:span 2" class="num">${money(it.cantidad*it.costo)}</div>
+    <input type="number" min="1" value="${it.cantidad}" oninput="updCompra(${i},'cantidad',this.value)" onblur="renderCompraForm()">
+    <input type="number" min="0" step="0.01" value="${it.costo}" oninput="updCompra(${i},'costo',this.value)" onblur="renderCompraForm()">
+    <div id="co-line-${i}" style="text-align:right;font-weight:600;grid-column:span 2" class="num">${money(it.cantidad*it.costo)}</div>
     <button class="x" onclick="rmCompra(${i})">×</button></div>`;}).join('');
   const total=compraCart.reduce((s,it)=>s+it.cantidad*it.costo,0);
   $('#co-tot').textContent=money(total);
   $('#co-go').disabled=!compraCart.length;
 }
-window.updCompra=(i,k,v)=>{compraCart[i][k]=Number(v)||0;renderCompraForm();};
+window.updCompra=(i,k,v)=>{compraCart[i][k]=Number(v)||0;const it=compraCart[i];const l=$('#co-line-'+i);if(l)l.textContent=money(it.cantidad*it.costo);const el=$('#co-tot');if(el)el.textContent=money(compraCart.reduce((s,x)=>s+x.cantidad*x.costo,0));};
 window.rmCompra=i=>{compraCart.splice(i,1);renderCompraForm();};
 // Toggle visual del checkbox compra especial
 $('#co-especial').onchange=()=>{
