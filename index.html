@@ -5052,21 +5052,25 @@ $('#co-go').onclick=()=>{
   renderCompraForm();go('compras');
 };
 
-// Divide una lista de items en varias "facturas", cada una con total <= limite (parte cantidades si hace falta).
+// Divide una lista de items en varias "facturas" con cantidades en múltiplos de 10;
+// se permite que alguna factura pase un poco del límite para respetar los bloques de 10.
 function dividirCompraItems(items, limite){
   const facturas=[]; let cur={items:[],total:0}; let warnUnidad=false;
+  const BLOQUE=10;
   const cerrar=()=>{ if(cur.items.length){facturas.push(cur); cur={items:[],total:0};} };
   for(const it of items){
     let restante=Number(it.cantidad)||0; const costo=Number(it.costo)||0;
     if(restante<=0)continue;
     if(costo<=0){ cur.items.push({...it,cantidad:restante}); continue; } // gratis: no suma al total
     while(restante>0){
-      const maxU=Math.floor((limite-cur.total+1e-6)/costo);
-      if(maxU<=0){
-        if(cur.items.length===0){ warnUnidad=true; cur.items.push({...it,cantidad:1}); cur.total+=costo; restante-=1; cerrar(); continue; }
-        cerrar(); continue;
+      const caben=Math.floor((limite-cur.total+1e-6)/costo);   // unidades que caben sin pasar el límite
+      let tomar=Math.floor(caben/BLOQUE)*BLOQUE;                // bajamos al múltiplo de 10 que cabe
+      if(tomar<=0){
+        if(cur.items.length>0){ cerrar(); continue; }          // no cabe ni un bloque -> nueva factura
+        tomar=Math.min(BLOQUE,restante);                       // factura vacía: forzamos un bloque (se pasa un poco)
       }
-      const tomar=Math.min(restante,maxU);
+      if(tomar>restante) tomar=restante;                       // último pedazo: el sobrante (puede ser <10)
+      if(cur.total+tomar*costo>limite+1e-6) warnUnidad=true;
       cur.items.push({...it,cantidad:tomar}); cur.total+=tomar*costo; restante-=tomar;
     }
   }
@@ -5089,8 +5093,8 @@ function dividirCompraUI(){
   }).join('');
   const totalGen=facturas.reduce((s,f)=>s+f.items.reduce((ss,it)=>ss+it.cantidad*it.costo,0),0);
   openMod('Dividir orden en '+facturas.length+' factura'+(facturas.length!==1?'s':''),
-    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">Cada factura queda en ≤ <b>${money(limite)}</b>. Total: <b>${money(totalGen)}</b> repartido en <b>${facturas.length}</b> compra(s).</p>
-     ${warnUnidad?`<div class="note" style="margin-bottom:10px;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Hay un producto cuyo costo unitario ya supera el límite; esa unidad queda sola en su factura (no se puede dividir más).</span></div>`:''}
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">Cantidades en múltiplos de 10, apuntando a <b>${money(limite)}</b> por factura. Total: <b>${money(totalGen)}</b> repartido en <b>${facturas.length}</b> compra(s).</p>
+     ${warnUnidad?`<div class="note" style="margin-bottom:10px;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Para mantener las cantidades en múltiplos de 10, alguna factura pasa un poco del límite.</span></div>`:''}
      ${cuerpo}`,
     ()=>registrarCompraDividida(facturas));
   const _b=$('#m-save'); if(_b){_b.className='btn btn-primary';_b.textContent='Registrar las '+facturas.length+' compras';}
