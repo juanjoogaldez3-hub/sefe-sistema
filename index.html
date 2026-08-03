@@ -2242,7 +2242,8 @@ function renderDocs(){
   let filtrados=documentos.filter(docsEnRango);
   if(esVentas()&&miVendedorId())filtrados=filtrados.filter(d=>d.vendedorId===miVendedorId());
   $('#docs-empty').style.display=filtrados.length?'none':'block';
-  renderPaginado('t-docs',filtrados.slice().reverse().map(rowDoc(true)),'Sin documentos');
+  // Orden estable: el documento más reciente siempre arriba (por fecha, y por id como desempate).
+  renderPaginado('t-docs',filtrados.slice().sort((a,b)=>(new Date(b.creada||0))-(new Date(a.creada||0))||((b.id||0)-(a.id||0))).map(rowDoc(true)),'Sin documentos');
   enhanceTable('t-docs');
 }
 $('#docs-tipo').onchange=renderDocs;
