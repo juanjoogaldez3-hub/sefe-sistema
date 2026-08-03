@@ -463,12 +463,26 @@
       <button onclick="doLoginAuth()" id="login-btn"
         style="width:100%;background:var(--green);color:#fff;border:none;padding:13px;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s">Ingresar</button>
       <div id="login-error" style="text-align:center;font-size:12px;color:#c0392b;margin-top:12px;min-height:16px"></div>
+      <div style="text-align:center;margin-top:10px"><a href="#" onclick="pedirResetPass();return false" style="font-size:12.5px;color:#5a7a3e;font-weight:600;text-decoration:none">¿Olvidaste tu contraseña?</a></div>
+      <div id="login-info" style="text-align:center;font-size:12px;color:#2e7d32;margin-top:8px;line-height:1.4"></div>
     </div>
     <div id="conn-badge" style="text-align:center;font-size:11.5px;font-weight:600;margin-top:14px;color:#999">● Verificando conexión…</div>
     </div>
   </div>
 </div>
 
+<div id="reset-screen" style="position:fixed;inset:0;background:var(--green);display:none;align-items:center;justify-content:center;z-index:310;padding:24px">
+  <div style="width:100%;max-width:400px;background:#fff;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.28);padding:34px 30px">
+    <h1 style="font-family:var(--disp);color:#1a1a17;font-size:20px;font-weight:700;margin-bottom:4px">Nueva contraseña</h1>
+    <p style="color:#888;font-size:12.5px;margin-bottom:22px">Escribí tu nueva contraseña para tu cuenta.</p>
+    <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Nueva contraseña</label>
+    <input id="reset-pass" type="password" autocomplete="new-password" placeholder="••••••••" style="width:100%;border:1px solid #d8e3d2;border-radius:9px;padding:12px;font-size:13.5px;background:#fafdf8;margin-bottom:14px;box-sizing:border-box">
+    <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Repetí la contraseña</label>
+    <input id="reset-pass2" type="password" autocomplete="new-password" placeholder="••••••••" style="width:100%;border:1px solid #d8e3d2;border-radius:9px;padding:12px;font-size:13.5px;background:#fafdf8;margin-bottom:20px;box-sizing:border-box" onkeydown="if(event.key==='Enter')hacerUpdatePass()">
+    <button onclick="hacerUpdatePass()" id="reset-btn" style="width:100%;background:var(--green);color:#fff;border:none;padding:13px;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">Guardar contraseña</button>
+    <div id="reset-msg" style="text-align:center;font-size:12.5px;margin-top:12px;min-height:16px"></div>
+  </div>
+</div>
 <div class="layout" id="app-layout" style="display:none">
   <aside class="sidebar">
     <div class="brand"><div class="mk">SE</div><div><h2>SEFE</h2><span>PEDIDOS &amp; FACTURACIÓN</span></div></div>
@@ -1434,6 +1448,54 @@ function logout(){
   logoutAuth();
 }
 window.logout=logout;
+
+// ===== Recuperación de contraseña (Supabase Auth) =====
+// _modoRecovery: true si la app se abrió desde el enlace del correo de recuperación.
+let _modoRecovery = /type=recovery/.test((typeof location!=='undefined'&&location.hash)||'');
+// 1) Pedir el correo de recuperación desde el login
+async function pedirResetPass(){
+  const email=(($('#login-email')||{}).value||'').trim().toLowerCase();
+  const info=$('#login-info'), err=$('#login-error');
+  if(err)err.textContent='';
+  const set=(c,t)=>{ if(info){info.style.color=c;info.textContent=t;} };
+  if(!email){ set('#c0392b','Escribí tu correo arriba y volvé a tocar el enlace.'); return; }
+  if(typeof sb==='undefined'||!sb.auth){ set('#c0392b','Sin conexión con el servidor.'); return; }
+  try{
+    await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+    set('#2e7d32','Si el correo está registrado, te enviamos un enlace para restablecer la contraseña. Revisá tu bandeja (y la carpeta de spam).');
+  }catch(e){ set('#c0392b','No se pudo enviar el correo: '+(e&&e.message||e)); }
+}
+window.pedirResetPass=pedirResetPass;
+// 2) Mostrar el formulario de nueva contraseña (al volver del enlace)
+function mostrarResetPass(){
+  _modoRecovery=true;
+  try{ ocultarLoader(); }catch(e){}
+  const l=$('#login-screen'); if(l)l.style.display='none';
+  const a=$('#app-layout'); if(a)a.style.display='none';
+  const r=$('#reset-screen'); if(r)r.style.display='flex';
+}
+window.mostrarResetPass=mostrarResetPass;
+// 3) Guardar la nueva contraseña
+async function hacerUpdatePass(){
+  const p1=(($('#reset-pass')||{}).value)||'', p2=(($('#reset-pass2')||{}).value)||'';
+  const msg=$('#reset-msg'), btn=$('#reset-btn');
+  const set=(c,t)=>{ if(msg){msg.style.color=c;msg.textContent=t;} };
+  if(p1.length<6){ set('#c0392b','La contraseña debe tener al menos 6 caracteres'); return; }
+  if(p1!==p2){ set('#c0392b','Las contraseñas no coinciden'); return; }
+  if(typeof sb==='undefined'||!sb.auth){ set('#c0392b','Sin conexión con el servidor.'); return; }
+  if(btn){btn.disabled=true;btn.textContent='Guardando...';}
+  try{
+    const {error}=await sb.auth.updateUser({password:p1});
+    if(error){ set('#c0392b','No se pudo cambiar: '+error.message); if(btn){btn.disabled=false;btn.textContent='Guardar contraseña';} return; }
+    set('#2e7d32','✓ Contraseña actualizada. Ya podés iniciar sesión.');
+    try{ await sb.auth.signOut(); }catch(e){}
+    _modoRecovery=false;
+    setTimeout(()=>{ try{ history.replaceState(null,'',location.pathname); }catch(e){} const r=$('#reset-screen');if(r)r.style.display='none'; const l=$('#login-screen');if(l)l.style.display='flex'; }, 1600);
+  }catch(e){ set('#c0392b','Error: '+(e&&e.message||e)); if(btn){btn.disabled=false;btn.textContent='Guardar contraseña';} }
+}
+window.hacerUpdatePass=hacerUpdatePass;
+// 4) Detectar el evento de recuperación de Supabase (cuando llega desde el correo)
+try{ if(typeof sb!=='undefined'&&sb.auth&&sb.auth.onAuthStateChange){ sb.auth.onAuthStateChange((event)=>{ if(event==='PASSWORD_RECOVERY')mostrarResetPass(); }); } }catch(e){}
 
 function toast(msg,sub,err){const t=$('#toast');t.className='toast show'+(err?' err':'');
   t.innerHTML=`<div class="tk"><svg viewBox="0 0 24 24">${err?'<path d="M18 6 6 18M6 6l12 12"/>':'<path d="M20 6 9 17l-5-5"/>'}</svg></div><div><div>${msg}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;
@@ -8340,6 +8402,8 @@ async function arrancarApp(){
 // Al arrancar: si ya hay una sesión activa de Supabase Auth, entrar directo
 async function verificarSesion(){
   try{
+    // Si la app se abrió desde el enlace de recuperación, mostrar el form de nueva clave (no auto-entrar).
+    if(_modoRecovery || /type=recovery/.test(location.hash)){ mostrarResetPass(); return; }
     if(typeof sb==='undefined'||!sb.auth)return;
     const {data}=await sb.auth.getSession();
     if(data && data.session && data.session.user){
