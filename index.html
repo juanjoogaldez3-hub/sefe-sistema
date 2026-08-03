@@ -3852,14 +3852,25 @@ function verComprobante(tipo,id,idx){
 }
 window.verComprobante=verComprobante;
 
+function _abTalonarioChange(){
+  const t=(talonarios||[]).find(x=>x.id===Number($('#ab-talonario')?.value));
+  if(!t)return;
+  const prox=proximoReciboLibre(t,recibosUsados());
+  if(prox!=null&&$('#ab-recibo'))$('#ab-recibo').value=prox;
+}
+window._abTalonarioChange=_abTalonarioChange;
 function openAbono(id){
   _compFoto=null;
   const f=documentos.find(d=>d.id===id);const ai=arInfo(f);const saldo=ai.saldo;
   const hoy=fechaHoyGT();
-  const nextRecibo=String(Date.now()).slice(-6);
+  const _tals=talonariosConLibres();
+  const _hayTal=_tals.length>0;
+  const _miTal=_tals.find(x=>x.t.asignadoA===currentUser)||_tals[0];
+  const _recIni=_hayTal?_miTal.proximo:String(Date.now()).slice(-6);
   openMod('Registrar abono · '+f.serie+'-'+f.numeroDte,
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${f.clienteNombre} · Saldo pendiente: <b style="color:var(--ink)">${money(saldo)}</b></p>
-     <div class="row"><div><label>No. de recibo</label><input id="ab-recibo" placeholder="REC-${nextRecibo}" value="REC-${nextRecibo}"></div><div><label>Fecha</label><input id="ab-fecha" type="date" value="${hoy}"></div></div>
+     ${_hayTal?`<div class="row"><div><label>Talonario</label><select id="ab-talonario" onchange="_abTalonarioChange()">${_tals.map(x=>`<option value="${x.t.id}" ${x.t.id===_miTal.t.id?'selected':''}>${(x.t.descripcion||('Talón '+x.t.numeroInicial))} · ${x.t.asignadoA||'sin asignar'} (${x.t.numeroInicial}–${x.t.numeroFinal})</option>`).join('')}</select></div></div>`:`<div class="note" style="margin-bottom:12px;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>No hay talonarios con recibos libres. Cargá uno en <b>Talonarios</b>; por ahora el número queda libre.</span></div>`}
+     <div class="row"><div><label>No. de recibo ${_hayTal?'<span style="color:var(--muted);font-weight:400">(del talonario)</span>':''}</label><input id="ab-recibo" value="${_recIni}"></div><div><label>Fecha</label><input id="ab-fecha" type="date" value="${hoy}"></div></div>
      <div class="row"><div><label>Monto del abono</label><input id="ab-monto" type="number" step="0.01" value="${saldo.toFixed(2)}"></div><div><label>Método</label><select id="ab-met"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>Depósito</option><option>Tarjeta</option></select></div></div>
      <div class="row"><div><label>Referencia / No. boleta / cheque</label><input id="ab-ref" placeholder="Opcional"></div></div>
      <div class="row">${selectorCuentaBancoHTML('ab-cuenta','¿A qué cuenta entró el dinero?')}</div>
@@ -3869,6 +3880,12 @@ function openAbono(id){
       const monto=Number($('#ab-monto').value);
       if(!(monto>0)){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El monto debe ser mayor a cero';return;}
       if(monto>saldo+0.001){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El abono no puede superar el saldo de '+money(saldo);return;}
+      if(_hayTal){
+        const _t=(talonarios||[]).find(x=>x.id===Number($('#ab-talonario')?.value));
+        const _n=parseInt(($('#ab-recibo')?.value||'').replace(/\D/g,''),10);
+        if(!_t||isNaN(_n)||_n<_t.numeroInicial||_n>_t.numeroFinal){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El No. de recibo debe pertenecer al talonario seleccionado'+(_t?(' ('+_t.numeroInicial+'–'+_t.numeroFinal+')'):'');return;}
+        if(recibosUsados().has(_n)){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='Ese recibo ('+_n+') ya fue usado. Elegí el siguiente libre.';return;}
+      }
       f.abonos=f.abonos||[];
       const _ab={fecha:$('#ab-fecha').value||hoy,monto,metodo:$('#ab-met').value,referencia:$('#ab-ref').value,
         noRecibo:$('#ab-recibo').value.trim(),comprobante:_compFoto,cuentaBancoId:($('#ab-cuenta')?.value||null),
@@ -5223,6 +5240,18 @@ function recibosUsados(){
   return usados;
 }
 
+// Próximo número de recibo LIBRE de un talonario (menor no usado ni anulado); null si está lleno.
+function proximoReciboLibre(t, usadosSet){
+  const anul=new Set(recibosAnulados.map(r=>r.numero));
+  const us=usadosSet||recibosUsados();
+  for(let n=t.numeroInicial;n<=t.numeroFinal;n++){ if(!us.has(n)&&!anul.has(n))return n; }
+  return null;
+}
+// Talonarios con al menos un recibo libre (para elegir al cobrar), con su próximo número.
+function talonariosConLibres(){
+  const us=recibosUsados();
+  return (talonarios||[]).filter(t=>t.estado!=='anulado').map(t=>({t,proximo:proximoReciboLibre(t,us)})).filter(x=>x.proximo!=null);
+}
 // Calcula el cuadre de un talonario: usados, faltantes y anulados.
 function cuadreTalonario(t, usadosSet){
   const anuladosSet=new Set(recibosAnulados.map(r=>r.numero));
