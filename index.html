@@ -2156,7 +2156,7 @@ $('#f-go').onclick=async()=>{
     if(doc.id<0)toast('⚠ Pedido guardado solo en pantalla','No se pudo confirmar con la base. Recargá y verificá antes de facturarlo.',true);
     else toast('✓ Pedido ingresado','PED-'+padn(doc.numero)+' · inventario rebajado. Facturalo o convertilo en Documentos.');
   }
-  cart=[];$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';limpiarBorrador();initForm();render();go('documentos');
+  cart=[];if($('#f-cli'))$('#f-cli').value='';if($('#f-cli-search'))$('#f-cli-search').value='';if(typeof actualizarVendedorInfo==='function')actualizarVendedorInfo(null);$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';limpiarBorrador();initForm();render();go('documentos');
 };
 
 function rowDoc(withActions){
@@ -2655,7 +2655,7 @@ window.editarPedido=id=>{const f=documentos.find(d=>d.id===id);if(f.tipoDoc!=='p
   if(f.subVendedorNombre&&$('#f-subvend')){$('#f-subvend').value=f.subVendedorNombre;}
   $('#f-oc').value=f.ordenCompra||'';$('#f-obs').value=f.observaciones||'';if($('#f-nota'))$('#f-nota').value=f.notaInterna||'';
   go('pedido');render();toast('Editando PED-'+padn(f.numero),'Ajustá productos o cliente y guardá');};
-window.cancelarEdicion=()=>{editId=null;editOldMap={};cart=[];$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';render();go('documentos');};
+window.cancelarEdicion=()=>{editId=null;editOldMap={};cart=[];if($('#f-cli'))$('#f-cli').value='';if($('#f-cli-search'))$('#f-cli-search').value='';if(typeof actualizarVendedorInfo==='function')actualizarVendedorInfo(null);$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';render();go('documentos');};
 window.regresar=id=>{const f=documentos.find(d=>d.id===id);if(!['envio','prestamo'].includes(f.tipoDoc)||f.estado!=='pendiente')return;
   Object.assign(f,{tipoDoc:'pedido',estado:'abierto'});delete f.autorizacion;delete f.serie;delete f.numeroDte;
   closeMod();renderDocs();
