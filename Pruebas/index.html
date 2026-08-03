@@ -1240,6 +1240,7 @@ function canAsignarPiloto(){return (currentRole==='admin'||ROLES[currentRole]?.a
 function canConvertir(){return (currentRole==='admin'||ROLES[currentRole]?.convertirCajas===true)&&!soloLectura();}
 let proveedores=[];
 let compras=[];
+let categorias=[]; // categorías de inventario con su umbral de stock bajo: {nombre, umbralStock}
 let documentos=[];
 let talonarios=[];
 let recibosAnulados=[];
@@ -1560,7 +1561,7 @@ function renderPanel(){
     return Number(p.stock)||0;
   };
   const activos=productos.filter(p=>p.activo!==false);
-  const stockBajo=activos.filter(p=>{const s=stockEfectivo(p);return s<=10&&s>0;});
+  const stockBajo=activos.filter(p=>{const s=stockEfectivo(p);return s<=umbralStock(p)&&s>0;});
   const sinStock=activos.filter(p=>stockEfectivo(p)===0);
   const ocPend=compras.filter(c=>!c.anulado&&c.estadoRecepcion!=='recibida');
   const espPend=compras.filter(c=>c.especial&&!c.oficializada&&!c.anulado);
@@ -1621,7 +1622,7 @@ function renderPanel(){
   }
   if(dbConf('alerta_stock')){
     if(sinStock.length)alertas.push({tipo:'danger',msg:`${sinStock.length} producto${sinStock.length!==1?'s':''} sin stock: ${sinStock.map(p=>p.nombre).join(', ')}`,view:'inventario'});
-    else if(stockBajo.length)alertas.push({tipo:'warn',msg:`${stockBajo.length} producto${stockBajo.length!==1?'s':''} con stock bajo (≤10 unidades)`,view:'inventario'});
+    else if(stockBajo.length)alertas.push({tipo:'warn',msg:`${stockBajo.length} producto${stockBajo.length!==1?'s':''} con stock bajo (según el umbral de su categoría)`,view:'inventario'});
   }
   if(dbConf('alerta_oc')&&ocPend.length)alertas.push({tipo:'info',msg:`${ocPend.length} orden${ocPend.length!==1?'es':''} de compra pendiente${ocPend.length!==1?'s':''} de recibir`,view:'compras'});
   if(dbConf('alerta_esp')&&espPend.length){
@@ -5681,6 +5682,12 @@ function toggleUsuario(id){const u=usuarios.find(x=>x.id===id);if(!u)return;u.ac
 window.toggleUsuario=toggleUsuario;
 
 // Existencia TOTAL en unidades (suma las cajas cerradas convertidas) — fuente única de verdad
+// Umbral de "stock bajo" de un producto, según su categoría. Default 10 si no tiene categoría o umbral.
+const UMBRAL_STOCK_DEF=10;
+function umbralStock(p){
+  if(p&&p.categoria){const c=categorias.find(x=>x.nombre===p.categoria);if(c&&Number(c.umbralStock)>0)return Number(c.umbralStock);}
+  return UMBRAL_STOCK_DEF;
+}
 function existenciaTotal(p){
   if(!p)return 0;
   if(p.tipoEmpaque==='caja_unidad')return (Number(p.stock)||0)+(Number(p.stockCajas)||0)*(Number(p.unidadesPorCaja)||0);
@@ -5703,10 +5710,48 @@ function existenciaCajas(p){
 }
 function fmtCajas(n){return (Math.round(n*100)/100).toLocaleString('es-GT',{maximumFractionDigits:2});}
 function medidaProducto(p){return (p&&(p.tipoEmpaque==='caja_unidad'||p.tipoEmpaque==='caja'))?'Caja':((p&&p.unidad)||'UNI');}
+// Modal para gestionar las categorías y su umbral de stock bajo.
+function openCategorias(){
+  if(!canEditInventario()){toast('Sin permiso','Solo Admin, Gerencia y Bodega pueden configurar categorías',true);return;}
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const filas=categorias.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')).map(c=>`
+    <div class="row" data-cat-row style="align-items:flex-end;gap:8px;margin-bottom:8px">
+      <div style="flex:2"><input class="cat-nom" value="${esc(c.nombre)}" readonly style="background:var(--surface-2);color:var(--muted)"></div>
+      <div style="width:110px"><input class="cat-umb" type="number" min="0" value="${Number(c.umbralStock)||0}"></div>
+      <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarCategoriaUI('${esc(c.nombre).replace(/'/g,"\\'")}')">Quitar</button>
+    </div>`).join('');
+  openMod('Categorías y umbrales de stock',
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">Cuando un producto de la categoría baja de su umbral, se marca en alerta (rojo). Los productos sin categoría usan el umbral por defecto (${UMBRAL_STOCK_DEF} unidades).</p>
+     <div class="row" style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;gap:8px;margin-bottom:6px"><div style="flex:2">Categoría</div><div style="width:110px">Umbral (unid.)</div><div style="width:64px"></div></div>
+     <div id="cat-lista">${filas||'<div style="font-size:12.5px;color:var(--muted-2);padding:8px 0">Sin categorías todavía. Agregá una abajo.</div>'}</div>
+     <div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Agregar categoría</div>
+     <div class="row" style="gap:8px"><div style="flex:2"><input id="cat-new-nom" placeholder="Nombre (ej. Papel)"></div><div style="width:110px"><input id="cat-new-umb" type="number" min="0" placeholder="${UMBRAL_STOCK_DEF}"></div></div>`,
+    async ()=>{
+      for(const r of [...document.querySelectorAll('#cat-lista [data-cat-row]')]){
+        const nom=r.querySelector('.cat-nom').value.trim();
+        const umb=Number(r.querySelector('.cat-umb').value)||0;
+        const c=categorias.find(x=>x.nombre===nom);
+        if(c&&c.umbralStock!==umb){c.umbralStock=umb;if(typeof guardarCategoria==='function')await guardarCategoria(c);}
+      }
+      const nn=($('#cat-new-nom')?.value||'').trim(), nu=Number($('#cat-new-umb')?.value)||UMBRAL_STOCK_DEF;
+      if(nn&&!categorias.find(x=>(x.nombre||'').toLowerCase()===nn.toLowerCase())){
+        const nueva={nombre:nn,umbralStock:nu};categorias.push(nueva);if(typeof guardarCategoria==='function')await guardarCategoria(nueva);
+      }
+      cerrarTodo();renderProd();toast('✓ Categorías guardadas');
+    });
+}
+window.openCategorias=openCategorias;
+async function borrarCategoriaUI(nombre){
+  categorias=categorias.filter(c=>c.nombre!==nombre);
+  if(typeof borrarCategoria==='function')await borrarCategoria(nombre);
+  toast('Categoría quitada',nombre);openCategorias();
+}
+window.borrarCategoriaUI=borrarCategoriaUI;
 function renderProd(){
   // Botón "Nuevo" en el encabezado (según permiso)
   const acc=$('#inv-acciones');
   if(acc)acc.innerHTML=(canEditInventario()?`<button class="btn btn-ghost btn-sm" onclick="openProd()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
+    ` <button class="btn btn-ghost btn-sm" onclick="openCategorias()" title="Umbrales de stock por categoría"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Categorías</button>`+
     ` <button class="btn btn-ghost btn-sm" id="btn-ver-inactivos" onclick="toggleVerInactivos()" style="color:var(--muted)">${_verInactivos?'Ocultar inactivos':'Ver inactivos'}</button> `:'')+filtroMarcaInv();
   let lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
   // Filtrar por marca si está seleccionada
@@ -5717,16 +5762,14 @@ function renderProd(){
   const provTxt=provs.length?provs.map(pv=>pv.nombre).join(', '):'<span style="color:var(--muted-2)">Sin asignar</span>';
   // Mostrar existencias según el tipo de empaque
   let stockCell;
+  const _bajo=existenciaTotal(p)<=umbralStock(p); // stock bajo según el umbral de la categoría
   if(p.tipoEmpaque==='caja_unidad'){
-    const cajClase=(p.stockCajas||0)<=2?'low':((p.stockCajas||0)<=5?'mid':'');
-    const uniClase=p.stock<=10?'low':(p.stock<=25?'mid':'');
     stockCell=`<div style="display:flex;flex-direction:column;gap:2px;align-items:flex-end">
-      <span class="stk ${cajClase} num" style="font-size:11px">${p.stockCajas||0} caja${(p.stockCajas||0)!==1?'s':''}</span>
-      <span class="stk ${uniClase} num" style="font-size:11px">${p.stock} und</span>
-      <span class="num" style="font-size:10px;color:var(--muted-2)">= ${existenciaTotal(p).toLocaleString('es-GT')} und en total</span></div>`;
+      <span class="stk ${_bajo?'low':''} num" style="font-size:11px">${p.stockCajas||0} caja${(p.stockCajas||0)!==1?'s':''}</span>
+      <span class="stk ${_bajo?'low':''} num" style="font-size:11px">${p.stock} und</span>
+      <span class="num" style="font-size:10px;color:${_bajo?'var(--danger)':'var(--muted-2)'}">= ${existenciaTotal(p).toLocaleString('es-GT')} und en total</span></div>`;
   }else{
-    const c=p.stock<=10?'low':(p.stock<=25?'mid':'');
-    stockCell=`<span class="stk ${c} num">${p.stock}</span>`;
+    stockCell=`<span class="stk ${_bajo?'low':''} num">${p.stock}</span>`;
   }
   let acts='';
   if(canEditInventario()){
@@ -7619,7 +7662,7 @@ function openProd(id){
   const tipoEmp=p?(p.tipoEmpaque||'unidad'):'unidad';
   openMod(p?'Editar producto':'Nuevo producto',`
   <div class="row"><div style="flex:2"><label>Nombre interno</label><input id="p-nom" value="${p?p.nombre:''}"></div><div><label>Código</label><input id="p-cod" value="${p?p.codigo:''}"></div></div>
-  <div class="row"><div style="flex:1"><label>Marca</label><input id="p-marca" placeholder="Opcional" value="${p?(p.marca||''):''}"></div></div>
+  <div class="row"><div style="flex:1"><label>Marca</label><input id="p-marca" placeholder="Opcional" value="${p?(p.marca||''):''}"></div><div style="flex:1"><label>Categoría <span style="color:var(--muted);font-weight:400">(umbral de stock)</span></label><input id="p-categoria" list="p-cat-list" placeholder="Ej. Papel, Jabón…" value="${p?(p.categoria||''):''}"><datalist id="p-cat-list">${categorias.map(c=>`<option value="${(c.nombre||'').replace(/"/g,'&quot;')}"></option>`).join('')}</datalist></div></div>
   <div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin:2px 0 8px">Nomenclatura del proveedor</div>
   <div class="row"><div style="flex:2"><label>Nombre del proveedor</label><input id="p-nom-prov" placeholder="Opcional" value="${p?(p.nombreProveedor||''):''}"></div><div><label>SKU del proveedor</label><input id="p-sku-prov" placeholder="Ej. QV-DES-1GL" value="${p?(p.skuProveedor||''):''}"></div></div>
   <div class="row"><div><label id="p-pre-lbl">${(tipoEmp==='caja_unidad'||tipoEmp==='caja')?'Precio de venta CAJA (IVA incl.)':'Precio de venta (IVA incl.)'}</label><input id="p-pre" type="number" step="0.01" value="${p?p.precio:0}" oninput="recalcPrecioUnidad()"></div><div><label>Costo</label><input id="p-cos" type="number" step="0.01" value="${p?(p.costo||0):0}"></div></div>
@@ -7649,7 +7692,7 @@ function openProd(id){
     const tipoEmpaque=$('#p-tipo').value;
     const unidadesPorCaja=tipoEmpaque==='caja_unidad'?(Number($('#p-upc').value)||0):null;
     if(tipoEmpaque==='caja_unidad'&&!(unidadesPorCaja>0)){toast('Faltan unidades por caja','Indicá cuántas unidades trae una caja',true);return;}
-    const datos={codigo:$('#p-cod').value,nombre:nom,marca:$('#p-marca').value.trim(),skuProveedor:$('#p-sku-prov').value.trim(),nombreProveedor:$('#p-nom-prov').value.trim(),precio:Number($('#p-pre').value)||0,precioUnidad:Number($('#p-preuni')?.value)||0,costo:Number($('#p-cos').value)||0,unidad:$('#p-uni').value,proveedorIds,tipoEmpaque,unidadesPorCaja};
+    const datos={codigo:$('#p-cod').value,nombre:nom,marca:$('#p-marca').value.trim(),skuProveedor:$('#p-sku-prov').value.trim(),nombreProveedor:$('#p-nom-prov').value.trim(),precio:Number($('#p-pre').value)||0,precioUnidad:Number($('#p-preuni')?.value)||0,costo:Number($('#p-cos').value)||0,unidad:$('#p-uni').value,proveedorIds,tipoEmpaque,unidadesPorCaja,categoria:($('#p-categoria')?.value||'').trim()};
     if(p){
       const tipoViejo=p.tipoEmpaque||'unidad';
       // Si cambió el tipo de empaque y hay stock, reacomodar (o bloquear)

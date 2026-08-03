@@ -155,6 +155,14 @@ async function cargarTodo() {
       }));
     }
 
+    // Categorías (umbrales de stock por categoría). Tolera que la tabla no exista todavía.
+    try {
+      const rCat = await sb.from('categorias').select('*');
+      if (!rCat.error && typeof categorias !== 'undefined') {
+        categorias = (rCat.data||[]).map(c=>({nombre:c.nombre, umbralStock:Number(c.umbral_stock)||0}));
+      }
+    } catch(e){ /* tabla aún no creada */ }
+
     console.log('✓ Datos cargados desde Supabase');
     return true;
   } catch (e) {
@@ -186,7 +194,7 @@ function mapProductoFromDB(p){
     proveedorIds:p.proveedor_ids||[], skuProveedor:p.sku_proveedor, nombreProveedor:p.nombre_proveedor,
     marca:p.marca||'', activo:p.activo!==false,
     tipoEmpaque:p.tipo_empaque||'unidad', unidadesPorCaja:p.unidades_por_caja, stockCajas:Number(p.stock_cajas||0),
-    precioUnidad:Number(p.precio_unidad)||0, conversiones:p.conversiones||[]
+    precioUnidad:Number(p.precio_unidad)||0, conversiones:p.conversiones||[], categoria:p.categoria||''
   };
 }
 function mapProveedorFromDB(p){
@@ -388,7 +396,7 @@ async function guardarProducto(p){
     sku_proveedor:p.skuProveedor, nombre_proveedor:p.nombreProveedor,
     marca:p.marca||null, activo:p.activo!==false,
     tipo_empaque:p.tipoEmpaque||'unidad', unidades_por_caja:p.unidadesPorCaja, stock_cajas:p.stockCajas||0,
-    precio_unidad:p.precioUnidad||0, conversiones:p.conversiones||[]
+    precio_unidad:p.precioUnidad||0, conversiones:p.conversiones||[], categoria:p.categoria||null
   };
   if (p._nuevo) {
     // Producto nuevo: INSERT, y Supabase genera el id real
@@ -401,6 +409,18 @@ async function guardarProducto(p){
     const {error} = await sb.from('productos').update(row).eq('id', p.id);
     if(error)console.error('Error actualizando producto:',error);
   }
+}
+
+async function guardarCategoria(cat){
+  const row = { nombre:cat.nombre, umbral_stock:Number(cat.umbralStock)||0 };
+  const {error} = await sb.from('categorias').upsert(row,{onConflict:'nombre'});
+  if(error)console.error('Error guardando categoría:',error);
+  return !error;
+}
+async function borrarCategoria(nombre){
+  const {error} = await sb.from('categorias').delete().eq('nombre', nombre);
+  if(error)console.error('Error borrando categoría:',error);
+  return !error;
 }
 
 async function guardarAuditoria(entry){
