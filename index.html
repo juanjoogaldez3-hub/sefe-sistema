@@ -874,6 +874,13 @@
                 <div class="note n-ok" id="co-nota-normal"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El inventario sube cuando recibís la mercadería, y la cuenta por pagar se genera al registrar la factura del proveedor.</span></div>
                 <div class="note" id="co-nota-especial" style="display:none;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>El inventario sube al guardar. Tenés hasta fin de mes para ajustar y oficializar la compra.</span></div>
                 <button class="btn btn-primary" id="co-go" style="width:100%;margin-top:10px" disabled>Crear orden de compra</button>
+                <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+                  <div style="font-size:11.5px;color:var(--muted);margin-bottom:7px">¿El proveedor limita el monto por factura? Dividí la orden en varias automáticamente.</div>
+                  <div style="display:flex;gap:8px;align-items:flex-end">
+                    <div style="flex:1"><label style="font-size:11px">Máximo por factura (Q)</label><input id="co-limite" type="number" min="0" step="0.01" value="23000"></div>
+                    <button class="btn btn-ghost btn-sm" onclick="dividirCompraUI()" style="white-space:nowrap">Dividir en facturas</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -5044,6 +5051,70 @@ $('#co-go').onclick=()=>{
   $('#co-go').textContent='Crear orden de compra';
   renderCompraForm();go('compras');
 };
+
+// Divide una lista de items en varias "facturas", cada una con total <= limite (parte cantidades si hace falta).
+function dividirCompraItems(items, limite){
+  const facturas=[]; let cur={items:[],total:0}; let warnUnidad=false;
+  const cerrar=()=>{ if(cur.items.length){facturas.push(cur); cur={items:[],total:0};} };
+  for(const it of items){
+    let restante=Number(it.cantidad)||0; const costo=Number(it.costo)||0;
+    if(restante<=0)continue;
+    if(costo<=0){ cur.items.push({...it,cantidad:restante}); continue; } // gratis: no suma al total
+    while(restante>0){
+      const maxU=Math.floor((limite-cur.total+1e-6)/costo);
+      if(maxU<=0){
+        if(cur.items.length===0){ warnUnidad=true; cur.items.push({...it,cantidad:1}); cur.total+=costo; restante-=1; cerrar(); continue; }
+        cerrar(); continue;
+      }
+      const tomar=Math.min(restante,maxU);
+      cur.items.push({...it,cantidad:tomar}); cur.total+=tomar*costo; restante-=tomar;
+    }
+  }
+  cerrar();
+  return {facturas,warnUnidad};
+}
+// Muestra la división propuesta y permite registrar las N compras.
+function dividirCompraUI(){
+  if(!compraCart.length){toast('Sin productos','Agregá productos a la orden primero',true);return;}
+  const prov=proveedores.find(p=>p.id===Number($('#co-prov')?.value));
+  if(!prov){toast('Falta el proveedor','Elegí el proveedor primero',true);return;}
+  const limite=Number($('#co-limite')?.value)||0;
+  if(!(limite>0)){toast('Límite inválido','Poné un máximo por factura mayor a 0',true);return;}
+  const {facturas,warnUnidad}=dividirCompraItems(compraCart,limite);
+  const cuerpo=facturas.map((fac,i)=>{
+    const total=fac.items.reduce((s,it)=>s+it.cantidad*it.costo,0);
+    return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-weight:700;font-size:12.5px;margin-bottom:6px"><span>Factura ${i+1}</span><span class="num">${money(total)}</span></div>
+      ${fac.items.map(it=>`<div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)"><span>${it.nombre} × ${it.cantidad}</span><span class="num">${money(it.cantidad*it.costo)}</span></div>`).join('')}</div>`;
+  }).join('');
+  const totalGen=facturas.reduce((s,f)=>s+f.items.reduce((ss,it)=>ss+it.cantidad*it.costo,0),0);
+  openMod('Dividir orden en '+facturas.length+' factura'+(facturas.length!==1?'s':''),
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">Cada factura queda en ≤ <b>${money(limite)}</b>. Total: <b>${money(totalGen)}</b> repartido en <b>${facturas.length}</b> compra(s).</p>
+     ${warnUnidad?`<div class="note" style="margin-bottom:10px;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Hay un producto cuyo costo unitario ya supera el límite; esa unidad queda sola en su factura (no se puede dividir más).</span></div>`:''}
+     ${cuerpo}`,
+    ()=>registrarCompraDividida(facturas));
+  const _b=$('#m-save'); if(_b){_b.className='btn btn-primary';_b.textContent='Registrar las '+facturas.length+' compras';}
+}
+window.dividirCompraUI=dividirCompraUI;
+function registrarCompraDividida(facturas){
+  const prov=proveedores.find(p=>p.id===Number($('#co-prov')?.value)); if(!prov)return;
+  const fecha=$('#co-fecha')?.value?new Date($('#co-fecha').value+'T12:00:00').toISOString():new Date().toISOString();
+  const ref=($('#co-doc')?.value||'').trim();
+  const creadas=[];
+  facturas.forEach((fac,idx)=>{
+    const total=fac.items.reduce((s,it)=>s+it.cantidad*it.costo,0);
+    const c={id:compN++,proveedorId:prov.id,proveedorNombre:prov.nombre,
+      items:fac.items.map(it=>({...it,recibido:0})),
+      total,fecha,referencia:(ref?ref+' · ':'')+'parte '+(idx+1)+'/'+facturas.length,
+      estadoRecepcion:'pendiente',facturada:false,docProv:'',tipoPago:null,diasCredito:0,vencimiento:null,abonos:[],
+      especial:false,mes:null,oficializada:false,_nuevo:true};
+    compras.push(c); if(typeof guardarCompra==='function')guardarCompra(c); creadas.push(c);
+  });
+  logAudit('Orden dividida en '+facturas.length+' compras',prov.nombre+' · '+creadas.map(c=>'CMP-'+padn(c.id)).join(', '));
+  toast('✓ Orden dividida','Se crearon '+facturas.length+' compras (cada una ≤ límite)');
+  compraCart=[];$('#co-doc').value='';renderCompraForm();cerrarTodo();go('compras');
+}
+window.registrarCompraDividida=registrarCompraDividida;
 
 // ---- Editar compra especial ----
 function editarCompraEspecial(id){
