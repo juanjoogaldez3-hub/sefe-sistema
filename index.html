@@ -375,7 +375,7 @@
     #rep-print-area,#rep-print-area *,
     #doc-sheet,#doc-sheet *{visibility:visible}
     #rep-print-area{position:absolute;left:0;top:0;width:100%;padding:0}
-    #doc-sheet{position:absolute;left:0;top:0;width:100%;padding:0;box-shadow:none;border-radius:0}
+    #doc-sheet{position:absolute;left:0;top:0;width:100%;padding:44px 46px;box-shadow:none;border-radius:0;overflow:visible}
     #rep-print-area table{page-break-inside:auto}
     #rep-print-area tr{page-break-inside:avoid}
     #rep-print-area thead{display:table-header-group}
@@ -4953,6 +4953,7 @@ function anularPagoProv(compraId,idx){
 window.anularPagoProv=anularPagoProv;
 function verCompra(id){
   const c=compras.find(x=>x.id===id);const ai=apInfo(c);
+  window._pdfActual=null;window._pdfNombre=null; // esto NO es factura EcoFactura: imprimir usa la hoja interna
   const REC={pendiente:'Pendiente de recibir',parcial:'Recepción parcial',recibida:'Recibida completa'};
   $('#doc-bar-t').textContent='ORDEN DE COMPRA · CMP-'+padn(c.id);
   $('#doc-sheet').innerHTML=`
