@@ -2359,7 +2359,7 @@ async function facturarPedido(id,dias){
   const vendedorIniciales=inicialesVendedor(f.vendedorNombre||currentUser||'');
   const vencDDMMAAAA=(()=>{const d=new Date(Date.now()+dias*86400000);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();})();
   const payload={
-    numero:f.numero,
+    numero:f.id,
     fecha:hoy,
     cliente:{
       nit:f.nitFacturado||f.clienteNit||'CF',
@@ -2493,7 +2493,7 @@ async function facturarPedidoExento(id,dias,escenario){
   const vendedorIniciales=inicialesVendedor(f.vendedorNombre||currentUser||'');
   const vencDDMMAAAA=(()=>{const d=new Date(Date.now()+dias*86400000);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();})();
   const payload={
-    numero:f.numero, fecha:hoy,
+    numero:f.id, fecha:hoy,
     cliente:{nit:f.nitFacturado||f.clienteNit||'CF', nombre:f.nombreFacturado||f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:f.clienteDireccion||'Ciudad', email:f.clienteEmail||''},
     items:itemsEx.map(it=>({codigo:it.codigo||'GEN', nombre:it.nombre, cantidad:it.cantidad, precio:it.precio, descuento:it.descuento||0, unidad:it.unidad||'UNI', tipo:'B'})),
     total:totalEx, vencimiento:venc, observaciones:f.observaciones||'',
