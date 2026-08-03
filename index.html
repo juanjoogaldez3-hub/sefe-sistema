@@ -5471,8 +5471,40 @@ window.irAFacturaDesdeRecibo=function(docId){
   const d=documentos.find(x=>x.id===docId);
   if(d&&typeof verDoc==='function'){go('documentos');setTimeout(()=>verDoc(docId),150);}
 };
+// Admin: cambiar la contraseña de un usuario (via backend seguro con la llave de servicio).
+function openCambiarClave(id){
+  if(currentRole!=='admin'){toast('Sin permiso','Solo el administrador puede cambiar contraseñas',true);return;}
+  const u=usuarios.find(x=>x.id===id); if(!u)return;
+  if(!u.correo){toast('Sin correo','Este usuario no tiene correo; no se puede cambiar la clave.',true);return;}
+  openMod('Cambiar contraseña · '+u.nombre,
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Asignás una nueva contraseña para <b>${u.nombre}</b> (${u.correo}). El usuario entra con esa clave la próxima vez.</p>
+     <div class="row"><div style="flex:1"><label>Nueva contraseña</label><input id="cc-pass" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div></div>
+     <div class="row"><div style="flex:1"><label>Repetir contraseña</label><input id="cc-pass2" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')document.getElementById('m-save').click()"></div></div>
+     <div class="note n-danger" id="cc-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
+    async ()=>{
+      const p1=($('#cc-pass')?.value)||'', p2=($('#cc-pass2')?.value)||'';
+      const err=$('#cc-err'); const setErr=t=>{if(err){err.style.display='flex';err.querySelector('span').textContent=t;}};
+      if(p1.length<6){setErr('La contraseña debe tener al menos 6 caracteres');return;}
+      if(p1!==p2){setErr('Las contraseñas no coinciden');return;}
+      const btn=$('#m-save'); if(btn){btn.disabled=true;btn.textContent='Guardando...';}
+      try{
+        const {data:sess}=await sb.auth.getSession();
+        const token=sess&&sess.session&&sess.session.access_token;
+        if(!token){setErr('No hay sesión activa. Volvé a iniciar sesión.');if(btn){btn.disabled=false;btn.textContent='Cambiar contraseña';}return;}
+        const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/set-password',{
+          method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+          body:JSON.stringify({authId:u.authId||null,email:u.correo,password:p1})
+        });
+        const data=await r.json().catch(()=>({}));
+        if(r.ok&&data.ok){ cerrarTodo(); toast('✓ Contraseña actualizada',u.nombre+' ya puede entrar con la nueva clave'); if(typeof logAudit==='function')logAudit('Cambio de contraseña','Usuario: '+u.nombre); }
+        else { setErr(data.error||'No se pudo cambiar la contraseña'); if(btn){btn.disabled=false;btn.textContent='Cambiar contraseña';} }
+      }catch(e){ setErr('Error de conexión con el backend: '+(e.message||e)); if(btn){btn.disabled=false;btn.textContent='Cambiar contraseña';} }
+    });
+  const _b=$('#m-save'); if(_b)_b.textContent='Cambiar contraseña';
+}
+window.openCambiarClave=openCambiarClave;
 function renderUsuarios(){
-  $('#t-usr').innerHTML=usuarios.map(u=>`<tr><td style="font-weight:600">${u.nombre}</td><td style="color:var(--muted)">${u.correo||'—'}</td><td><span class="badge b-info">${ROLES[u.rol]?.label||u.rol}</span></td><td><span class="badge ${u.activo?'b-ok':'b-muted'}">${u.activo?'Activo':'Inactivo'}</span></td><td><div class="acts"><button class="btn btn-ghost btn-sm" onclick="openUsuario(${u.id})">Editar</button>${u.nombre!==currentUser?`<button class="btn btn-ghost btn-sm" onclick="toggleUsuario(${u.id})">${u.activo?'Desactivar':'Activar'}</button>`:''}</div></td></tr>`).join('');
+  $('#t-usr').innerHTML=usuarios.map(u=>`<tr><td style="font-weight:600">${u.nombre}</td><td style="color:var(--muted)">${u.correo||'—'}</td><td><span class="badge b-info">${ROLES[u.rol]?.label||u.rol}</span></td><td><span class="badge ${u.activo?'b-ok':'b-muted'}">${u.activo?'Activo':'Inactivo'}</span></td><td><div class="acts"><button class="btn btn-ghost btn-sm" onclick="openUsuario(${u.id})">Editar</button>${currentRole==='admin'&&u.correo?`<button class="btn btn-ghost btn-sm" style="color:var(--blue)" onclick="openCambiarClave(${u.id})">Clave</button>`:''}${u.nombre!==currentUser?`<button class="btn btn-ghost btn-sm" onclick="toggleUsuario(${u.id})">${u.activo?'Desactivar':'Activar'}</button>`:''}</div></td></tr>`).join('');
   enhanceTable('t-usr');
   renderPermisos();
   renderDashboardConfig();
