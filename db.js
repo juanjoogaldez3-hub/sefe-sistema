@@ -447,6 +447,16 @@ async function anularAbonoDB(abono){
   if(error)console.error('Error anulando abono:',error);
 }
 
+// Editar un abono existente (UPDATE de campos editables por su id en la base).
+async function actualizarAbonoDB(abono){
+  if(!abono._id)return; // si no tiene id de base, no estaba guardado
+  const {error}=await sb.from('abonos').update({
+    fecha:abono.fecha, monto:abono.monto, metodo:abono.metodo,
+    referencia:abono.referencia, no_recibo:abono.noRecibo
+  }).eq('id', abono._id);
+  if(error)console.error('Error actualizando abono:',error);
+}
+
 // Anular un pago a proveedor (UPDATE por su id en la base)
 async function anularPagoProveedorDB(pago){
   if(!pago._id)return;

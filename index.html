@@ -4095,7 +4095,7 @@ function openHistorialAbonos(id){
       <td style="${tachado}">${fdate(a.fecha)}</td>
       <td style="${tachado}" class="num">${money(a.monto)}</td>
       <td style="${tachado}">${a.metodo||'—'}${a.referencia?`<div style="font-size:10.5px;color:var(--muted-2)">${a.referencia}</div>`:''}${extra}</td>
-      <td>${a.comprobante?`<button class="btn btn-ghost btn-sm" onclick="verComprobante('doc',${f.id},${idx})">📷 Ver</button> `:''}${a.anulado?`<span class="badge b-muted">Anulado</span>`:(canAnular()?`<button class="btn btn-ghost btn-sm" onclick="openAnularAbono(${f.id},${idx})">Anular</button>`:'<span style="font-size:11px;color:var(--muted-2)">Sin permiso</span>')}</td>
+      <td>${a.comprobante?`<button class="btn btn-ghost btn-sm" onclick="verComprobante('doc',${f.id},${idx})">📷 Ver</button> `:''}${!a.anulado&&canRegistrarAbono()?`<button class="btn btn-ghost btn-sm" style="color:var(--blue)" onclick="openEditarAbono(${f.id},${idx})">Editar</button> `:''}${a.anulado?`<span class="badge b-muted">Anulado</span>`:(canAnular()?`<button class="btn btn-ghost btn-sm" onclick="openAnularAbono(${f.id},${idx})">Anular</button>`:'<span style="font-size:11px;color:var(--muted-2)">Sin permiso</span>')}</td>
     </tr>`;
   }).join('');
   openMod('Historial de abonos · '+f.serie+'-'+f.numeroDte,
@@ -4105,6 +4105,43 @@ function openHistorialAbonos(id){
   $('#m-save').textContent='Cerrar';$('#m-save').className='btn btn-ghost';
 }
 window.openHistorialAbonos=openHistorialAbonos;
+// Editar un abono (recibo, fecha, monto, método, referencia). Ajusta el saldo y el movimiento de banco si cambia el monto.
+function openEditarAbono(facturaId,abonoIdx){
+  if(!canRegistrarAbono()){toast('Sin permiso','Tu rol no puede editar abonos',true);return;}
+  const f=documentos.find(d=>d.id===facturaId);const a=f&&f.abonos[abonoIdx];if(!a||a.anulado)return;
+  const saldoSinEste=arInfo(f).saldo+Number(a.monto); // saldo si se quitara este abono (máximo permitido)
+  const _mets=['Efectivo','Transferencia','Cheque','Depósito','Tarjeta','Cobro'];
+  if(a.metodo&&_mets.indexOf(a.metodo)<0)_mets.unshift(a.metodo);
+  const esc=s=>String(s||'').replace(/"/g,'&quot;');
+  openMod('Editar abono · '+f.serie+'-'+f.numeroDte,
+    `<div class="row"><div><label>No. de recibo</label><input id="ea-recibo" value="${esc(a.noRecibo)}"></div><div><label>Fecha</label><input id="ea-fecha" type="date" value="${(a.fecha||'').slice(0,10)}"></div></div>
+     <div class="row"><div><label>Monto</label><input id="ea-monto" type="number" step="0.01" value="${Number(a.monto)}"></div><div><label>Método</label><select id="ea-met">${_mets.map(m=>`<option ${a.metodo===m?'selected':''}>${m}</option>`).join('')}</select></div></div>
+     <div class="row"><div><label>Referencia / No. boleta / cheque</label><input id="ea-ref" value="${esc(a.referencia)}"></div></div>
+     ${a.cuentaBancoId?`<div class="note" style="margin-bottom:0;font-size:11.5px;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Este cobro entró a una cuenta de banco. Si cambiás el monto, se ajusta también el movimiento de banco.</span></div>`:''}
+     <div class="note n-danger" id="ea-err" style="display:none;margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
+    ()=>{
+      const nRec=($('#ea-recibo')?.value||'').trim(), nFecha=$('#ea-fecha')?.value||a.fecha;
+      const nMonto=Number($('#ea-monto')?.value), nMet=$('#ea-met')?.value||a.metodo, nRef=($('#ea-ref')?.value||'').trim();
+      const err=$('#ea-err'); const setErr=t=>{if(err){err.style.display='flex';err.querySelector('span').textContent=t;}};
+      if(!(nMonto>0)){setErr('El monto debe ser mayor a cero');return;}
+      if(nMonto>saldoSinEste+0.001){setErr('El monto no puede superar '+money(saldoSinEste)+' (saldo disponible de la factura)');return;}
+      const montoViejo=Number(a.monto);
+      a.noRecibo=nRec;a.fecha=nFecha;a.monto=nMonto;a.metodo=nMet;a.referencia=nRef;
+      // Ajustar el movimiento de banco si cambió el monto y el cobro estaba ligado a una cuenta
+      if(a.cuentaBancoId&&Math.abs(nMonto-montoViejo)>0.001&&typeof movimientosBanco!=='undefined'){
+        const mv=movimientosBanco.find(m=>!m.anulado&&m.origen==='cobro'&&m.origenId===f.id&&Number(m.cuentaId)===Number(a.cuentaBancoId)&&Math.abs(Number(m.monto)-montoViejo)<0.01);
+        if(mv){mv.monto=nMonto;mv.fecha=nFecha;if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mv);}
+      }
+      const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
+      openHistorialAbonos(facturaId);renderCobros();
+      logAudit('Abono editado','Factura '+f.serie+'-'+f.numeroDte+' · '+money(nMonto)+' · recibo '+(nRec||'—'));
+      toast('✓ Abono actualizado','Saldo: '+money(nuevo.saldo));
+      if(typeof actualizarAbonoDB==='function')actualizarAbonoDB(a);
+      if(typeof guardarDocumento==='function')guardarDocumento(f);
+    });
+  const _b=$('#m-save'); if(_b){_b.className='btn btn-primary';_b.textContent='Guardar cambios';}
+}
+window.openEditarAbono=openEditarAbono;
 function openAnularAbono(facturaId,abonoIdx){
   const f=documentos.find(d=>d.id===facturaId);const a=f.abonos[abonoIdx];if(!a||a.anulado)return;
   openMod('Anular abono',
