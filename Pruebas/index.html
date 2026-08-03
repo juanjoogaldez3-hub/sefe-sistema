@@ -3678,7 +3678,8 @@ function fdate(d){
   // lo construimos como fecha LOCAL usando sus componentes.
   const m=(typeof d==='string')&&d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   const fecha=m?new Date(+m[1],+m[2]-1,+m[3]):new Date(d);
-  return fecha.toLocaleDateString('es-GT',{day:'2-digit',month:'short',year:'2-digit'});
+  const dd=String(fecha.getDate()).padStart(2,'0'),mm=String(fecha.getMonth()+1).padStart(2,'0');
+  return `${dd}-${mm}-${fecha.getFullYear()}`;
 }
 function cobrosEnFiltro(f,ai){
   const cli=$('#cb-cliente')?.value,est=$('#cb-estado')?.value,met=$('#cb-metodo')?.value,desde=$('#cb-desde')?.value,hasta=$('#cb-hasta')?.value;
@@ -6977,7 +6978,7 @@ function renderReportes(){
       filasExp.push(Object.assign({Documento:(o.nit?'('+o.nit+') ':'')+n,Fecha:''},vaciosV()));
       const tot={corr:0,b30:0,b60:0,b90:0,b90p:0};
       o.facts.slice().sort((a,b)=>b.dias-a.dias).forEach(f=>{
-        const row=Object.assign({Documento:'FA '+((f.serie?f.serie+'-':'')+(f.dte||f.num)),Fecha:f.emitida?f.emitida.slice(0,10):''},vaciosV());
+        const row=Object.assign({Documento:'FA '+((f.serie?f.serie+'-':'')+(f.dte||f.num)),Fecha:f.emitida?fdate(f.emitida.slice(0,10)):''},vaciosV());
         row[KEYV[f.bv]]=Math.round(f.saldo*100)/100; tot[f.bv]+=f.saldo;
         filasExp.push(row);
       });
@@ -7190,12 +7191,17 @@ function renderReportes(){
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   try{
-  const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
+  // Librería con soporte de estilos (negrita, etc.); si falla, respaldo a SheetJS normal (exporta sin estilos).
+  let XLSX,_styled=false;
+  try{const _m=await import('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/+esm');XLSX=_m.default||_m;if(XLSX&&XLSX.utils)_styled=true;else throw 0;}
+  catch(_e){XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');}
   const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const _esInv=(repType==='invactual'||repType==='invcosto');
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
+  // Estado de cuenta: nombres de cliente y "TOTALES CLIENTE" en negrita (si la librería soporta estilos).
+  if(_styled&&repType==='estcta'){repLastData.forEach((row,i)=>{const doc=(row&&row.Documento)||'';if(doc&&!/^FA /.test(doc)){const ref='A'+(7+i);if(ws[ref])ws[ref].s={font:{bold:true}};}});}
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,String(TIPO_NOMBRES[repType]||'Reporte').replace(/[\\\/?*\[\]:]/g,' ').slice(0,31));
   XLSX.writeFile(wb,`SEFE_${repType}_${fechaHoyGT()}.xlsx`);
   toast('✓ Excel descargado','SEFE_'+repType+'_'+fechaHoyGT()+'.xlsx');
