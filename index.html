@@ -948,6 +948,7 @@
         <datalist id="pg-cli-list"></datalist>
         <input type="hidden" id="pg-cli-id">
       </div>
+      <div><label>Talonario</label><select id="pg-talonario" onchange="_pgTalonarioChange()"></select></div>
       <div><label>No. de recibo</label><input id="pg-recibo"></div>
       <div><label>Fecha</label><input id="pg-fecha" type="date"></div>
       <div><label>Método de pago</label><select id="pg-met"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>Depósito</option><option>Tarjeta</option></select></div>
@@ -3908,12 +3909,30 @@ function openAbono(id){
 window.openAbono=openAbono;
 
 // ---- Pago global (un recibo, varias facturas) ----
+function _pgTalonarioChange(){
+  const t=(talonarios||[]).find(x=>x.id===Number($('#pg-talonario')?.value));
+  if(!t)return;
+  const prox=proximoReciboLibre(t,recibosUsados());
+  if(prox!=null&&$('#pg-recibo'))$('#pg-recibo').value=prox;
+}
+window._pgTalonarioChange=_pgTalonarioChange;
 function openPagoGlobal(){
   // Poblar datalist de clientes
   const list=$('#pg-cli-list');
   if(list)list.innerHTML=clientes.map(c=>`<option value="${c.nombre} · ${c.nit}">`).join('');
   $('#pg-cli-search').value='';$('#pg-cli-id').value='';
-  $('#pg-recibo').value='REC-'+String(Date.now()).slice(-6);
+  // Talonarios: llenar el selector y sugerir el próximo recibo libre
+  const _tals=talonariosConLibres();
+  const _tsel=$('#pg-talonario');
+  if(_tsel&&_tals.length){
+    const _mi=_tals.find(x=>x.t.asignadoA===currentUser)||_tals[0];
+    _tsel.innerHTML=_tals.map(x=>`<option value="${x.t.id}" ${x.t.id===_mi.t.id?'selected':''}>${(x.t.descripcion||('Talón '+x.t.numeroInicial))} · ${x.t.asignadoA||'sin asignar'} (${x.t.numeroInicial}–${x.t.numeroFinal})</option>`).join('');
+    if(_tsel.parentElement)_tsel.parentElement.style.display='';
+    $('#pg-recibo').value=_mi.proximo;
+  }else{
+    if(_tsel){_tsel.innerHTML='';if(_tsel.parentElement)_tsel.parentElement.style.display='none';}
+    $('#pg-recibo').value='REC-'+String(Date.now()).slice(-6);
+  }
   $('#pg-fecha').value=fechaHoyGT();
   $('#pg-met').value='Efectivo';$('#pg-ref').value='';
   const _cw=$('#pg-cuenta-wrap');if(_cw)_cw.innerHTML=selectorCuentaBancoHTML('pg-cuenta','¿A qué cuenta entró el dinero?');
@@ -4017,6 +4036,13 @@ function guardarPagoGlobal(){
   if(!cliId){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='Seleccioná un cliente';return;}
   const recibo=$('#pg-recibo').value.trim();
   if(!recibo){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='Ingresá el número de recibo';return;}
+  const _tsel2=$('#pg-talonario');
+  if(_tsel2&&_tsel2.value&&_tsel2.options.length){
+    const _t=(talonarios||[]).find(x=>x.id===Number(_tsel2.value));
+    const _n=parseInt(recibo.replace(/\D/g,''),10);
+    if(!_t||isNaN(_n)||_n<_t.numeroInicial||_n>_t.numeroFinal){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='El No. de recibo debe pertenecer al talonario seleccionado'+(_t?(' ('+_t.numeroInicial+'–'+_t.numeroFinal+')'):'');return;}
+    if(recibosUsados().has(_n)){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='Ese recibo ('+_n+') ya fue usado. Elegí el siguiente libre.';return;}
+  }
   const inputs=Array.from(document.querySelectorAll('.pg-monto-input')).filter(i=>Number(i.value)>0);
   if(!inputs.length){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='Asigná al menos un monto a una factura';return;}
   // Validar que ningún monto supere el saldo de su factura
