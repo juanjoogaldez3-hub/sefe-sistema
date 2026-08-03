@@ -7224,6 +7224,8 @@ async function exportarExcel(){
   if(repLastData.length){const _keys=Object.keys(repLastData[0]);ws['!cols']=_keys.map(k=>{let w=String(k).length;repLastData.forEach(r=>{const v=r[k];const l=(v==null?'':String(v)).length;if(l>w)w=l;});return {wch:Math.min(Math.max(w+2,9),60)};});}
   // Formato moneda (Q) en las columnas de importe del estado de cuenta.
   if(repType==='estcta'&&repLastData.length){const _k=Object.keys(repLastData[0]);const _cur=['Corriente','30 Días','60 Días','90 Días','+90 Días'];repLastData.forEach((r,i)=>{_k.forEach((kk,ci)=>{if(_cur.indexOf(kk)>=0&&typeof r[kk]==='number'){const ref=XLSX.utils.encode_cell({c:ci,r:6+i});if(ws[ref])ws[ref].z='"Q"#,##0.00';}});});}
+  // Formato moneda (Q) en columnas de importe del resto de reportes (por nombre; excluye % y cantidades).
+  if(repType!=='estcta'&&repLastData.length){const _k=Object.keys(repLastData[0]);const _inc=/precio|costo|venta|valor|saldo|monto|margen\s*q|\biva\b|neto|entrada|salida|abono|ganancia|compra|d[eé]bito|cr[eé]dito|pendiente|total|corriente/i;const _mes=/^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/i;const _exc=/%|porcentaje/i;const _money=_k.filter(k=>!_exc.test(k)&&(_inc.test(k)||_mes.test(k)||/^Δ/.test(k)));repLastData.forEach((r,i)=>{_k.forEach((kk,ci)=>{if(_money.indexOf(kk)>=0&&typeof r[kk]==='number'){const ref=XLSX.utils.encode_cell({c:ci,r:6+i});if(ws[ref])ws[ref].z='"Q"#,##0.00';}});});}
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,String(TIPO_NOMBRES[repType]||'Reporte').replace(/[\\\/?*\[\]:]/g,' ').slice(0,31));
   XLSX.writeFile(wb,`SEFE_${repType}_${fechaHoyGT()}.xlsx`);
   toast('✓ Excel descargado','SEFE_'+repType+'_'+fechaHoyGT()+'.xlsx');
