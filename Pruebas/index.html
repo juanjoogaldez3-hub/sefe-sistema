@@ -7202,6 +7202,8 @@ async function exportarExcel(){
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
   // Estado de cuenta: nombres de cliente y "TOTALES CLIENTE" en negrita (si la librería soporta estilos).
   if(_styled&&repType==='estcta'){repLastData.forEach((row,i)=>{const doc=(row&&row.Documento)||'';if(doc&&!/^FA /.test(doc)){const ref='A'+(7+i);if(ws[ref])ws[ref].s={font:{bold:true}};}});}
+  // Ancho de columnas automático según el contenido (para que no salgan cortadas).
+  if(repLastData.length){const _keys=Object.keys(repLastData[0]);ws['!cols']=_keys.map(k=>{let w=String(k).length;repLastData.forEach(r=>{const v=r[k];const l=(v==null?'':String(v)).length;if(l>w)w=l;});return {wch:Math.min(Math.max(w+2,9),60)};});}
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,String(TIPO_NOMBRES[repType]||'Reporte').replace(/[\\\/?*\[\]:]/g,' ').slice(0,31));
   XLSX.writeFile(wb,`SEFE_${repType}_${fechaHoyGT()}.xlsx`);
   toast('✓ Excel descargado','SEFE_'+repType+'_'+fechaHoyGT()+'.xlsx');
