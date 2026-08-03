@@ -781,6 +781,7 @@
           <button class="ct-tab" data-r="banco">Movimientos de banco</button>
           <button class="ct-tab" data-r="recibos">Recibos</button>
           <button class="ct-tab" data-r="pagos">Pagos por cliente</button>
+          <button class="ct-tab" data-r="retenciones">Retenciones IVA/ISR</button>
         </div>
         <div id="rep-filters" style="margin-bottom:16px"></div>
         <div id="rep-body"></div>
@@ -5677,6 +5678,7 @@ const MODULOS_PERMISOS=[
   {key:'rep_estcta',lbl:'Estado de cuenta general',grp:'Reportes · Clientes y cobros'},
   {key:'rep_recibos',lbl:'Recibos',grp:'Reportes · Clientes y cobros'},
   {key:'rep_pagos',lbl:'Pagos por cliente',grp:'Reportes · Clientes y cobros'},
+  {key:'rep_retenciones',lbl:'Retenciones IVA/ISR',grp:'Reportes · Clientes y cobros'},
   {key:'rep_cardex',lbl:'Cardex de inventario',grp:'Reportes · Inventario'},
   {key:'rep_invactual',lbl:'Inventario actual',grp:'Reportes · Inventario'},
   {key:'rep_invcosto',lbl:'Inventario valorizado',grp:'Reportes · Inventario'},
@@ -5687,7 +5689,7 @@ const MODULOS_PERMISOS=[
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','comision','dircli','factem','cardex','invactual','invcosto','canalvend','cprov','cprod','cxc','estcta','banco','recibos','pagos'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','comision','dircli','factem','cardex','invactual','invcosto','canalvend','cprov','cprod','cxc','estcta','banco','recibos','pagos','retenciones'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
@@ -6257,6 +6259,10 @@ function renderRepFilters(){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-vend-cc','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}${sel('rf-cli-cc','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
+  }
+  else if(repType==='retenciones'){
+    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    html=`<div class="rep-filter-bar">${sel('rf-cli-ret','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
   }
   else if(repType==='dircli'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
@@ -7398,6 +7404,35 @@ function renderReportes(){
       ${filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:15px;font-weight:700;border-top:1.5px solid var(--line-strong)">Valor total del inventario: ${money(granTotal)}</div>`:''}
       ${esHoy?'':'<div style="font-size:11px;color:var(--muted-2);padding:8px 4px 0">Existencias reconstruidas del historial; el costo usado es el costo actual del producto.</div>'}</div>`;
   }
+  else if(repType==='retenciones'){
+    // RETENCIONES IVA/ISR — abonos con método 'Retención ...' en el período (por fecha del abono).
+    const tipoDe=m=>{const s=String(m||'');return /ISR/i.test(s)?'ISR':(/IVA/i.test(s)?'IVA':'—');};
+    const filas=[];
+    documentos.forEach(d=>{
+      if(d.tipoDoc!=='cambiaria')return;
+      if(repFiltros.cliente&&String(d.clienteId)!==repFiltros.cliente)return;
+      (d.abonos||[]).forEach(a=>{
+        if(a.anulado||!/^Retenci/i.test(String(a.metodo||'')))return;
+        if(!enRango(a.fecha,r))return;
+        filas.push({fecha:a.fecha,cliente:d.clienteComercial||d.clienteNombre,factura:(d.serie?d.serie+'-'+d.numeroDte:('#'+d.id)),tipo:tipoDe(a.metodo),constancia:(a.referencia||'').replace(/^Constancia\s*/i,''),monto:Number(a.monto)||0});
+      });
+    });
+    filas.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+    const totIVA=filas.filter(x=>x.tipo==='IVA').reduce((s,x)=>s+x.monto,0);
+    const totISR=filas.filter(x=>x.tipo==='ISR').reduce((s,x)=>s+x.monto,0);
+    const tot=totIVA+totISR;
+    exportData=filas.map(x=>({Fecha:fdate(x.fecha),Cliente:x.cliente,Factura:x.factura,Tipo:x.tipo,'No. Constancia':x.constancia,'Monto retenido':x.monto}));
+    html+=`<div class="kpis stagger">${kpiHTML([
+      {ic:'i-blue',svg:'<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/>',lbl:'Retención IVA',val:money(totIVA),sub:filas.filter(x=>x.tipo==='IVA').length+' constancia(s)'},
+      {ic:'i-lime',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>',lbl:'Retención ISR',val:money(totISR),sub:filas.filter(x=>x.tipo==='ISR').length+' constancia(s)'},
+      {ic:'i-green',svg:'<path d="M20 6 9 17l-5-5"/>',lbl:'Total retenido',val:money(tot),sub:filas.length+' retención(es)'}
+    ])}</div>
+    <div class="panel"><div class="panel-head"><h3>Retenciones IVA / ISR</h3><span style="font-size:12px;color:var(--muted)">${periodoLabel} · ${filas.length} retención(es)</span></div>
+      <table style="font-size:12.5px"><thead><tr><th>Fecha</th><th>Cliente</th><th>Factura</th><th>Tipo</th><th>No. Constancia</th><th class="num">Monto retenido</th></tr></thead><tbody>
+      ${filas.length?filas.map(x=>`<tr><td style="color:var(--muted)">${fdate(x.fecha)}</td><td style="font-weight:600">${x.cliente}</td><td style="color:var(--muted)">${x.factura}</td><td><span class="badge ${x.tipo==='IVA'?'b-info':'b-warn'}">${x.tipo}</span></td><td>${x.constancia||'—'}</td><td class="num" style="font-weight:600">${money(x.monto)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin retenciones en el período</td></tr>'}
+      </tbody></table>
+      ${filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:14px;font-weight:700;border-top:1.5px solid var(--line-strong)">Total retenido: ${money(tot)}</div>`:''}</div>`;
+  }
   repLastData=exportData;
   $('#rep-body').innerHTML=html;
   // Si es el reporte cliente/producto, aplicar el estado de colapso guardado
@@ -7413,7 +7448,7 @@ async function exportarExcel(){
   let XLSX,_styled=false;
   try{const _m=await import('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/+esm');XLSX=_m.default||_m;if(XLSX&&XLSX.utils)_styled=true;else throw 0;}
   catch(_e){XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const _esInv=(repType==='invactual'||repType==='invcosto');
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
@@ -7478,7 +7513,7 @@ function _abrirPDF(html){
 }
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia','Cantidad','Costo unitario','Costo total',
