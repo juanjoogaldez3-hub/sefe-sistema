@@ -2359,7 +2359,7 @@ async function facturarPedido(id,dias){
   if(typeof FEL_BACKEND_URL==='undefined' || FEL_BACKEND_URL.includes('TU-BACKEND')){
     const uuid='SIM-'+Math.random().toString(36).slice(2,10).toUpperCase();
     Object.assign(f,{tipoDoc:'cambiaria',estado:'certificada',autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+f.id),
-      diasCredito:dias,vencimiento:new Date(Date.now()+dias*86400000).toISOString(),abonos:[],estadoPago:'pendiente',fechaCertificacion:new Date().toISOString()});
+      diasCredito:dias,vencimiento:new Date(Date.now()+dias*86400000).toISOString(),abonos:[],estadoPago:'pendiente',creada:new Date().toISOString(),fechaCertificacion:new Date().toISOString()});
     closeMod();renderDocs();
     toast('✓ Factura SIMULADA','Configurá FEL_BACKEND_URL para facturar de verdad');
     logAudit('Factura emitida (simulada)',f.serie+'-'+f.numeroDte+' · '+(f.clienteComercial||f.clienteNombre));
@@ -2409,7 +2409,7 @@ async function facturarPedido(id,dias){
         autorizacion:data.uuid, serie:data.serie, numeroDte:data.numeroDTE,
         fechaCertificacion:data.fechaCert, pdfBase64:data.pdfBase64, xmlBase64:data.xmlBase64,
         diasCredito:dias, vencimiento:new Date(Date.now()+dias*86400000).toISOString(),
-        abonos:[], estadoPago:'pendiente'});
+        abonos:[], estadoPago:'pendiente', creada:new Date().toISOString()});
       closeMod();renderDocs();
       toast('✓ Factura Cambiaria CERTIFICADA','Autorización SAT: '+data.uuid);
       logAudit('Factura emitida (FEL real)',f.serie+'-'+f.numeroDte+' · '+(f.clienteComercial||f.clienteNombre)+' · '+money(f.totales.total));
@@ -2496,7 +2496,7 @@ async function facturarPedidoExento(id,dias,escenario){
     const uuid='SIM-'+Math.random().toString(36).slice(2,10).toUpperCase();
     Object.assign(f,{tipoDoc:'cambiaria',estado:'certificada',autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+f.id),
       diasCredito:dias,vencimiento:new Date(Date.now()+dias*86400000).toISOString(),abonos:[],estadoPago:'pendiente',
-      exenta:true,escenarioExenta:escenario,items:itemsEx,totales:{...f.totales,total:totalEx,baseSinIva:totalEx,iva:0},fechaCertificacion:new Date().toISOString()});
+      exenta:true,escenarioExenta:escenario,items:itemsEx,totales:{...f.totales,total:totalEx,baseSinIva:totalEx,iva:0},creada:new Date().toISOString(),fechaCertificacion:new Date().toISOString()});
     closeMod();renderDocs();
     toast('✓ Factura Exenta SIMULADA','Configurá el backend para emitir de verdad');
     if(typeof guardarDocumento==='function')guardarDocumento(f);
@@ -2532,7 +2532,7 @@ async function facturarPedidoExento(id,dias,escenario){
         fechaCertificacion:data.fechaCert, pdfBase64:data.pdfBase64, xmlBase64:data.xmlBase64,
         diasCredito:dias, vencimiento:new Date(Date.now()+dias*86400000).toISOString(),
         abonos:[], estadoPago:'pendiente',
-        exenta:true, escenarioExenta:escenario, items:itemsEx, totales:{...f.totales,total:totalEx,baseSinIva:totalEx,iva:0}});
+        exenta:true, escenarioExenta:escenario, items:itemsEx, totales:{...f.totales,total:totalEx,baseSinIva:totalEx,iva:0}, creada:new Date().toISOString()});
       closeMod();renderDocs();
       toast('✓ Factura Exenta CERTIFICADA','Autorización SAT: '+data.uuid);
       logAudit('Factura Exenta emitida (FEL real)',f.serie+'-'+f.numeroDte+' · Esc.'+escenario+' · '+money(f.totales.total));
