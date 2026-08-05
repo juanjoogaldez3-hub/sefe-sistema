@@ -2570,7 +2570,7 @@ window.generarNota=generarNota;
 function cancelarPedido(id){
   const f=documentos.find(d=>d.id===id);
   if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});f.inventarioRebajado=false;}
-  f.estado='anulada';closeMod();renderDocs();
+  f.estado='anulada';f.anuladoFecha=new Date().toISOString();f.anuladoPor=currentUser;closeMod();renderDocs();
   toast('✓ Pedido cancelado','Inventario reintegrado');
   logAudit('Pedido cancelado',refPed(f)+' · '+(f.clienteComercial||f.clienteNombre));
   if(typeof guardarDocumento==='function')guardarDocumento(f);
@@ -2663,7 +2663,7 @@ async function anularFacturaReal(id,motivo){
 window.anularFacturaReal=anularFacturaReal;
 
 window.anular=id=>{const f=documentos.find(d=>d.id===id);if(f.inventarioRebajado){f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});f.inventarioRebajado=false;}
-  f.estado='anulada';closeMod();renderDocs();toast('✓ Anulado','Inventario reingresado');logAudit('Documento anulado',(f.serie?f.serie+'-'+f.numeroDte:refPed(f)));if(typeof guardarDocumento==='function')guardarDocumento(f);};
+  f.estado='anulada';f.anuladoFecha=new Date().toISOString();f.anuladoPor=currentUser;closeMod();renderDocs();toast('✓ Anulado','Inventario reingresado');logAudit('Documento anulado',(f.serie?f.serie+'-'+f.numeroDte:refPed(f)));if(typeof guardarDocumento==='function')guardarDocumento(f);};
 window.editarPedido=id=>{const f=documentos.find(d=>d.id===id);if(f.tipoDoc!=='pedido'||f.estado!=='abierto')return;
   editId=id;editOldMap={};f.items.forEach(it=>editOldMap[it.id]={q:it.cantidad,modo:it.modoVenta});
   cart=f.items.map(it=>({...it}));
