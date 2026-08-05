@@ -4834,6 +4834,21 @@ function polizaChequePDF(mov,beneficiario){
   const numChq=(mov.referencia||'').toString().trim();
   const fechaTxt=mov.fecha?fdate(mov.fecha):'—';
   const montoNum='Q '+Number(mov.monto).toLocaleString('es-GT',{minimumFractionDigits:2});
+  const numAut=(mov.referencia||'').toString().trim();
+  // Beneficiario: para pagos a proveedor usar la razón social del NIT
+  let payee=benef, provNit='';
+  if(mov.origen==='pago_proveedor'){
+    const _cmp=compras.find(x=>x.id===mov.origenId);
+    const _prov=_cmp?proveedores.find(p=>p.id===_cmp.proveedorId):null;
+    if(_prov){ payee=_prov.razonSocial||_prov.nombre||benef; provNit=_prov.nit||''; }
+  }
+  // Concepto del egreso: quitar el prefijo "Pago a <proveedor> ·" (redundante con el beneficiario)
+  let conceptoEgreso=(mov.concepto||'').trim();
+  if(mov.origen==='pago_proveedor'){
+    const _i=conceptoEgreso.indexOf('·');
+    conceptoEgreso=(_i>=0?conceptoEgreso.slice(_i+1):'').trim();
+  }
+  if(!conceptoEgreso)conceptoEgreso='—';
   const sec=t=>`<div style="font-size:10px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.7px;margin:11px 0 4px;display:flex;align-items:center;gap:8px"><span>${t}</span><span style="flex:1;height:1px;background:#D6DCC9"></span></div>`;
   const cajaFirma=(rol)=>`<td style="width:33.3%;padding:0 8px;text-align:center;vertical-align:bottom">
       <div style="border-top:1px solid #555;margin-top:16px;padding-top:5px;font-size:10px;color:#555">${rol}</div></td>`;
@@ -4842,7 +4857,6 @@ function polizaChequePDF(mov,beneficiario){
       <div style="flex:1;min-width:230px">
         <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Fecha</div>
         <div style="font-size:14px;font-weight:700;margin-top:2px;color:#173916">Guatemala, ${fechaTxt}</div>
-        <div style="font-size:11.5px;color:#666B5C;margin-top:3px">No. de póliza: <b>${numPol}</b></div>
       </div>
       <div style="text-align:right;min-width:200px">
         <div style="font-size:10px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.8px">Monto</div>
@@ -4853,7 +4867,7 @@ function polizaChequePDF(mov,beneficiario){
     <div style="margin-top:10px;border:1.5px solid #173916;border-radius:8px;overflow:hidden">
       <div style="padding:7px 14px;border-bottom:1px solid #D6DCC9">
         <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Páguese a la orden de</div>
-        <div style="font-size:15px;font-weight:700;color:#173916;margin-top:1px">${benef}</div>
+        <div style="font-size:15px;font-weight:700;color:#173916;margin-top:1px">${payee}</div>${provNit?`<div style="font-size:10px;color:#909584;margin-top:1px">NIT: ${provNit}</div>`:''}
       </div>
       <div style="padding:7px 14px">
         <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">La cantidad de</div>
@@ -4864,15 +4878,13 @@ function polizaChequePDF(mov,beneficiario){
     <div style="display:flex;gap:22px;align-items:flex-start">
       <div style="flex:1;min-width:0">
         ${sec('Concepto del egreso')}
-        <div style="font-size:12px;color:#333;padding:2px 2px 4px;min-height:22px">${mov.concepto||'—'}</div>
+        <div style="font-size:12px;color:#333;padding:2px 2px 4px;min-height:22px">${conceptoEgreso}</div>
         <div style="font-size:11px;color:#909584;margin-top:2px">Categoría: ${CAT_MOV_LBL[mov.categoria]||mov.categoria||'Otro'}</div>
       </div>
       <div style="flex:1;min-width:0">
         ${sec('Cuenta de banco / Forma de pago')}
         <div style="font-size:13.5px;font-weight:700;color:#173916">${c.numero?c.numero+' / ':''}${c.banco||c.nombre||'—'}</div>
         ${c.nombre?`<div style="font-size:12px;color:#666B5C;margin-top:1px">${c.nombre}</div>`:''}
-        <div style="font-size:11px;color:#666B5C;margin-top:5px">No. cheque / autorización / transferencia:</div>
-        <div style="font-size:13.5px;font-weight:700;color:#173916;margin-top:1px">${mov.referencia||'________'}</div>
       </div>
     </div>
 
@@ -4880,9 +4892,10 @@ function polizaChequePDF(mov,beneficiario){
       ${cajaFirma('Elaborado por')}
       ${cajaFirma('Autorizado por')}
       ${cajaFirma('Recibí conforme')}
-    </tr></table>`;
+    </tr></table>
+    <div style="text-align:right;margin-top:12px;font-size:11.5px;color:#173916;font-weight:700">No. de autorización: ${numAut||'________'}</div>`;
   // Carta vertical; la póliza va compacta en la mitad de arriba (horizontal) para cortar la hoja al medio.
-  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:(numChq?('Cheque/Aut. No. '+numChq):numPol)+' · '+(c.nombre||''),orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
+  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:[numChq?('Cheque/Aut. No. '+numChq):'',(c.nombre||'')].filter(Boolean).join(' · '),orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
 }
 window.polizaChequePDF=polizaChequePDF;
 window.polizaChequeUI=function(id){const m=movimientosBanco.find(x=>x.id===id);if(m)polizaChequePDF(m);};
