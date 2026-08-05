@@ -4893,7 +4893,7 @@ function polizaChequePDF(mov,beneficiario){
       ${cajaFirma('Autorizado por')}
       ${cajaFirma('Recibí conforme')}
     </tr></table>
-    <div style="text-align:right;margin-top:12px;font-size:11.5px;color:#173916;font-weight:700">No. de autorización: ${numAut||'________'}</div>`;
+    <div style="text-align:right;margin-top:12px;font-size:19px;color:#173916;font-weight:800;letter-spacing:.3px">${numAut||'________'}</div>`;
   // Carta vertical; la póliza va compacta en la mitad de arriba (horizontal) para cortar la hoja al medio.
   _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:[numChq?('Cheque/Aut. No. '+numChq):'',(c.nombre||'')].filter(Boolean).join(' · '),orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
 }
