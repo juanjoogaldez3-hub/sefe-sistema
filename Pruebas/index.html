@@ -4968,7 +4968,7 @@ function initCompra(){
   crearAutocomplete('co-add',
     (q)=>{
       const ql=q.toLowerCase();
-      return productos.filter(p=>
+      return productos.filter(p=>p.activo!==false).filter(p=>
         (p.skuProveedor||'').toLowerCase().includes(ql)||
         (p.codigo||'').toLowerCase().includes(ql)||
         (p.nombreProveedor||'').toLowerCase().includes(ql)||
