@@ -2217,7 +2217,7 @@ function rowDoc(withActions){
       <td style="font-weight:600">${noCol}</td>
       <td><span class="pill ${cls}">${lblFinal}</span>${origen}</td>
       <td>${f.clienteComercial||f.clienteNombre}</td>
-      ${withActions?`<td style="color:var(--muted)">${new Date(f.creada).toLocaleDateString('es-GT')}</td>`:''}
+      ${withActions?`<td style="color:var(--muted)">${new Date(ultimaActividad(f)).toLocaleDateString('es-GT')}</td>`:''}
       <td class="num" style="font-weight:600">${money(f.totales.total)}</td>
       <td><span class="badge ${ec}">${en}</span></td>
       ${withActions?`<td><div class="acts"><button class="acts-btn" onclick="toggleDrop('${dropId}',event)">Acciones<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><div class="acts-drop" id="${dropId}">${items.join('')}</div></div></td>`:''}
