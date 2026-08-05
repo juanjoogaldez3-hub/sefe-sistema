@@ -2225,7 +2225,7 @@ function rowDoc(withActions){
       <td style="font-weight:600">${noCol}</td>
       <td><span class="pill ${cls}">${lblFinal}</span>${origen}</td>
       <td>${f.clienteComercial||f.clienteNombre}</td>
-      ${withActions?`<td style="color:var(--muted)">${new Date(ultimaActividad(f)).toLocaleDateString('es-GT')}</td>`:''}
+      ${withActions?`<td style="color:var(--muted)">${new Date(fechaDoc(f)).toLocaleDateString('es-GT')}</td>`:''}
       <td class="num" style="font-weight:600">${money(f.totales.total)}</td>
       <td><span class="badge ${ec}">${en}</span></td>
       ${withActions?`<td><div class="acts"><button class="acts-btn" onclick="toggleDrop('${dropId}',event)">Acciones<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><div class="acts-drop" id="${dropId}">${items.join('')}</div></div></td>`:''}
@@ -2264,12 +2264,20 @@ function ultimaActividad(d){
   (d.abonos||[]).forEach(a=>upd(a.registradoEl||a.fecha));
   return t;
 }
+// Fecha a MOSTRAR del documento: último cambio del propio documento (facturación/anulación/devolución),
+// SIN contar los abonos: un cobro no cambia la fecha de la factura.
+function fechaDoc(d){
+  let t=new Date(d.creada||0).getTime()||0;
+  const upd=x=>{ if(x){ const v=new Date(x).getTime(); if(v>t)t=v; } };
+  upd(d.fechaCertificacion); upd(d.anuladoFecha); upd(d.devueltoFecha);
+  return t;
+}
 function renderDocs(){
   let filtrados=documentos.filter(docsEnRango);
   if(esVentas()&&miVendedorId())filtrados=filtrados.filter(d=>d.vendedorId===miVendedorId());
   $('#docs-empty').style.display=filtrados.length?'none':'block';
   // Orden por ÚLTIMA ACTIVIDAD: lo recién facturado/cobrado/creado sube arriba (id como desempate).
-  renderPaginado('t-docs',filtrados.slice().sort((a,b)=>(ultimaActividad(b)-ultimaActividad(a))||((b.id||0)-(a.id||0))).map(rowDoc(true)),'Sin documentos');
+  renderPaginado('t-docs',filtrados.slice().sort((a,b)=>(fechaDoc(b)-fechaDoc(a))||((b.id||0)-(a.id||0))).map(rowDoc(true)),'Sin documentos');
   enhanceTable('t-docs');
 }
 $('#docs-tipo').onchange=renderDocs;
