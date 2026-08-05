@@ -4877,7 +4877,7 @@ function polizaChequePDF(mov,beneficiario){
     </tr></table>
     <div style="text-align:right;margin-top:12px;font-size:19px;color:#173916;font-weight:800;letter-spacing:.3px">${numAut||'________'}</div>`;
   // Carta vertical; la póliza va compacta en la mitad de arriba (horizontal) para cortar la hoja al medio.
-  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',subtitulo:[numChq?('Cheque/Aut. No. '+numChq):'',(c.nombre||'')].filter(Boolean).join(' · '),orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
+  _abrirPDF(_pdfShell({titulo:'PÓLIZA DE CHEQUE',sinTitulo:true,orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
 }
 window.polizaChequePDF=polizaChequePDF;
 window.polizaChequeUI=function(id){const m=movimientosBanco.find(x=>x.id===id);if(m)polizaChequePDF(m);};
@@ -7586,11 +7586,11 @@ function _pdfShell(o){
       <div>
         <img src="${SEFE_LOGO}" alt="SEFE, S.A." style="width:${cmp?108:150}px;height:auto;display:block">
       </div>
-      <div style="text-align:right">
+      ${o.sinTitulo?'':`<div style="text-align:right">
         <div style="display:inline-block;background:#173916;color:#fff;padding:${cmp?'5px 14px':'8px 18px'};border-radius:6px;font-weight:700;font-size:${cmp?13:14}px;letter-spacing:.5px">${o.titulo}</div>
         ${o.subtitulo?`<div style="font-size:12.5px;color:#444;margin-top:${cmp?4:8}px;font-weight:600">${o.subtitulo}</div>`:''}
         <div style="font-size:11px;color:#666B5C;margin-top:${cmp?3:6}px">Emitido el ${fecha} · ${hora}${usuario?(cmp?' · Por: '+usuario:'<br>Por: '+usuario):''}</div>
-      </div>
+      </div>`}
     </div>
     <div style="height:3px;background:#173916;margin-top:${cmp?8:14}px"></div>
     <div style="height:2px;background:#A8C038;margin-top:2px;margin-bottom:${cmp?9:16}px"></div>
