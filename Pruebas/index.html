@@ -7727,9 +7727,11 @@ function openCli(id){
     const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:normalizarNit($('#c-nit').value)||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),tiempoCredito,vendedorId,subVendedorNombre,sedesDe,nitsSecundarios:leerNitsSecundarios(),
       contactoPagos:{nombre:$('#cp-nom').value,telefono:$('#cp-tel').value,correo:$('#cp-mail').value},
       contactoCompras:{nombre:$('#cc-nom').value,telefono:$('#cc-tel').value,correo:$('#cc-mail').value}};
+    const creditoAnterior=c?(c.tiempoCredito||0):null;
     if(c){Object.assign(c,datos);logAudit('Cliente editado',nom+' · NIT '+datos.nit);toast('✓ Cliente actualizado');if(typeof guardarCliente==='function')guardarCliente(c);}
     else{const nuevo={id:cliN++,...datos,fechaAlta:fechaHoyGT(),precios:{},_nuevo:true};clientes.push(nuevo);logAudit('Cliente creado',nom+' · NIT '+datos.nit);toast('✓ Cliente agregado');if(typeof guardarCliente==='function')guardarCliente(nuevo);}
-    closeMod();initForm();renderCli();if(cliActual&&$('#v-clientedet').classList.contains('active'))renderCliDet();});
+    closeMod();initForm();renderCli();if(cliActual&&$('#v-clientedet').classList.contains('active'))renderCliDet();
+    if(c&&creditoAnterior!==tiempoCredito)ofrecerRecalcVencimientos(c,tiempoCredito);});
   setTimeout(()=>{const s=$('#c-tc');if(s)s.onchange=()=>{$('#c-tc-custom-wrap').style.display=s.value==='custom'?'block':'none';};
     const cv=$('#c-vend'),sw=$('#c-subvend-wrap');
     const toggleSub=()=>{if(!sw)return;const vn=vendedores.find(v=>v.id===Number(cv.value));sw.style.display=esVendedorCanal(vn?.nombre)?'':'none';};
@@ -7737,6 +7739,33 @@ function openCli(id){
   },0);
 }
 window.openCli=openCli;
+// Facturas cambiarias del cliente con saldo pendiente (para recalcular vencimientos)
+function facturasPendientesCredito(cli){
+  return documentos.filter(d=>d.clienteId===cli.id && d.tipoDoc==='cambiaria' && d.estado!=='anulada' && d.creada && arInfo(d).saldo>0.01);
+}
+// Al cambiar el crédito de un cliente, ofrecer recalcular el vencimiento de sus facturas PENDIENTES
+function ofrecerRecalcVencimientos(cli,dias){
+  const pend=facturasPendientesCredito(cli);
+  if(!pend.length)return;
+  const txt=dias>0?('<b>'+dias+' días</b>'):'<b>contado (sin crédito)</b>';
+  const detalle=dias>0?('fecha de factura + '+dias+' días'):'sin vencimiento (contado)';
+  confirmar('¿Actualizar vencimientos?',
+    `Cambiaste el crédito de <b>${cli.nombre}</b> a ${txt}. Tiene <b>${pend.length}</b> factura(s) pendiente(s) de pago. ¿Recalcular su vencimiento como ${detalle}?<br><span style="color:var(--muted-2);font-size:11.5px">Solo afecta facturas con saldo; las ya pagadas no se tocan.</span>`,
+    'Sí, actualizar',
+    ()=>{
+      pend.forEach(f=>{
+        f.diasCredito=dias;
+        f.vencimiento=dias>0?new Date(new Date(f.creada).getTime()+dias*86400000).toISOString():null;
+        if(typeof guardarDocumento==='function')guardarDocumento(f);
+      });
+      logAudit('Vencimientos recalculados',cli.nombre+' · '+pend.length+' factura(s) · '+(dias>0?dias+' días':'contado'));
+      toast('✓ Vencimientos actualizados',pend.length+' factura(s) de '+cli.nombre);
+      if(typeof renderDocs==='function')renderDocs();
+      if(typeof renderCobros==='function')renderCobros();
+      if(cliActual&&$('#v-clientedet')&&$('#v-clientedet').classList.contains('active'))renderCliDet();
+    });
+}
+window.ofrecerRecalcVencimientos=ofrecerRecalcVencimientos;
 // Agregar una fila vacía de NIT secundario en el formulario del cliente
 function agregarNitSecRow(){
   const cont=document.getElementById('nits-sec-lista');
