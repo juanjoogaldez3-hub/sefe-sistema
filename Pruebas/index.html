@@ -7441,7 +7441,8 @@ function renderReportes(){
         filas.push({facturaId:d.id,cliente:d.clienteComercial||d.clienteNombre,nit:d.clienteNit||'',factura:d.serie+'-'+d.numeroDte,noRecibo:a.noRecibo||'—',fecha:a.fecha,monto:a.monto,metodo:a.metodo||'—',referencia:a.referencia||'',registradoPor:a.registradoPor||'—'});
       });
     });
-    filas.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+    const _nrec=x=>{const d=String(x.noRecibo||'').replace(/[^0-9]/g,'');return d?parseInt(d,10):Infinity;};
+    filas.sort((a,b)=>{const na=_nrec(a),nb=_nrec(b);return na!==nb?na-nb:(new Date(a.fecha)-new Date(b.fecha));});
     const totalRec=filas.reduce((s,x)=>s+x.monto,0);
     exportData=filas.map(x=>({'NombreComercial':x.cliente,'NIT':x.nit,'Recibo':x.noRecibo,'FechaRecibo':fdate(x.fecha),'Factura':x.factura,'ValorAbono':x.monto}));
     html+=`<div class="kpis stagger">${kpiHTML([
