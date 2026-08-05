@@ -368,6 +368,13 @@
   .comp-bars{display:flex;align-items:flex-end;gap:4px;height:160px;flex:1;min-width:0}
   .comp-col{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;height:100%;justify-content:flex-end}
   .comp-col .bar-wrap{display:flex;gap:3px;align-items:flex-end;width:100%;justify-content:center}
+  /* Buscador de productos (pedidos y compras) */
+  .prod-search{position:relative;display:inline-flex;align-items:center}
+  .prod-search>svg{position:absolute;left:13px;width:17px;height:17px;fill:none;stroke:var(--muted-2);stroke-width:2;pointer-events:none}
+  .prod-search>input{width:min(400px,44vw);max-width:none;padding:11px 15px 11px 40px;font-size:14px;border-radius:11px;border:1.5px solid var(--line-strong);transition:border-color .13s,box-shadow .13s}
+  .prod-search>input::placeholder{color:var(--muted-2)}
+  .prod-search>input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(47,82,51,.12);outline:none}
+  @media (max-width:720px){.prod-search>input{width:min(400px,72vw)}}
   @media print{
     body *{visibility:hidden}
     /* Sacar del flujo la app (alta) para que no deje hojas en blanco; el overlay del documento se conserva */
@@ -625,8 +632,8 @@
             <div class="panel">
               <div class="panel-head"><h3>Productos</h3>
                 <div style="display:flex;gap:8px;align-items:center">
-                  <input id="f-add" placeholder="Buscar por SKU o nombre…" autocomplete="off" style="max-width:260px;padding:7px 10px;font-size:12.5px">
-                  
+                  <div class="prod-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="f-add" placeholder="Buscar producto por SKU o nombre…" autocomplete="off"></div>
+
                   <button class="btn btn-primary btn-sm" onclick="addPedidoProducto()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
                   <button class="btn btn-ghost btn-sm" id="btn-guardar-precios" onclick="guardarPreciosAlCliente()" style="display:none" title="Guarda los precios de este pedido en la ficha del cliente"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Guardar precios al cliente</button>
                 </div>
@@ -849,8 +856,7 @@
             <div class="panel">
               <div class="panel-head"><h3>Productos a ordenar</h3>
                 <div style="display:flex;gap:8px;align-items:center">
-                  <input id="co-add" list="co-add-list" placeholder="Buscar por SKU o nombre…" autocomplete="off" style="max-width:260px;padding:7px 10px;font-size:12.5px">
-                  <datalist id="co-add-list"></datalist>
+                  <div class="prod-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="co-add" placeholder="Buscar producto por SKU o nombre…" autocomplete="off"></div>
                   <button class="btn btn-primary btn-sm" onclick="addCompraProducto()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
                 </div>
               </div>
@@ -1796,6 +1802,8 @@ const MAX_SUGERENCIAS=8;
 function crearAutocomplete(inputId, getItems, onSelect){
   const input=document.getElementById(inputId);
   if(!input)return;
+  if(input._acWired)return; // ya configurado: no volver a agregar listeners
+  input._acWired=true;
   // Quitar el datalist nativo si lo tenía
   input.removeAttribute('list');
   // Crear el contenedor del dropdown (una sola vez)
@@ -4956,13 +4964,32 @@ window.verCompra=verCompra;
 let compraCart=[];
 function initCompra(){
   $('#co-prov').innerHTML=proveedores.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
-  const list=$('#co-add-list');
-  if(list)list.innerHTML=productos.map(p=>{
-    const sku=p.skuProveedor?p.skuProveedor:p.codigo;
-    return `<option value="${sku} — ${p.nombreProveedor||p.nombre}"><option value="${p.codigo} — ${p.nombre}">`;
-  }).join('');
+  // Buscador con dropdown propio (nombres completos), igual que en pedidos
+  crearAutocomplete('co-add',
+    (q)=>{
+      const ql=q.toLowerCase();
+      return productos.filter(p=>
+        (p.skuProveedor||'').toLowerCase().includes(ql)||
+        (p.codigo||'').toLowerCase().includes(ql)||
+        (p.nombreProveedor||'').toLowerCase().includes(ql)||
+        (p.nombre||'').toLowerCase().includes(ql)
+      ).map(p=>{
+        const distinto=(p.nombreProveedor&&p.nombreProveedor!==p.nombre);
+        return {texto:`${p.skuProveedor||p.codigo} — ${p.nombreProveedor||p.nombre}`,
+                sub:distinto?`Interno: ${p.codigo} · ${p.nombre}`:(p.marca||''), valor:p.id};
+      });
+    },
+    (item)=>{ if(item){agregarCompraPorId(item.valor);$('#co-add').value='';} });
   $('#co-fecha').value=fechaHoyGT();
 }
+// Agrega un producto al carrito de compra por su id (usado por el autocomplete)
+function agregarCompraPorId(id){
+  const p=productos.find(x=>x.id===id);if(!p)return;
+  const ex=compraCart.find(c=>c.id===p.id);
+  if(ex)ex.cantidad++;else compraCart.push({id:p.id,codigo:p.codigo,skuProveedor:p.skuProveedor||p.codigo,nombre:p.nombre,nombreProveedor:p.nombreProveedor||p.nombre,costo:p.costo||0,cantidad:1});
+  renderCompraForm();
+}
+window.agregarCompraPorId=agregarCompraPorId;
 function addCompraProducto(){
   const inp=$('#co-add');const v=(inp.value||'').trim();if(!v)return;
   // Buscar también por SKU proveedor
