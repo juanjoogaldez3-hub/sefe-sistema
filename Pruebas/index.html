@@ -1582,8 +1582,8 @@ function renderPanel(){
     return Number(p.stock)||0;
   };
   const activos=productos.filter(p=>p.activo!==false);
-  const stockBajo=activos.filter(p=>{const s=stockEfectivo(p);return s<=umbralStock(p)&&s>0;});
-  const sinStock=activos.filter(p=>stockEfectivo(p)===0);
+  const stockBajo=activos.filter(p=>!esServicio(p)&&(()=>{const s=stockEfectivo(p);return s<=umbralStock(p)&&s>0;})());
+  const sinStock=activos.filter(p=>!esServicio(p)&&stockEfectivo(p)===0);
   const ocPend=compras.filter(c=>!c.anulado&&c.estadoRecepcion!=='recibida');
   const espPend=compras.filter(c=>c.especial&&!c.oficializada&&!c.anulado);
   const porVencer=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&!arInfo(d).vencido&&new Date(d.vencimiento)<=semana&&arInfo(d).saldo>0);
@@ -2060,6 +2060,7 @@ window.agregarProductoPorId=agregarProductoPorId;
 // todo lo demás mueve stock.
 function aplicarStock(p,delta,modoVenta){
   if(!p||!delta)return;
+  if(esServicio(p))return; // los servicios no manejan inventario
   if(p.tipoEmpaque==='caja_unidad'&&modoVenta==='caja')p.stockCajas=(Number(p.stockCajas)||0)+delta;
   else p.stock=(Number(p.stock)||0)+delta;
   if(typeof guardarProducto==='function')guardarProducto(p);
@@ -2101,6 +2102,7 @@ function render(){
   // Disponibilidad según el modo de venta de la línea
   const avail=it=>{
     const p=productos.find(x=>x.id===it.id);if(!p)return 0;
+    if(esServicio(p))return Infinity; // servicio: disponibilidad ilimitada
     const _prev=editId?editOldMap[it.id]:null;
     const oldQ=(_prev&&_prev.modo===it.modoVenta)?(_prev.q||0):0;
     if(it.modoVenta==='caja'){
@@ -2117,7 +2119,7 @@ function render(){
       </select>`:'';
     const unidadTxt=it.modoVenta==='caja'?'caja':(it.unidad||'und');
     return `<div class="li">
-    <div><div class="nm">${it.nombre}</div><div class="sk">${it.codigo} · <span class="${ex?'stk low':''}">disp. ${a} ${unidadTxt}${a!==1?'s':''}</span>${selModo}</div></div>
+    <div><div class="nm">${it.nombre}</div><div class="sk">${it.codigo} · <span class="${ex?'stk low':''}">${a===Infinity?'servicio · sin inventario':`disp. ${a} ${unidadTxt}${a!==1?'s':''}`}</span>${selModo}</div></div>
     <input type="number" min="1" value="${it.cantidad}" style="${ex?'border-color:var(--danger)':''}" oninput="updLive(${i},'cantidad',this.value)" onblur="render()">
     <input type="number" min="0" step="0.01" value="${it.precio}" oninput="updLive(${i},'precio',this.value)" onblur="render()">
     <input type="number" min="0" step="0.01" value="${it.descuento}" oninput="updLive(${i},'descuento',this.value)" onblur="render()">
@@ -6044,6 +6046,8 @@ function umbralStock(p){
   if(p&&p.categoria){const c=categorias.find(x=>x.nombre===p.categoria);if(c&&Number(c.umbralStock)>0)return Number(c.umbralStock);}
   return UMBRAL_STOCK_DEF;
 }
+// Producto de SERVICIO (marca "Servicios"): no maneja inventario, se puede facturar en 0.
+function esServicio(p){ return !!(p && /^servicios?$/i.test(String(p.marca||'').trim())); }
 function existenciaTotal(p){
   if(!p)return 0;
   if(p.tipoEmpaque==='caja_unidad')return (Number(p.stock)||0)+(Number(p.stockCajas)||0)*(Number(p.unidadesPorCaja)||0);
@@ -6118,7 +6122,7 @@ function renderProd(){
   const provTxt=provs.length?provs.map(pv=>pv.nombre).join(', '):'<span style="color:var(--muted-2)">Sin asignar</span>';
   // Mostrar existencias según el tipo de empaque
   let stockCell;
-  const _bajo=existenciaTotal(p)<=umbralStock(p); // stock bajo según el umbral de la categoría
+  const _bajo=!esServicio(p)&&existenciaTotal(p)<=umbralStock(p); // stock bajo (los servicios no cuentan)
   if(p.tipoEmpaque==='caja_unidad'){
     stockCell=`<div style="display:flex;flex-direction:column;gap:2px;align-items:flex-end">
       <span class="stk ${_bajo?'low':''} num" style="font-size:11px">${p.stockCajas||0} caja${(p.stockCajas||0)!==1?'s':''}</span>
