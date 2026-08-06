@@ -7441,7 +7441,7 @@ function renderReportes(){
       porCli[k][tramo]+=inf.saldo; porCli[k].saldo+=inf.saldo;
       porCli[k].facts.push({num:d.numeroDte||d.serie||('#'+d.id),serie:d.serie||'',dte:d.numeroDte||'',emitida:d.creada,vence:d.vencimiento,dias,saldo:inf.saldo,vencido:inf.vencido,tramo,bv});
     });
-    const arr=Object.entries(porCli).sort((a,b)=>b[1].saldo-a[1].saldo);
+    const arr=Object.entries(porCli).sort((a,b)=>(a[0]||'').localeCompare(b[0]||'','es'));
     const T={b1:0,b2:0,b3:0,saldo:0};
     arr.forEach(([,o])=>{T.b1+=o.b1;T.b2+=o.b2;T.b3+=o.b3;T.saldo+=o.saldo;});
     // Datos para exportar (una fila por cliente)
