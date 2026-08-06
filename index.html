@@ -6585,6 +6585,54 @@ function enhanceRepTables(){
     enhanceTable(tb.id,{sort:false});
   });
 }
+// Agrega una fila de TOTALES al pie de cada tabla de reporte (suma columnas numéricas).
+// Salta tablas jerárquicas (con colspan) o que ya tienen totales, y columnas de %, precios unitarios o fechas.
+function agregarTotalesReportes(){
+  const cont=document.getElementById('rep-body'); if(!cont)return;
+  const parseNum=t=>{const n=parseFloat(String(t).replace(/[^0-9.\-]/g,''));return isNaN(n)?null:n;};
+  cont.querySelectorAll('table').forEach(tbl=>{
+    if(tbl.dataset.totales)return;
+    const thead=tbl.querySelector('thead'), tbody=tbl.querySelector('tbody');
+    if(!thead||!tbody)return;
+    const headRow=thead.querySelector('tr'); if(!headRow)return;
+    const heads=[...headRow.children].map(th=>(th.textContent||'').toLowerCase());
+    const nCols=heads.length;
+    const rows=[...tbody.querySelectorAll(':scope > tr')];
+    const tieneColspan=rows.some(r=>[...r.children].some(td=>Number(td.getAttribute('colspan')||1)>1));
+    const yaTotal=rows.some(r=>/^\s*(sub)?total(es)?\b/i.test((r.children[0]?.textContent||'').trim()));
+    if(tieneColspan||yaTotal)return;
+    const datos=rows.filter(r=>r.children.length===nCols);
+    if(datos.length<2)return;
+    const skip=c=>{const h=heads[c]||'';return h.includes('%')||h.includes('unitari')||h.includes('precio lista')||h.includes('fecha')||h.includes('día')||h.includes('dias');};
+    const sums=new Array(nCols).fill(null), esMoney=new Array(nCols).fill(false);
+    for(let c=1;c<nCols;c++){
+      if(skip(c))continue;
+      let ok=true, any=false, total=0, money_=false;
+      for(const r of datos){
+        const cell=r.children[c]; if(!cell){ok=false;break;}
+        const raw=(cell.textContent||'').trim();
+        if(!raw||raw==='—')continue;
+        if(!cell.classList.contains('num')){ok=false;break;}
+        if(raw.includes('%')){ok=false;break;}
+        if(/Q/i.test(raw))money_=true;
+        const n=parseNum(raw); if(n===null){ok=false;break;}
+        total+=n; any=true;
+      }
+      if(ok&&any){sums[c]=total;esMoney[c]=money_;}
+    }
+    if(!sums.some(s=>s!==null))return;
+    const tr=document.createElement('tr');
+    tr.style.cssText='font-weight:700;border-top:2px solid var(--line-strong);background:var(--surface-2)';
+    for(let c=0;c<nCols;c++){
+      const td=document.createElement('td');
+      if(c===0)td.textContent='TOTALES';
+      else if(sums[c]!==null){td.className='num';td.textContent=esMoney[c]?money(sums[c]):(Math.round(sums[c]*100)/100).toLocaleString('es-GT');}
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+    tbl.dataset.totales='1';
+  });
+}
 function renderReportes(){
   bindRep();renderRepFilters();
   const r=repRange();
@@ -7602,6 +7650,7 @@ function renderReportes(){
   }
   repLastData=exportData;
   $('#rep-body').innerHTML=html;
+  try{agregarTotalesReportes();}catch(e){console.error('totales',e);}
   // Si es el reporte cliente/producto, aplicar el estado de colapso guardado
   if(repType==='cliprod'||repType==='dircli'||repType==='climes')aplicarColapso();
   enhanceRepTables();
