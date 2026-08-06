@@ -619,6 +619,12 @@
                     <div style="font-size:11px;color:var(--muted);margin-top:5px">El vendedor sigue siendo Whaticket, pero se registra quién hizo la venta.</div>
                   </div>
                 </div>
+                <div id="f-nit-wrap" class="row" style="display:none;margin-bottom:13px">
+                  <div style="grid-column:1/-1">
+                    <label>Facturar a nombre de <span style="color:var(--muted);font-weight:400">(elegí el NIT del cliente)</span></label>
+                    <select id="f-nit-sel" style="width:100%"></select>
+                  </div>
+                </div>
                 <div id="f-saldo-alert" style="display:none;margin-bottom:13px"></div>
                 <div class="row">
                   <div><label>Orden de compra</label><input id="f-oc" placeholder="OC-2026-…"></div>
@@ -1906,6 +1912,29 @@ function setupAutocomplete(){
     (item)=>{ if(item){agregarProductoPorId(item.valor);$('#f-add').value='';} });
 }
 
+// Puebla el selector "Facturar a nombre de" del PEDIDO según los NITs secundarios del cliente.
+// nitSel (opcional) = NIT a preseleccionar (ej. al editar un pedido ya guardado).
+function poblarSelectorNitPedido(cli, nitSel){
+  const wrap=document.getElementById('f-nit-wrap'), sel=document.getElementById('f-nit-sel');
+  if(!wrap||!sel)return;
+  const nitsSec=cli?nitsSecNorm(cli):[];
+  if(!cli||!nitsSec.length){wrap.style.display='none';sel.innerHTML='';return;}
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const norm=x=>String(x||'').replace(/[-\s]/g,'').toUpperCase();
+  let idxSel='__principal__';
+  if(nitSel){const i=nitsSec.findIndex(n=>norm(n.nit)===norm(nitSel));if(i>=0)idxSel=String(i);}
+  const principalNombre=cli.razonSocial||cli.nombre;
+  sel.innerHTML=`<option value="__principal__"${idxSel==='__principal__'?' selected':''}>${esc(principalNombre)} · NIT ${esc(cli.nit||'CF')} (principal)</option>`+
+    nitsSec.map((n,i)=>`<option value="${i}"${idxSel===String(i)?' selected':''}>${esc(n.nombre||n.nit)} · NIT ${esc(n.nit)}</option>`).join('');
+  wrap.style.display='';
+}
+// Lee la selección de NIT del pedido -> {nit, nombre} (o nulos si es el principal / no aplica).
+function leerNitPedido(cli){
+  const s=document.getElementById('f-nit-sel'), w=document.getElementById('f-nit-wrap');
+  if(!s||!w||w.style.display==='none'||!s.value||s.value==='__principal__')return {nit:null,nombre:null};
+  const ns=(cli?nitsSecNorm(cli):[])[Number(s.value)]||null;
+  return ns?{nit:ns.nit,nombre:ns.nombre||ns.nit}:{nit:null,nombre:null};
+}
 // Aplica la selección de cliente (extraído del oninput original)
 function aplicarClienteSeleccionado(cliId){
   const cli=cliId?clientes.find(c=>c.id===cliId):null;
@@ -1915,8 +1944,8 @@ function aplicarClienteSeleccionado(cliId){
     if(box){box.style.display='block';box.innerHTML=`<div class="note n-danger" style="margin:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>Este cliente no está asignado a vos. Solo podés crear pedidos para tus clientes.</span></div>`;}
     return;
   }
-  if(cli){$('#f-cli').value=String(cli.id);actualizarVendedorInfo(cli);cart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)it.precio=precioCliente(cli,p);});render();}
-  else{$('#f-cli').value='';actualizarVendedorInfo(null);}
+  if(cli){$('#f-cli').value=String(cli.id);actualizarVendedorInfo(cli);poblarSelectorNitPedido(cli);cart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)it.precio=precioCliente(cli,p);});render();}
+  else{$('#f-cli').value='';actualizarVendedorInfo(null);poblarSelectorNitPedido(null);}
 }
 
 function initForm(){
@@ -2130,6 +2159,7 @@ $('#f-go').onclick=async()=>{
   if(esVentas()&&cli.vendedorId!==miVendedorId()){toast('Cliente no asignado','Solo podés crear pedidos para tus clientes',true);return;}
   const total=cart.reduce((s,it)=>s+(it.cantidad*it.precio-it.descuento),0);
   const totales={total,baseSinIva:total/1.12,iva:total-total/1.12};
+  const _nitPed=leerNitPedido(cli);
   if(editId){
     const f=documentos.find(d=>d.id===editId);
     const ids=new Set([...Object.keys(editOldMap).map(Number),...cart.map(it=>it.id)]);
@@ -2144,7 +2174,7 @@ $('#f-go').onclick=async()=>{
     });
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
     const subVendEd=esVendedorCanal(vend?.nombre)?(cli.subVendedorNombre||null):null;
-    Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,subVendedorNombre:subVendEd,items:cart.map(it=>({...it})),totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||''});
+    Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,subVendedorNombre:subVendEd,items:cart.map(it=>({...it})),totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre});
     toast('✓ Pedido actualizado',refPed(f)+' · inventario ajustado');
     logAudit('Pedido editado',refPed(f)+' · '+cli.nombre+' · '+money(totales.total));
     if(typeof guardarDocumento==='function')guardarDocumento(f);
@@ -2157,7 +2187,7 @@ $('#f-go').onclick=async()=>{
     // temporal nunca puede coincidir con otro documento (evita facturar el equivocado).
     const nuevoId=-Date.now();
     const doc={id:nuevoId,numero:corr,tipoDoc:'pedido',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend?.id,vendedorNombre:vend?.nombre,subVendedorNombre:subVend,
-      items:cart.map(it=>({...it})),totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',_nuevo:true};
+      items:cart.map(it=>({...it})),totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre,_nuevo:true};
     documentos.push(doc);corr++;
     logAudit('Pedido creado','PED-'+padn(doc.numero)+' · '+cli.nombre+' · '+money(totales.total));
     // Esperamos el id real de la base ANTES de dibujar la lista, para que los
@@ -2166,7 +2196,7 @@ $('#f-go').onclick=async()=>{
     if(doc.id<0)toast('⚠ Pedido guardado solo en pantalla','No se pudo confirmar con la base. Recargá y verificá antes de facturarlo.',true);
     else toast('✓ Pedido ingresado','PED-'+padn(doc.numero)+' · inventario rebajado. Facturalo o convertilo en Documentos.');
   }
-  cart=[];if($('#f-cli'))$('#f-cli').value='';if($('#f-cli-search'))$('#f-cli-search').value='';if(typeof actualizarVendedorInfo==='function')actualizarVendedorInfo(null);$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';limpiarBorrador();initForm();render();go('documentos');
+  cart=[];if($('#f-cli'))$('#f-cli').value='';if($('#f-cli-search'))$('#f-cli-search').value='';if(typeof actualizarVendedorInfo==='function')actualizarVendedorInfo(null);$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';if($('#f-nit-wrap'))$('#f-nit-wrap').style.display='none';limpiarBorrador();initForm();render();go('documentos');
 };
 
 function rowDoc(withActions){
@@ -2302,11 +2332,14 @@ function selectorNitHTML(f,cli){
   if(!nitsSec.length)return '';
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const nitPrincipalNombre=cli?(cli.razonSocial||cli.nombre):(f.clienteNombre||'');
+  const _norm=x=>String(x||'').replace(/[-\s]/g,'').toUpperCase();
+  let _idxSel='__principal__';
+  if(f.nitFacturado){const i=nitsSec.findIndex(n=>_norm(n.nit)===_norm(f.nitFacturado));if(i>=0)_idxSel=String(i);}
   return `<div style="margin-top:12px">
       <label style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px">Facturar a nombre de</label>
       <select id="fac-nit-sel" style="width:100%;margin-top:4px">
-        <option value="__principal__">${esc(nitPrincipalNombre)} · NIT ${esc(f.clienteNit||'CF')} (principal)</option>
-        ${nitsSec.map((n,i)=>`<option value="${i}">${esc(n.nombre||n.nit)} · NIT ${esc(n.nit)}</option>`).join('')}
+        <option value="__principal__"${_idxSel==='__principal__'?' selected':''}>${esc(nitPrincipalNombre)} · NIT ${esc(f.clienteNit||'CF')} (principal)</option>
+        ${nitsSec.map((n,i)=>`<option value="${i}"${_idxSel===String(i)?' selected':''}>${esc(n.nombre||n.nit)} · NIT ${esc(n.nit)}</option>`).join('')}
       </select>
       <div style="font-size:11px;color:var(--muted);margin-top:5px">La factura sale al NIT elegido, pero la venta queda registrada en ${esc(nitPrincipalNombre)}.</div>
     </div>`;
@@ -2668,11 +2701,11 @@ window.editarPedido=id=>{const f=documentos.find(d=>d.id===id);if(f.tipoDoc!=='p
   cart=f.items.map(it=>({...it}));
   initForm();
   const cli=clientes.find(c=>c.id===f.clienteId);
-  if(cli){$('#f-cli').value=String(cli.id);$('#f-cli-search').value=`${cli.nombre} · ${cli.nit}`;actualizarVendedorInfo(cli);}
+  if(cli){$('#f-cli').value=String(cli.id);$('#f-cli-search').value=`${cli.nombre} · ${cli.nit}`;actualizarVendedorInfo(cli);poblarSelectorNitPedido(cli,f.nitFacturado);}
   if(f.subVendedorNombre&&$('#f-subvend')){$('#f-subvend').value=f.subVendedorNombre;}
   $('#f-oc').value=f.ordenCompra||'';$('#f-obs').value=f.observaciones||'';if($('#f-nota'))$('#f-nota').value=f.notaInterna||'';
   go('pedido');render();toast('Editando PED-'+padn(f.numero),'Ajustá productos o cliente y guardá');};
-window.cancelarEdicion=()=>{editId=null;editOldMap={};cart=[];if($('#f-cli'))$('#f-cli').value='';if($('#f-cli-search'))$('#f-cli-search').value='';if(typeof actualizarVendedorInfo==='function')actualizarVendedorInfo(null);$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';render();go('documentos');};
+window.cancelarEdicion=()=>{editId=null;editOldMap={};cart=[];if($('#f-cli'))$('#f-cli').value='';if($('#f-cli-search'))$('#f-cli-search').value='';if(typeof actualizarVendedorInfo==='function')actualizarVendedorInfo(null);$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';if($('#f-nit-wrap'))$('#f-nit-wrap').style.display='none';render();go('documentos');};
 window.regresar=id=>{const f=documentos.find(d=>d.id===id);if(!['envio','prestamo'].includes(f.tipoDoc)||f.estado!=='pendiente')return;
   Object.assign(f,{tipoDoc:'pedido',estado:'abierto'});delete f.autorizacion;delete f.serie;delete f.numeroDte;
   closeMod();renderDocs();
