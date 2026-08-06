@@ -7039,8 +7039,11 @@ function renderReportes(){
     arr.sort((a,b)=>b.valorComision-a.valorComision);
     const T={cant:0,costoTotal:0,precioLista:0,precioFinal:0,ventaSinIva:0,valorComision:0,ganancia:0};
     arr.forEach(g=>{T.cant+=g.cant;T.costoTotal+=g.costoTotal;T.precioLista+=g.precioLista;T.precioFinal+=g.precioFinal;T.ventaSinIva+=g.ventaSinIva;T.valorComision+=g.valorComision;T.ganancia+=g.ganancia;});
+    // % globales (ponderados con los totales, no un promedio simple)
+    const TpctDesc=T.precioLista?(T.precioLista-T.precioFinal)/T.precioLista*100:0;
+    const TpctGan=T.precioFinal?T.ganancia/T.precioFinal*100:0;
     exportData=arr.map(g=>({'Código':g.codigo,'NombreProducto':g.nombre,'Cantidad':g.cant,'Costo Unitario Promedio':r2(g.costoUnit),'Costo Total':r2(g.costoTotal),'Valor Unitario':r2(g.valorUnit),'Precio Lista':r2(g.precioLista),'Precio Final':r2(g.precioFinal),'Porcentaje Descuento':r2(g.pctDesc),'Venta Total sin IVA':r2(g.ventaSinIva),'Comision':COMISION_PCT,'Valor Comision':r2(g.valorComision),'Ganancia':r2(g.ganancia),'Porcentaje Ganancia':r2(g.pctGan)}));
-    if(arr.length)exportData.push({'Código':'','NombreProducto':'TOTAL','Cantidad':T.cant,'Costo Unitario Promedio':'','Costo Total':r2(T.costoTotal),'Valor Unitario':'','Precio Lista':r2(T.precioLista),'Precio Final':r2(T.precioFinal),'Porcentaje Descuento':'','Venta Total sin IVA':r2(T.ventaSinIva),'Comision':'','Valor Comision':r2(T.valorComision),'Ganancia':r2(T.ganancia),'Porcentaje Ganancia':''});
+    if(arr.length)exportData.push({'Código':'','NombreProducto':'TOTAL','Cantidad':T.cant,'Costo Unitario Promedio':'','Costo Total':r2(T.costoTotal),'Valor Unitario':'','Precio Lista':r2(T.precioLista),'Precio Final':r2(T.precioFinal),'Porcentaje Descuento':r2(TpctDesc),'Venta Total sin IVA':r2(T.ventaSinIva),'Comision':'','Valor Comision':r2(T.valorComision),'Ganancia':r2(T.ganancia),'Porcentaje Ganancia':r2(TpctGan)});
     const filasHtml=arr.map(g=>`<tr>
       <td style="color:var(--muted);font-size:11px">${g.codigo||'—'}</td>
       <td style="font-weight:600">${g.nombre||'—'}</td>
@@ -7061,10 +7064,10 @@ function renderReportes(){
       <td class="num">${T.cant}</td><td></td>
       <td class="num">${money(T.costoTotal)}</td><td></td>
       <td class="num">${money(T.precioLista)}</td>
-      <td class="num">${money(T.precioFinal)}</td><td></td>
+      <td class="num">${money(T.precioFinal)}</td><td class="num" style="color:${TpctDesc<0?'var(--danger)':'inherit'}">${TpctDesc.toFixed(1)}%</td>
       <td class="num">${money(T.ventaSinIva)}</td><td></td>
       <td class="num" style="color:var(--green)">${money(T.valorComision)}</td>
-      <td class="num">${money(T.ganancia)}</td><td></td></tr>`:'';
+      <td class="num">${money(T.ganancia)}</td><td class="num" style="color:${TpctGan<0?'var(--danger)':'inherit'}">${TpctGan.toFixed(1)}%</td></tr>`:'';
     html+=`<div class="kpis stagger">${kpiHTML([
       {ic:'i-green',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Comisión total ('+COMISION_PCT+'%)',val:money(T.valorComision),sub:arr.length+' producto(s)'},
       {ic:'i-blue',svg:'<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/>',lbl:'Venta sin IVA',val:money(T.ventaSinIva)},
