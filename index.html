@@ -6851,8 +6851,11 @@ function agregarTotalesReportes(){
 // y mantiene repLastData (lo que exporta el Excel) en el mismo orden que la pantalla.
 function prepararOrdenReportes(){
   const cont=document.getElementById('rep-body'); if(!cont)return;
+  // Reportes agrupados/jerárquicos: no se ordenan libremente (romperían la agrupación)
+  if(['estcta','vendedor','cliprod','climes','climescomp','dircli'].includes(repType))return;
   cont.querySelectorAll('table').forEach((tbl,ti)=>{
     if(tbl.dataset.ordenable)return;
+    if(tbl.closest('td'))return; // no enganchar tablas anidadas (detalles dentro de una celda)
     const thead=tbl.querySelector('thead'), tbody=tbl.querySelector('tbody');
     if(!thead||!tbody)return;
     const rows=[...tbody.querySelectorAll(':scope > tr')];
@@ -7640,8 +7643,8 @@ function renderReportes(){
       if(repFiltros.tiempoCredito){if(!cliRec||String(cliRec.tiempoCredito||0)!==repFiltros.tiempoCredito)return;}
       const inf=arInfo(d);if(inf.saldo<=0.001)return;
       if(repFiltros.soloVencidos&&!inf.vencido)return;
-      const k=d.clienteComercial||d.clienteNombre;
-      if(!porCli[k])porCli[k]={b1:0,b2:0,b3:0,saldo:0,facts:[],nit:(cliRec&&cliRec.nit)||d.clienteNit||''};
+      const k=(d.clienteId!=null)?('c'+d.clienteId):('n'+((d.clienteComercial||d.clienteNombre||'—').toUpperCase()));
+      if(!porCli[k])porCli[k]={nombre:(cliRec?(cliRec.nombre||cliRec.razonSocial):(d.clienteComercial||d.clienteNombre))||'—',b1:0,b2:0,b3:0,saldo:0,facts:[],nit:(cliRec&&cliRec.nit)||d.clienteNit||''};
       const dias=Math.floor((hoy-new Date(d.creada))/86400000); // antigüedad desde emisión
       const tramo=dias<=30?'b1':(dias<=90?'b2':'b3');
       // Antigüedad por VENCIMIENTO (para el reporte de antigüedad de saldos): días vencidos
@@ -7650,7 +7653,7 @@ function renderReportes(){
       porCli[k][tramo]+=inf.saldo; porCli[k].saldo+=inf.saldo;
       porCli[k].facts.push({num:d.numeroDte||d.serie||('#'+d.id),serie:d.serie||'',dte:d.numeroDte||'',emitida:d.creada,vence:d.vencimiento,dias,saldo:inf.saldo,vencido:inf.vencido,tramo,bv});
     });
-    const arr=Object.entries(porCli).sort((a,b)=>(a[0]||'').localeCompare(b[0]||'','es'));
+    const arr=Object.entries(porCli).sort((a,b)=>(a[1].nombre||'').localeCompare(b[1].nombre||'','es'));
     const T={b1:0,b2:0,b3:0,saldo:0};
     arr.forEach(([,o])=>{T.b1+=o.b1;T.b2+=o.b2;T.b3+=o.b3;T.saldo+=o.saldo;});
     // Datos para exportar (una fila por cliente)
@@ -7659,8 +7662,8 @@ function renderReportes(){
     const COLSV=['Corriente','30 Días','60 Días','90 Días','+90 Días'];
     const vaciosV=()=>{const o={};COLSV.forEach(c=>o[c]='');return o;};
     const filasExp=[];
-    arr.forEach(([n,o])=>{
-      filasExp.push(Object.assign({Documento:(o.nit?'('+o.nit+') ':'')+n,Fecha:''},vaciosV()));
+    arr.forEach(([k,o])=>{
+      filasExp.push(Object.assign({Documento:(o.nit?'('+o.nit+') ':'')+o.nombre,Fecha:''},vaciosV()));
       const tot={corr:0,b30:0,b60:0,b90:0,b90p:0};
       o.facts.slice().sort((a,b)=>b.dias-a.dias).forEach(f=>{
         const row=Object.assign({Documento:'FA '+((f.serie?f.serie+'-':'')+(f.dte||f.num)),Fecha:f.emitida?fdate(f.emitida.slice(0,10)):''},vaciosV());
@@ -7681,9 +7684,9 @@ function renderReportes(){
       {ic:'i-danger',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',lbl:'90+ días',val:money(T.b3)}])}</div>
       <div class="panel"><div class="panel-head"><h3>Estado de cuenta general · saldos pendientes</h3><span style="font-size:12px;color:var(--muted)">Tocá un cliente para ver el detalle</span></div>
       <table><thead><tr><th>Cliente</th><th>0-30 días</th><th>30-90 días</th><th>90+ días</th><th>Saldo total</th></tr></thead><tbody>
-      ${arr.length?arr.map(([n,o],i)=>`
+      ${arr.length?arr.map(([k,o],i)=>`
         <tr class="estcta-cli" style="cursor:pointer" onclick="toggleEstcta(${i})">
-          <td style="font-weight:600"><span id="estcta-arrow-${i}" style="color:var(--muted-2);display:inline-block;width:14px">▸</span>${n}</td>
+          <td style="font-weight:600"><span id="estcta-arrow-${i}" style="color:var(--muted-2);display:inline-block;width:14px">▸</span>${o.nombre}</td>
           <td class="num" style="color:${o.b1>0?'var(--ink)':'var(--muted-2)'}">${money(o.b1)}</td>
           <td class="num" style="color:${o.b2>0?'#9A6B07':'var(--muted-2)'}">${money(o.b2)}</td>
           <td class="num" style="color:${o.b3>0?'var(--danger)':'var(--muted-2)'}">${money(o.b3)}</td>
