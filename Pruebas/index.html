@@ -3395,9 +3395,10 @@ function recTipoChange(forceTipo){
   if(wrap)wrap.style.display=tipo==='tarea'?'none':'';
   const tw=document.getElementById('rec-titulo-wrap');if(tw)tw.style.display=esContra?'none':'';
   const cw=document.getElementById('rec-contra-wrap');if(cw)cw.style.display=esContra?'':'none';
+  const fw=document.getElementById('rec-fact-wrap');if(fw)fw.style.display=esContra?'':'none';
   const rl=document.getElementById('rec-ref-label');if(rl)rl.textContent=(esContra||tipo==='cliente')?'Cliente':(tipo==='factura'?'Factura':tipo==='producto'?'Producto':tipo==='compra'?'Compra':'Ligado a');
   const fl=document.getElementById('rec-fecha-label');if(fl)fl.textContent=esContra?'Fecha de pago':'Vence';
-  if(!forceTipo){const rid=document.getElementById('rec-refid'),rf=document.getElementById('rec-ref');if(rid)rid.value='';if(rf)rf.value='';}
+  if(!forceTipo){const rid=document.getElementById('rec-refid'),rf=document.getElementById('rec-ref'),fid=document.getElementById('rec-factid'),ff=document.getElementById('rec-fact');if(rid)rid.value='';if(rf)rf.value='';if(fid)fid.value='';if(ff)ff.value='';}
 }
 window.recTipoChange=recTipoChange;
 function openRecordatorio(id,preset){
@@ -3405,8 +3406,16 @@ function openRecordatorio(id,preset){
   preset=preset||{};
   const curTipo=r?r.tipo:(preset.tipo||'tarea');
   let presetRefLabel=preset.refLabel||'';
-  if(!r&&preset.refId&&!presetRefLabel&&(preset.tipo==='cliente'||preset.tipo==='contrasena')){const _c=clientes.find(x=>x.id===preset.refId);presetRefLabel=_c?_c.nombre:'';}
+  if(!r&&preset.refId&&!presetRefLabel&&preset.tipo==='cliente'){const _c=clientes.find(x=>x.id===preset.refId);presetRefLabel=_c?_c.nombre:'';}
   const contraNo=(curTipo==='contrasena'&&r)?((String(r.titulo||'').match(/No\.\s*(.+)$/i)||[])[1]||'').trim():'';
+  // Contraseña de pago: cliente (filtro) + factura (referencia que se guarda en refId)
+  let cliRefId='',cliRefLabel='',factRefId='',factRefLabel='';
+  if(curTipo==='contrasena'){
+    if(r){factRefId=r.refId||'';factRefLabel=r.refLabel||'';const _fd=documentos.find(d=>d.id===r.refId);if(_fd){const _c=clientes.find(x=>x.id===_fd.clienteId);cliRefId=_fd.clienteId||'';cliRefLabel=_c?_c.nombre:(_fd.clienteComercial||_fd.clienteNombre||'');}}
+    else if(preset.refId){const _c=clientes.find(x=>x.id===preset.refId);cliRefId=preset.refId;cliRefLabel=_c?_c.nombre:'';}
+  }
+  const refInit=(curTipo==='contrasena')?cliRefLabel:((r&&r.refLabel)?r.refLabel:presetRefLabel);
+  const refIdInit=(curTipo==='contrasena')?cliRefId:((r&&r.refId)?r.refId:(preset.refId||''));
   const usrOpts=usuarios.filter(u=>u.activo!==false).map(u=>`<option value="${_escRec(u.nombre)}"${(r?r.asignadoA:currentUser)===u.nombre?' selected':''}>${_escRec(u.nombre)}</option>`).join('');
   const tipoOpts=[['tarea','Tarea libre'],['cliente','Cliente'],['contrasena','Contraseña de pago'],['factura','Factura'],['producto','Producto'],['compra','Compra']].map(([v,l])=>`<option value="${v}"${curTipo===v?' selected':''}>${l}</option>`).join('');
   const prioOpts=[['alta','Alta'],['normal','Normal'],['baja','Baja']].map(([v,l])=>`<option value="${v}"${(r?r.prioridad:'normal')===v?' selected':''}>${l}</option>`).join('');
@@ -3415,22 +3424,27 @@ function openRecordatorio(id,preset){
      <div class="row" id="rec-contra-wrap" style="display:none"><div style="grid-column:1/-1"><label>No. de contraseña de pago</label><input id="rec-contra" value="${_escRec(contraNo)}" placeholder="Ej. 04521"></div></div>
      <div class="row"><div style="grid-column:1/-1"><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="rec-nota" value="${r?_escRec(r.nota):''}" placeholder="Detalle"></div></div>
      <div class="row"><div><label>Tipo</label><select id="rec-tipo" onchange="recTipoChange()">${tipoOpts}</select></div>
-       <div id="rec-ref-wrap"><label id="rec-ref-label">Ligado a</label><input id="rec-ref" placeholder="Buscar…" autocomplete="off" value="${r&&r.refLabel?_escRec(r.refLabel):(presetRefLabel?_escRec(presetRefLabel):'')}"><input type="hidden" id="rec-refid" value="${r&&r.refId?r.refId:(preset.refId||'')}"></div></div>
+       <div id="rec-ref-wrap"><label id="rec-ref-label">Ligado a</label><input id="rec-ref" placeholder="Buscar…" autocomplete="off" value="${_escRec(refInit)}"><input type="hidden" id="rec-refid" value="${refIdInit}"></div></div>
+     <div class="row" id="rec-fact-wrap" style="display:none"><div style="grid-column:1/-1"><label>Factura</label><input id="rec-fact" placeholder="Buscar factura del cliente…" autocomplete="off" value="${_escRec(factRefLabel)}"><input type="hidden" id="rec-factid" value="${factRefId}"></div></div>
      <div class="row"><div><label id="rec-fecha-label">Vence</label><input id="rec-fecha" type="date" value="${r&&r.fechaVencimiento?String(r.fechaVencimiento).slice(0,10):''}"></div><div><label>Prioridad</label><select id="rec-prio">${prioOpts}</select></div></div>
      <div class="row"><div style="grid-column:1/-1"><label>Asignar a</label><select id="rec-asig">${usrOpts}</select></div></div>`,
     ()=>{
       const tipo=$('#rec-tipo').value;
       let titulo=$('#rec-titulo').value.trim();
+      let contraFactId=null,contraFactLabel='';
       if(tipo==='contrasena'){
         const num=($('#rec-contra')?.value||'').trim();
         if(!num){toast('Falta el No. de contraseña','Escribí el número de contraseña de pago',true);return;}
         if(!$('#rec-refid').value){toast('Falta el cliente','Elegí el cliente de la contraseña',true);return;}
+        if(!$('#rec-factid').value){toast('Falta la factura','Elegí la factura de la contraseña',true);return;}
         titulo='Contraseña de pago No. '+num;
+        contraFactId=Number($('#rec-factid').value);
+        contraFactLabel=($('#rec-fact').value.trim()||'')+' · '+($('#rec-ref').value.trim()||'');
       }
       if(!titulo){toast('Falta el título','Escribí qué hay que recordar',true);return;}
       const datos={titulo,nota:$('#rec-nota').value.trim(),tipo,
-        refId:tipo==='tarea'?null:(($('#rec-refid').value)?Number($('#rec-refid').value):null),
-        refLabel:tipo==='tarea'?'':($('#rec-ref').value.trim()||''),
+        refId:tipo==='contrasena'?contraFactId:(tipo==='tarea'?null:(($('#rec-refid').value)?Number($('#rec-refid').value):null)),
+        refLabel:tipo==='contrasena'?contraFactLabel:(tipo==='tarea'?'':($('#rec-ref').value.trim()||'')),
         fechaVencimiento:$('#rec-fecha').value||null,asignadoA:$('#rec-asig').value,prioridad:$('#rec-prio').value};
       if(r){Object.assign(r,datos);if(typeof guardarRecordatorio==='function')guardarRecordatorio(r);logAudit('Recordatorio editado',titulo);}
       else{const nuevo={id:(recordatorios.reduce((m,x)=>Math.max(m,x.id||0),0)+1),...datos,hecho:false,creadoPor:currentUser,creado:new Date().toISOString(),_nuevo:true};recordatorios.push(nuevo);if(typeof guardarRecordatorio==='function')guardarRecordatorio(nuevo);logAudit('Recordatorio creado',titulo);}
@@ -3447,7 +3461,13 @@ function openRecordatorio(id,preset){
         if(tipo==='compra')return compras.filter(c=>('CMP-'+padn(c.id)).toLowerCase().includes(ql)||(c.proveedorNombre||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:'CMP-'+padn(c.id)+' · '+c.proveedorNombre,sub:money(c.total),valor:c.id}));
         return [];
       },
-      (item)=>{ if(item){document.getElementById('rec-refid').value=item.valor;document.getElementById('rec-ref').value=item.texto;} });
+      (item)=>{ if(item){document.getElementById('rec-refid').value=item.valor;document.getElementById('rec-ref').value=item.texto;const rf=document.getElementById('rec-fact'),rfi=document.getElementById('rec-factid');if(rf)rf.value='';if(rfi)rfi.value='';} });
+    crearAutocomplete('rec-fact',
+      (q)=>{
+        const cliId=Number(document.getElementById('rec-refid')?.value||0);const ql=q.toLowerCase();
+        return documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.serie&&d.estado!=='anulada'&&(!cliId||d.clienteId===cliId)).filter(d=>((d.serie+'-'+d.numeroDte).toLowerCase().includes(ql)||String(d.numeroDte||'').includes(ql)||(d.clienteComercial||d.clienteNombre||'').toLowerCase().includes(ql))).slice(0,10).map(d=>({texto:d.serie+'-'+d.numeroDte,sub:(d.clienteComercial||d.clienteNombre||'')+' · '+money((d.totales&&d.totales.total)||0),valor:d.id}));
+      },
+      (item)=>{ if(item){document.getElementById('rec-factid').value=item.valor;document.getElementById('rec-fact').value=item.texto;} });
   },0);
 }
 window.openRecordatorio=openRecordatorio;
