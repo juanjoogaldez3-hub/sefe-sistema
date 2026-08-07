@@ -1287,6 +1287,8 @@ let proveedores=[];
 let compras=[];
 let categorias=[]; // categorías de inventario con su umbral de stock bajo: {nombre, umbralStock}
 let recordatorios=[]; // módulo de recordatorios/tareas: {id,titulo,nota,tipo,refId,refLabel,fechaVencimiento,asignadoA,creadoPor,prioridad,hecho,...}
+let cotizaciones=[]; // módulo de cotizaciones: {id,numero,clienteId,items,totales,estado,validezDias,fechaVence,...}
+let cotN=1; // correlativo de cotizaciones
 let documentos=[];
 let talonarios=[];
 let recibosAnulados=[];
@@ -1345,7 +1347,6 @@ const FISCAL={cambiaria:1};
 const MODULOS_DESACTIVADOS=['despachos','misentregas'];
 function tienePermiso(v){
   if(MODULOS_DESACTIVADOS.includes(v))return false;
-  if(v==='recordatorios')return true; // módulo de recordatorios disponible para todos los roles
   const r=ROLES[currentRole];if(!r)return true;
   return r.views==='ALL'||r.views.includes(v);
 }
@@ -1353,10 +1354,10 @@ function go(v,desdeHash){
   if(!tienePermiso(v)){toast('No tenés permiso para esta sección','Tu rol es '+(ROLES[currentRole]?.label||currentRole),true);return;}
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
-  $('#v-'+v).classList.add('active');
-  const t={panel:['Dashboard','Resumen de operación'],pedido:['Nuevo pedido','Generá el pedido; después lo facturás o convertís'],documentos:['Documentos','Pedidos, notas y facturas'],cobros:['Cobros','Cuentas por cobrar de las facturas a crédito'],clientes:['Clientes','Catálogo de clientes'],recordatorios:['Recordatorios','Tareas, seguimientos y notas — tuyas y asignadas'],inventario:['Inventario','Existencias de productos'],reportes:['Reportes','Análisis de ventas'],compras:['Compras','Registro de compras a proveedores'],nuevacompra:['Nueva compra','Registrá la entrada de mercadería'],porpagar:['Por pagar','Cuentas por pagar a proveedores'],bancos:['Bancos','Control de cuentas, entradas y salidas de dinero'],talonarios:['Talonarios','Control de talonarios de recibos y su cuadre'],proveedores:['Proveedores','Catálogo de proveedores'],usuarios:['Usuarios','Usuarios y roles del sistema'],auditoria:['Auditoría','Registro de todas las acciones del sistema'],despachos:['Despachos','Asignación de entregas y rutas'],misentregas:['Mis entregas','Documentos asignados para entregar']};
-  $('#ttl').textContent=t[v][0];$('#sub').textContent=t[v][1];
-  if(v==='panel')renderPanel();if(v==='documentos')renderDocs();if(v==='cobros')renderCobros();if(v==='clientes')renderCli();if(v==='recordatorios')renderRecordatorios();if(v==='inventario')renderProd();if(v==='reportes')renderReportes();if(v==='compras')renderCompras();if(v==='nuevacompra')renderCompraForm();if(v==='porpagar')renderPorPagar();if(v==='bancos')renderBancos();if(v==='proveedores')renderProveedores();if(v==='talonarios')renderTalonarios();if(v==='usuarios')renderUsuarios();if(v==='auditoria')renderAuditoria();if(v==='despachos')renderDespachos();if(v==='misentregas')renderMisEntregas();
+  const _sec=$('#v-'+v); if(!_sec)return; _sec.classList.add('active');
+  const t={panel:['Dashboard','Resumen de operación'],pedido:['Nuevo pedido','Generá el pedido; después lo facturás o convertís'],cotizaciones:['Cotizaciones','Cotizaciones a clientes — se pueden convertir en pedido'],documentos:['Documentos','Pedidos, notas y facturas'],cobros:['Cobros','Cuentas por cobrar de las facturas a crédito'],clientes:['Clientes','Catálogo de clientes'],recordatorios:['Recordatorios','Tareas, seguimientos y notas — tuyas y asignadas'],inventario:['Inventario','Existencias de productos'],reportes:['Reportes','Análisis de ventas'],compras:['Compras','Registro de compras a proveedores'],nuevacompra:['Nueva compra','Registrá la entrada de mercadería'],porpagar:['Por pagar','Cuentas por pagar a proveedores'],bancos:['Bancos','Control de cuentas, entradas y salidas de dinero'],talonarios:['Talonarios','Control de talonarios de recibos y su cuadre'],proveedores:['Proveedores','Catálogo de proveedores'],usuarios:['Usuarios','Usuarios y roles del sistema'],auditoria:['Auditoría','Registro de todas las acciones del sistema'],despachos:['Despachos','Asignación de entregas y rutas'],misentregas:['Mis entregas','Documentos asignados para entregar']};
+  if(t[v]){$('#ttl').textContent=t[v][0];$('#sub').textContent=t[v][1];}
+  if(v==='panel')renderPanel();if(v==='cotizaciones')renderCotizaciones();if(v==='documentos')renderDocs();if(v==='cobros')renderCobros();if(v==='clientes')renderCli();if(v==='recordatorios')renderRecordatorios();if(v==='inventario')renderProd();if(v==='reportes')renderReportes();if(v==='compras')renderCompras();if(v==='nuevacompra')renderCompraForm();if(v==='porpagar')renderPorPagar();if(v==='bancos')renderBancos();if(v==='proveedores')renderProveedores();if(v==='talonarios')renderTalonarios();if(v==='usuarios')renderUsuarios();if(v==='auditoria')renderAuditoria();if(v==='despachos')renderDespachos();if(v==='misentregas')renderMisEntregas();
   // Actualizar la dirección (hash) para que el botón atrás y el recargar funcionen.
   // Si el cambio vino del propio hash, no lo reescribimos para evitar bucles.
   if(!desdeHash && ('#'+v)!==location.hash){ try{ location.hash=v; }catch(e){} }
@@ -6098,8 +6099,10 @@ function renderUsuarios(){
 const MODULOS_PERMISOS=[
   {key:'panel',lbl:'Dashboard',grp:'Módulos'},
   {key:'pedido',lbl:'Nuevo pedido',grp:'Módulos'},
+  {key:'cotizaciones',lbl:'Cotizaciones',grp:'Módulos'},
   {key:'documentos',lbl:'Documentos',grp:'Módulos'},
   {key:'clientes',lbl:'Clientes',grp:'Módulos'},
+  {key:'recordatorios',lbl:'Recordatorios',grp:'Módulos'},
   {key:'cobros',lbl:'Cobros',grp:'Módulos'},
   {key:'porpagar',lbl:'Por pagar',grp:'Módulos'},
   {key:'bancos',lbl:'Bancos',grp:'Módulos'},
@@ -9186,7 +9189,7 @@ function aplicarPermisosUI(){
     return;
   }
   document.querySelectorAll('.nav button[data-view]').forEach(b=>{
-    const ok=(r.views==='ALL'||(Array.isArray(r.views)&&r.views.includes(b.dataset.view)))&&!MODULOS_DESACTIVADOS.includes(b.dataset.view);
+    const ok=tienePermiso(b.dataset.view);
     b.style.display=ok?'':'none';
   });
   const esAdmin=currentRole==='admin';
@@ -9236,7 +9239,7 @@ window.go=function(v,desdeHash){
 // ---- Navegación por dirección (hash) ----
 // Permite que el botón "atrás"/"adelante" del navegador y el recargar (F5)
 // funcionen dentro del sistema. Cada sección tiene su dirección: #inventario, #reportes, etc.
-const VISTAS_VALIDAS=['panel','pedido','documentos','cobros','clientes','recordatorios','inventario','reportes','compras','nuevacompra','porpagar','bancos','talonarios','proveedores','usuarios','auditoria','despachos','misentregas'];
+const VISTAS_VALIDAS=['panel','pedido','cotizaciones','documentos','cobros','clientes','recordatorios','inventario','reportes','compras','nuevacompra','porpagar','bancos','talonarios','proveedores','usuarios','auditoria','despachos','misentregas'];
 function irAHash(){
   // Solo navegar por hash si ya entramos al sistema (app visible)
   const app=document.getElementById('app-layout');
