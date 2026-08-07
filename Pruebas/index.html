@@ -3641,6 +3641,7 @@ function renderCotizaciones(){
       <td><span class="badge ${ec}">${en}</span></td>
       <td><div class="acts">
         <button class="btn btn-ghost btn-sm" onclick="cotizacionPDF(${c.id})" title="Ver PDF">PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="cotizacionExcel(${c.id})" title="Exportar a Excel">Excel</button>
         <button class="btn btn-ghost btn-sm" onclick="editarCotizacion(${c.id})">Editar</button>
         ${c.estado!=='convertida'?`<button class="btn btn-ghost btn-sm" style="color:var(--green)" onclick="convertirCotizacionAPedido(${c.id})" title="Convertir a pedido">→ Pedido</button>`:''}
         <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarCotizacionUI(${c.id})">✕</button>
@@ -3851,6 +3852,42 @@ function cotizacionPDF(id){
   _abrirPDF(_pdfShell({titulo:'COTIZACIÓN',subtitulo:c.clienteComercial||c.clienteNombre||'',orientacion:'portrait',body}));
 }
 window.cotizacionPDF=cotizacionPDF;
+async function cotizacionExcel(id){
+  const c=cotizaciones.find(x=>x.id===id);if(!c){toast('No encontrada',null,true);return;}
+  try{
+    let XLSX;
+    try{const _m=await import('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/+esm');XLSX=_m.default||_m;if(!(XLSX&&XLSX.utils))throw 0;}
+    catch(_e){XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');}
+    const fecha=c.creada?fdate(String(c.creada).slice(0,10)):fdate(fechaHoyGT());
+    const meta=[
+      ['COTIZACIÓN','COT-'+padn(c.numero)],
+      ['Cliente',c.clienteComercial||c.clienteNombre||''],
+      ['NIT',c.clienteNit||''],
+      ['Fecha',fecha],
+      ['Válida hasta',c.fechaVence?fdate(c.fechaVence):''],
+      ['Atiende',c.vendedorNombre||''],
+      ['Tel. vendedor',c.vendedorTel||''],
+      ['Correo vendedor',c.vendedorEmail||''],
+      []
+    ];
+    const ws=XLSX.utils.aoa_to_sheet(meta);
+    const filas=(c.items||[]).map(it=>{
+      const eff=Number(it.precio)*(1-(Number(it.descuento)||0)/100);
+      return {'Código':it.codigo||'','Descripción':it.nombre||'','Cantidad':Number(it.cantidad),'Precio unit.':Number(it.precio),'Desc %':Number(it.descuento)||0,'Subtotal':Math.round(eff*Number(it.cantidad)*100)/100};
+    });
+    const HDR=9; // fila 0-index del encabezado de la tabla (A10)
+    XLSX.utils.sheet_add_json(ws,filas,{origin:'A10'});
+    filas.forEach((r,i)=>{[3,5].forEach(ci=>{const ref=XLSX.utils.encode_cell({c:ci,r:HDR+1+i});if(ws[ref])ws[ref].z='"Q"#,##0.00';});});
+    const rt=HDR+1+filas.length;
+    XLSX.utils.sheet_add_aoa(ws,[['','','','','TOTAL (IVA incl.)',cotTotal(c)]],{origin:{r:rt,c:0}});
+    const refT=XLSX.utils.encode_cell({c:5,r:rt});if(ws[refT])ws[refT].z='"Q"#,##0.00';
+    ws['!cols']=[{wch:14},{wch:42},{wch:10},{wch:14},{wch:8},{wch:15}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'COT-'+padn(c.numero));
+    XLSX.writeFile(wb,`SEFE_cotizacion_COT-${padn(c.numero)}.xlsx`);
+    toast('✓ Excel descargado','SEFE_cotizacion_COT-'+padn(c.numero)+'.xlsx');
+  }catch(e){console.error('Error exportando cotización a Excel:',e);toast('No se pudo generar el Excel',e.message||String(e),true);}
+}
+window.cotizacionExcel=cotizacionExcel;
 // ==================== FIN COTIZACIONES ====================
 window.cerrarRecmod=function(){const ov=$('#recmod');if(ov)ov.classList.remove('show');};
 // ---- Recordatorios de cobro: pop-up en la pantalla principal ----
