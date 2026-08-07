@@ -3404,20 +3404,30 @@ function recTipoChange(forceTipo){
   const wrap=document.getElementById('rec-ref-wrap');
   if(wrap)wrap.style.display=tipo==='tarea'?'none':'';
   const tw=document.getElementById('rec-titulo-wrap');if(tw)tw.style.display=esContra?'none':'';
-  const cw=document.getElementById('rec-contra-wrap');if(cw)cw.style.display=esContra?'':'none';
+  const formaW=document.getElementById('rec-forma-wrap');if(formaW)formaW.style.display=esContra?'':'none';
+  const _forma=document.getElementById('rec-forma')?.value||'contra';
+  const cw=document.getElementById('rec-contra-wrap');if(cw)cw.style.display=(esContra&&_forma==='contra')?'':'none';
   const fw=document.getElementById('rec-fact-wrap');if(fw)fw.style.display=esContra?'':'none';
   const rl=document.getElementById('rec-ref-label');if(rl)rl.textContent=(esContra||tipo==='cliente')?'Cliente':(tipo==='factura'?'Factura':tipo==='producto'?'Producto':tipo==='compra'?'Compra':'Ligado a');
   const fl=document.getElementById('rec-fecha-label');if(fl)fl.textContent=esContra?'Fecha de pago':'Vence';
   if(!forceTipo){const rid=document.getElementById('rec-refid'),rf=document.getElementById('rec-ref'),fid=document.getElementById('rec-factid'),ff=document.getElementById('rec-fact');if(rid)rid.value='';if(rf)rf.value='';if(fid)fid.value='';if(ff)ff.value='';}
 }
 window.recTipoChange=recTipoChange;
+// Muestra/oculta el No. de contraseña según la forma de cobro (contraseña vs al crédito)
+function recFormaChange(){
+  const tipo=document.getElementById('rec-tipo')?.value||'tarea';
+  const forma=document.getElementById('rec-forma')?.value||'contra';
+  const cw=document.getElementById('rec-contra-wrap');if(cw)cw.style.display=(tipo==='contrasena'&&forma==='contra')?'':'none';
+}
+window.recFormaChange=recFormaChange;
 function openRecordatorio(id,preset){
   const r=id?recordatorios.find(x=>x.id===id):null;
   preset=preset||{};
   const curTipo=r?r.tipo:(preset.tipo||'tarea');
   let presetRefLabel=preset.refLabel||'';
   if(!r&&preset.refId&&!presetRefLabel&&preset.tipo==='cliente'){const _c=clientes.find(x=>x.id===preset.refId);presetRefLabel=_c?_c.nombre:'';}
-  const contraNo=(curTipo==='contrasena'&&r)?((String(r.titulo||'').match(/No\.\s*(.+)$/i)||[])[1]||'').trim():'';
+  const curForma=(curTipo==='contrasena'&&r&&/^al cr[eé]dito/i.test(String(r.titulo||'')))?'credito':'contra';
+  const contraNo=(curTipo==='contrasena'&&r&&curForma==='contra')?((String(r.titulo||'').match(/No\.\s*(.+)$/i)||[])[1]||'').trim():'';
   // Contraseña de pago: cliente (filtro) + factura (referencia que se guarda en refId)
   let cliRefId='',cliRefLabel='',factRefId='',factRefLabel='';
   if(curTipo==='contrasena'){
@@ -3431,6 +3441,7 @@ function openRecordatorio(id,preset){
   const prioOpts=[['alta','Alta'],['normal','Normal'],['baja','Baja']].map(([v,l])=>`<option value="${v}"${(r?r.prioridad:'normal')===v?' selected':''}>${l}</option>`).join('');
   openMod(id?'Editar recordatorio':'Nuevo recordatorio',
     `<div class="row" id="rec-titulo-wrap"><div style="grid-column:1/-1"><label>Título</label><input id="rec-titulo" value="${r&&curTipo!=='contrasena'?_escRec(r.titulo):''}" placeholder="Ej. Llamar al cliente por su orden de compra"></div></div>
+     <div class="row" id="rec-forma-wrap" style="display:none"><div style="grid-column:1/-1"><label>Forma de cobro</label><select id="rec-forma" onchange="recFormaChange()"><option value="contra"${curForma==='contra'?' selected':''}>Con contraseña de pago</option><option value="credito"${curForma==='credito'?' selected':''}>Al crédito (sin contraseña)</option></select></div></div>
      <div class="row" id="rec-contra-wrap" style="display:none"><div style="grid-column:1/-1"><label>No. de contraseña de pago</label><input id="rec-contra" value="${_escRec(contraNo)}" placeholder="Ej. 04521"></div></div>
      <div class="row"><div style="grid-column:1/-1"><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="rec-nota" value="${r?_escRec(r.nota):''}" placeholder="Detalle"></div></div>
      <div class="row"><div><label>Tipo</label><select id="rec-tipo" onchange="recTipoChange()">${tipoOpts}</select></div>
@@ -3443,11 +3454,16 @@ function openRecordatorio(id,preset){
       let titulo=$('#rec-titulo').value.trim();
       let contraFactId=null,contraFactLabel='';
       if(tipo==='contrasena'){
-        const num=($('#rec-contra')?.value||'').trim();
-        if(!num){toast('Falta el No. de contraseña','Escribí el número de contraseña de pago',true);return;}
-        if(!$('#rec-refid').value){toast('Falta el cliente','Elegí el cliente de la contraseña',true);return;}
-        if(!$('#rec-factid').value){toast('Falta la factura','Elegí la factura de la contraseña',true);return;}
-        titulo='Contraseña de pago No. '+num;
+        const forma=$('#rec-forma')?.value||'contra';
+        if(!$('#rec-refid').value){toast('Falta el cliente','Elegí el cliente',true);return;}
+        if(!$('#rec-factid').value){toast('Falta la factura','Elegí la factura',true);return;}
+        if(forma==='contra'){
+          const num=($('#rec-contra')?.value||'').trim();
+          if(!num){toast('Falta el No. de contraseña','Escribí el número de contraseña de pago',true);return;}
+          titulo='Contraseña de pago No. '+num;
+        }else{
+          titulo='Al crédito (sin contraseña)';
+        }
         contraFactId=Number($('#rec-factid').value);
         contraFactLabel=($('#rec-fact').value.trim()||'')+' · '+($('#rec-ref').value.trim()||'');
       }
@@ -3736,7 +3752,7 @@ function renderCliDet(){
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="estadoCuentaPDF(${c.id})" title="Descargar estado de cuenta en PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>Estado de cuenta PDF</button>
           ${canRegistrarAbono()?`<button class="btn btn-primary btn-sm" onclick="openPagoGlobalCliente(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pago global</button>`:''}
-          <button class="btn btn-ghost btn-sm" onclick="openRecordatorio(null,{tipo:'contrasena',refId:${c.id}})" title="Registrar una contraseña de pago con fecha de cobro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg>Contraseña de pago</button>
+          <button class="btn btn-ghost btn-sm" onclick="openRecordatorio(null,{tipo:'contrasena',refId:${c.id}})" title="Registrar contraseña de pago o entrega al crédito, ligada a la factura"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg>Contraseña / crédito</button>
           ${canCrearCliente()&&!c.sedesDe?`<button class="btn btn-ghost btn-sm" onclick="openCliSede(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar sede</button>`:''}
           ${canCrearCliente()?`<button class="btn btn-ghost btn-sm" onclick="openCli(${c.id})">Editar datos</button>`:''}
           ${currentRole==="admin"?`<button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:#f0d0d0" onclick="eliminarCliente(${c.id})" title="Eliminar cliente (solo admin)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>Eliminar</button>`:''}
