@@ -163,6 +163,14 @@ async function cargarTodo() {
       }
     } catch(e){ /* tabla aún no creada */ }
 
+    // Recordatorios (módulo general). Tolera que la tabla no exista todavía.
+    try {
+      const rRec = await sb.from('recordatorios').select('*');
+      if (!rRec.error && typeof recordatorios !== 'undefined') {
+        recordatorios = (rRec.data||[]).map(mapRecordatorioFromDB);
+      }
+    } catch(e){ /* tabla aún no creada */ }
+
     console.log('✓ Datos cargados desde Supabase');
     return true;
   } catch (e) {
@@ -422,6 +430,39 @@ async function borrarCategoria(nombre){
   if(error)console.error('Error borrando categoría:',error);
   return !error;
 }
+
+// ── Recordatorios (módulo general) ──────────────────────────
+function mapRecordatorioFromDB(r){
+  return {
+    id:r.id, titulo:r.titulo, nota:r.nota||'', tipo:r.tipo||'tarea',
+    refId:r.ref_id, refLabel:r.ref_label||'',
+    fechaVencimiento:r.fecha_vencimiento, asignadoA:r.asignado_a||'', creadoPor:r.creado_por||'',
+    prioridad:r.prioridad||'normal', hecho:r.hecho===true, hechoPor:r.hecho_por||'', hechoFecha:r.hecho_fecha,
+    creado:r.creado
+  };
+}
+async function guardarRecordatorio(rec){
+  const row={
+    titulo:rec.titulo, nota:rec.nota||null, tipo:rec.tipo||'tarea',
+    ref_id:rec.refId||null, ref_label:rec.refLabel||null,
+    fecha_vencimiento:rec.fechaVencimiento||null, asignado_a:rec.asignadoA||null, creado_por:rec.creadoPor||null,
+    prioridad:rec.prioridad||'normal', hecho:rec.hecho===true, hecho_por:rec.hechoPor||null, hecho_fecha:rec.hechoFecha||null
+  };
+  if(rec._nuevo){
+    delete rec._nuevo;
+    const {data,error}=await sb.from('recordatorios').insert(row).select().single();
+    if(error){console.error('Error guardando recordatorio:',error); rec._nuevo=true;}
+    else rec.id=data.id;
+  }else{
+    const {error}=await sb.from('recordatorios').update(row).eq('id',rec.id);
+    if(error)console.error('Error actualizando recordatorio:',error);
+  }
+}
+async function borrarRecordatorio(id){
+  const {error}=await sb.from('recordatorios').delete().eq('id',id);
+  if(error)console.error('Error borrando recordatorio:',error);
+}
+if(typeof window!=='undefined'){window.guardarRecordatorio=guardarRecordatorio;window.borrarRecordatorio=borrarRecordatorio;}
 
 async function guardarAuditoria(entry){
   const row = {

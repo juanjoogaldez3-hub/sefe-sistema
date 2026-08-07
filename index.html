@@ -495,6 +495,7 @@
       <button data-view="pedido"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/><circle cx="19" cy="17" r="2.5"/></svg><span>Nuevo pedido</span></button>
       <button data-view="documentos"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Documentos</span></button>
       <button data-view="clientes"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg><span>Clientes</span></button>
+      <button data-view="recordatorios"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Recordatorios</span></button>
       <button data-view="despachos"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span>Despachos</span></button>
       <button data-view="misentregas"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span>Mis entregas</span></button>
       <div class="lbl">Finanzas</div>
@@ -721,6 +722,24 @@
       </section>
 
       <section class="view" id="v-clientedet"></section>
+
+      <section class="view" id="v-recordatorios">
+        <div class="kpis stagger" id="rec-kpis"></div>
+        <div class="panel">
+          <div class="panel-head"><h3>Recordatorios</h3>
+            <button class="btn btn-primary btn-sm" onclick="openRecordatorio()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo recordatorio</button>
+          </div>
+          <div id="rec-tabs" style="display:flex;gap:6px;padding:10px 16px 0;flex-wrap:wrap">
+            <button class="ct-tab on" data-f="pendientes" onclick="setRecFiltro('pendientes')">Pendientes</button>
+            <button class="ct-tab" data-f="hoy" onclick="setRecFiltro('hoy')">Hoy / vencidos</button>
+            <button class="ct-tab" data-f="hechos" onclick="setRecFiltro('hechos')">Hechos</button>
+            <button class="ct-tab" data-f="todos" onclick="setRecFiltro('todos')">Todos</button>
+          </div>
+          <div class="panel-body">
+            <table><thead><tr><th style="width:34px"></th><th>Recordatorio</th><th>Ligado a</th><th>Asignado</th><th>Vence</th><th>Prioridad</th><th></th></tr></thead><tbody id="t-recordatorios"></tbody></table>
+          </div>
+        </div>
+      </section>
 
       <!-- DESPACHOS (Facturador/Logística) -->
       <section class="view" id="v-despachos">
@@ -998,6 +1017,14 @@
 </div></div>
 <button id="bell-rec" onclick="mostrarRecordatoriosHoy(true)" title="Recordatorios de cobro de hoy" style="display:none;position:fixed;bottom:22px;right:22px;z-index:80;align-items:center;gap:7px;background:var(--warn);color:#fff;border:none;border-radius:999px;padding:11px 16px;font-weight:700;font-size:13px;box-shadow:var(--shadow-lg);cursor:pointer">🔔 <span id="bell-rec-n"></span></button>
 
+<!-- Pop-up de recordatorios (módulo general, para todos) -->
+<div class="overlay" id="recmod" style="align-items:flex-start;padding-top:40px"><div class="modal" style="max-width:560px">
+  <div class="modal-head"><h3>🔔 Tus recordatorios de hoy</h3><button class="x" onclick="cerrarRecmod()">×</button></div>
+  <div class="modal-body" id="recmod-body" style="max-height:68vh;overflow:auto"></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="cerrarRecmod()">Cerrar</button><button class="btn btn-primary" onclick="cerrarRecmod();go('recordatorios')">Ver todos</button></div>
+</div></div>
+<button id="bell-recmod" onclick="mostrarRecordatoriosPopup(true)" title="Tus recordatorios de hoy" style="display:none;position:fixed;bottom:76px;right:22px;z-index:80;align-items:center;gap:7px;background:var(--green);color:#fff;border:none;border-radius:999px;padding:11px 16px;font-weight:700;font-size:13px;box-shadow:var(--shadow-lg);cursor:pointer">🔔 <span id="bell-recmod-n"></span></button>
+
 <div class="doc-overlay" id="docov">
   <div class="doc-wrap">
     <div class="doc-bar no-print">
@@ -1259,6 +1286,7 @@ function canConvertir(){return (currentRole==='admin'||ROLES[currentRole]?.conve
 let proveedores=[];
 let compras=[];
 let categorias=[]; // categorías de inventario con su umbral de stock bajo: {nombre, umbralStock}
+let recordatorios=[]; // módulo de recordatorios/tareas: {id,titulo,nota,tipo,refId,refLabel,fechaVencimiento,asignadoA,creadoPor,prioridad,hecho,...}
 let documentos=[];
 let talonarios=[];
 let recibosAnulados=[];
@@ -1317,6 +1345,7 @@ const FISCAL={cambiaria:1};
 const MODULOS_DESACTIVADOS=['despachos','misentregas'];
 function tienePermiso(v){
   if(MODULOS_DESACTIVADOS.includes(v))return false;
+  if(v==='recordatorios')return true; // módulo de recordatorios disponible para todos los roles
   const r=ROLES[currentRole];if(!r)return true;
   return r.views==='ALL'||r.views.includes(v);
 }
@@ -1325,9 +1354,9 @@ function go(v,desdeHash){
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   $('#v-'+v).classList.add('active');
-  const t={panel:['Dashboard','Resumen de operación'],pedido:['Nuevo pedido','Generá el pedido; después lo facturás o convertís'],documentos:['Documentos','Pedidos, notas y facturas'],cobros:['Cobros','Cuentas por cobrar de las facturas a crédito'],clientes:['Clientes','Catálogo de clientes'],inventario:['Inventario','Existencias de productos'],reportes:['Reportes','Análisis de ventas'],compras:['Compras','Registro de compras a proveedores'],nuevacompra:['Nueva compra','Registrá la entrada de mercadería'],porpagar:['Por pagar','Cuentas por pagar a proveedores'],bancos:['Bancos','Control de cuentas, entradas y salidas de dinero'],talonarios:['Talonarios','Control de talonarios de recibos y su cuadre'],proveedores:['Proveedores','Catálogo de proveedores'],usuarios:['Usuarios','Usuarios y roles del sistema'],auditoria:['Auditoría','Registro de todas las acciones del sistema'],despachos:['Despachos','Asignación de entregas y rutas'],misentregas:['Mis entregas','Documentos asignados para entregar']};
+  const t={panel:['Dashboard','Resumen de operación'],pedido:['Nuevo pedido','Generá el pedido; después lo facturás o convertís'],documentos:['Documentos','Pedidos, notas y facturas'],cobros:['Cobros','Cuentas por cobrar de las facturas a crédito'],clientes:['Clientes','Catálogo de clientes'],recordatorios:['Recordatorios','Tareas, seguimientos y notas — tuyas y asignadas'],inventario:['Inventario','Existencias de productos'],reportes:['Reportes','Análisis de ventas'],compras:['Compras','Registro de compras a proveedores'],nuevacompra:['Nueva compra','Registrá la entrada de mercadería'],porpagar:['Por pagar','Cuentas por pagar a proveedores'],bancos:['Bancos','Control de cuentas, entradas y salidas de dinero'],talonarios:['Talonarios','Control de talonarios de recibos y su cuadre'],proveedores:['Proveedores','Catálogo de proveedores'],usuarios:['Usuarios','Usuarios y roles del sistema'],auditoria:['Auditoría','Registro de todas las acciones del sistema'],despachos:['Despachos','Asignación de entregas y rutas'],misentregas:['Mis entregas','Documentos asignados para entregar']};
   $('#ttl').textContent=t[v][0];$('#sub').textContent=t[v][1];
-  if(v==='panel')renderPanel();if(v==='documentos')renderDocs();if(v==='cobros')renderCobros();if(v==='clientes')renderCli();if(v==='inventario')renderProd();if(v==='reportes')renderReportes();if(v==='compras')renderCompras();if(v==='nuevacompra')renderCompraForm();if(v==='porpagar')renderPorPagar();if(v==='bancos')renderBancos();if(v==='proveedores')renderProveedores();if(v==='talonarios')renderTalonarios();if(v==='usuarios')renderUsuarios();if(v==='auditoria')renderAuditoria();if(v==='despachos')renderDespachos();if(v==='misentregas')renderMisEntregas();
+  if(v==='panel')renderPanel();if(v==='documentos')renderDocs();if(v==='cobros')renderCobros();if(v==='clientes')renderCli();if(v==='recordatorios')renderRecordatorios();if(v==='inventario')renderProd();if(v==='reportes')renderReportes();if(v==='compras')renderCompras();if(v==='nuevacompra')renderCompraForm();if(v==='porpagar')renderPorPagar();if(v==='bancos')renderBancos();if(v==='proveedores')renderProveedores();if(v==='talonarios')renderTalonarios();if(v==='usuarios')renderUsuarios();if(v==='auditoria')renderAuditoria();if(v==='despachos')renderDespachos();if(v==='misentregas')renderMisEntregas();
   // Actualizar la dirección (hash) para que el botón atrás y el recargar funcionen.
   // Si el cambio vino del propio hash, no lo reescribimos para evitar bucles.
   if(!desdeHash && ('#'+v)!==location.hash){ try{ location.hash=v; }catch(e){} }
@@ -1450,6 +1479,7 @@ async function doLoginAuth(){
     entrarVistaInicial();
     setTimeout(recuperarBorrador,300);
     _recDismissed=false;setTimeout(()=>{try{mostrarRecordatoriosHoy();}catch(e){console.error(e);}},700);
+    setTimeout(()=>{try{actualizarBellRec();mostrarRecordatoriosPopup();}catch(e){console.error(e);}},1100);
     ocultarLoader();
     btn.disabled=false;btn.textContent='Ingresar';
   }catch(e){
@@ -3291,6 +3321,151 @@ function borrarSeguimiento(cliId,segId){
   toast('Seguimiento eliminado');
 }
 window.borrarSeguimiento=borrarSeguimiento;
+
+// ========== MÓDULO RECORDATORIOS (general, para todos) ==========
+let recFiltro='pendientes';
+const _escRec=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// Recordatorios visibles para el usuario actual (admin ve todos; el resto los asignados a él o creados por él)
+function recVisibles(){
+  if(currentRole==='admin'||currentRole==='gerencia')return recordatorios.slice();
+  return recordatorios.filter(r=>r.asignadoA===currentUser||r.creadoPor===currentUser);
+}
+// Recordatorios pendientes de HOY o vencidos, del usuario actual (para la campana/pop-up)
+function recordatoriosPendientesHoy(){
+  const hoy=fechaHoyGT();
+  return recVisibles().filter(r=>!r.hecho&&r.fechaVencimiento&&r.fechaVencimiento<=hoy)
+    .sort((a,b)=>(a.fechaVencimiento||'').localeCompare(b.fechaVencimiento||''));
+}
+window.setRecFiltro=function(f){recFiltro=f;document.querySelectorAll('#rec-tabs .ct-tab').forEach(b=>b.classList.toggle('on',b.dataset.f===f));renderRecordatorios();};
+function renderRecordatorios(){
+  const hoy=fechaHoyGT();
+  const base=recVisibles();
+  const pend=base.filter(r=>!r.hecho);
+  const venc=pend.filter(r=>r.fechaVencimiento&&r.fechaVencimiento<hoy);
+  const deHoy=pend.filter(r=>r.fechaVencimiento===hoy);
+  const kp=$('#rec-kpis');
+  if(kp)kp.innerHTML=kpiHTML([
+    {ic:venc.length?'i-danger':'i-lime',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',lbl:'Vencidos',val:venc.length},
+    {ic:'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'Para hoy',val:deHoy.length},
+    {ic:'i-blue',svg:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',lbl:'Pendientes',val:pend.length}]);
+  let arr=base;
+  if(recFiltro==='pendientes')arr=base.filter(r=>!r.hecho);
+  else if(recFiltro==='hoy')arr=base.filter(r=>!r.hecho&&r.fechaVencimiento&&r.fechaVencimiento<=hoy);
+  else if(recFiltro==='hechos')arr=base.filter(r=>r.hecho);
+  const prioW={alta:0,normal:1,baja:2};
+  arr=arr.slice().sort((a,b)=>{
+    if(a.hecho!==b.hecho)return a.hecho?1:-1;
+    const av=a.fechaVencimiento||'9999-12-31',bv=b.fechaVencimiento||'9999-12-31';
+    if(av!==bv)return av<bv?-1:1;
+    return (prioW[a.prioridad]??1)-(prioW[b.prioridad]??1);
+  });
+  const tipoIcon={tarea:'📌',cliente:'👤',factura:'🧾',producto:'📦',compra:'🛒'};
+  const tb=$('#t-recordatorios');if(!tb)return;
+  tb.innerHTML=arr.length?arr.map(r=>{
+    const vencido=!r.hecho&&r.fechaVencimiento&&r.fechaVencimiento<hoy;
+    const esHoy=!r.hecho&&r.fechaVencimiento===hoy;
+    const prioBadge=r.prioridad==='alta'?'<span class="badge b-danger" style="font-size:9.5px">Alta</span>':(r.prioridad==='baja'?'<span class="badge b-muted" style="font-size:9.5px">Baja</span>':'');
+    return `<tr style="${r.hecho?'opacity:.55':''}">
+      <td style="text-align:center"><input type="checkbox" ${r.hecho?'checked':''} onclick="toggleHechoRecordatorio(${r.id})" title="Marcar hecho" style="width:16px;height:16px;cursor:pointer"></td>
+      <td><div style="font-weight:600;${r.hecho?'text-decoration:line-through':''}">${tipoIcon[r.tipo]||'📌'} ${_escRec(r.titulo)}</div>${r.nota?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.nota)}</div>`:''}</td>
+      <td style="font-size:12px;color:var(--muted)">${r.refLabel?_escRec(r.refLabel):'—'}</td>
+      <td style="font-size:12px">${_escRec(r.asignadoA||'—')}</td>
+      <td style="color:${vencido?'var(--danger)':(esHoy?'#9A6B07':'var(--muted)')};font-weight:${vencido||esHoy?'700':'400'}">${r.fechaVencimiento?fdate(r.fechaVencimiento)+(vencido?' · vencido':(esHoy?' · hoy':'')):'—'}</td>
+      <td>${prioBadge}</td>
+      <td><div class="acts"><button class="btn btn-ghost btn-sm" onclick="openRecordatorio(${r.id})">Editar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarRecordatorioUI(${r.id})">✕</button></div></td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="7" class="empty">Sin recordatorios ${recFiltro==='hechos'?'hechos':'en esta vista'}</td></tr>`;
+}
+window.renderRecordatorios=renderRecordatorios;
+// Configura el autocomplete "Ligado a" según el tipo elegido (lee el tipo en vivo)
+function recTipoChange(forceTipo){
+  const tipo=forceTipo||document.getElementById('rec-tipo')?.value||'tarea';
+  const wrap=document.getElementById('rec-ref-wrap');
+  if(wrap)wrap.style.display=tipo==='tarea'?'none':'';
+  if(!forceTipo){const rid=document.getElementById('rec-refid'),rf=document.getElementById('rec-ref');if(rid)rid.value='';if(rf)rf.value='';}
+}
+window.recTipoChange=recTipoChange;
+function openRecordatorio(id){
+  const r=id?recordatorios.find(x=>x.id===id):null;
+  const usrOpts=usuarios.filter(u=>u.activo!==false).map(u=>`<option value="${_escRec(u.nombre)}"${(r?r.asignadoA:currentUser)===u.nombre?' selected':''}>${_escRec(u.nombre)}</option>`).join('');
+  const tipoOpts=[['tarea','Tarea libre'],['cliente','Cliente'],['factura','Factura'],['producto','Producto'],['compra','Compra']].map(([v,l])=>`<option value="${v}"${(r?r.tipo:'tarea')===v?' selected':''}>${l}</option>`).join('');
+  const prioOpts=[['alta','Alta'],['normal','Normal'],['baja','Baja']].map(([v,l])=>`<option value="${v}"${(r?r.prioridad:'normal')===v?' selected':''}>${l}</option>`).join('');
+  openMod(id?'Editar recordatorio':'Nuevo recordatorio',
+    `<div class="row"><div style="grid-column:1/-1"><label>Título</label><input id="rec-titulo" value="${r?_escRec(r.titulo):''}" placeholder="Ej. Llamar al cliente por su orden de compra"></div></div>
+     <div class="row"><div style="grid-column:1/-1"><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="rec-nota" value="${r?_escRec(r.nota):''}" placeholder="Detalle"></div></div>
+     <div class="row"><div><label>Tipo</label><select id="rec-tipo" onchange="recTipoChange()">${tipoOpts}</select></div>
+       <div id="rec-ref-wrap"><label>Ligado a</label><input id="rec-ref" placeholder="Buscar…" autocomplete="off" value="${r&&r.refLabel?_escRec(r.refLabel):''}"><input type="hidden" id="rec-refid" value="${r&&r.refId?r.refId:''}"></div></div>
+     <div class="row"><div><label>Vence</label><input id="rec-fecha" type="date" value="${r&&r.fechaVencimiento?String(r.fechaVencimiento).slice(0,10):''}"></div><div><label>Prioridad</label><select id="rec-prio">${prioOpts}</select></div></div>
+     <div class="row"><div style="grid-column:1/-1"><label>Asignar a</label><select id="rec-asig">${usrOpts}</select></div></div>`,
+    ()=>{
+      const titulo=$('#rec-titulo').value.trim();
+      if(!titulo){toast('Falta el título','Escribí qué hay que recordar',true);return;}
+      const tipo=$('#rec-tipo').value;
+      const datos={titulo,nota:$('#rec-nota').value.trim(),tipo,
+        refId:tipo==='tarea'?null:(($('#rec-refid').value)?Number($('#rec-refid').value):null),
+        refLabel:tipo==='tarea'?'':($('#rec-ref').value.trim()||''),
+        fechaVencimiento:$('#rec-fecha').value||null,asignadoA:$('#rec-asig').value,prioridad:$('#rec-prio').value};
+      if(r){Object.assign(r,datos);if(typeof guardarRecordatorio==='function')guardarRecordatorio(r);logAudit('Recordatorio editado',titulo);}
+      else{const nuevo={id:(recordatorios.reduce((m,x)=>Math.max(m,x.id||0),0)+1),...datos,hecho:false,creadoPor:currentUser,creado:new Date().toISOString(),_nuevo:true};recordatorios.push(nuevo);if(typeof guardarRecordatorio==='function')guardarRecordatorio(nuevo);logAudit('Recordatorio creado',titulo);}
+      closeMod();renderRecordatorios();actualizarBellRec();toast('✓ Recordatorio guardado',titulo);
+    });
+  setTimeout(()=>{
+    recTipoChange(r?r.tipo:'tarea');
+    crearAutocomplete('rec-ref',
+      (q)=>{
+        const tipo=document.getElementById('rec-tipo')?.value||'tarea';const ql=q.toLowerCase();
+        if(tipo==='cliente')return clientes.filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:c.nombre,sub:c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:(c.nit||''),valor:c.id}));
+        if(tipo==='factura')return documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.serie).filter(d=>((d.serie+'-'+d.numeroDte).toLowerCase().includes(ql)||(d.clienteComercial||d.clienteNombre||'').toLowerCase().includes(ql))).slice(0,8).map(d=>({texto:d.serie+'-'+d.numeroDte,sub:d.clienteComercial||d.clienteNombre||'',valor:d.id}));
+        if(tipo==='producto')return productos.filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:p.marca||'',valor:p.id}));
+        if(tipo==='compra')return compras.filter(c=>('CMP-'+padn(c.id)).toLowerCase().includes(ql)||(c.proveedorNombre||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:'CMP-'+padn(c.id)+' · '+c.proveedorNombre,sub:money(c.total),valor:c.id}));
+        return [];
+      },
+      (item)=>{ if(item){document.getElementById('rec-refid').value=item.valor;document.getElementById('rec-ref').value=item.texto;} });
+  },0);
+}
+window.openRecordatorio=openRecordatorio;
+window.toggleHechoRecordatorio=function(id){
+  const r=recordatorios.find(x=>x.id===id);if(!r)return;
+  r.hecho=!r.hecho;
+  if(r.hecho){r.hechoPor=currentUser;r.hechoFecha=new Date().toISOString();}else{r.hechoPor='';r.hechoFecha=null;}
+  if(typeof guardarRecordatorio==='function')guardarRecordatorio(r);
+  logAudit('Recordatorio '+(r.hecho?'completado':'reabierto'),r.titulo);
+  renderRecordatorios();actualizarBellRec();
+};
+window.borrarRecordatorioUI=function(id){
+  const r=recordatorios.find(x=>x.id===id);if(!r)return;
+  confirmar('¿Borrar recordatorio?','Se eliminará "'+(_escRec(r.titulo))+'". Esta acción no se puede deshacer.','Borrar',()=>{
+    recordatorios=recordatorios.filter(x=>x.id!==id);
+    if(typeof borrarRecordatorio==='function')borrarRecordatorio(id);
+    logAudit('Recordatorio eliminado',r.titulo);
+    renderRecordatorios();actualizarBellRec();toast('Recordatorio eliminado');
+  });
+};
+// Campana de recordatorios (para todos los roles)
+function actualizarBellRec(){
+  const b=document.getElementById('bell-recmod');if(!b)return;
+  const n=recordatoriosPendientesHoy().length;
+  b.style.display=n>0?'flex':'none';
+  const s=document.getElementById('bell-recmod-n');if(s)s.textContent=n;
+}
+window.actualizarBellRec=actualizarBellRec;
+function mostrarRecordatoriosPopup(forzar){
+  actualizarBellRec();
+  const lista=recordatoriosPendientesHoy();
+  if(!lista.length){if(forzar)toast('Sin recordatorios','No tenés recordatorios para hoy ni vencidos');return;}
+  const hoy=fechaHoyGT();
+  const body=$('#recmod-body');
+  if(body)body.innerHTML=lista.map(r=>{
+    const vencido=r.fechaVencimiento<hoy;
+    return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid var(--line)">
+      <input type="checkbox" onclick="toggleHechoRecordatorio(${r.id});this.closest('div').style.opacity=.4" style="width:16px;height:16px;margin-top:2px;cursor:pointer">
+      <div style="flex:1"><div style="font-weight:600">${_escRec(r.titulo)}</div>${r.refLabel?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.refLabel)}</div>`:''}${r.nota?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.nota)}</div>`:''}<div style="font-size:11px;color:${vencido?'var(--danger)':'#9A6B07'};font-weight:700;margin-top:2px">${vencido?'Vencido · ':'Hoy · '}${fdate(r.fechaVencimiento)}</div></div>
+    </div>`;
+  }).join('');
+  const ov=$('#recmod');if(ov)ov.classList.add('show');
+}
+window.mostrarRecordatoriosPopup=mostrarRecordatoriosPopup;
+window.cerrarRecmod=function(){const ov=$('#recmod');if(ov)ov.classList.remove('show');};
 // ---- Recordatorios de cobro: pop-up en la pantalla principal ----
 // Solo los ve el admin y el rol de cobros/contabilidad. Muestra los
 // "próximo seguimiento" cuya fecha es HOY y que aún no se atendieron.
@@ -8973,7 +9148,7 @@ window.go=function(v,desdeHash){
 // ---- Navegación por dirección (hash) ----
 // Permite que el botón "atrás"/"adelante" del navegador y el recargar (F5)
 // funcionen dentro del sistema. Cada sección tiene su dirección: #inventario, #reportes, etc.
-const VISTAS_VALIDAS=['panel','pedido','documentos','cobros','clientes','inventario','reportes','compras','nuevacompra','porpagar','bancos','talonarios','proveedores','usuarios','auditoria','despachos','misentregas'];
+const VISTAS_VALIDAS=['panel','pedido','documentos','cobros','clientes','recordatorios','inventario','reportes','compras','nuevacompra','porpagar','bancos','talonarios','proveedores','usuarios','auditoria','despachos','misentregas'];
 function irAHash(){
   // Solo navegar por hash si ya entramos al sistema (app visible)
   const app=document.getElementById('app-layout');
@@ -9092,6 +9267,7 @@ async function verificarSesion(){
         setTimeout(recuperarBorrador, 2000);
         // Recordatorios de cobro: mostrar el pop-up también al restaurar sesión (F5)
         _recDismissed=false;setTimeout(()=>{try{mostrarRecordatoriosHoy();}catch(e){console.error(e);}},2200);
+        setTimeout(()=>{try{actualizarBellRec();mostrarRecordatoriosPopup();}catch(e){console.error(e);}},2600);
       }
     }
   }catch(e){ /* si falla, se queda en el login normal */ }
