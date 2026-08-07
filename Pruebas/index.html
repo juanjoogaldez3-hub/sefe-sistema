@@ -6769,10 +6769,11 @@ function _movsInvDespuesDe(corte){
 // Agrega un buscador ("Buscar en la tabla…") a cada tabla de reporte. Se omite en los
 // reportes agrupados/colapsables (cliprod, dircli, climes), donde chocaría con expandir/colapsar.
 function enhanceRepTables(){
-  if(['cliprod','dircli','climes'].includes(repType))return;
+  if(['cliprod','dircli','climes','estcta','vendedor','climescomp'].includes(repType))return;
   const body=document.getElementById('rep-body');if(!body)return;
   let i=0;
   body.querySelectorAll('table').forEach(table=>{
+    if(table.closest('td'))return; // no enganchar tablas de detalle anidadas (dentro de una celda)
     const tb=table.querySelector('tbody');if(!tb)return;
     if(tb.querySelectorAll('tr').length<5)return; // tablas chicas no necesitan buscador
     if(!tb.id)tb.id='rep-tbl-'+(i++);
