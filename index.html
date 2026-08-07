@@ -493,6 +493,7 @@
       <button class="active" data-view="panel"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Dashboard</span></button>
       <div class="lbl">Operaciones</div>
       <button data-view="pedido"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/><circle cx="19" cy="17" r="2.5"/></svg><span>Nuevo pedido</span></button>
+      <button data-view="cotizaciones"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg><span>Cotizaciones</span></button>
       <button data-view="documentos"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Documentos</span></button>
       <button data-view="clientes"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg><span>Clientes</span></button>
       <button data-view="recordatorios"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Recordatorios</span></button>
@@ -737,6 +738,54 @@
           </div>
           <div class="panel-body">
             <table><thead><tr><th style="width:34px"></th><th>Recordatorio</th><th>Ligado a</th><th>Asignado</th><th>Vence</th><th>Prioridad</th><th></th></tr></thead><tbody id="t-recordatorios"></tbody></table>
+          </div>
+        </div>
+      </section>
+
+      <!-- COTIZACIONES -->
+      <section class="view" id="v-cotizaciones">
+        <div id="cot-list">
+          <div class="kpis stagger" id="cot-kpis"></div>
+          <div class="panel">
+            <div class="panel-head"><h3>Cotizaciones</h3>
+              <button class="btn btn-primary btn-sm" onclick="nuevaCotizacion()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva cotización</button>
+            </div>
+            <div id="cot-tabs" style="display:flex;gap:6px;padding:10px 16px 0;flex-wrap:wrap">
+              <button class="ct-tab on" data-f="activas" onclick="setCotFiltro('activas')">Activas</button>
+              <button class="ct-tab" data-f="aceptada" onclick="setCotFiltro('aceptada')">Aceptadas</button>
+              <button class="ct-tab" data-f="convertida" onclick="setCotFiltro('convertida')">Convertidas</button>
+              <button class="ct-tab" data-f="todas" onclick="setCotFiltro('todas')">Todas</button>
+            </div>
+            <div class="panel-body">
+              <table><thead><tr><th>Cotización</th><th>Cliente</th><th>Fecha</th><th>Vigencia</th><th class="num">Total</th><th>Estado</th><th></th></tr></thead><tbody id="t-cotizaciones"></tbody></table>
+            </div>
+          </div>
+        </div>
+        <div id="cot-editor" style="display:none">
+          <div class="panel">
+            <div class="panel-head"><h3 id="cot-ed-title">Nueva cotización</h3>
+              <button class="btn btn-ghost btn-sm" onclick="cerrarCotEditor()">← Volver</button>
+            </div>
+            <div class="panel-body">
+              <div class="row"><div style="flex:1"><label>Cliente</label>
+                <div class="prod-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="cot-cli-search" placeholder="Buscar cliente por nombre o NIT…" autocomplete="off"></div>
+              </div></div>
+              <div id="cot-cli-info" style="font-size:12px;color:var(--muted);margin:2px 0 12px"></div>
+              <div class="row"><div style="flex:1"><label>Agregar producto</label>
+                <div class="prod-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="cot-add" placeholder="Buscar producto por SKU o nombre…" autocomplete="off"></div>
+              </div></div>
+              <div style="overflow-x:auto"><table id="cot-cart-tbl"><thead><tr><th>Producto</th><th class="num">Cantidad</th><th class="num">Precio unit.</th><th class="num">Desc %</th><th class="num">Subtotal</th><th></th></tr></thead><tbody id="cot-cart"></tbody></table></div>
+              <div style="display:flex;justify-content:flex-end;gap:12px;align-items:center;margin-top:10px;font-size:15px;font-weight:700">TOTAL: <span id="cot-total" class="num">Q 0.00</span></div>
+              <div class="row" style="margin-top:14px">
+                <div><label>Validez (días)</label><input id="cot-validez" type="number" min="1" value="15" style="width:120px"></div>
+                <div><label>Estado</label><select id="cot-estado"><option value="borrador">Borrador</option><option value="enviada">Enviada</option><option value="aceptada">Aceptada</option><option value="rechazada">Rechazada</option></select></div>
+              </div>
+              <div class="row"><div style="flex:1"><label>Observaciones</label><input id="cot-obs" placeholder="Notas para la cotización (opcional)"></div></div>
+              <div style="display:flex;gap:8px;margin-top:14px">
+                <button class="btn btn-primary" onclick="guardarCotizacionUI()">Guardar cotización</button>
+                <button class="btn btn-ghost" onclick="cerrarCotEditor()">Cancelar</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1461,7 +1510,7 @@ async function doLoginAuth(){
           if(ok){
             cliN=(clientes.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
             prodN=(productos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-            corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;
+            corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;cotN=(cotizaciones.reduce((m,c)=>Math.max(m,c.numero||0),0)||0)+1;
             compN=(compras.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
             usrN=(usuarios.reduce((m,u)=>Math.max(m,u.id),0)||0)+1;
             pilN=(pilotos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
@@ -3549,6 +3598,249 @@ function mostrarRecordatoriosPopup(forzar){
   const ov=$('#recmod');if(ov)ov.classList.add('show');
 }
 window.mostrarRecordatoriosPopup=mostrarRecordatoriosPopup;
+
+// ==================== COTIZACIONES ====================
+let cotCart=[];         // items en edición
+let cotEditId=null;     // id de la cotización que se edita (null = nueva)
+let cotClienteSel=null; // cliente elegido en el editor
+let cotFiltro='activas';
+const COT_ESTADO={borrador:['Borrador','b-muted'],enviada:['Enviada','b-info'],aceptada:['Aceptada','b-ok'],rechazada:['Rechazada','b-danger'],convertida:['Convertida','b-warn']};
+function cotEsc(s){return (typeof _escRec==='function')?_escRec(s):String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function cotTotal(c){return (c.totales&&c.totales.total)||0;}
+function cotVisibles(){
+  if(typeof esVentas==='function'&&esVentas())return cotizaciones.filter(c=>c.creadoPor===currentUser||(typeof miVendedorId==='function'&&c.vendedorId===miVendedorId()));
+  return cotizaciones.slice();
+}
+function setCotFiltro(f){cotFiltro=f;document.querySelectorAll('#cot-tabs .ct-tab').forEach(b=>b.classList.toggle('on',b.dataset.f===f));renderCotizaciones();}
+window.setCotFiltro=setCotFiltro;
+function renderCotizaciones(){
+  const listBox=document.getElementById('cot-list'),edBox=document.getElementById('cot-editor');
+  if(listBox)listBox.style.display='';if(edBox)edBox.style.display='none';
+  const base=cotVisibles().slice().sort((a,b)=>(b.numero||0)-(a.numero||0));
+  let lista=base;
+  if(cotFiltro==='activas')lista=base.filter(c=>['borrador','enviada'].includes(c.estado));
+  else if(cotFiltro==='aceptada')lista=base.filter(c=>c.estado==='aceptada');
+  else if(cotFiltro==='convertida')lista=base.filter(c=>c.estado==='convertida');
+  const kpis=document.getElementById('cot-kpis');
+  if(kpis&&typeof kpiHTML==='function'){
+    const nAct=base.filter(c=>['borrador','enviada'].includes(c.estado)).length;
+    const nAcc=base.filter(c=>c.estado==='aceptada').length;
+    const montoVig=base.filter(c=>['borrador','enviada','aceptada'].includes(c.estado)).reduce((s,c)=>s+cotTotal(c),0);
+    kpis.innerHTML=kpiHTML([
+      {ic:'i-warn',svg:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',lbl:'Activas',val:nAct},
+      {ic:'i-ok',svg:'<path d="M20 6 9 17l-5-5"/>',lbl:'Aceptadas',val:nAcc},
+      {ic:'i-blue',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Monto vigente',val:money(montoVig)}
+    ]);
+  }
+  const tb=document.getElementById('t-cotizaciones');if(!tb)return;
+  tb.innerHTML=lista.length?lista.map(c=>{
+    const [en,ec]=COT_ESTADO[c.estado]||['—','b-muted'];
+    const vencida=c.fechaVence&&c.estado!=='convertida'&&String(c.fechaVence)<fechaHoyGT();
+    return `<tr>
+      <td style="font-weight:600">COT-${padn(c.numero)}</td>
+      <td>${cotEsc(c.clienteComercial||c.clienteNombre||'—')}</td>
+      <td style="color:var(--muted)">${c.creada?fdate(String(c.creada).slice(0,10)):'—'}</td>
+      <td style="color:${vencida?'var(--danger)':'var(--muted)'}">${c.fechaVence?fdate(c.fechaVence):'—'}${vencida?' · vencida':''}</td>
+      <td class="num" style="font-weight:700">${money(cotTotal(c))}</td>
+      <td><span class="badge ${ec}">${en}</span></td>
+      <td><div class="acts">
+        <button class="btn btn-ghost btn-sm" onclick="cotizacionPDF(${c.id})" title="Ver PDF">PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="editarCotizacion(${c.id})">Editar</button>
+        ${c.estado!=='convertida'?`<button class="btn btn-ghost btn-sm" style="color:var(--green)" onclick="convertirCotizacionAPedido(${c.id})" title="Convertir a pedido">→ Pedido</button>`:''}
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarCotizacionUI(${c.id})">✕</button>
+      </div></td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="7" class="empty">Sin cotizaciones ${cotFiltro==='todas'?'':'en esta vista'}</td></tr>`;
+}
+window.renderCotizaciones=renderCotizaciones;
+function cotInfoCliente(){
+  const box=document.getElementById('cot-cli-info');if(!box)return;
+  box.textContent=cotClienteSel?(((cotClienteSel.razonSocial&&cotClienteSel.razonSocial!==cotClienteSel.nombre)?cotClienteSel.razonSocial+' · ':'')+(cotClienteSel.nit?'NIT '+cotClienteSel.nit:'')):'';
+}
+function cotWireAutocomplete(){
+  if(typeof crearAutocomplete!=='function')return;
+  crearAutocomplete('cot-cli-search',
+    (q)=>{const ql=q.toLowerCase();let base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+      return base.filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:`${c.nombre} · ${c.nit||''}`,sub:c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:'',valor:c.id}));},
+    (item)=>{cotClienteSel=item?clientes.find(c=>c.id===item.valor):null;cotInfoCliente();});
+  crearAutocomplete('cot-add',
+    (q)=>{const ql=q.toLowerCase();
+      return productos.filter(p=>p.activo!==false).filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)||(p.skuProveedor||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:p.marca||'',valor:p.id}));},
+    (item)=>{if(item){cotAddProducto(item.valor);const el=document.getElementById('cot-add');if(el)el.value='';}});
+}
+function abrirCotEditor(titulo){
+  const listBox=document.getElementById('cot-list'),edBox=document.getElementById('cot-editor');
+  if(listBox)listBox.style.display='none';if(edBox)edBox.style.display='';
+  const t=document.getElementById('cot-ed-title');if(t)t.textContent=titulo;
+  const cs=document.getElementById('cot-cli-search');if(cs)cs.value=cotClienteSel?`${cotClienteSel.nombre} · ${cotClienteSel.nit||''}`:'';
+  cotInfoCliente();cotRenderCart();
+  setTimeout(cotWireAutocomplete,0);
+}
+function nuevaCotizacion(){
+  cotEditId=null;cotCart=[];cotClienteSel=null;
+  abrirCotEditor('Nueva cotización');
+  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=15;const e=document.getElementById('cot-estado');if(e)e.value='borrador';const o=document.getElementById('cot-obs');if(o)o.value='';},0);
+}
+window.nuevaCotizacion=nuevaCotizacion;
+function editarCotizacion(id){
+  const c=cotizaciones.find(x=>x.id===id);if(!c)return;
+  cotEditId=id;cotCart=(c.items||[]).map(it=>({...it}));cotClienteSel=clientes.find(x=>x.id===c.clienteId)||null;
+  abrirCotEditor('Editar COT-'+padn(c.numero));
+  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=c.validezDias||15;const e=document.getElementById('cot-estado');if(e)e.value=(c.estado==='convertida'?'aceptada':c.estado)||'borrador';const o=document.getElementById('cot-obs');if(o)o.value=c.observaciones||'';},0);
+}
+window.editarCotizacion=editarCotizacion;
+function cerrarCotEditor(){cotEditId=null;renderCotizaciones();}
+window.cerrarCotEditor=cerrarCotEditor;
+function cotAddProducto(pid){
+  const p=productos.find(x=>x.id===pid);if(!p)return;
+  const ex=cotCart.find(it=>it.id===pid);
+  if(ex){ex.cantidad++;}
+  else{
+    let precio=Number(p.precio)||0;
+    if(cotClienteSel&&typeof precioCliente==='function'){try{const pc=precioCliente(cotClienteSel,p);if(pc>0)precio=pc;}catch(e){}}
+    cotCart.push({id:p.id,codigo:p.codigo,nombre:p.nombre,precioBase:precio,precio:precio,cantidad:1,descuento:0,unidad:p.unidad,modoVenta:'unidad',tipoEmpaque:p.tipoEmpaque||'unidad',unidadesPorCaja:p.unidadesPorCaja});
+  }
+  cotRenderCart();
+}
+window.cotAddProducto=cotAddProducto;
+function cotCalcTotal(){return cotCart.reduce((s,it)=>s+Number(it.precio)*(1-(Number(it.descuento)||0)/100)*Number(it.cantidad),0);}
+function cotRenderCart(){
+  const tb=document.getElementById('cot-cart');if(!tb)return;
+  let total=0;
+  tb.innerHTML=cotCart.length?cotCart.map((it,i)=>{
+    const eff=Number(it.precio)*(1-(Number(it.descuento)||0)/100);
+    const sub=eff*Number(it.cantidad);total+=sub;
+    return `<tr>
+      <td style="font-weight:600">${cotEsc(it.nombre)}<div style="font-size:11px;color:var(--muted)">${cotEsc(it.codigo||'')}</div></td>
+      <td class="num"><input type="number" min="0" step="1" value="${it.cantidad}" style="width:70px;text-align:right" onchange="cotSet(${i},'cantidad',this.value)"></td>
+      <td class="num"><input type="number" min="0" step="0.01" value="${Number(it.precio).toFixed(2)}" style="width:92px;text-align:right" onchange="cotSet(${i},'precio',this.value)"></td>
+      <td class="num"><input type="number" min="0" max="100" step="1" value="${it.descuento||0}" style="width:64px;text-align:right" onchange="cotSet(${i},'descuento',this.value)"></td>
+      <td class="num" style="font-weight:700">${money(sub)}</td>
+      <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="cotRemove(${i})">✕</button></td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="6" class="empty">Agregá productos al presupuesto…</td></tr>`;
+  const tot=document.getElementById('cot-total');if(tot)tot.textContent=money(total);
+}
+function cotSet(i,campo,val){
+  if(!cotCart[i])return;let n=Number(val);if(isNaN(n))n=0;
+  if(campo==='cantidad'){n=Math.max(0,Math.round(n));if(n===0){cotCart.splice(i,1);cotRenderCart();return;}cotCart[i].cantidad=n;}
+  else if(campo==='precio'){cotCart[i].precio=Math.max(0,n);}
+  else if(campo==='descuento'){cotCart[i].descuento=Math.min(100,Math.max(0,n));}
+  cotRenderCart();
+}
+window.cotSet=cotSet;
+function cotRemove(i){cotCart.splice(i,1);cotRenderCart();}
+window.cotRemove=cotRemove;
+async function guardarCotizacionUI(){
+  if(!cotClienteSel){toast('Falta el cliente','Elegí el cliente de la cotización',true);return;}
+  if(!cotCart.length){toast('Agregá productos','La cotización no tiene productos',true);return;}
+  const validez=Math.max(1,parseInt((document.getElementById('cot-validez')||{}).value)||15);
+  const estado=(document.getElementById('cot-estado')||{}).value||'borrador';
+  const obs=((document.getElementById('cot-obs')||{}).value||'').trim();
+  const total=cotCalcTotal();
+  const vend=vendedores.find(v=>v.id===cotClienteSel.vendedorId)||null;
+  const hoy=fechaHoyGT();
+  const fechaVence=(()=>{const d=new Date(hoy+'T12:00:00');d.setDate(d.getDate()+validez);return d.toISOString().slice(0,10);})();
+  let cot;
+  if(cotEditId){
+    cot=cotizaciones.find(c=>c.id===cotEditId);if(!cot){toast('No encontrada',null,true);return;}
+    Object.assign(cot,{clienteId:cotClienteSel.id,clienteNombre:cotClienteSel.razonSocial||cotClienteSel.nombre,clienteComercial:cotClienteSel.nombre,clienteNit:cotClienteSel.nit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado});
+  }else{
+    cot={id:-Date.now(),numero:cotN,clienteId:cotClienteSel.id,clienteNombre:cotClienteSel.razonSocial||cotClienteSel.nombre,clienteComercial:cotClienteSel.nombre,clienteNit:cotClienteSel.nit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,_nuevo:true};
+    cotizaciones.push(cot);cotN++;
+  }
+  const ok=(typeof guardarCotizacion==='function')?await guardarCotizacion(cot):true;
+  logAudit(cotEditId?'Cotización editada':'Cotización creada','COT-'+padn(cot.numero)+' · '+(cot.clienteComercial||cot.clienteNombre)+' · '+money(total));
+  if(ok===false)toast('⚠ Guardada solo en pantalla','No se pudo confirmar con la base. Revisá conexión.',true);
+  else toast('✓ Cotización guardada','COT-'+padn(cot.numero));
+  cotEditId=null;renderCotizaciones();
+}
+window.guardarCotizacionUI=guardarCotizacionUI;
+function borrarCotizacionUI(id){
+  const c=cotizaciones.find(x=>x.id===id);if(!c)return;
+  confirmar('Borrar cotización','¿Seguro que querés borrar <b>COT-'+padn(c.numero)+'</b>? Esta acción no se puede deshacer.','Borrar',()=>{
+    cotizaciones=cotizaciones.filter(x=>x.id!==id);
+    if(typeof borrarCotizacion==='function')borrarCotizacion(id);
+    logAudit('Cotización borrada','COT-'+padn(c.numero));
+    renderCotizaciones();toast('Cotización borrada');
+  });
+}
+window.borrarCotizacionUI=borrarCotizacionUI;
+function convertirCotizacionAPedido(id){
+  const c=cotizaciones.find(x=>x.id===id);if(!c)return;
+  if(!(c.items||[]).length){toast('Sin productos',null,true);return;}
+  if(c.estado==='convertida'){toast('Ya convertida','Esta cotización ya se convirtió en pedido',true);return;}
+  confirmar('Convertir a pedido','Se creará un pedido abierto con los productos de <b>COT-'+padn(c.numero)+'</b>, reservando inventario. ¿Continuar?','Convertir a pedido',async()=>{
+    const cli=clientes.find(x=>x.id===c.clienteId);
+    const vend=vendedores.find(v=>v.id===(c.vendedorId||(cli&&cli.vendedorId)))||vendedores[0];
+    const items=(c.items||[]).map(it=>{
+      const eff=Math.round(Number(it.precio)*(1-(Number(it.descuento)||0)/100)*100)/100;
+      return {id:it.id,codigo:it.codigo,nombre:it.nombre,precio:eff,unidad:it.unidad,cantidad:Number(it.cantidad),descuento:0,modoVenta:it.modoVenta||'unidad',tipoEmpaque:it.tipoEmpaque||'unidad',unidadesPorCaja:it.unidadesPorCaja};
+    });
+    const total=items.reduce((s,it)=>s+it.precio*it.cantidad,0);
+    const doc={id:-Date.now(),numero:corr,tipoDoc:'pedido',clienteId:c.clienteId,clienteNombre:c.clienteNombre,clienteComercial:c.clienteComercial,clienteNit:c.clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',subVendedorNombre:null,items,totales:{total},estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:'',observaciones:'Generado desde COT-'+padn(c.numero),notaInterna:'',nitFacturado:(cli&&cli.nit)||c.clienteNit,nombreFacturado:(cli&&cli.nombre)||c.clienteComercial,_nuevo:true};
+    items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p&&typeof aplicarStock==='function')aplicarStock(p,-it.cantidad,it.modoVenta);});
+    documentos.push(doc);corr++;
+    if(typeof guardarDocumento==='function')await guardarDocumento(doc);
+    c.estado='convertida';c.convertidoPedidoId=doc.id;
+    if(typeof guardarCotizacion==='function')await guardarCotizacion(c);
+    logAudit('Cotización convertida','COT-'+padn(c.numero)+' → PED-'+padn(doc.numero));
+    renderCotizaciones();
+    toast('✓ Convertida a pedido','PED-'+padn(doc.numero)+' · inventario reservado');
+  });
+}
+window.convertirCotizacionAPedido=convertirCotizacionAPedido;
+function cotizacionPDF(id){
+  const c=cotizaciones.find(x=>x.id===id);if(!c){toast('No encontrada',null,true);return;}
+  if(typeof _pdfShell!=='function'||typeof _abrirPDF!=='function'){toast('PDF no disponible',null,true);return;}
+  const cli=clientes.find(x=>x.id===c.clienteId);
+  const fecha=c.creada?fdate(String(c.creada).slice(0,10)):fdate(fechaHoyGT());
+  const rows=(c.items||[]).map(it=>{
+    const eff=Number(it.precio)*(1-(Number(it.descuento)||0)/100);const sub=eff*Number(it.cantidad);
+    return `<tr>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE">${cotEsc(it.codigo||'')}</td>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE">${cotEsc(it.nombre)}</td>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE;text-align:right">${it.cantidad}</td>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE;text-align:right">${money(it.precio)}</td>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE;text-align:right">${(Number(it.descuento)||0)>0?it.descuento+'%':'—'}</td>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE;text-align:right">${money(sub)}</td>
+    </tr>`;
+  }).join('');
+  const total=cotTotal(c);
+  const body=`
+    <div style="display:flex;justify-content:space-between;gap:20px;margin-bottom:12px">
+      <div style="font-size:12px;line-height:1.55">
+        <div style="font-weight:700;font-size:12.5px;color:#173916">CLIENTE</div>
+        ${cotEsc(c.clienteComercial||c.clienteNombre||'')}<br>
+        ${c.clienteNit?'NIT: '+cotEsc(c.clienteNit)+'<br>':''}
+        ${cli&&cli.direccion?cotEsc(cli.direccion):''}
+      </div>
+      <div style="font-size:12px;line-height:1.55;text-align:right">
+        <div><b>Cotización:</b> COT-${padn(c.numero)}</div>
+        <div><b>Fecha:</b> ${fecha}</div>
+        <div><b>Válida hasta:</b> ${c.fechaVence?fdate(c.fechaVence):'—'}</div>
+        ${c.vendedorNombre?'<div><b>Vendedor:</b> '+cotEsc(c.vendedorNombre)+'</div>':''}
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#F4F8F3">
+        <th style="text-align:left;padding:6px 4px;border-bottom:2px solid #173916">Código</th>
+        <th style="text-align:left;padding:6px 4px;border-bottom:2px solid #173916">Descripción</th>
+        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Cant.</th>
+        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Precio</th>
+        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Desc.</th>
+        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Subtotal</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="5" style="text-align:right;font-weight:700;padding:8px 4px;border-top:2px solid #173916">TOTAL (IVA incluido)</td><td style="text-align:right;font-weight:700;padding:8px 4px;border-top:2px solid #173916">${money(total)}</td></tr></tfoot>
+    </table>
+    ${c.observaciones?`<div style="margin-top:12px;font-size:11.5px;color:#555"><b>Observaciones:</b> ${cotEsc(c.observaciones)}</div>`:''}
+    <div style="margin-top:14px;font-size:10.5px;color:#888">Precios en quetzales, IVA incluido. Cotización válida por ${c.validezDias||15} días a partir de su emisión. Sujeta a existencias.</div>
+  `;
+  _abrirPDF(_pdfShell({titulo:'COTIZACIÓN',subtitulo:c.clienteComercial||c.clienteNombre||'',orientacion:'portrait',body}));
+}
+window.cotizacionPDF=cotizacionPDF;
+// ==================== FIN COTIZACIONES ====================
 window.cerrarRecmod=function(){const ov=$('#recmod');if(ov)ov.classList.remove('show');};
 // ---- Recordatorios de cobro: pop-up en la pantalla principal ----
 // Solo los ve el admin y el rol de cobros/contabilidad. Muestra los
@@ -9277,7 +9569,7 @@ async function arrancarApp(){
         // Reconstruir contadores de IDs según lo que vino de la base
         cliN=(clientes.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
         prodN=(productos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-        corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;
+        corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;cotN=(cotizaciones.reduce((m,c)=>Math.max(m,c.numero||0),0)||0)+1;
         compN=(compras.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
         usrN=(usuarios.reduce((m,u)=>Math.max(m,u.id),0)||0)+1;
         pilN=(pilotos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
@@ -9323,7 +9615,7 @@ async function verificarSesion(){
               window._sefeConectado=true;
               cliN=(clientes.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
               prodN=(productos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-              corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;
+              corr=(documentos.reduce((m,d)=>Math.max(m,d.numero||0),0)||0)+1;cotN=(cotizaciones.reduce((m,c)=>Math.max(m,c.numero||0),0)||0)+1;
               compN=(compras.reduce((m,c)=>Math.max(m,c.id),0)||0)+1;
               usrN=(usuarios.reduce((m,u)=>Math.max(m,u.id),0)||0)+1;
               pilN=(pilotos.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
