@@ -776,6 +776,11 @@
               </div>
               <div style="width:190px"><label>NIT <span style="color:var(--muted-2);font-weight:400">(si es nuevo)</span></label><input id="cot-cli-nit" placeholder="CF o NIT" autocomplete="off"></div></div>
               <div id="cot-cli-info" style="font-size:12px;color:var(--muted);margin:2px 0 12px"></div>
+              <div class="row">
+                <div style="flex:1"><label>Vendedor / Atiende</label><input id="cot-vend-nom" placeholder="Nombre del vendedor" autocomplete="off"></div>
+                <div style="width:180px"><label>Teléfono</label><input id="cot-vend-tel" placeholder="Tel. de contacto" autocomplete="off"></div>
+                <div style="flex:1"><label>Correo</label><input id="cot-vend-mail" placeholder="Correo de contacto" autocomplete="off"></div>
+              </div>
               <div class="row"><div style="flex:1"><label>Agregar producto</label>
                 <div class="prod-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="cot-add" placeholder="Buscar producto por SKU o nombre…" autocomplete="off"></div>
               </div></div>
@@ -3670,14 +3675,14 @@ function abrirCotEditor(titulo){
 function nuevaCotizacion(){
   cotEditId=null;cotCart=[];cotClienteSel=null;
   abrirCotEditor('Nueva cotización');
-  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=15;const e=document.getElementById('cot-estado');if(e)e.value='borrador';const o=document.getElementById('cot-obs');if(o)o.value='';const n=document.getElementById('cot-cli-nit');if(n)n.value='';},0);
+  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=15;const e=document.getElementById('cot-estado');if(e)e.value='borrador';const o=document.getElementById('cot-obs');if(o)o.value='';const n=document.getElementById('cot-cli-nit');if(n)n.value='';const vn=document.getElementById('cot-vend-nom');if(vn)vn.value=(typeof usuarios!=='undefined'&&(usuarios.find(u=>u.correo===currentUser)||{}).nombre)||'';const vt=document.getElementById('cot-vend-tel');if(vt)vt.value='';const vmail=document.getElementById('cot-vend-mail');if(vmail)vmail.value='';},0);
 }
 window.nuevaCotizacion=nuevaCotizacion;
 function editarCotizacion(id){
   const c=cotizaciones.find(x=>x.id===id);if(!c)return;
   cotEditId=id;cotCart=(c.items||[]).map(it=>({...it}));cotClienteSel=clientes.find(x=>x.id===c.clienteId)||null;
   abrirCotEditor('Editar COT-'+padn(c.numero));
-  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=c.validezDias||15;const e=document.getElementById('cot-estado');if(e)e.value=(c.estado==='convertida'?'aceptada':c.estado)||'borrador';const o=document.getElementById('cot-obs');if(o)o.value=c.observaciones||'';const n=document.getElementById('cot-cli-nit');if(!cotClienteSel){const s=document.getElementById('cot-cli-search');if(s)s.value=c.clienteComercial||c.clienteNombre||'';if(n)n.value=c.clienteNit||'';}else if(n){n.value='';}},0);
+  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=c.validezDias||15;const e=document.getElementById('cot-estado');if(e)e.value=(c.estado==='convertida'?'aceptada':c.estado)||'borrador';const o=document.getElementById('cot-obs');if(o)o.value=c.observaciones||'';const n=document.getElementById('cot-cli-nit');if(!cotClienteSel){const s=document.getElementById('cot-cli-search');if(s)s.value=c.clienteComercial||c.clienteNombre||'';if(n)n.value=c.clienteNit||'';}else if(n){n.value='';}const vn=document.getElementById('cot-vend-nom');if(vn)vn.value=c.vendedorNombre||'';const vt=document.getElementById('cot-vend-tel');if(vt)vt.value=c.vendedorTel||'';const vmail=document.getElementById('cot-vend-mail');if(vmail)vmail.value=c.vendedorEmail||'';},0);
 }
 window.editarCotizacion=editarCotizacion;
 function cerrarCotEditor(){cotEditId=null;renderCotizaciones();}
@@ -3735,6 +3740,9 @@ async function guardarCotizacionUI(){
   }else{
     clienteId=null;clienteNombre=txt;clienteComercial=txt;clienteNit=((document.getElementById('cot-cli-nit')||{}).value||'').trim();vend=null;
   }
+  const vendNom=((document.getElementById('cot-vend-nom')||{}).value||'').trim();
+  const vendTel=((document.getElementById('cot-vend-tel')||{}).value||'').trim();
+  const vendMail=((document.getElementById('cot-vend-mail')||{}).value||'').trim();
   const validez=Math.max(1,parseInt((document.getElementById('cot-validez')||{}).value)||15);
   const estado=(document.getElementById('cot-estado')||{}).value||'borrador';
   const obs=((document.getElementById('cot-obs')||{}).value||'').trim();
@@ -3744,9 +3752,9 @@ async function guardarCotizacionUI(){
   let cot;
   if(cotEditId){
     cot=cotizaciones.find(c=>c.id===cotEditId);if(!cot){toast('No encontrada',null,true);return;}
-    Object.assign(cot,{clienteId,clienteNombre,clienteComercial,clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado});
+    Object.assign(cot,{clienteId,clienteNombre,clienteComercial,clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado});
   }else{
-    cot={id:-Date.now(),numero:cotN,clienteId,clienteNombre,clienteComercial,clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,_nuevo:true};
+    cot={id:-Date.now(),numero:cotN,clienteId,clienteNombre,clienteComercial,clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,_nuevo:true};
     cotizaciones.push(cot);cotN++;
   }
   const ok=(typeof guardarCotizacion==='function')?await guardarCotizacion(cot):true;
@@ -3820,7 +3828,9 @@ function cotizacionPDF(id){
         <div><b>Cotización:</b> COT-${padn(c.numero)}</div>
         <div><b>Fecha:</b> ${fecha}</div>
         <div><b>Válida hasta:</b> ${c.fechaVence?fdate(c.fechaVence):'—'}</div>
-        ${c.vendedorNombre?'<div><b>Vendedor:</b> '+cotEsc(c.vendedorNombre)+'</div>':''}
+        ${c.vendedorNombre?'<div style="margin-top:4px"><b>Atiende:</b> '+cotEsc(c.vendedorNombre)+'</div>':''}
+        ${c.vendedorTel?'<div>☎ '+cotEsc(c.vendedorTel)+'</div>':''}
+        ${c.vendedorEmail?'<div>✉ '+cotEsc(c.vendedorEmail)+'</div>':''}
       </div>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">

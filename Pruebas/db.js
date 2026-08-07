@@ -476,7 +476,7 @@ function mapCotizacionFromDB(c){
   return {
     id:c.id, numero:c.numero,
     clienteId:c.cliente_id, clienteNombre:c.cliente_nombre||'', clienteComercial:c.cliente_comercial||'', clienteNit:c.cliente_nit||'',
-    vendedorId:c.vendedor_id, vendedorNombre:c.vendedor_nombre||'',
+    vendedorId:c.vendedor_id, vendedorNombre:c.vendedor_nombre||'', vendedorTel:c.vendedor_tel||'', vendedorEmail:c.vendedor_email||'',
     items:c.items||[], totales:c.totales||{},
     observaciones:c.observaciones||'', validezDias:Number(c.validez_dias)||15, fechaVence:c.fecha_vence,
     estado:c.estado||'borrador', creadoPor:c.creado_por||'', creada:c.creada,
@@ -487,7 +487,7 @@ async function guardarCotizacion(cot){
   const row={
     numero:cot.numero, cliente_id:cot.clienteId||null, cliente_nombre:cot.clienteNombre||null,
     cliente_comercial:cot.clienteComercial||null, cliente_nit:cot.clienteNit||null,
-    vendedor_id:cot.vendedorId||null, vendedor_nombre:cot.vendedorNombre||null,
+    vendedor_id:cot.vendedorId||null, vendedor_nombre:cot.vendedorNombre||null, vendedor_tel:cot.vendedorTel||null, vendedor_email:cot.vendedorEmail||null,
     items:cot.items||[], totales:cot.totales||{},
     observaciones:cot.observaciones||null, validez_dias:cot.validezDias||15, fecha_vence:cot.fechaVence||null,
     estado:cot.estado||'borrador', creado_por:cot.creadoPor||null, creada:cot.creada||null,
