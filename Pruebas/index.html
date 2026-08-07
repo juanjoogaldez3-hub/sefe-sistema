@@ -771,9 +771,10 @@
               <button class="btn btn-ghost btn-sm" onclick="cerrarCotEditor()">← Volver</button>
             </div>
             <div class="panel-body">
-              <div class="row"><div style="flex:1"><label>Cliente</label>
-                <div class="prod-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="cot-cli-search" placeholder="Buscar cliente por nombre o NIT…" autocomplete="off"></div>
-              </div></div>
+              <div class="row"><div style="flex:1"><label>Cliente <span style="color:var(--muted-2);font-weight:400">— o escribí un nombre nuevo si no existe</span></label>
+                <div class="prod-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="cot-cli-search" placeholder="Buscar cliente, o escribir uno nuevo…" autocomplete="off"></div>
+              </div>
+              <div style="width:190px"><label>NIT <span style="color:var(--muted-2);font-weight:400">(si es nuevo)</span></label><input id="cot-cli-nit" placeholder="CF o NIT" autocomplete="off"></div></div>
               <div id="cot-cli-info" style="font-size:12px;color:var(--muted);margin:2px 0 12px"></div>
               <div class="row"><div style="flex:1"><label>Agregar producto</label>
                 <div class="prod-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="cot-add" placeholder="Buscar producto por SKU o nombre…" autocomplete="off"></div>
@@ -3652,7 +3653,7 @@ function cotWireAutocomplete(){
   crearAutocomplete('cot-cli-search',
     (q)=>{const ql=q.toLowerCase();let base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
       return base.filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:`${c.nombre} · ${c.nit||''}`,sub:c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:'',valor:c.id}));},
-    (item)=>{cotClienteSel=item?clientes.find(c=>c.id===item.valor):null;cotInfoCliente();});
+    (item)=>{cotClienteSel=item?clientes.find(c=>c.id===item.valor):null;const n=document.getElementById('cot-cli-nit');if(n&&cotClienteSel)n.value='';cotInfoCliente();});
   crearAutocomplete('cot-add',
     (q)=>{const ql=q.toLowerCase();
       return productos.filter(p=>p.activo!==false).filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)||(p.skuProveedor||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:p.marca||'',valor:p.id}));},
@@ -3669,14 +3670,14 @@ function abrirCotEditor(titulo){
 function nuevaCotizacion(){
   cotEditId=null;cotCart=[];cotClienteSel=null;
   abrirCotEditor('Nueva cotización');
-  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=15;const e=document.getElementById('cot-estado');if(e)e.value='borrador';const o=document.getElementById('cot-obs');if(o)o.value='';},0);
+  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=15;const e=document.getElementById('cot-estado');if(e)e.value='borrador';const o=document.getElementById('cot-obs');if(o)o.value='';const n=document.getElementById('cot-cli-nit');if(n)n.value='';},0);
 }
 window.nuevaCotizacion=nuevaCotizacion;
 function editarCotizacion(id){
   const c=cotizaciones.find(x=>x.id===id);if(!c)return;
   cotEditId=id;cotCart=(c.items||[]).map(it=>({...it}));cotClienteSel=clientes.find(x=>x.id===c.clienteId)||null;
   abrirCotEditor('Editar COT-'+padn(c.numero));
-  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=c.validezDias||15;const e=document.getElementById('cot-estado');if(e)e.value=(c.estado==='convertida'?'aceptada':c.estado)||'borrador';const o=document.getElementById('cot-obs');if(o)o.value=c.observaciones||'';},0);
+  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=c.validezDias||15;const e=document.getElementById('cot-estado');if(e)e.value=(c.estado==='convertida'?'aceptada':c.estado)||'borrador';const o=document.getElementById('cot-obs');if(o)o.value=c.observaciones||'';const n=document.getElementById('cot-cli-nit');if(!cotClienteSel){const s=document.getElementById('cot-cli-search');if(s)s.value=c.clienteComercial||c.clienteNombre||'';if(n)n.value=c.clienteNit||'';}else if(n){n.value='';}},0);
 }
 window.editarCotizacion=editarCotizacion;
 function cerrarCotEditor(){cotEditId=null;renderCotizaciones();}
@@ -3722,21 +3723,30 @@ window.cotSet=cotSet;
 function cotRemove(i){cotCart.splice(i,1);cotRenderCart();}
 window.cotRemove=cotRemove;
 async function guardarCotizacionUI(){
-  if(!cotClienteSel){toast('Falta el cliente','Elegí el cliente de la cotización',true);return;}
   if(!cotCart.length){toast('Agregá productos','La cotización no tiene productos',true);return;}
+  const txt=((document.getElementById('cot-cli-search')||{}).value||'').trim();
+  let cliObj=cotClienteSel;
+  if(cliObj){const disp=`${cliObj.nombre} · ${cliObj.nit||''}`.trim();if(txt&&txt!==disp)cliObj=null;}
+  if(!cliObj&&!txt){toast('Falta el cliente','Elegí un cliente o escribí el nombre de uno nuevo',true);return;}
+  let clienteId,clienteNombre,clienteComercial,clienteNit,vend;
+  if(cliObj){
+    clienteId=cliObj.id;clienteNombre=cliObj.razonSocial||cliObj.nombre;clienteComercial=cliObj.nombre;clienteNit=cliObj.nit;
+    vend=vendedores.find(v=>v.id===cliObj.vendedorId)||null;
+  }else{
+    clienteId=null;clienteNombre=txt;clienteComercial=txt;clienteNit=((document.getElementById('cot-cli-nit')||{}).value||'').trim();vend=null;
+  }
   const validez=Math.max(1,parseInt((document.getElementById('cot-validez')||{}).value)||15);
   const estado=(document.getElementById('cot-estado')||{}).value||'borrador';
   const obs=((document.getElementById('cot-obs')||{}).value||'').trim();
   const total=cotCalcTotal();
-  const vend=vendedores.find(v=>v.id===cotClienteSel.vendedorId)||null;
   const hoy=fechaHoyGT();
   const fechaVence=(()=>{const d=new Date(hoy+'T12:00:00');d.setDate(d.getDate()+validez);return d.toISOString().slice(0,10);})();
   let cot;
   if(cotEditId){
     cot=cotizaciones.find(c=>c.id===cotEditId);if(!cot){toast('No encontrada',null,true);return;}
-    Object.assign(cot,{clienteId:cotClienteSel.id,clienteNombre:cotClienteSel.razonSocial||cotClienteSel.nombre,clienteComercial:cotClienteSel.nombre,clienteNit:cotClienteSel.nit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado});
+    Object.assign(cot,{clienteId,clienteNombre,clienteComercial,clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado});
   }else{
-    cot={id:-Date.now(),numero:cotN,clienteId:cotClienteSel.id,clienteNombre:cotClienteSel.razonSocial||cotClienteSel.nombre,clienteComercial:cotClienteSel.nombre,clienteNit:cotClienteSel.nit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,_nuevo:true};
+    cot={id:-Date.now(),numero:cotN,clienteId,clienteNombre,clienteComercial,clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,_nuevo:true};
     cotizaciones.push(cot);cotN++;
   }
   const ok=(typeof guardarCotizacion==='function')?await guardarCotizacion(cot):true;
@@ -3760,6 +3770,7 @@ function convertirCotizacionAPedido(id){
   const c=cotizaciones.find(x=>x.id===id);if(!c)return;
   if(!(c.items||[]).length){toast('Sin productos',null,true);return;}
   if(c.estado==='convertida'){toast('Ya convertida','Esta cotización ya se convirtió en pedido',true);return;}
+  if(!c.clienteId){toast('Cliente no registrado','Esta cotización es para un cliente nuevo (prospecto). Creá el cliente en el sistema y reasignálo en la cotización antes de convertirla en pedido.',true);return;}
   confirmar('Convertir a pedido','Se creará un pedido abierto con los productos de <b>COT-'+padn(c.numero)+'</b>, reservando inventario. ¿Continuar?','Convertir a pedido',async()=>{
     const cli=clientes.find(x=>x.id===c.clienteId);
     const vend=vendedores.find(v=>v.id===(c.vendedorId||(cli&&cli.vendedorId)))||vendedores[0];
