@@ -1156,6 +1156,7 @@ function enhanceTable(tbodyId,opts){
           });
           rows.forEach(r=>tb.appendChild(r));
         }
+        if(opts&&typeof opts.onSort==='function')opts.onSort(idx,dir);
       };
     });
   }
@@ -6640,6 +6641,7 @@ function agregarTotalesReportes(){
     }
     if(!sums.some(s=>s!==null))return;
     const tr=document.createElement('tr');
+    tr.dataset.totalsRow='1';
     tr.style.cssText='font-weight:700;border-top:2px solid var(--line-strong);background:var(--surface-2)';
     for(let c=0;c<nCols;c++){
       const td=document.createElement('td');
@@ -6649,6 +6651,35 @@ function agregarTotalesReportes(){
     }
     tbody.appendChild(tr);
     tbl.dataset.totales='1';
+  });
+}
+// Hace ordenables + buscables las tablas planas de reporte (clic en el encabezado),
+// y mantiene repLastData (lo que exporta el Excel) en el mismo orden que la pantalla.
+function prepararOrdenReportes(){
+  const cont=document.getElementById('rep-body'); if(!cont)return;
+  cont.querySelectorAll('table').forEach((tbl,ti)=>{
+    if(tbl.dataset.ordenable)return;
+    const thead=tbl.querySelector('thead'), tbody=tbl.querySelector('tbody');
+    if(!thead||!tbody)return;
+    const rows=[...tbody.querySelectorAll(':scope > tr')];
+    const dataRows=rows.filter(r=>r.dataset.totalsRow!=='1');
+    // saltar tablas jerárquicas (con colspan en filas de datos) o demasiado cortas
+    const tieneColspan=dataRows.some(r=>[...r.children].some(td=>Number(td.getAttribute('colspan')||1)>1));
+    if(tieneColspan||dataRows.length<2)return;
+    // Sincronización con el Excel solo si hay 1 fila de datos por registro de repLastData
+    const puedeSync=Array.isArray(repLastData)&&repLastData.length===dataRows.length;
+    if(puedeSync)dataRows.forEach((r,i)=>{r.dataset.ri=String(i);});
+    if(!tbody.id)tbody.id='rep-tbody-'+ti;
+    tbl.dataset.ordenable='1';
+    enhanceTable(tbody.id,{onSort:()=>{
+      // La fila de TOTALES siempre al final
+      const tot=tbody.querySelector('tr[data-totals-row]'); if(tot)tbody.appendChild(tot);
+      // Reordenar repLastData según el nuevo orden de pantalla (para que el Excel lo siga)
+      if(puedeSync){
+        const orden=[...tbody.querySelectorAll(':scope > tr[data-ri]')].map(r=>repLastData[Number(r.dataset.ri)]);
+        if(orden.length===repLastData.length&&orden.every(x=>x!=null)){repLastData.length=0;repLastData.push(...orden);}
+      }
+    }});
   });
 }
 function renderReportes(){
@@ -7673,6 +7704,7 @@ function renderReportes(){
   repLastData=exportData;
   $('#rep-body').innerHTML=html;
   try{agregarTotalesReportes();}catch(e){console.error('totales',e);}
+  try{prepararOrdenReportes();}catch(e){console.error('orden',e);}
   // Si es el reporte cliente/producto, aplicar el estado de colapso guardado
   if(repType==='cliprod'||repType==='dircli'||repType==='climes')aplicarColapso();
   enhanceRepTables();
