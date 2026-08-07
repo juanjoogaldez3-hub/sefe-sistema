@@ -475,7 +475,7 @@ if(typeof window!=='undefined'){window.guardarRecordatorio=guardarRecordatorio;w
 function mapCotizacionFromDB(c){
   return {
     id:c.id, numero:c.numero,
-    clienteId:c.cliente_id, clienteNombre:c.cliente_nombre||'', clienteComercial:c.cliente_comercial||'', clienteNit:c.cliente_nit||'',
+    clienteId:c.cliente_id, clienteNombre:c.cliente_nombre||'', clienteComercial:c.cliente_comercial||'', clienteNit:c.cliente_nit||'', clienteContacto:c.cliente_contacto||'', clienteTel:c.cliente_tel||'', clienteEmail:c.cliente_email||'',
     vendedorId:c.vendedor_id, vendedorNombre:c.vendedor_nombre||'', vendedorTel:c.vendedor_tel||'', vendedorEmail:c.vendedor_email||'',
     items:c.items||[], totales:c.totales||{},
     observaciones:c.observaciones||'', validezDias:Number(c.validez_dias)||15, fechaVence:c.fecha_vence,
@@ -486,7 +486,7 @@ function mapCotizacionFromDB(c){
 async function guardarCotizacion(cot){
   const row={
     numero:cot.numero, cliente_id:cot.clienteId||null, cliente_nombre:cot.clienteNombre||null,
-    cliente_comercial:cot.clienteComercial||null, cliente_nit:cot.clienteNit||null,
+    cliente_comercial:cot.clienteComercial||null, cliente_nit:cot.clienteNit||null, cliente_contacto:cot.clienteContacto||null, cliente_tel:cot.clienteTel||null, cliente_email:cot.clienteEmail||null,
     vendedor_id:cot.vendedorId||null, vendedor_nombre:cot.vendedorNombre||null, vendedor_tel:cot.vendedorTel||null, vendedor_email:cot.vendedorEmail||null,
     items:cot.items||[], totales:cot.totales||{},
     observaciones:cot.observaciones||null, validez_dias:cot.validezDias||15, fecha_vence:cot.fechaVence||null,

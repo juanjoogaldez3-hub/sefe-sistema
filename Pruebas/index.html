@@ -777,6 +777,11 @@
               <div style="width:190px"><label>NIT <span style="color:var(--muted-2);font-weight:400">(si es nuevo)</span></label><input id="cot-cli-nit" placeholder="CF o NIT" autocomplete="off"></div></div>
               <div id="cot-cli-info" style="font-size:12px;color:var(--muted);margin:2px 0 12px"></div>
               <div class="row">
+                <div style="flex:1"><label>Contacto del cliente <span style="color:var(--muted-2);font-weight:400">(opcional)</span></label><input id="cot-cli-contacto" placeholder="Nombre de contacto" autocomplete="off"></div>
+                <div style="width:180px"><label>Teléfono</label><input id="cot-cli-tel" placeholder="Tel. del cliente" autocomplete="off"></div>
+                <div style="flex:1"><label>Correo</label><input id="cot-cli-mail" placeholder="Correo del cliente" autocomplete="off"></div>
+              </div>
+              <div class="row">
                 <div style="flex:1"><label>Vendedor / Atiende</label><input id="cot-vend-nom" placeholder="Nombre del vendedor" autocomplete="off"></div>
                 <div style="width:180px"><label>Teléfono</label><input id="cot-vend-tel" placeholder="Tel. de contacto" autocomplete="off"></div>
                 <div style="flex:1"><label>Correo</label><input id="cot-vend-mail" placeholder="Correo de contacto" autocomplete="off"></div>
@@ -3659,7 +3664,7 @@ function cotWireAutocomplete(){
   crearAutocomplete('cot-cli-search',
     (q)=>{const ql=q.toLowerCase();let base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
       return base.filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:`${c.nombre} · ${c.nit||''}`,sub:c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:'',valor:c.id}));},
-    (item)=>{cotClienteSel=item?clientes.find(c=>c.id===item.valor):null;const n=document.getElementById('cot-cli-nit');if(n&&cotClienteSel)n.value='';cotInfoCliente();});
+    (item)=>{cotClienteSel=item?clientes.find(c=>c.id===item.valor):null;const n=document.getElementById('cot-cli-nit');if(n&&cotClienteSel)n.value='';if(cotClienteSel){const t=document.getElementById('cot-cli-tel');if(t)t.value=cotClienteSel.telefono||'';const m=document.getElementById('cot-cli-mail');if(m)m.value=cotClienteSel.correo||'';}cotInfoCliente();});
   crearAutocomplete('cot-add',
     (q)=>{const ql=q.toLowerCase();
       return productos.filter(p=>p.activo!==false).filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)||(p.skuProveedor||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:p.marca||'',valor:p.id}));},
@@ -3676,14 +3681,14 @@ function abrirCotEditor(titulo){
 function nuevaCotizacion(){
   cotEditId=null;cotCart=[];cotClienteSel=null;
   abrirCotEditor('Nueva cotización');
-  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=15;const e=document.getElementById('cot-estado');if(e)e.value='borrador';const o=document.getElementById('cot-obs');if(o)o.value='';const n=document.getElementById('cot-cli-nit');if(n)n.value='';const vn=document.getElementById('cot-vend-nom');if(vn)vn.value=(typeof usuarios!=='undefined'&&(usuarios.find(u=>u.correo===currentUser)||{}).nombre)||'';const vt=document.getElementById('cot-vend-tel');if(vt)vt.value='';const vmail=document.getElementById('cot-vend-mail');if(vmail)vmail.value='';},0);
+  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=15;const e=document.getElementById('cot-estado');if(e)e.value='borrador';const o=document.getElementById('cot-obs');if(o)o.value='';const n=document.getElementById('cot-cli-nit');if(n)n.value='';const vn=document.getElementById('cot-vend-nom');if(vn)vn.value=(typeof usuarios!=='undefined'&&(usuarios.find(u=>u.correo===currentUser)||{}).nombre)||'';const vt=document.getElementById('cot-vend-tel');if(vt)vt.value='';const vmail=document.getElementById('cot-vend-mail');if(vmail)vmail.value='';const cc=document.getElementById('cot-cli-contacto');if(cc)cc.value='';const ct=document.getElementById('cot-cli-tel');if(ct)ct.value='';const cm=document.getElementById('cot-cli-mail');if(cm)cm.value='';},0);
 }
 window.nuevaCotizacion=nuevaCotizacion;
 function editarCotizacion(id){
   const c=cotizaciones.find(x=>x.id===id);if(!c)return;
   cotEditId=id;cotCart=(c.items||[]).map(it=>({...it}));cotClienteSel=clientes.find(x=>x.id===c.clienteId)||null;
   abrirCotEditor('Editar COT-'+padn(c.numero));
-  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=c.validezDias||15;const e=document.getElementById('cot-estado');if(e)e.value=(c.estado==='convertida'?'aceptada':c.estado)||'borrador';const o=document.getElementById('cot-obs');if(o)o.value=c.observaciones||'';const n=document.getElementById('cot-cli-nit');if(!cotClienteSel){const s=document.getElementById('cot-cli-search');if(s)s.value=c.clienteComercial||c.clienteNombre||'';if(n)n.value=c.clienteNit||'';}else if(n){n.value='';}const vn=document.getElementById('cot-vend-nom');if(vn)vn.value=c.vendedorNombre||'';const vt=document.getElementById('cot-vend-tel');if(vt)vt.value=c.vendedorTel||'';const vmail=document.getElementById('cot-vend-mail');if(vmail)vmail.value=c.vendedorEmail||'';},0);
+  setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=c.validezDias||15;const e=document.getElementById('cot-estado');if(e)e.value=(c.estado==='convertida'?'aceptada':c.estado)||'borrador';const o=document.getElementById('cot-obs');if(o)o.value=c.observaciones||'';const n=document.getElementById('cot-cli-nit');if(!cotClienteSel){const s=document.getElementById('cot-cli-search');if(s)s.value=c.clienteComercial||c.clienteNombre||'';if(n)n.value=c.clienteNit||'';}else if(n){n.value='';}const vn=document.getElementById('cot-vend-nom');if(vn)vn.value=c.vendedorNombre||'';const vt=document.getElementById('cot-vend-tel');if(vt)vt.value=c.vendedorTel||'';const vmail=document.getElementById('cot-vend-mail');if(vmail)vmail.value=c.vendedorEmail||'';const cc=document.getElementById('cot-cli-contacto');if(cc)cc.value=c.clienteContacto||'';const ct=document.getElementById('cot-cli-tel');if(ct)ct.value=c.clienteTel||'';const cm=document.getElementById('cot-cli-mail');if(cm)cm.value=c.clienteEmail||'';},0);
 }
 window.editarCotizacion=editarCotizacion;
 function cerrarCotEditor(){cotEditId=null;renderCotizaciones();}
@@ -3744,6 +3749,9 @@ async function guardarCotizacionUI(){
   const vendNom=((document.getElementById('cot-vend-nom')||{}).value||'').trim();
   const vendTel=((document.getElementById('cot-vend-tel')||{}).value||'').trim();
   const vendMail=((document.getElementById('cot-vend-mail')||{}).value||'').trim();
+  const clienteContacto=((document.getElementById('cot-cli-contacto')||{}).value||'').trim();
+  const clienteTel=((document.getElementById('cot-cli-tel')||{}).value||'').trim();
+  const clienteEmail=((document.getElementById('cot-cli-mail')||{}).value||'').trim();
   const validez=Math.max(1,parseInt((document.getElementById('cot-validez')||{}).value)||15);
   const estado=(document.getElementById('cot-estado')||{}).value||'borrador';
   const obs=((document.getElementById('cot-obs')||{}).value||'').trim();
@@ -3753,9 +3761,9 @@ async function guardarCotizacionUI(){
   let cot;
   if(cotEditId){
     cot=cotizaciones.find(c=>c.id===cotEditId);if(!cot){toast('No encontrada',null,true);return;}
-    Object.assign(cot,{clienteId,clienteNombre,clienteComercial,clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado});
+    Object.assign(cot,{clienteId,clienteNombre,clienteComercial,clienteNit,clienteContacto,clienteTel,clienteEmail,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado});
   }else{
-    cot={id:-Date.now(),numero:cotN,clienteId,clienteNombre,clienteComercial,clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,_nuevo:true};
+    cot={id:-Date.now(),numero:cotN,clienteId,clienteNombre,clienteComercial,clienteNit,clienteContacto,clienteTel,clienteEmail,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,_nuevo:true};
     cotizaciones.push(cot);cotN++;
   }
   const ok=(typeof guardarCotizacion==='function')?await guardarCotizacion(cot):true;
@@ -3823,6 +3831,9 @@ function cotizacionPDF(id){
         <div style="font-weight:700;font-size:12.5px;color:#173916">CLIENTE</div>
         ${cotEsc(c.clienteComercial||c.clienteNombre||'')}<br>
         ${c.clienteNit?'NIT: '+cotEsc(c.clienteNit)+'<br>':''}
+        ${c.clienteContacto?'Contacto: '+cotEsc(c.clienteContacto)+'<br>':''}
+        ${c.clienteTel?'☎ '+cotEsc(c.clienteTel)+'<br>':''}
+        ${c.clienteEmail?'✉ '+cotEsc(c.clienteEmail)+'<br>':''}
         ${cli&&cli.direccion?cotEsc(cli.direccion):''}
       </div>
       <div style="font-size:12px;line-height:1.55;text-align:right">
@@ -3863,6 +3874,9 @@ async function cotizacionExcel(id){
       ['COTIZACIÓN','COT-'+padn(c.numero)],
       ['Cliente',c.clienteComercial||c.clienteNombre||''],
       ['NIT',c.clienteNit||''],
+      ['Contacto cliente',c.clienteContacto||''],
+      ['Tel. cliente',c.clienteTel||''],
+      ['Correo cliente',c.clienteEmail||''],
       ['Fecha',fecha],
       ['Válida hasta',c.fechaVence?fdate(c.fechaVence):''],
       ['Atiende',c.vendedorNombre||''],
@@ -3875,8 +3889,8 @@ async function cotizacionExcel(id){
       const eff=Number(it.precio)*(1-(Number(it.descuento)||0)/100);
       return {'Código':it.codigo||'','Descripción':it.nombre||'','Cantidad':Number(it.cantidad),'Precio unit.':Number(it.precio),'Desc %':Number(it.descuento)||0,'Subtotal':Math.round(eff*Number(it.cantidad)*100)/100};
     });
-    const HDR=9; // fila 0-index del encabezado de la tabla (A10)
-    XLSX.utils.sheet_add_json(ws,filas,{origin:'A10'});
+    const HDR=12; // fila 0-index del encabezado de la tabla (A13)
+    XLSX.utils.sheet_add_json(ws,filas,{origin:'A13'});
     filas.forEach((r,i)=>{[3,5].forEach(ci=>{const ref=XLSX.utils.encode_cell({c:ci,r:HDR+1+i});if(ws[ref])ws[ref].z='"Q"#,##0.00';});});
     const rt=HDR+1+filas.length;
     XLSX.utils.sheet_add_aoa(ws,[['','','','','TOTAL (IVA incl.)',cotTotal(c)]],{origin:{r:rt,c:0}});
