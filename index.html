@@ -2659,21 +2659,25 @@ function abrirAnular(id){
   if(!f){toast('Documento no encontrado',null,true);return;}
   // Si es una factura ya certificada ante SAT (tiene UUID real), hay que anular en EcoFactura
   const esRealFEL=f.autorizacion && !String(f.autorizacion).startsWith('SIM-');
+  const tieneAbonos=(f.abonos||[]).length>0;
+  const puedeDevolver=!tieneAbonos && (f.items||[]).length>0;
   openMod('Anular '+(f.serie?f.serie+'-'+f.numeroDte:refPed(f)),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:6px">Vas a anular esta factura por <b style="color:var(--ink)">${money(f.totales.total)}</b>.</p>
      ${esRealFEL?'<p style="font-size:12px;color:var(--danger);margin-bottom:12px">⚠️ Esta factura está certificada ante SAT. Se anulará también en EcoFactura. Esta acción no se puede deshacer.</p>':'<p style="font-size:12px;color:var(--muted);margin-bottom:12px">El inventario se reintegrará.</p>'}
      <label>Motivo de la anulación</label>
-     <input id="anular-motivo" type="text" maxlength="255" placeholder="Ej: Error en datos del cliente" style="width:100%;box-sizing:border-box">`,
+     <input id="anular-motivo" type="text" maxlength="255" placeholder="Ej: Error en datos del cliente" style="width:100%;box-sizing:border-box">
+     ${puedeDevolver?`<label style="display:flex;align-items:flex-start;gap:8px;margin-top:14px;font-size:13px;cursor:pointer;color:var(--ink)"><input type="checkbox" id="anular-devolver" style="width:auto;margin:2px 0 0 0;flex-shrink:0"><span>Devolver a pedido<br><span style="font-size:11.5px;color:var(--muted)">Queda un pedido abierto con los mismos productos para volver a facturarla.</span></span></label>`:(tieneAbonos?`<p style="font-size:11.5px;color:var(--muted-2);margin-top:12px;margin-bottom:0">Esta factura tiene abonos/cobros registrados, por eso no se puede devolver a pedido.</p>`:'')}`,
     ()=>{
       const motivo=($('#anular-motivo')?.value||'').trim();
       if(!motivo){toast('Escribí el motivo de la anulación',null,true);return false;}
-      anularFacturaReal(id,motivo);
+      const devolver=!!($('#anular-devolver')?.checked);
+      anularFacturaReal(id,motivo,devolver);
     });
 }
 window.abrirAnular=abrirAnular;
 
 // Anula la factura: primero en EcoFactura (si es real), luego en el sistema
-async function anularFacturaReal(id,motivo){
+async function anularFacturaReal(id,motivo,devolverAPedido){
   if(!canAnular()){toast('Sin permiso','Tu rol no puede anular',true);return;}
   const f=documentos.find(d=>d.id===id);
   if(!f)return;
@@ -2728,11 +2732,27 @@ async function anularFacturaReal(id,motivo){
     f.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,it.cantidad,it.modoVenta);});
     f.inventarioRebajado=false;
   }
-  f.estado='anulada';f.motivo=motivo;f.anuladoFecha=new Date().toISOString();
-  closeMod();renderDocs();
-  toast('✓ Factura anulada',esRealFEL?'Anulada ante SAT · '+(f.serie||''):'Inventario reingresado');
+  f.estado='anulada';f.motivo=motivo;f.anuladoFecha=new Date().toISOString();f.anuladoPor=currentUser;
+  if(typeof guardarDocumento==='function')await guardarDocumento(f);
   logAudit('Factura anulada',(f.serie?f.serie+'-'+f.numeroDte:refPed(f))+' · '+motivo);
-  if(typeof guardarDocumento==='function')guardarDocumento(f);
+  // Opción A: devolver a pedido SOLO si no tiene abonos y tiene items
+  let pedNum=null;
+  if(devolverAPedido && !(f.abonos||[]).length && (f.items||[]).length){
+    const nuevoId=-Date.now();
+    const ped={id:nuevoId,numero:corr,tipoDoc:'pedido',clienteId:f.clienteId,clienteNombre:f.clienteNombre,clienteComercial:f.clienteComercial,clienteNit:f.clienteNit,
+      vendedorId:f.vendedorId,vendedorNombre:f.vendedorNombre,subVendedorNombre:f.subVendedorNombre||null,
+      items:f.items.map(it=>({...it})),totales:{...f.totales},estado:'abierto',inventarioRebajado:true,
+      creada:new Date().toISOString(),ordenCompra:f.ordenCompra||'',observaciones:f.observaciones||'',notaInterna:f.notaInterna||'',
+      nitFacturado:f.nitFacturado,nombreFacturado:f.nombreFacturado,origenAnulacionId:f.id,_nuevo:true};
+    // la anulación reintegró el inventario; el pedido nuevo lo vuelve a reservar
+    ped.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,-it.cantidad,it.modoVenta);});
+    documentos.push(ped);corr++;pedNum=ped.numero;
+    logAudit('Factura devuelta a pedido',(f.serie?f.serie+'-'+f.numeroDte:refPed(f))+' → PED-'+padn(ped.numero));
+    if(typeof guardarDocumento==='function')await guardarDocumento(ped);
+  }
+  closeMod();renderDocs();
+  if(pedNum!=null)toast('✓ Factura anulada y devuelta a pedido','PED-'+padn(pedNum)+' · abierto para volver a facturar');
+  else toast('✓ Factura anulada',esRealFEL?'Anulada ante SAT · '+(f.serie||''):'Inventario reingresado');
 }
 window.anularFacturaReal=anularFacturaReal;
 
