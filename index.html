@@ -3348,12 +3348,22 @@ const _escRec=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replac
 // Recordatorios visibles para el usuario actual (admin ve todos; el resto los asignados a él o creados por él)
 function recVisibles(){
   if(currentRole==='admin'||currentRole==='gerencia')return recordatorios.slice();
-  return recordatorios.filter(r=>r.asignadoA===currentUser||r.creadoPor===currentUser);
+  // Las contraseñas de pago las ve TODO el mundo en el listado; el resto, solo propias/asignadas
+  return recordatorios.filter(r=>r.tipo==='contrasena'||r.asignadoA===currentUser||r.creadoPor===currentUser);
+}
+// Recordatorios que DISPARAN notificación (campana/pop-up) para el usuario actual.
+// Contraseñas de pago: notifican a admin/gerencia/cobros/contabilidad (+ creador/asignado); no a todos.
+function recNotificables(){
+  if(currentRole==='admin'||currentRole==='gerencia')return recordatorios.slice();
+  const notifContra=currentRole==='cobros'||currentRole==='contabilidad';
+  return recordatorios.filter(r=>r.tipo==='contrasena'
+    ?(notifContra||r.asignadoA===currentUser||r.creadoPor===currentUser)
+    :(r.asignadoA===currentUser||r.creadoPor===currentUser));
 }
 // Recordatorios pendientes de HOY o vencidos, del usuario actual (para la campana/pop-up)
 function recordatoriosPendientesHoy(){
   const hoy=fechaHoyGT();
-  return recVisibles().filter(r=>!r.hecho&&r.fechaVencimiento&&r.fechaVencimiento<=hoy)
+  return recNotificables().filter(r=>!r.hecho&&r.fechaVencimiento&&r.fechaVencimiento<=hoy)
     .sort((a,b)=>(a.fechaVencimiento||'').localeCompare(b.fechaVencimiento||''));
 }
 window.setRecFiltro=function(f){recFiltro=f;document.querySelectorAll('#rec-tabs .ct-tab').forEach(b=>b.classList.toggle('on',b.dataset.f===f));renderRecordatorios();};
