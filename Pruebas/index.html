@@ -4402,7 +4402,8 @@ function arInfo(f){
   const abon=(f.abonos||[]).filter(a=>!a.anulado).reduce((s,a)=>s+Number(a.monto),0);
   const saldo=Math.round((totalAjustado-abon)*100)/100;
   const estado=saldo<=0.001?'pagado':(abon>0?'parcial':'pendiente');
-  const venc=f.vencimiento?new Date(f.vencimiento):null;
+  // Si no hay vencimiento (ej. factura al contado, 0 días), la fecha de vencimiento es la de emisión.
+  const venc=f.vencimiento?new Date(f.vencimiento):((f.tipoDoc==='cambiaria'&&(f.fechaCertificacion||f.creada))?new Date(f.fechaCertificacion||f.creada):null);
   const vencido=estado!=='pagado'&&venc&&new Date()>venc;
   return {abon,saldo,estado,vencido,venc,cr,totalAjustado};
 }
@@ -4520,7 +4521,7 @@ function renderCobros(){
       <td style="font-weight:600">${f.serie}-${f.numeroDte}</td>
       <td>${f.clienteComercial||f.clienteNombre}</td>
       <td style="color:var(--muted)">${fdate(f.creada)}</td>
-      <td style="color:${x.vencido?'var(--danger)':'var(--muted)'};font-weight:${x.vencido?'600':'400'}">${fdate(f.vencimiento)}</td>
+      <td style="color:${x.vencido?'var(--danger)':'var(--muted)'};font-weight:${x.vencido?'600':'400'}">${fdate(f.vencimiento||x.venc)}</td>
       <td class="num">${money(f.totales.total)}</td>
       <td class="num" style="color:var(--ok)">${money(x.abon)}</td>
       <td class="num" style="font-weight:700">${money(x.saldo)}</td>
