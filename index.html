@@ -2351,7 +2351,7 @@ function rowDoc(withActions){
       <td>${f.clienteComercial||f.clienteNombre}</td>
       ${withActions?`<td style="color:var(--muted)">${new Date(fechaDoc(f)).toLocaleDateString('es-GT')}</td>`:''}
       <td class="num" style="font-weight:600">${money(f.totales.total)}</td>
-      ${withActions?`<td class="num">${(f.tipoDoc==='cambiaria'&&f.estado!=='anulada')?(()=>{const _inf=arInfo(f);return _inf.saldo>0.001?`<span style="color:var(--danger);font-weight:700">${money(_inf.saldo)}</span>`:`<span style="color:var(--muted)">Pagado</span>`;})():'<span style="color:var(--muted)">—</span>'}</td>`:''}
+      ${withActions?`<td class="num">${(f.tipoDoc==='cambiaria'&&f.estado!=='anulada')?(()=>{const _inf=arInfo(f);const _c=_inf.saldo<=0.001?'var(--ok)':(_inf.abon>0?'var(--warn)':'var(--danger)');return `<span style="color:${_c};font-weight:700">${money(_inf.saldo)}</span>`;})():'<span style="color:var(--muted)">—</span>'}</td>`:''}
       <td><span class="badge ${ec}">${en}</span></td>
       ${withActions?`<td><div class="acts"><button class="acts-btn" onclick="toggleDrop('${dropId}',event)">Acciones<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><div class="acts-drop" id="${dropId}">${items.join('')}</div></div></td>`:''}
     </tr>`;
