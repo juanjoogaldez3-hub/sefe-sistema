@@ -3547,6 +3547,7 @@ function openRecordatorio(id,preset){
       if(r){Object.assign(r,datos);if(typeof guardarRecordatorio==='function')guardarRecordatorio(r);logAudit('Recordatorio editado',titulo);}
       else{const nuevo={id:(recordatorios.reduce((m,x)=>Math.max(m,x.id||0),0)+1),...datos,hecho:false,creadoPor:currentUser,creado:new Date().toISOString(),_nuevo:true};recordatorios.push(nuevo);if(typeof guardarRecordatorio==='function')guardarRecordatorio(nuevo);logAudit('Recordatorio creado',titulo);}
       closeMod();renderRecordatorios();actualizarBellRec();toast('✓ Recordatorio guardado',titulo);
+      if(typeof _reRenderCliSiAbierto==='function')_reRenderCliSiAbierto(cliActual);
     });
   setTimeout(()=>{
     recTipoChange(curTipo);
@@ -3576,6 +3577,7 @@ window.toggleHechoRecordatorio=function(id){
   if(typeof guardarRecordatorio==='function')guardarRecordatorio(r);
   logAudit('Recordatorio '+(r.hecho?'completado':'reabierto'),r.titulo);
   renderRecordatorios();actualizarBellRec();
+  if(typeof _reRenderCliSiAbierto==='function')_reRenderCliSiAbierto(cliActual);
 };
 window.borrarRecordatorioUI=function(id){
   const r=recordatorios.find(x=>x.id===id);if(!r)return;
@@ -3584,6 +3586,7 @@ window.borrarRecordatorioUI=function(id){
     if(typeof borrarRecordatorio==='function')borrarRecordatorio(id);
     logAudit('Recordatorio eliminado',r.titulo);
     renderRecordatorios();actualizarBellRec();toast('Recordatorio eliminado');
+    if(typeof _reRenderCliSiAbierto==='function')_reRenderCliSiAbierto(cliActual);
   });
 };
 // Campana de recordatorios (para todos los roles)
@@ -4059,6 +4062,27 @@ function renderCliDet(){
     </div>`;
   }else if(cliTab==='seguimiento'){
     const puedeEditar=canRegistrarAbono()||canCrearCliente();
+    // Recordatorios del módulo ligados a este cliente (directo, o vía sus facturas/documentos)
+    const _idsDocsCli=new Set(documentos.filter(d=>d.clienteId===c.id).map(d=>d.id));
+    const _recsCli=recordatorios.filter(r=>(r.tipo==='cliente'&&r.refId===c.id)||((r.tipo==='factura'||r.tipo==='contrasena')&&r.refId&&_idsDocsCli.has(r.refId))).sort((a,b)=>(a.hecho?1:0)-(b.hecho?1:0)||String(a.fechaVencimiento||'9999').localeCompare(String(b.fechaVencimiento||'9999')));
+    const _tiRec={tarea:'📌',cliente:'👤',contrasena:'🔑',factura:'🧾',producto:'📦',compra:'🛒'};
+    const _hoyRec=fechaHoyGT();
+    const _recRows=_recsCli.length?_recsCli.map(r=>{
+      const _venc=!r.hecho&&r.fechaVencimiento&&String(r.fechaVencimiento)<_hoyRec;
+      const _esHoy=!r.hecho&&String(r.fechaVencimiento)===_hoyRec;
+      return `<tr style="${r.hecho?'opacity:.55':''}">
+        <td style="text-align:center"><input type="checkbox" ${r.hecho?'checked':''} onclick="toggleHechoRecordatorio(${r.id})" title="Marcar hecho" style="width:15px;height:15px;cursor:pointer"></td>
+        <td><div style="font-weight:600;${r.hecho?'text-decoration:line-through':''}">${_tiRec[r.tipo]||'📌'} ${_escRec(r.titulo)}</div>${r.nota?`<div style="font-size:11px;color:var(--muted)">${_escRec(r.nota)}</div>`:''}</td>
+        <td style="font-size:12px;color:var(--muted)">${r.refLabel?_escRec(r.refLabel):'—'}</td>
+        <td style="font-size:12px;white-space:nowrap;color:${_venc?'var(--danger)':(_esHoy?'var(--warn)':'var(--muted)')};font-weight:${_venc||_esHoy?'700':'400'}">${r.fechaVencimiento?fdate(r.fechaVencimiento)+(_venc?' · vencido':(_esHoy?' · hoy':'')):'—'}</td>
+        <td style="font-size:11.5px;color:var(--muted-2)">${_escRec(r.asignadoA||'—')}</td>
+        <td style="white-space:nowrap">${puedeEditar?`<button class="btn btn-ghost btn-sm" onclick="openRecordatorio(${r.id})">Editar</button><button class="x" onclick="borrarRecordatorioUI(${r.id})">×</button>`:''}</td>
+      </tr>`;
+    }).join(''):'<tr><td colspan="6" class="empty">Sin recordatorios ligados a este cliente</td></tr>';
+    const _recPanelCli=`<div class="panel">
+      <div class="panel-head"><h3>Recordatorios ligados <span style="font-weight:400;font-size:12px;color:var(--muted)">· ${_recsCli.filter(r=>!r.hecho).length} pendiente(s)</span></h3>${puedeEditar?`<button class="btn btn-primary btn-sm" onclick="openRecordatorio(null,{tipo:'cliente',refId:${c.id}})"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo recordatorio</button>`:''}</div>
+      <table><thead><tr><th style="width:34px"></th><th>Recordatorio</th><th>Ligado a</th><th>Vence</th><th>Asignado</th><th></th></tr></thead><tbody>${_recRows}</tbody></table>
+    </div>`;
     const segs=Array.isArray(c.seguimientos)?c.seguimientos:[];
     const resultOpts=Object.entries(RESULT_SEG).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');
     const filas=segs.length?segs.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||((b.id||0)-(a.id||0))).map(s=>{
@@ -4072,7 +4096,7 @@ function renderCliDet(){
         <td style="white-space:nowrap">${puedeEditar?`${(s.proximaFecha&&!s.hecho)?`<button class="btn btn-ghost btn-sm" style="color:var(--ok);padding:4px 8px" title="Marcar recordatorio como atendido" onclick="marcarRecordatorioHecho(${c.id},${s.id})">✓</button> `:''}<button class="x" onclick="borrarSeguimiento(${c.id},${s.id})">×</button>`:''}</td>
       </tr>`;
     }).join(''):'<tr><td colspan="6" class="empty">Sin seguimientos registrados todavía</td></tr>';
-    body=`<div class="panel">
+    body=_recPanelCli+`<div class="panel">
       <div class="panel-head"><h3>Seguimiento de cobro</h3><span style="font-size:12px;color:var(--muted)">${segs.length} anotación(es)</span></div>
       ${puedeEditar?`<div class="panel-body" style="border-bottom:1px solid var(--line)">
         <div style="display:grid;grid-template-columns:140px 1fr 160px;gap:11px;align-items:end">
