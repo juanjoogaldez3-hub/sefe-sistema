@@ -2306,6 +2306,8 @@ function rowDoc(withActions){
     if(withActions){
       // Ver siempre visible
       items.push(`<button class="act-primary" onclick="verDoc(${f.id})">Ver documento</button>`);
+      if(f.clienteId)items.push(`<button onclick="abrirCliente(${f.clienteId})">Ver cliente</button>`);
+      items.push(`<button onclick="recordatorioDesdeDoc(${f.id})">Recordatorio</button>`);
 
       if(f.tipoDoc==='pedido'&&f.estado==='abierto'){
         items.push('<div class="act-sep"></div>');
@@ -3560,6 +3562,16 @@ function openRecordatorio(id,preset){
   },0);
 }
 window.openRecordatorio=openRecordatorio;
+// Shortcut: crear un recordatorio ya rellenado con el documento (factura → tipo factura; otros → ligado al cliente)
+window.recordatorioDesdeDoc=function(docId){
+  const d=documentos.find(x=>x.id===docId);if(!d)return;
+  const cli=d.clienteComercial||d.clienteNombre||'';
+  if(d.tipoDoc==='cambiaria'&&d.serie){
+    openRecordatorio(null,{tipo:'factura',refId:d.id,refLabel:d.serie+'-'+d.numeroDte+(cli?' · '+cli:'')});
+  }else{
+    openRecordatorio(null,{tipo:'cliente',refId:d.clienteId,refLabel:cli});
+  }
+};
 window.toggleHechoRecordatorio=function(id){
   const r=recordatorios.find(x=>x.id===id);if(!r)return;
   r.hecho=!r.hecho;
