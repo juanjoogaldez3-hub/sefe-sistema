@@ -4444,8 +4444,8 @@ function renderLlamarHoy(ars){
   const hoy=new Date();hoy.setHours(0,0,0,0);
   const porCli={};
   ars.forEach(f=>{
-    const ai=arInfo(f);if(ai.saldo<=0.001||!f.vencimiento)return;
-    const dias=Math.floor((hoy-new Date(f.vencimiento))/86400000); // >0 = vencida hace N días
+    const ai=arInfo(f);if(ai.saldo<=0.001||!ai.venc)return;
+    const dias=Math.floor((hoy-ai.venc)/86400000); // >0 = vencida hace N días (ai.venc usa la emisión si es contado sin fecha)
     if(dias< -3)return; // todavía falta más de 3 días, no urge llamar
     const cid=f.clienteId;
     if(!porCli[cid])porCli[cid]={cliente:f.clienteComercial||f.clienteNombre,clienteId:cid,saldo:0,facturas:0,maxDias:-999};
