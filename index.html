@@ -4033,7 +4033,7 @@ function renderCliDet(){
       <td><button class="x" onclick="quitarPrecio(${pid})">×</button></td></tr>`;
     }).join(''):`<tr><td colspan="${esAdmin?6:5}" class="empty">Este cliente aún no tiene precios asignados. Agregá los productos que compra.</td></tr>`;
     body=`<div class="panel">
-      <div class="panel-head"><h3>Precios específicos</h3><span style="font-size:12px;color:var(--muted)">${ids.length} producto(s) asignado(s)</span></div>
+      <div class="panel-head"><h3>Precios específicos</h3><span style="font-size:12px;color:var(--muted)">${ids.length} producto(s) asignado(s)${ids.length?' · <span id="cli-prom-desc">'+_promDescLabel(_promDescCli(c))+'</span>':''}</span></div>
       <div class="panel-body" style="padding-bottom:8px">
         <div style="display:flex;gap:9px;align-items:flex-end">
           <div style="flex:1"><label>Agregar producto</label><input id="cp-add" list="cp-prods" placeholder="Buscar por código o nombre…" onkeydown="if(event.key==='Enter')addPrecioProd()"><datalist id="cp-prods">${opts}</datalist></div>
@@ -4323,12 +4323,34 @@ function estadoCuentaGrupoPDF(cliId){
   _abrirPDF(_pdfShell({titulo:'ESTADO DE CUENTA · GRUPO',subtitulo:c.nombre,orientacion:'portrait',body}));
 }
 window.estadoCuentaGrupoPDF=estadoCuentaGrupoPDF;
+// Promedio de descuento del cliente sobre el precio base, de todos los productos con precio registrado.
+// Devuelve el % promedio (negativo = descuento, positivo = recargo) o null si no hay precios.
+function _promDescCli(c){
+  const ds=[];
+  Object.keys(c.precios||{}).map(Number).forEach(pid=>{
+    const p=productos.find(x=>x.id===pid);if(!p)return;
+    const base=Number(p.precio)||0,pc=Number(c.precios[pid])||0;
+    if(base>0)ds.push((pc-base)/base*100);
+  });
+  return ds.length?ds.reduce((s,v)=>s+v,0)/ds.length:null;
+}
+function _promDescLabel(prom){
+  if(prom===null)return '';
+  if(prom<-0.05)return `Descuento promedio: <b style="color:var(--ok)">${Math.abs(prom).toFixed(1)}%</b>`;
+  if(prom>0.05)return `Recargo promedio: <b style="color:var(--warn)">${prom.toFixed(1)}%</b>`;
+  return `Descuento promedio: <b style="color:var(--muted-2)">0%</b>`;
+}
+function _actualizarPromDescCli(){
+  const c=clientes.find(x=>x.id===cliActual);if(!c)return;
+  const el=document.getElementById('cli-prom-desc');if(el)el.innerHTML=_promDescLabel(_promDescCli(c));
+}
 function setPrecioCli(prodId,val){const c=clientes.find(x=>x.id===cliActual);if(!c)return;c.precios=c.precios||{};
   if(val===''||val==null)return;c.precios[prodId]=Number(val);
   // Marcar que hay cambios sin guardar (el botón "Guardar precios" los persiste)
   _preciosSinGuardar=true;
   const btn=document.getElementById('btn-guardar-precios');
   if(btn){btn.classList.add('btn-primary');btn.classList.remove('btn-ghost');btn.textContent='● Guardar precios';}
+  _actualizarPromDescCli();
 }
 window.setPrecioCli=setPrecioCli;
 let _preciosSinGuardar=false;
