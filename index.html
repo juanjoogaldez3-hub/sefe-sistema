@@ -684,7 +684,7 @@
             <button class="btn btn-ghost btn-sm" onclick="esteMesDocs()">Este mes</button>
             <button class="btn btn-ghost btn-sm" onclick="limpiarFechaDocs()">Limpiar</button>
           </div>
-          <table><thead><tr><th>No.</th><th>Tipo</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="t-docs"></tbody></table>
+          <table><thead><tr><th>No.</th><th>Tipo</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="t-docs"></tbody></table>
           <div class="empty" id="docs-empty">Todavía no hay documentos.</div>
         </div>
       </section>
@@ -2351,6 +2351,7 @@ function rowDoc(withActions){
       <td>${f.clienteComercial||f.clienteNombre}</td>
       ${withActions?`<td style="color:var(--muted)">${new Date(fechaDoc(f)).toLocaleDateString('es-GT')}</td>`:''}
       <td class="num" style="font-weight:600">${money(f.totales.total)}</td>
+      ${withActions?`<td class="num">${(f.tipoDoc==='cambiaria'&&f.estado!=='anulada')?(()=>{const _inf=arInfo(f);return _inf.saldo>0.001?`<span style="color:var(--danger);font-weight:700">${money(_inf.saldo)}</span>`:`<span style="color:var(--muted)">Pagado</span>`;})():'<span style="color:var(--muted)">—</span>'}</td>`:''}
       <td><span class="badge ${ec}">${en}</span></td>
       ${withActions?`<td><div class="acts"><button class="acts-btn" onclick="toggleDrop('${dropId}',event)">Acciones<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><div class="acts-drop" id="${dropId}">${items.join('')}</div></div></td>`:''}
     </tr>`;
