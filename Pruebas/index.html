@@ -4153,7 +4153,6 @@ function renderCliDet(){
         ${(c.nitsSecundarios&&c.nitsSecundarios.length)?`<div style="font-size:12px;color:var(--muted);margin-top:4px">🧾 NITs adicionales: ${c.nitsSecundarios.map(n=>`${n.nit}${n.nombre&&n.nombre!==n.nit?` (${n.nombre})`:''}`).join(' · ')}</div>`:''}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="estadoCuentaPDF(${c.id})" title="Descargar estado de cuenta en PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>Estado de cuenta PDF</button>
-          ${canRegistrarAbono()?`<button class="btn btn-ghost btn-sm" onclick="recalcularVencimientosCliente(${c.id})" title="Aplicar los días de crédito actuales a las facturas abiertas (desde su emisión)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Recalcular vencimientos</button>`:''}
           ${canRegistrarAbono()?`<button class="btn btn-primary btn-sm" onclick="openPagoGlobalCliente(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pago global</button>`:''}
           <button class="btn btn-ghost btn-sm" onclick="openRecordatorio(null,{tipo:'contrasena',refId:${c.id}})" title="Registrar contraseña de pago o entrega al crédito, ligada a la factura"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg>Contraseña / crédito</button>
           ${canCrearCliente()&&!c.sedesDe?`<button class="btn btn-ghost btn-sm" onclick="openCliSede(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar sede</button>`:''}
@@ -4172,26 +4171,6 @@ function renderCliDet(){
 }
 function cliSetTab(t){cliTab=t;renderCliDet();}
 window.cliSetTab=cliSetTab;
-// Recalcula el vencimiento de las facturas ABIERTAS del cliente con sus días de crédito actuales,
-// contando desde la fecha de emisión de cada una. Solo control interno (el DTE certificado no cambia).
-window.recalcularVencimientosCliente=function(cliId){
-  const c=clientes.find(x=>x.id===cliId);if(!c)return;
-  const dias=(typeof c.tiempoCredito==='number')?c.tiempoCredito:0;
-  const emiGT=iso=>{try{return new Date(new Date(iso).getTime()-6*3600*1000).toISOString().slice(0,10);}catch(e){return String(iso||'').slice(0,10);}};
-  const facs=documentos.filter(d=>d.clienteId===cliId&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&arInfo(d).saldo>0.001);
-  if(!facs.length){toast('Sin facturas abiertas','Este cliente no tiene facturas cambiarias pendientes para recalcular',true);return;}
-  confirmar('Recalcular vencimientos','Se recalcularán los vencimientos de <b>'+facs.length+'</b> factura(s) abierta(s) de <b>'+_escRec(c.nombre)+'</b> usando <b>'+tcLabel(dias)+'</b>, contando desde la emisión de cada una.<br><br>Esto cambia solo el control interno de cobros; el DTE certificado ante SAT no se modifica.','Recalcular',()=>{
-    let n=0;
-    facs.forEach(f=>{
-      const emi=emiGT(f.fechaCertificacion||f.creada);
-      const nuevo=dias>0?sumarDiasFecha(emi,dias):emi;
-      if(nuevo&&nuevo!==String(f.vencimiento||'').slice(0,10)){f.vencimiento=nuevo;f.diasCredito=dias;if(typeof guardarDocumento==='function')guardarDocumento(f);n++;}
-    });
-    logAudit('Vencimientos recalculados',c.nombre+' · '+n+' factura(s) · '+tcLabel(dias));
-    renderCliDet();if($('#v-documentos')?.classList.contains('active'))renderDocs();if($('#v-cobros')?.classList.contains('active'))renderCobros();
-    toast('✓ Vencimientos recalculados',n+' de '+facs.length+' factura(s) actualizada(s)');
-  });
-};
 // Genera el estado de cuenta del cliente en PDF (para imprimir o enviar)
 function estadoCuentaPDF(cliId){
   const c=clientes.find(x=>x.id===cliId);if(!c)return;
@@ -8654,23 +8633,18 @@ function facturasPendientesCredito(cli){
 function ofrecerRecalcVencimientos(cli,dias){
   const pend=facturasPendientesCredito(cli);
   if(!pend.length)return;
-  const txt=dias>0?('<b>'+dias+' días</b>'):'<b>contado (sin crédito)</b>';
-  const detalle=dias>0?('fecha de factura + '+dias+' días'):'sin vencimiento (contado)';
-  confirmar('¿Actualizar vencimientos?',
-    `Cambiaste el crédito de <b>${cli.nombre}</b> a ${txt}. Tiene <b>${pend.length}</b> factura(s) pendiente(s) de pago. ¿Recalcular su vencimiento como ${detalle}?<br><span style="color:var(--muted-2);font-size:11.5px">Solo afecta facturas con saldo; las ya pagadas no se tocan.</span>`,
-    'Sí, actualizar',
-    ()=>{
-      pend.forEach(f=>{
-        f.diasCredito=dias;
-        f.vencimiento=dias>0?new Date(new Date(f.creada).getTime()+dias*86400000).toISOString():null;
-        if(typeof guardarDocumento==='function')guardarDocumento(f);
-      });
-      logAudit('Vencimientos recalculados',cli.nombre+' · '+pend.length+' factura(s) · '+(dias>0?dias+' días':'contado'));
-      toast('✓ Vencimientos actualizados',pend.length+' factura(s) de '+cli.nombre);
-      if(typeof renderDocs==='function')renderDocs();
-      if(typeof renderCobros==='function')renderCobros();
-      if(cliActual&&$('#v-clientedet')&&$('#v-clientedet').classList.contains('active'))renderCliDet();
-    });
+  // Automático: al cambiar los días de crédito del cliente, recalcula el vencimiento de sus
+  // facturas pendientes (desde la fecha de emisión). Solo afecta facturas con saldo; las pagadas no se tocan.
+  pend.forEach(f=>{
+    f.diasCredito=dias;
+    f.vencimiento=dias>0?new Date(new Date(f.creada).getTime()+dias*86400000).toISOString():null;
+    if(typeof guardarDocumento==='function')guardarDocumento(f);
+  });
+  logAudit('Vencimientos recalculados (auto)',cli.nombre+' · '+pend.length+' factura(s) · '+(dias>0?dias+' días':'contado'));
+  toast('✓ Vencimientos actualizados',pend.length+' factura(s) de '+cli.nombre+' · '+(dias>0?dias+' días':'contado'));
+  if(typeof renderDocs==='function')renderDocs();
+  if(typeof renderCobros==='function')renderCobros();
+  if(cliActual&&$('#v-clientedet')&&$('#v-clientedet').classList.contains('active'))renderCliDet();
 }
 window.ofrecerRecalcVencimientos=ofrecerRecalcVencimientos;
 // Agregar una fila vacía de NIT secundario en el formulario del cliente
