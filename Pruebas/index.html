@@ -2520,7 +2520,7 @@ async function facturarPedido(id,dias){
     cliente:{
       nit:f.nitFacturado||f.clienteNit||'CF',
       nombre:f.nombreFacturado||f.clienteNombre||f.clienteComercial||'Consumidor Final',
-      direccion:f.clienteDireccion||'Ciudad',
+      direccion:dirFiscalDoc(f),
       email:f.clienteEmail||'',
     },
     items:(f.items||[]).map(it=>({
@@ -2650,7 +2650,7 @@ async function facturarPedidoExento(id,dias,escenario){
   const vencDDMMAAAA=(()=>{const d=new Date(Date.now()+dias*86400000);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();})();
   const payload={
     numero:f.id, fecha:hoy,
-    cliente:{nit:f.nitFacturado||f.clienteNit||'CF', nombre:f.nombreFacturado||f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:f.clienteDireccion||'Ciudad', email:f.clienteEmail||''},
+    cliente:{nit:f.nitFacturado||f.clienteNit||'CF', nombre:f.nombreFacturado||f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:dirFiscalDoc(f), email:f.clienteEmail||''},
     items:itemsEx.map(it=>({codigo:it.codigo||'GEN', nombre:it.nombre, cantidad:it.cantidad, precio:it.precio, descuento:it.descuento||0, unidad:it.unidad||'UNI', tipo:'B'})),
     total:totalEx, vencimiento:venc, observaciones:f.observaciones||'',
     // Datos de exención
@@ -4383,6 +4383,13 @@ window.confirmarEliminarCliente=confirmarEliminarCliente;
 function notasDe(f){
   const cr=documentos.filter(d=>d.tipoDoc==='notaCredito'&&d.facturaOrigenId===f.id&&d.estado!=='anulada').reduce((s,d)=>s+d.totales.total,0);
   return {cr};
+}
+// Dirección fiscal para la factura: la del documento si se guardó, si no la del cliente actual, y por último 'Ciudad'.
+function dirFiscalDoc(f){
+  const c=clientes.find(x=>x.id===f.clienteId);
+  const d1=(f.clienteDireccion||'').trim();
+  const d2=(c&&c.direccion||'').trim();
+  return d1||d2||'Ciudad';
 }
 function arInfo(f){
   const {cr}=notasDe(f);
