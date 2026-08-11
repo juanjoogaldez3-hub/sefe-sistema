@@ -6812,12 +6812,17 @@ function medidaProducto(p){return (p&&(p.tipoEmpaque==='caja_unidad'||p.tipoEmpa
 function openCategorias(){
   if(!canEditInventario()){toast('Sin permiso','Solo Admin, Gerencia y Bodega pueden configurar categorías',true);return;}
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const filas=categorias.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')).map(c=>`
+  const _nombresCat=[...new Set([...categorias.map(c=>c.nombre),...productos.map(p=>p.categoria)].map(s=>(s||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const filas=_nombresCat.map(nom=>{
+    const c=categorias.find(x=>x.nombre===nom);
+    const umb=c?(Number(c.umbralStock)||0):0;
+    return `
     <div class="row" data-cat-row style="align-items:flex-end;gap:8px;margin-bottom:8px">
-      <div style="flex:2"><input class="cat-nom" value="${esc(c.nombre)}" readonly style="background:var(--surface-2);color:var(--muted)"></div>
-      <div style="width:110px"><input class="cat-umb" type="number" min="0" value="${Number(c.umbralStock)||0}"></div>
-      <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarCategoriaUI('${esc(c.nombre).replace(/'/g,"\\'")}')">Quitar</button>
-    </div>`).join('');
+      <div style="flex:2"><input class="cat-nom" value="${esc(nom)}" readonly style="background:var(--surface-2);color:var(--muted)"></div>
+      <div style="width:110px"><input class="cat-umb" type="number" min="0" value="${umb}" placeholder="${UMBRAL_STOCK_DEF}"></div>
+      ${c?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarCategoriaUI('${esc(nom).replace(/'/g,"\\'")}')">Quitar</button>`:`<span style="width:64px;font-size:9.5px;color:var(--muted-2);text-align:center">en productos</span>`}
+    </div>`;
+  }).join('');
   openMod('Categorías y umbrales de stock',
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">Cuando un producto de la categoría baja de su umbral, se marca en alerta (rojo). Los productos sin categoría usan el umbral por defecto (${UMBRAL_STOCK_DEF} unidades).</p>
      <div class="row" style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;gap:8px;margin-bottom:6px"><div style="flex:2">Categoría</div><div style="width:110px">Umbral (unid.)</div><div style="width:64px"></div></div>
@@ -6828,8 +6833,9 @@ function openCategorias(){
       for(const r of [...document.querySelectorAll('#cat-lista [data-cat-row]')]){
         const nom=r.querySelector('.cat-nom').value.trim();
         const umb=Number(r.querySelector('.cat-umb').value)||0;
-        const c=categorias.find(x=>x.nombre===nom);
-        if(c&&c.umbralStock!==umb){c.umbralStock=umb;if(typeof guardarCategoria==='function')await guardarCategoria(c);}
+        let c=categorias.find(x=>x.nombre===nom);
+        if(c){if(c.umbralStock!==umb){c.umbralStock=umb;if(typeof guardarCategoria==='function')await guardarCategoria(c);}}
+        else if(umb>0){const nc={nombre:nom,umbralStock:umb};categorias.push(nc);if(typeof guardarCategoria==='function')await guardarCategoria(nc);}
       }
       const nn=($('#cat-new-nom')?.value||'').trim(), nu=Number($('#cat-new-umb')?.value)||UMBRAL_STOCK_DEF;
       if(nn&&!categorias.find(x=>(x.nombre||'').toLowerCase()===nn.toLowerCase())){
