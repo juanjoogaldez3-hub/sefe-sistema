@@ -5266,11 +5266,11 @@ function _numLetras(n){
   if(resto)s+=chunk(resto);
   return s.trim().replace(/\s+/g,' ');
 }
-function montoEnLetras(monto){
+function montoEnLetras(monto,moneda){
   const ent=Math.floor(Math.abs(monto));
   const cent=Math.round((Math.abs(monto)-ent)*100);
   let txt=_numLetras(ent).toUpperCase();
-  txt+=' CON '+String(cent).padStart(2,'0')+'/100 QUETZALES';
+  txt+=' CON '+String(cent).padStart(2,'0')+'/100 '+(moneda==='USD'?'DÓLARES':'QUETZALES');
   return txt;
 }
 const TIPO_CUENTA_LBL={monetaria:'Monetaria',ahorro:'Ahorro',efectivo:'Efectivo / Caja'};
@@ -5410,7 +5410,7 @@ window.onTipoMov=function(){
 };
 window.anularMovimientoBancoUI=function(id){
   const m=movimientosBanco.find(x=>x.id===id);if(!m)return;
-  confirmar('¿Anular este movimiento?','Se revertirá su efecto en el saldo de la cuenta.',()=>{
+  confirmar('¿Anular este movimiento?','Se revertirá su efecto en el saldo de la cuenta.','Anular',()=>{
     m.anulado=true;
     if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(m);
     logAudit('Movimiento de banco anulado',(m.concepto||'')+' · '+money(m.monto));
@@ -5592,7 +5592,7 @@ function polizaChequePDF(mov,beneficiario){
   const numPol='POL-'+String(mov.poliza||0).padStart(6,'0');
   const numChq=(mov.referencia||'').toString().trim();
   const fechaTxt=mov.fecha?fdate(mov.fecha):'—';
-  const montoNum='Q '+Number(mov.monto).toLocaleString('es-GT',{minimumFractionDigits:2});
+  const montoNum=moneyC(mov.monto,c.moneda);
   const numAut=(mov.referencia||'').toString().trim();
   // Beneficiario: para pagos a proveedor usar la razón social del NIT
   let payee=benef, provNit='';
@@ -5630,7 +5630,7 @@ function polizaChequePDF(mov,beneficiario){
       </div>
       <div style="padding:7px 14px">
         <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">La cantidad de</div>
-        <div style="font-size:12.5px;font-weight:600;color:#333;margin-top:1px;font-style:italic">${montoEnLetras(mov.monto)}</div>
+        <div style="font-size:12.5px;font-weight:600;color:#333;margin-top:1px;font-style:italic">${montoEnLetras(mov.monto,c.moneda)}</div>
       </div>
     </div>
 
