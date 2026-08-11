@@ -5474,7 +5474,7 @@ window._renderEstadoCtaBco=function(id){
   const cont=$('#ecb-cont');if(!cont)return;
   const filasHTML=d.filas.length?d.filas.map(f=>`<tr>
       <td style="color:var(--muted);white-space:nowrap">${f.fecha}</td>
-      <td>${f.concepto}${f.referencia?`<span style="color:var(--muted-2);font-size:11px"> · ${f.referencia}</span>`:''}</td>
+      <td style="word-break:break-word">${f.concepto}${f.referencia?`<span style="color:var(--muted-2);font-size:11px"> · ${f.referencia}</span>`:''}</td>
       <td><span class="badge b-muted" style="font-size:10px">${f.categoria}</span></td>
       <td class="num" style="color:var(--ok)">${f.ent?M(f.ent):'—'}</td>
       <td class="num" style="color:var(--danger)">${f.sal?M(f.sal):'—'}</td>
@@ -5486,8 +5486,8 @@ window._renderEstadoCtaBco=function(id){
       {ic:'i-green',svg:'<path d="M12 5v14M19 12l-7 7-7-7"/>',lbl:'Entradas',val:M(d.totEnt)},
       {ic:'i-danger',svg:'<path d="M12 19V5M5 12l7-7 7 7"/>',lbl:'Salidas',val:M(d.totSal)},
       {ic:(d.saldoFinal>=0?'i-blue':'i-danger'),svg:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',lbl:'Saldo final',val:M(d.saldoFinal)}])}</div>
-    <div style="overflow:auto;max-height:46vh;border:1px solid var(--line);border-radius:8px">
-    <table style="margin:0"><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Entrada</th><th>Salida</th><th>Saldo</th></tr></thead><tbody>
+    <div style="overflow-y:auto;overflow-x:hidden;max-height:46vh;border:1px solid var(--line);border-radius:8px">
+    <table style="margin:0;width:100%;table-layout:fixed"><colgroup><col style="width:11%"><col style="width:34%"><col style="width:13%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th class="num">Entrada</th><th class="num">Salida</th><th class="num">Saldo</th></tr></thead><tbody>
       <tr style="background:var(--bg-soft,#f6f8f2)"><td colspan="5" style="font-weight:600;color:var(--muted)">Saldo inicial ${desde?('al '+desde):'(apertura de la cuenta)'}</td><td class="num" style="font-weight:700">${M(d.saldoAntes)}</td></tr>
       ${filasHTML}
       <tr style="border-top:2px solid var(--line-strong);font-weight:700"><td colspan="3">TOTALES DEL PERÍODO</td><td class="num" style="color:var(--ok)">${M(d.totEnt)}</td><td class="num" style="color:var(--danger)">${M(d.totSal)}</td><td class="num">${M(d.saldoFinal)}</td></tr>
