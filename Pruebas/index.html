@@ -5265,12 +5265,14 @@ function renderBancos(){
   $('#bancos-empty').style.display=lista.length?'none':'block';
   const saldoTotal=lista.reduce((s,c)=>s+saldoCuenta(c.id),0);
   const hoyStr=fechaHoyGT();
-  let entHoy=0,salHoy=0;
-  movimientosBanco.forEach(m=>{if(m.anulado)return;if((m.fecha||'').slice(0,10)===hoyStr){if(m.tipo==='entrada')entHoy+=Number(m.monto||0);else salHoy+=Number(m.monto||0);}});
+  let entHoy=0,salHoy=0,entMes=0,salMes=0;const mesStr=hoyStr.slice(0,7);
+  movimientosBanco.forEach(m=>{if(m.anulado)return;const f=(m.fecha||'').slice(0,10);const mo=Number(m.monto||0);
+    if(f===hoyStr){if(m.tipo==='entrada')entHoy+=mo;else salHoy+=mo;}
+    if(f.slice(0,7)===mesStr){if(m.tipo==='entrada')entMes+=mo;else salMes+=mo;}});
   $('#bancos-kpis').innerHTML=kpiHTML([
     {ic:'i-green',svg:'<path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11"/>',lbl:'Saldo total en bancos',val:money(saldoTotal),sub:lista.length+' cuenta'+(lista.length!==1?'s':'')},
-    {ic:'i-blue',svg:'<path d="M12 5v14M19 12l-7 7-7-7"/>',lbl:'Entradas hoy',val:money(entHoy)},
-    {ic:'i-warn',svg:'<path d="M12 19V5M5 12l7-7 7 7"/>',lbl:'Salidas hoy',val:money(salHoy)}]);
+    {ic:'i-blue',svg:'<path d="M12 5v14M19 12l-7 7-7-7"/>',lbl:'Entradas del mes',val:money(entMes),sub:'Hoy: '+money(entHoy)},
+    {ic:'i-warn',svg:'<path d="M12 19V5M5 12l7-7 7 7"/>',lbl:'Salidas del mes',val:money(salMes),sub:'Hoy: '+money(salHoy)}]);
   $('#t-bancos').innerHTML=lista.map(c=>{
     const sact=saldoCuenta(c.id);
 return `<tr>
