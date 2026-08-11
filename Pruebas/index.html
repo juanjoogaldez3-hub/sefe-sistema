@@ -5965,6 +5965,8 @@ function updEspecialItem(compraId,idx,val){
   if(prod)aplicarStock(prod,delta,'caja');
   it.cantidad=nuevaCant;it.recibido=nuevaCant;
   c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
+  if(delta&&prod)logAudit('Inventario · compra especial','CMP-'+padn(compraId)+' · '+(it.nombreProveedor||it.nombre)+' · '+(delta>0?'+':'')+delta+' und → stock '+prod.stock);
+  if(typeof guardarCompra==='function')guardarCompra(c);
   $('#esp-rows').innerHTML=c.items.map((it,i)=>`<tr>
     <td style="font-weight:600">${it.nombreProveedor||it.nombre}</td>
     <td><input type="number" min="1" value="${it.cantidad}" style="width:70px;text-align:right" onchange="updEspecialItem(${compraId},${i},this.value)"></td>
@@ -5980,8 +5982,10 @@ function quitarEspecialItem(compraId,idx){
   const it=c.items[idx];
   const prod=productos.find(p=>p.id===it.id);
   if(prod)aplicarStock(prod,-it.cantidad,'caja');
+  logAudit('Inventario · compra especial','CMP-'+padn(compraId)+' · quitado '+(it.nombreProveedor||it.nombre)+' · -'+it.cantidad+' und → stock '+(prod?prod.stock:'?'));
   c.items.splice(idx,1);
   c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
+  if(typeof guardarCompra==='function')guardarCompra(c);
   if(!c.items.length){toast('Sin productos — la compra especial quedó vacía');closeMod();renderCompras();return;}
   editarCompraEspecial(compraId);
 }
@@ -5997,6 +6001,9 @@ function addEspecialItem(compraId){
   else{c.items.push({id:p.id,codigo:p.codigo,skuProveedor:p.skuProveedor||p.codigo,nombre:p.nombre,nombreProveedor:p.nombreProveedor||p.nombre,costo:p.costo||0,cantidad:1,recibido:1});
     const prod=productos.find(x=>x.id===p.id);if(prod)aplicarStock(prod,1,'caja');}
   c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
+  const _pAdd=productos.find(x=>x.id===p.id);
+  logAudit('Inventario · compra especial','CMP-'+padn(compraId)+' · '+(p.nombreProveedor||p.nombre)+' · +1 und → stock '+(_pAdd?_pAdd.stock:'?'));
+  if(typeof guardarCompra==='function')guardarCompra(c);
   $('#esp-add').value='';
   editarCompraEspecial(compraId);
 }
