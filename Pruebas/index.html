@@ -8634,6 +8634,7 @@ function openCli(id){
   </div></div>
   <div class="row"><div><label>Dirección</label><input id="c-dir" value="${c?(c.direccion||'Ciudad'):'Ciudad'}"></div></div>
   <div class="row"><div><label>Dirección de entrega <span style="font-weight:400;color:var(--muted-2)">(si es distinta a la de facturación)</span></label><input id="c-dirent" value="${c?(c.direccionEntrega||''):''}" placeholder="Dejar vacío si entrega en la misma dirección"></div></div>
+  <div class="row"><div><label>Ruta <span style="font-weight:400;color:var(--muted-2)">(elegí una existente o escribí una nueva)</span></label><input id="c-ruta" list="c-rutas-list" value="${c?(c.ruta||''):''}" placeholder="Ej. Ruta 1, Zona 11…"><datalist id="c-rutas-list">${[...new Set(clientes.map(x=>(x.ruta||'').trim()).filter(Boolean))].sort().map(r=>`<option value="${escHtml(r)}">`).join('')}</datalist></div></div>
   <div class="row"><div><label>Tiempo de crédito</label><select id="c-tc">
       <option value="0" ${tc===0?'selected':''}>Contado</option>
       <option value="15" ${tc===15?'selected':''}>15 días</option>
@@ -8672,7 +8673,7 @@ function openCli(id){
     const sedesDe=$('#c-sede').value?Number($('#c-sede').value):null;
     const _vendSel=vendedores.find(v=>v.id===vendedorId);
     const subVendedorNombre=esVendedorCanal(_vendSel?.nombre)?($('#c-subvend')?.value||null):null;
-    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:normalizarNit($('#c-nit').value)||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),tiempoCredito,vendedorId,subVendedorNombre,sedesDe,nitsSecundarios:leerNitsSecundarios(),
+    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:normalizarNit($('#c-nit').value)||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),ruta:$('#c-ruta').value.trim(),tiempoCredito,vendedorId,subVendedorNombre,sedesDe,nitsSecundarios:leerNitsSecundarios(),
       contactoPagos:{nombre:$('#cp-nom').value,telefono:$('#cp-tel').value,correo:$('#cp-mail').value},
       contactoCompras:{nombre:$('#cc-nom').value,telefono:$('#cc-tel').value,correo:$('#cc-mail').value}};
     const creditoAnterior=c?(c.tiempoCredito||0):null;
