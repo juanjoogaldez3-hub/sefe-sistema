@@ -1235,9 +1235,15 @@ function enhanceTable(tbodyId,opts){
           return cell?cell.textContent.trim():'';
         };
         const cmpFn=(av,bv)=>{
-          const an=parseFloat(av.replace(/[^0-9.\-]/g,'')),bn=parseFloat(bv.replace(/[^0-9.\-]/g,''));
-          const bothNum=/[0-9]/.test(av)&&/[0-9]/.test(bv)&&!isNaN(an)&&!isNaN(bn);
-          return (bothNum?(an-bn):av.localeCompare(bv,'es',{sensitivity:'base'}))*dir;
+          // Fechas: DD-MM-YYYY (o ISO YYYY-MM-DD) → comparar cronológicamente (no como número suelto)
+          const _fd=s=>{const t=String(s).trim();let m=t.match(/(\d{2})-(\d{2})-(\d{4})/);if(m)return +(m[3]+m[2]+m[1]);m=t.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return +(m[1]+m[2]+m[3]);return null;};
+          const da=_fd(av),db=_fd(bv);
+          if(da!==null&&db!==null)return (da-db)*dir;
+          // Números (moneda, cantidades): solo si la celda es esencialmente numérica
+          const _esNum=s=>/[0-9]/.test(s)&&/^[\sQ$.,()%\-0-9]+$/.test(String(s).trim());
+          if(_esNum(av)&&_esNum(bv)){const an=parseFloat(av.replace(/[^0-9.\-]/g,'')),bn=parseFloat(bv.replace(/[^0-9.\-]/g,''));if(!isNaN(an)&&!isNaN(bn))return (an-bn)*dir;}
+          // Texto con orden natural ("Ruta 2" antes que "Ruta 10")
+          return av.localeCompare(bv,'es',{numeric:true,sensitivity:'base'})*dir;
         };
         if(stP){
           // Tabla paginada: ordenar el ARRAY completo y volver a renderizar
