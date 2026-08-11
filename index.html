@@ -999,9 +999,15 @@
         </div>
         <div class="panel">
           <div class="panel-head"><h3>Movimientos recientes</h3><button class="btn btn-primary btn-sm" onclick="openMovimientoBanco()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Registrar movimiento / gasto</button></div>
-          <div class="tbl-toolbar">
+          <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">
             <select id="mov-filtro-cuenta" onchange="renderBancos()" style="min-width:170px"><option value="">Todas las cuentas</option></select>
             <select id="mov-filtro-tipo" onchange="renderBancos()"><option value="">Entradas y salidas</option><option value="entrada">Solo entradas</option><option value="salida">Solo salidas</option></select>
+            <span style="width:1px;height:22px;background:var(--line)"></span>
+            <button class="btn btn-ghost btn-sm" onclick="movRango('hoy')">Hoy</button>
+            <button class="btn btn-ghost btn-sm" onclick="movRango('mes')">Este mes</button>
+            <input id="mov-desde" type="date" onchange="renderBancos()" title="Desde" style="width:150px">
+            <input id="mov-hasta" type="date" onchange="renderBancos()" title="Hasta" style="width:150px">
+            <button class="btn btn-ghost btn-sm" onclick="movRango('todo')">Limpiar</button>
           </div>
           <table><thead><tr><th>Fecha</th><th>Cuenta</th><th>Concepto</th><th>Categoría</th><th>Entrada</th><th>Salida</th><th></th></tr></thead><tbody id="t-movimientos"></tbody></table>
           <div class="empty" id="mov-empty">Aún no hay movimientos.</div>
@@ -5312,9 +5318,13 @@ function renderBancos(){
   }
   const fCta=document.getElementById('mov-filtro-cuenta')?.value||'';
   const fTipo=document.getElementById('mov-filtro-tipo')?.value||'';
+  const fDesde=document.getElementById('mov-desde')?.value||'';
+  const fHasta=document.getElementById('mov-hasta')?.value||'';
   let movs=movimientosBanco.filter(m=>!m.anulado);
   if(fCta)movs=movs.filter(m=>String(m.cuentaId)===String(fCta));
   if(fTipo)movs=movs.filter(m=>m.tipo===fTipo);
+  if(fDesde)movs=movs.filter(m=>(m.fecha||'').slice(0,10)>=fDesde);
+  if(fHasta)movs=movs.filter(m=>(m.fecha||'').slice(0,10)<=fHasta);
   movs=movs.slice().sort((a,b)=>{const d=(b.fecha||'').localeCompare(a.fecha||'');return d!==0?d:((Number(b.id)||0)-(Number(a.id)||0));}).slice(0,200);
   const empM=document.getElementById('mov-empty');if(empM)empM.style.display=movs.length?'none':'block';
   const nombreCuenta=id=>{const c=cuentasBanco.find(x=>x.id===id);return c?c.nombre:'—';};
@@ -5357,6 +5367,14 @@ function openCuentaBanco(id){
 }
 window.openCuentaBanco=openCuentaBanco;
 window.renderBancos=renderBancos;
+window.movRango=function(tipo){
+  const n=fechaHoyGT();
+  const d=document.getElementById('mov-desde'),h=document.getElementById('mov-hasta');
+  if(tipo==='hoy'){if(d)d.value=n;if(h)h.value=n;}
+  else if(tipo==='mes'){if(d)d.value=n.slice(0,7)+'-01';if(h)h.value=n;}
+  else{if(d)d.value='';if(h)h.value='';}
+  renderBancos();
+};
 window.eliminarCuentaBancoUI=function(id){
   const c=cuentasBanco.find(x=>x.id===id);if(!c)return;
   if(nMovsCuenta(id)>0){toast('No se puede eliminar','La cuenta tiene movimientos registrados. Desactivala en vez de borrarla.',true);return;}
