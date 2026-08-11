@@ -2541,7 +2541,7 @@ async function facturarPedido(id,dias){
       email:f.clienteEmail||'',
     },
     items:(f.items||[]).map(it=>({
-      codigo:it.codigo||'GEN', nombre:(it.codigo&&(''+it.codigo).trim()&&(''+it.codigo).trim().toUpperCase()!=='GEN'?(''+it.codigo).trim()+' - ':'')+it.nombre, cantidad:it.cantidad,
+      codigo:it.codigo||'GEN', nombre:(it.codigo&&(''+it.codigo).trim()&&(''+it.codigo).trim().toUpperCase()!=='GEN'?(''+it.codigo).trim()+' - ':'')+it.nombre+(it.unidad&&(''+it.unidad).trim()?' - '+(''+it.unidad).trim():''), cantidad:it.cantidad,
       precio:it.precio, descuento:it.descuento||0, unidad:it.unidad||'UNI', tipo:'B',
     })),
     total:f.totales.total,
@@ -2669,7 +2669,7 @@ async function facturarPedidoExento(id,dias,escenario){
   const payload={
     numero:f.id, fecha:hoy,
     cliente:{nit:f.nitFacturado||f.clienteNit||'CF', nombre:f.nombreFacturado||f.clienteNombre||f.clienteComercial||'Consumidor Final', direccion:dirFiscalDoc(f), email:f.clienteEmail||''},
-    items:itemsEx.map(it=>({codigo:it.codigo||'GEN', nombre:(it.codigo&&(''+it.codigo).trim()&&(''+it.codigo).trim().toUpperCase()!=='GEN'?(''+it.codigo).trim()+' - ':'')+it.nombre, cantidad:it.cantidad, precio:it.precio, descuento:it.descuento||0, unidad:it.unidad||'UNI', tipo:'B'})),
+    items:itemsEx.map(it=>({codigo:it.codigo||'GEN', nombre:(it.codigo&&(''+it.codigo).trim()&&(''+it.codigo).trim().toUpperCase()!=='GEN'?(''+it.codigo).trim()+' - ':'')+it.nombre+(it.unidad&&(''+it.unidad).trim()?' - '+(''+it.unidad).trim():''), cantidad:it.cantidad, precio:it.precio, descuento:it.descuento||0, unidad:it.unidad||'UNI', tipo:'B'})),
     total:totalEx, vencimiento:venc, observaciones:f.observaciones||'',
     // Datos de exención
     exenta:true, fraseTipo:4, escenario:escenario,
