@@ -1330,18 +1330,18 @@ const ROLES={
 // objeto para que cualquier usuario existente con rol='cobros' siga funcionando y para que
 // ambos nunca puedan divergir. Migrar usuarios a 'contabilidad' con el SQL y luego se puede quitar.
 ROLES.cobros=ROLES.contabilidad;
-let usuarios=[
-  {id:1,nombre:'Juanjo',correo:'juanjo@sefe.gt',rol:'admin',activo:true,vendedorId:null},
-  {id:2,nombre:'Sofía Castillo',correo:'sofia@sefe.gt',rol:'gerencia',activo:true,vendedorId:null},
-  {id:3,nombre:'Ana Ramírez',correo:'ana@sefe.gt',rol:'ventas',activo:true,vendedorId:1},
-  {id:4,nombre:'Luis Méndez',correo:'luis@sefe.gt',rol:'contabilidad',activo:true,vendedorId:null},
-  {id:5,nombre:'Carlos Pérez',correo:'carlos@sefe.gt',rol:'bodega',activo:true,vendedorId:null},
-  {id:6,nombre:'María López',correo:'maria@sefe.gt',rol:'contabilidad',activo:true,vendedorId:null},
-  {id:7,nombre:'Auditor Externo',correo:'auditor@sefe.gt',rol:'auditoria',activo:true,vendedorId:null},
-  {id:8,nombre:'Facturador SEFE',correo:'facturador@sefe.gt',rol:'facturador',activo:true,vendedorId:null,pilotoId:null},
-  {id:9,nombre:'José Coc',correo:'jose@sefe.gt',rol:'piloto',activo:true,vendedorId:null,pilotoId:1},
-  {id:10,nombre:'Mynor Tzún',correo:'mynor@sefe.gt',rol:'piloto',activo:true,vendedorId:null,pilotoId:2},
-];
+// Los usuarios SIEMPRE vienen de la base (tabla 'usuarios').
+//
+// Antes acá había 10 usuarios de ejemplo de la época del prototipo
+// (Sofía Castillo, Ana Ramírez, José Coc…). Si la carga de Supabase
+// fallaba o llegaba tarde, el sistema mostraba esos nombres inventados
+// como si fueran el personal real — y la red de seguridad del arranque
+// no lo detectaba, porque preguntaba "¿la lista está vacía?" y con los
+// ejemplos adentro nunca lo estaba.
+//
+// Vacío es lo correcto: si no hay datos, que no se vea nada, en lugar
+// de mostrar gente que no existe.
+let usuarios=[];
 let usrN=11;
 let currentUser='Juanjo',currentRole='admin';
 function iniciales(n){return n.split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');}
@@ -9840,7 +9840,13 @@ async function verificarSesion(){
       // Red de seguridad: si por timing los datos no cargaron (usuarios vacío
       // O documentos/clientes vacíos), reintentar cargarTodo y esperar a que
       // estén realmente completos antes de entrar.
-      const datosIncompletos=()=>(!usuarios||usuarios.length===0);
+      // ¿Los datos vienen de verdad de la base? `_sefeDatosBase` lo pone
+      // cargarTodo() sólo cuando terminó bien. Antes acá se preguntaba
+      // únicamente si la lista de usuarios estaba vacía, y eso nunca
+      // pasaba porque el código traía usuarios de ejemplo: la red de
+      // seguridad no saltaba nunca y el sistema se quedaba mostrando
+      // datos inventados.
+      const datosIncompletos=()=>(!window._sefeDatosBase||!usuarios||usuarios.length===0);
       if(datosIncompletos() && typeof cargarTodo==='function'){
         // Reintentar hasta 3 veces, esperando entre intentos
         for(let intento=0; intento<3 && datosIncompletos(); intento++){
