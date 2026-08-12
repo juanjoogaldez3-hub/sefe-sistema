@@ -106,10 +106,7 @@ async function cargarTodo() {
       };
     });
     // Auditoría
-    auditLog = (rAudit.data||[]).map(a=>({
-      seq:a.seq, fecha:a.fecha, usuario:a.usuario, rol:a.rol,
-      accion:a.accion, detalle:a.detalle, prevHash:a.prev_hash, hash:a.hash
-    })).reverse();
+    auditLog = (rAudit.data||[]).map(mapAuditoriaFromDB).reverse();
     auditSeq = auditLog.length ? Math.max(...auditLog.map(a=>a.seq)) : 0;
 
     // Dashboard config por rol (si la variable global existe)
@@ -123,43 +120,28 @@ async function cargarTodo() {
 
     // Talonarios de recibos
     if (typeof talonarios !== 'undefined') {
-      talonarios = (rTalonarios.data||[]).map(t=>({
-        id:t.id, numeroInicial:t.numero_inicial, numeroFinal:t.numero_final,
-        cantidad:t.cantidad, asignadoA:t.asignado_a, asignadoId:t.asignado_id,
-        descripcion:t.descripcion, estado:t.estado, fechaEntrega:t.fecha_entrega, creado:t.creado
-      }));
+      talonarios = (rTalonarios.data||[]).map(mapTalonarioFromDB);
     }
 
     // Recibos anulados
     if (typeof recibosAnulados !== 'undefined') {
-      recibosAnulados = (rRecAnul.data||[]).map(r=>({
-        id:r.id, numero:r.numero, talonarioId:r.talonario_id,
-        motivo:r.motivo, anuladoPor:r.anulado_por, fecha:r.fecha
-      }));
+      recibosAnulados = (rRecAnul.data||[]).map(mapReciboAnuladoFromDB);
     }
 
     // Cuentas de banco
     if (typeof cuentasBanco !== 'undefined') {
-      cuentasBanco = (rCuentasBanco.data||[]).map(c=>({
-        id:c.id, nombre:c.nombre, banco:c.banco, numero:c.numero, tipo:c.tipo||'monetaria',
-        moneda:c.moneda||'GTQ', saldoInicial:Number(c.saldo_inicial)||0, activo:c.activo!==false, creada:c.creada
-      }));
+      cuentasBanco = (rCuentasBanco.data||[]).map(mapCuentaBancoFromDB);
     }
     // Movimientos de banco
     if (typeof movimientosBanco !== 'undefined') {
-      movimientosBanco = (rMovBanco.data||[]).map(m=>({
-        id:m.id, cuentaId:m.cuenta_id, fecha:m.fecha, tipo:m.tipo, monto:Number(m.monto)||0,
-        concepto:m.concepto, categoria:m.categoria, origen:m.origen, origenId:m.origen_id,
-        cuentaDestinoId:m.cuenta_destino_id, referencia:m.referencia, poliza:m.poliza, registradoPor:m.registrado_por,
-        registradoEl:m.registrado_el, anulado:m.anulado===true
-      }));
+      movimientosBanco = (rMovBanco.data||[]).map(mapMovimientoBancoFromDB);
     }
 
     // Categorías (umbrales de stock por categoría). Tolera que la tabla no exista todavía.
     try {
       const rCat = await sb.from('categorias').select('*');
       if (!rCat.error && typeof categorias !== 'undefined') {
-        categorias = (rCat.data||[]).map(c=>({nombre:c.nombre, umbralStock:Number(c.umbral_stock)||0}));
+        categorias = (rCat.data||[]).map(mapCategoriaFromDB);
       }
     } catch(e){ /* tabla aún no creada */ }
 
@@ -219,13 +201,18 @@ function mapProveedorFromDB(p){
     telefono:p.telefono, correo:p.correo, diasCredito:p.dias_credito
   };
 }
-function mapDocumentoFromDB(d, todosAbonos){
-  const abonos = todosAbonos.filter(a=>a.documento_id===d.id).map(a=>({
+// Un abono suelto (fila de la tabla 'abonos'). Se usa tanto al armar el
+// documento completo como al recibir un cambio en tiempo real.
+function mapAbonoFromDB(a){
+  return {
     fecha:a.fecha, monto:Number(a.monto), metodo:a.metodo, referencia:a.referencia,
     noRecibo:a.no_recibo, comprobante:a.comprobante, registradoPor:a.registrado_por,
     registradoEl:a.registrado_el, anulado:a.anulado, motivoAnulacion:a.motivo_anulacion,
     origenCobroRuta:a.origen_cobro_ruta, cuentaBancoId:a.cuenta_banco_id, _id:a.id
-  }));
+  };
+}
+function mapDocumentoFromDB(d, todosAbonos){
+  const abonos = (todosAbonos||[]).filter(a=>a.documento_id===d.id).map(mapAbonoFromDB);
   return {
     id:d.id, numero:d.numero, tipoDoc:d.tipo_doc, clienteId:d.cliente_id,
     clienteNombre:d.cliente_nombre, clienteComercial:d.cliente_comercial, clienteNit:d.cliente_nit,
@@ -252,13 +239,17 @@ function mapCobroRutaFromDB(c){
     procesadoPor:c.procesado_por, procesadoFecha:c.procesado_fecha
   };
 }
-function mapCompraFromDB(c, todosPagos){
-  const abonos = todosPagos.filter(p=>p.compra_id===c.id).map(p=>({
+// Un pago a proveedor suelto (fila de 'pagos_proveedor').
+function mapPagoProveedorFromDB(p){
+  return {
     fecha:p.fecha, monto:Number(p.monto), metodo:p.metodo, referencia:p.referencia,
     noRecibo:p.no_recibo, comprobante:p.comprobante, registradoPor:p.registrado_por,
     registradoEl:p.registrado_el, anulado:p.anulado, motivoAnulacion:p.motivo_anulacion,
     esCierre:p.es_cierre, cuentaBancoId:p.cuenta_banco_id, _id:p.id
-  }));
+  };
+}
+function mapCompraFromDB(c, todosPagos){
+  const abonos = (todosPagos||[]).filter(p=>p.compra_id===c.id).map(mapPagoProveedorFromDB);
   return {
     id:c.id, proveedorId:c.proveedor_id, proveedorNombre:c.proveedor_nombre,
     items:c.items||[], total:Number(c.total), fecha:c.fecha,
@@ -272,6 +263,42 @@ function mapUsuarioFromDB(u){
   return {
     id:u.id, nombre:u.nombre, correo:u.correo, rol:u.rol, activo:u.activo,
     vendedorId:u.vendedor_id, pilotoId:u.piloto_id, authId:u.auth_id
+  };
+}
+function mapTalonarioFromDB(t){
+  return {
+    id:t.id, numeroInicial:t.numero_inicial, numeroFinal:t.numero_final,
+    cantidad:t.cantidad, asignadoA:t.asignado_a, asignadoId:t.asignado_id,
+    descripcion:t.descripcion, estado:t.estado, fechaEntrega:t.fecha_entrega, creado:t.creado
+  };
+}
+function mapReciboAnuladoFromDB(r){
+  return {
+    id:r.id, numero:r.numero, talonarioId:r.talonario_id,
+    motivo:r.motivo, anuladoPor:r.anulado_por, fecha:r.fecha
+  };
+}
+function mapCuentaBancoFromDB(c){
+  return {
+    id:c.id, nombre:c.nombre, banco:c.banco, numero:c.numero, tipo:c.tipo||'monetaria',
+    moneda:c.moneda||'GTQ', saldoInicial:Number(c.saldo_inicial)||0, activo:c.activo!==false, creada:c.creada
+  };
+}
+function mapMovimientoBancoFromDB(m){
+  return {
+    id:m.id, cuentaId:m.cuenta_id, fecha:m.fecha, tipo:m.tipo, monto:Number(m.monto)||0,
+    concepto:m.concepto, categoria:m.categoria, origen:m.origen, origenId:m.origen_id,
+    cuentaDestinoId:m.cuenta_destino_id, referencia:m.referencia, poliza:m.poliza, registradoPor:m.registrado_por,
+    registradoEl:m.registrado_el, anulado:m.anulado===true
+  };
+}
+function mapCategoriaFromDB(c){
+  return { nombre:c.nombre, umbralStock:Number(c.umbral_stock)||0 };
+}
+function mapAuditoriaFromDB(a){
+  return {
+    seq:a.seq, fecha:a.fecha, usuario:a.usuario, rol:a.rol,
+    accion:a.accion, detalle:a.detalle, prevHash:a.prev_hash, hash:a.hash
   };
 }
 

@@ -420,6 +420,8 @@
 <script src="config.js"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
 <script src="db.js"></script>
+<!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
+<script src="realtime.js"></script>
 </head>
 <body>
 <div id="banner-pruebas" style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#C9A227;color:#fff;text-align:center;padding:7px;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:bold;letter-spacing:.4px;box-shadow:0 2px 8px rgba(0,0,0,.15)">
@@ -1552,6 +1554,9 @@ async function doLoginAuth(){
     $('#app-layout').style.display='flex';
     aplicarPermisosUI();
     entrarVistaInicial();
+    // Sincronización en vivo: a partir de acá los cambios de los demás
+    // llegan solos, sin necesidad de recargar la página.
+    if(typeof iniciarRealtime==='function')iniciarRealtime();
     setTimeout(recuperarBorrador,300);
     _recDismissed=false;setTimeout(()=>{try{mostrarRecordatoriosHoy();}catch(e){console.error(e);}},700);
     setTimeout(()=>{try{actualizarBellRec();mostrarRecordatoriosPopup();}catch(e){console.error(e);}},1100);
@@ -1565,6 +1570,9 @@ async function doLoginAuth(){
 window.doLoginAuth=doLoginAuth;
 
 async function logoutAuth(){
+  // Cortar la sincronización en vivo ANTES de cerrar sesión, para no
+  // dejar el websocket abierto ni seguir recibiendo datos sin usuario.
+  if(typeof detenerRealtime==='function')detenerRealtime();
   try{ if(typeof sb!=='undefined'&&sb.auth)await sb.auth.signOut(); }catch(e){}
   currentUser=null;currentRole=null;
   const _b=document.getElementById('bell-rec');if(_b)_b.style.display='none';
@@ -9817,6 +9825,8 @@ async function verificarSesion(){
         $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
         aplicarPermisosUI();
         entrarVistaInicial();
+        // Sincronización en vivo también al restaurar sesión (F5 / volver a abrir).
+        if(typeof iniciarRealtime==='function')iniciarRealtime();
         // Red de seguridad contra timing: si los datos llegaron tarde, la vista
         // podría haber quedado vacía. Redibujamos la vista actual varias veces
         // en los primeros segundos para garantizar que se pinte con datos completos.
