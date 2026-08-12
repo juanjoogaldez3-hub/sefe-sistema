@@ -217,7 +217,60 @@ await esperar(600);
 ok('el pago entra en la compra', ctx.compras.length===1 && ctx.compras[0].abonos.length===1);
 ok('el pago mapea bien', ctx.compras[0].abonos[0].monto===400 && ctx.compras[0].abonos[0]._id===55);
 
-console.log('\n═══ 10. PARADA LIMPIA ═══');
+console.log('\n═══ 10. EL AVISO LLEGA ANTES QUE EL ID (no duplicar) ═══');
+// Este es el caso que se rompió en producción: al registrar un pago, la
+// app lo muestra al instante con una copia local que TODAVÍA NO tiene id
+// (el id se lo pone la base y llega después). Si el aviso del websocket
+// llega antes que esa respuesta, buscar por id no encuentra nada y el
+// registro se agregaba de nuevo: aparecía duplicado, pero sólo en la
+// pantalla de quien lo creó.
+estadoDOM.vistaActiva = 'porpagar';
+ctx.compras.length = 0;
+emitir('compras','INSERT',{ id:70, proveedor_id:1, proveedor_nombre:'Papelera',
+  items:[], total:'22420', fecha:'2026-08-11', estado_recepcion:'recibida' });
+await esperar(600);
+
+// La app agrega el pago a la lista local, sin _id todavía
+const selloPago = '2026-08-11T15:42:07.881Z';
+ctx.compras[0].abonos.push({ fecha:'2026-08-11', monto:20500, metodo:'transferencia',
+  referencia:'5253', registradoPor:'Wendy Ogaldez', registradoEl:selloPago });
+ok('la copia local entra sin _id', ctx.compras[0].abonos.length===1 &&
+   ctx.compras[0].abonos[0]._id===undefined);
+
+// Ahora llega el aviso de la base, con el id ya asignado
+emitir('pagos_proveedor','INSERT',{ id:901, compra_id:70, fecha:'2026-08-11',
+  monto:'20500', metodo:'transferencia', referencia:'5253',
+  registrado_por:'Wendy Ogaldez', registrado_el:selloPago });
+await esperar(600);
+ok('NO se duplica el pago', ctx.compras[0].abonos.length===1,
+   'quedaron ' + ctx.compras[0].abonos.length + ' pagos');
+ok('adopta el id que asignó la base', ctx.compras[0].abonos[0]._id===901);
+
+// Un pago DISTINTO del mismo monto sí tiene que entrar
+emitir('pagos_proveedor','INSERT',{ id:902, compra_id:70, fecha:'2026-08-11',
+  monto:'20500', metodo:'transferencia', referencia:'5254',
+  registrado_por:'Otro', registrado_el:'2026-08-11T16:10:00.000Z' });
+await esperar(600);
+ok('un pago realmente distinto sí se agrega', ctx.compras[0].abonos.length===2,
+   'quedaron ' + ctx.compras[0].abonos.length);
+
+console.log('\n═══ 11. LO MISMO EN DOCUMENTOS (id provisorio negativo) ═══');
+estadoDOM.vistaActiva = 'documentos';
+ctx.documentos.length = 0;
+const selloDoc = '2026-08-12T09:15:33.512Z';
+// Así crea la app un pedido: id negativo provisorio hasta que llega el real
+ctx.documentos.push({ id:-1755000000000, numero:1500, tipoDoc:'pedido',
+  clienteNombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
+  creada:selloDoc, abonos:[] });
+emitir('documentos','INSERT',{ id:4321, numero:1500, tipo_doc:'pedido',
+  cliente_nombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
+  creada:selloDoc });
+await esperar(600);
+ok('NO se duplica el pedido', ctx.documentos.length===1,
+   'quedaron ' + ctx.documentos.length);
+ok('reemplaza el id provisorio por el real', ctx.documentos[0].id===4321);
+
+console.log('\n═══ 12. PARADA LIMPIA ═══');
 ctx.detenerRealtime();
 ok('queda inactivo', ctx._realtime.estado().activo===false);
 

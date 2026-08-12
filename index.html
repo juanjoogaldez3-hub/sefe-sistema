@@ -246,7 +246,18 @@
   .overlay{position:fixed;inset:0;background:rgba(22,24,17,.5);backdrop-filter:blur(3px);z-index:90;display:none;align-items:center;justify-content:center;padding:24px}
   .overlay.show{display:flex;animation:fade .25s}
   .modal{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-lg);width:100%;max-width:470px;max-height:90vh;display:flex;flex-direction:column;animation:pop .3s cubic-bezier(.2,.9,.3,1)}
-  .overlay.modal-wide .modal{max-width:760px}
+  .overlay.modal-wide .modal{max-width:min(94vw,860px)}
+  /* Los cuadros con tabla adentro se ensanchan solos hasta lo que
+     necesiten. Con el ancho fijo de 470px las columnas quedaban tan
+     angostas que el texto salía una palabra por renglón y encima
+     aparecía una barra para desplazarse de lado. */
+  .modal:has(table){max-width:min(94vw,1000px)}
+  .modal:has(table) table{width:100%}
+  /* Que las celdas usen el ancho que necesitan en vez de partir cada
+     palabra, pero sin desbordar: los textos largos siguen bajando de
+     renglón cuando de verdad no entran. */
+  .modal:has(table) th,.modal:has(table) td{overflow-wrap:break-word;word-break:normal;hyphens:none}
+  .modal:has(table) .num,.modal:has(table) td:has(.num){white-space:nowrap}
   @keyframes pop{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:none}}
   .modal-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
   .modal-head h3{font-family:var(--disp);font-size:16px;font-weight:600}
@@ -340,6 +351,9 @@
     .row{flex-direction:column;gap:11px}
     /* Modales a pantalla casi completa */
     .modal{max-width:100%;max-height:92vh;margin:0;border-radius:18px 18px 0 0}
+    /* Los cuadros con tabla también, si no quedarían más angostos que
+       el resto por la regla de escritorio (que tiene más peso). */
+    .modal:has(table),.overlay.modal-wide .modal{max-width:100%}
     .overlay{align-items:flex-end;padding:0}
     .modal-foot{flex-wrap:wrap}
     .modal-foot .btn{flex:1;min-width:120px;justify-content:center}

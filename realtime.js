@@ -57,6 +57,7 @@
       arr: () => documentos,
       map: (f) => mapDocumentoFromDB(f, []),
       conservar: ['abonos'],
+      identidad: ['creada'],   // marca de tiempo que pone el navegador al crear
       vistas: ['documentos', 'cobros', 'panel', 'despachos', 'misentregas', 'clientedet'],
     },
     // Los abonos NO son un array de primer nivel: viven dentro de
@@ -68,6 +69,7 @@
         lista: 'abonos',
         map: (f) => mapAbonoFromDB(f),
         idLocal: '_id',
+        identidad: ['registradoEl', 'monto'],
       },
       vistas: ['documentos', 'cobros', 'panel', 'clientedet', 'talonarios'],
     },
@@ -109,6 +111,7 @@
         lista: 'abonos',
         map: (f) => mapPagoProveedorFromDB(f),
         idLocal: '_id',
+        identidad: ['registradoEl', 'monto'],
       },
       vistas: ['compras', 'porpagar', 'panel', 'proveedordet'],
     },
@@ -129,6 +132,7 @@
     movimientos_banco: {
       arr: () => movimientosBanco,
       map: mapMovimientoBancoFromDB,
+      identidad: ['registradoEl', 'monto'],
       vistas: ['bancos', 'panel'],
     },
 
@@ -148,11 +152,13 @@
     recordatorios: {
       arr: () => recordatorios,
       map: mapRecordatorioFromDB,
+      identidad: ['creado'],
       vistas: ['recordatorios', 'panel'],
     },
     cotizaciones: {
       arr: () => cotizaciones,
       map: mapCotizacionFromDB,
+      identidad: ['creada'],
       vistas: ['cotizaciones', 'panel'],
     },
     usuarios: {
@@ -250,6 +256,43 @@
     return true;
   }
 
+  // ¿Esta fila local todavía NO se guardó en la base?
+  //
+  // Cuando registrás algo, la app lo muestra al instante con una copia
+  // local que aún no tiene id: el id se lo pone la base y llega después.
+  // Los documentos usan un id negativo provisorio (-Date.now()); las
+  // filas hijas (abonos, pagos) directamente no tienen _id todavía.
+  function sinGuardar(fila, campoId) {
+    const v = fila[campoId];
+    return v == null || (typeof v === 'number' && v < 0);
+  }
+
+  // ¿Esta fila local es la MISMA que la que acaba de llegar de la base?
+  //
+  // Sirve para el caso que rompía: el aviso del websocket puede llegar
+  // ANTES que la respuesta del guardado. En ese instante la copia local
+  // no tiene id, así que buscarla por id no la encuentra y se agregaba
+  // de nuevo — el registro aparecía duplicado, pero sólo en la pantalla
+  // de quien lo creó.
+  //
+  // Se comparan campos que genera el propio navegador al crear el
+  // registro (una marca de tiempo con milisegundos, el monto), así que
+  // reconocen la copia sin depender de a qué hora llegó cada mensaje.
+  function esElMismo(local, nuevo, campos) {
+    if (!campos || !campos.length) return false;
+    for (const c of campos) {
+      if (nuevo[c] == null || local[c] == null) return false;
+      if (String(local[c]) !== String(nuevo[c])) return false;
+    }
+    return true;
+  }
+
+  // Busca la copia local sin guardar que corresponde a lo que llegó.
+  function buscarCopiaLocal(lista, obj, campoId, identidad) {
+    if (!identidad) return -1;
+    return lista.findIndex((x) => sinGuardar(x, campoId) && esElMismo(x, obj, identidad));
+  }
+
   // ============================================================
   //  4. APLICAR UN CAMBIO AL ESTADO LOCAL
   // ============================================================
@@ -278,7 +321,17 @@
     const i = arr.findIndex((x) => x[idCampo] === fila[idCampo]);
 
     if (i < 0) {
-      // Fila nueva. `alFrente` es para auditLog, que va al revés.
+      // Antes de darla por nueva: ¿es la copia local que acabamos de
+      // crear y todavía no tenía id? Si es así se adopta, NO se agrega
+      // de nuevo. Sin esto, quien registra algo lo ve duplicado en su
+      // pantalla mientras los demás lo ven bien.
+      const j = buscarCopiaLocal(arr, obj, idCampo, cfg.identidad);
+      if (j >= 0) {
+        (cfg.conservar || []).forEach((k) => { obj[k] = arr[j][k]; });
+        arr.splice(j, 1, obj);
+        return true;
+      }
+      // Fila nueva de verdad. `alFrente` es para auditLog, que va al revés.
       if (cfg.alFrente) arr.unshift(obj);
       else arr.push(obj);
       return true;
@@ -317,7 +370,15 @@
       return true;
     }
     const obj = cfg.map(fila);
-    if (i < 0) { lista.push(obj); return true; }
+    if (i < 0) {
+      // Igual que en las tablas normales: puede ser la copia local que
+      // se creó recién y todavía no tenía _id. Este es el caso que hacía
+      // aparecer los pagos a proveedor duplicados.
+      const j = buscarCopiaLocal(lista, obj, cfg.idLocal, cfg.identidad);
+      if (j >= 0) { lista.splice(j, 1, obj); return true; }
+      lista.push(obj);
+      return true;
+    }
     if (esIgual(lista[i], obj)) return false;
     lista.splice(i, 1, obj);
     return true;
