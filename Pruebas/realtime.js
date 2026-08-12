@@ -399,7 +399,10 @@
       @keyframes rt-late{0%,100%{opacity:1}50%{opacity:.25}}
       .rt-conn{display:inline-flex;align-items:center;gap:6px;font-size:11px;
         font-weight:600;color:var(--muted)}
-      @media(max-width:600px){.rt-conn span{display:none}.rt-pastilla{top:64px}}
+      /* En pantalla chica se esconde sólo el TEXTO ("En vivo"), nunca el
+         puntito. Antes acá decía '.rt-conn span', que agarraba los dos
+         y dejaba al celular sin ningún indicador de conexión. */
+      @media(max-width:600px){.rt-conn #rt-conn-txt{display:none}.rt-pastilla{top:64px}}
     `;
     document.head.appendChild(css);
 
