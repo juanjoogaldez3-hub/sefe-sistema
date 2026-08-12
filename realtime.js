@@ -211,6 +211,7 @@
   let reintento = null;
   let intentos = 0;
   let vigilante = null;
+  let vigilanteAuth = null;      // escucha la renovación del token (RLS)
 
   // ============================================================
   //  3. HELPERS
@@ -554,10 +555,29 @@
   //  9. ARRANQUE Y PARADA
   // ============================================================
 
+  // Con RLS activo, el websocket manda el token de la sesión para
+  // saber qué filas te puede entregar. Ese token vence cada tanto y
+  // se renueva solo — pero si no le avisamos a Realtime, se queda con
+  // el viejo y DEJA DE RECIBIR EN SILENCIO, que es el peor modo de
+  // fallar: todo se ve bien y los datos están viejos.
+  function seguirElToken() {
+    if (typeof sb === 'undefined' || !sb.auth || !sb.auth.onAuthStateChange) return;
+    try {
+      const { data } = sb.auth.onAuthStateChange((evento, sesion) => {
+        if (!activo) return;
+        if (evento === 'TOKEN_REFRESHED' || evento === 'SIGNED_IN') {
+          try { sb.realtime.setAuth(sesion && sesion.access_token); } catch (e) {}
+        }
+      });
+      vigilanteAuth = data && data.subscription ? data.subscription : null;
+    } catch (e) { /* si la versión de supabase-js no lo soporta, ella sola se encarga */ }
+  }
+
   function iniciarRealtime() {
     if (activo) return;
     activo = true;
     montarUI();
+    seguirElToken();
     conectar();
 
     // Reintenta el refresco pendiente cuando se libera el bloqueo
@@ -575,6 +595,7 @@
   function detenerRealtime() {
     activo = false;
     desconectarCanal();
+    if (vigilanteAuth) { try { vigilanteAuth.unsubscribe(); } catch (e) {} vigilanteAuth = null; }
     clearInterval(vigilante);
     clearTimeout(temporizador);
     clearTimeout(reintento);

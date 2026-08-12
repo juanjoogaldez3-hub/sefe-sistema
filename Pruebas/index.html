@@ -1515,8 +1515,14 @@ async function doLoginAuth(){
       btn.disabled=false;btn.textContent='Ingresar';
       return;
     }
-    // Login correcto: buscar el rol del usuario en la tabla usuarios
-    let u=usuarios.find(x=>(x.correo||'').toLowerCase()===email && x.activo);
+    // Login correcto: buscar el rol del usuario en la tabla usuarios.
+    //
+    // OJO — hay que preguntárselo a la base AHORA, ya autenticados.
+    // El array `usuarios` se llenó en arrancarApp(), que corre ANTES
+    // del login: con RLS activo esa carga anónima viene vacía y el
+    // login fallaría siempre con "usuario no habilitado".
+    // Se busca igual que el backend: primero por auth_id, luego por correo.
+    let u=await buscarMiUsuario(data.user, email);
     if(!u){
       errBox.textContent='Tu usuario no está habilitado en el sistema';
       await sb.auth.signOut();
@@ -1568,6 +1574,45 @@ async function doLoginAuth(){
   }
 }
 window.doLoginAuth=doLoginAuth;
+
+// ============================================================
+//  ¿Quién soy? — se consulta a la base YA autenticado
+// ============================================================
+//  Necesario para que el sistema funcione con RLS activo. La carga
+//  general (cargarTodo) ocurre antes de iniciar sesión, así que la
+//  lista de usuarios que hay en memoria en ese momento puede venir
+//  vacía. Acá se pregunta directo, con la sesión ya abierta.
+//
+//  Busca igual que el backend (server.js): primero por auth_id, y
+//  si no aparece, por correo.
+//
+//  Si la consulta falla por lo que sea, cae de vuelta a la lista en
+//  memoria — que es como funcionaba antes. Así este cambio se puede
+//  subir con o sin RLS, sin romper nada.
+async function buscarMiUsuario(authUser, email){
+  const correo=(email||(authUser&&authUser.email)||'').toLowerCase();
+  try{
+    if(typeof sb!=='undefined'&&sb.from){
+      if(authUser&&authUser.id){
+        const q1=await sb.from('usuarios').select('*').eq('auth_id',authUser.id).limit(1);
+        if(q1.data&&q1.data[0]){
+          const u=mapUsuarioFromDB(q1.data[0]);
+          return u.activo===false?null:u;
+        }
+      }
+      if(correo){
+        const q2=await sb.from('usuarios').select('*').ilike('correo',correo).limit(1);
+        if(q2.data&&q2.data[0]){
+          const u=mapUsuarioFromDB(q2.data[0]);
+          return u.activo===false?null:u;
+        }
+      }
+    }
+  }catch(e){ console.warn('No se pudo consultar el usuario, usando la lista en memoria',e); }
+  // Respaldo: como funcionaba antes de RLS
+  return usuarios.find(x=>(x.correo||'').toLowerCase()===correo && x.activo)||null;
+}
+window.buscarMiUsuario=buscarMiUsuario;
 
 async function logoutAuth(){
   // Cortar la sincronización en vivo ANTES de cerrar sesión, para no
@@ -9819,7 +9864,9 @@ async function verificarSesion(){
         }
       }
       const email=(data.session.user.email||'').toLowerCase();
-      const u=usuarios.find(x=>(x.correo||'').toLowerCase()===email && x.activo);
+      // Igual que en el login: se pregunta a la base con la sesión ya
+      // abierta, para que funcione con RLS activo.
+      const u=await buscarMiUsuario(data.session.user, email);
       if(u){
         currentUser=u.nombre;currentRole=u.rol;
         $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
