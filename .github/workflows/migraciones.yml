@@ -1,0 +1,139 @@
+# ============================================================
+#  Migraciones de base de datos — se aplican solas
+# ============================================================
+#  Qué hace: cuando se publica un cambio en main que agrega o
+#  modifica algo en supabase/migrations/, GitHub aplica lo que
+#  falte en cada base. Primero Pruebas, y Producción sólo después
+#  de una aprobación.
+#
+#  Nadie tiene que pegar SQL a mano ni acordarse de qué base le
+#  falta qué: Supabase lleva la cuenta de las migraciones aplicadas
+#  y sólo corre las nuevas.
+#
+#  ── ANTES DE QUE ESTO FUNCIONE ──────────────────────────────
+#  Hay que cargar tres claves una sola vez, y crear el "ambiente"
+#  de producción para que pida aprobación.
+#  Está explicado paso a paso en supabase/LEEME.md
+# ============================================================
+
+name: Migraciones de base de datos
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/migraciones.yml'
+  # Permite dispararlo a mano desde la pestaña Actions
+  workflow_dispatch:
+
+# Si se publican dos cambios seguidos, que no se pisen entre sí.
+concurrency:
+  group: migraciones
+  cancel-in-progress: false
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────
+  #  1. PRUEBAS — automático, sin aprobación
+  # ──────────────────────────────────────────────────────────
+  pruebas:
+    name: Aplicar en Pruebas
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_REF: imvoyzxdvtoktckazzsv
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar que estén las claves
+        run: |
+          faltan=""
+          [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]        && faltan="$faltan SUPABASE_ACCESS_TOKEN"
+          [ -z "${{ secrets.SUPABASE_DB_PASSWORD_PRUEBAS }}" ] && faltan="$faltan SUPABASE_DB_PASSWORD_PRUEBAS"
+          if [ -n "$faltan" ]; then
+            echo "::error::Faltan estas claves en Settings → Secrets → Actions:$faltan"
+            echo "Cómo cargarlas: supabase/LEEME.md"
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Conectar con la base de Pruebas
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD_PRUEBAS }}
+        run: supabase link --project-ref "$PROJECT_REF"
+
+      - name: Ver qué está aplicado y qué falta
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD_PRUEBAS }}
+        run: supabase migration list
+
+      - name: Aplicar las migraciones que falten
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD_PRUEBAS }}
+        run: supabase db push
+
+      - name: Estado final
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD_PRUEBAS }}
+        run: supabase migration list
+
+  # ──────────────────────────────────────────────────────────
+  #  2. PRODUCCIÓN — sólo si Pruebas salió bien, y con aprobación
+  # ──────────────────────────────────────────────────────────
+  #  El "environment: produccion" es lo que hace que GitHub frene
+  #  y pida un OK antes de tocar la base real. Se configura una vez
+  #  (ver supabase/LEEME.md). Sin eso, entraría de una.
+  produccion:
+    name: Aplicar en Producción
+    needs: pruebas
+    runs-on: ubuntu-latest
+    environment: produccion
+    env:
+      PROJECT_REF: krbyulpmfazntjwnpxnw
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar que estén las claves
+        run: |
+          faltan=""
+          [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]     && faltan="$faltan SUPABASE_ACCESS_TOKEN"
+          [ -z "${{ secrets.SUPABASE_DB_PASSWORD_PROD }}" ] && faltan="$faltan SUPABASE_DB_PASSWORD_PROD"
+          if [ -n "$faltan" ]; then
+            echo "::error::Faltan estas claves en Settings → Secrets → Actions:$faltan"
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Conectar con la base de Producción
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
+        run: supabase link --project-ref "$PROJECT_REF"
+
+      - name: Ver qué está aplicado y qué falta
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
+        run: supabase migration list
+
+      - name: Aplicar las migraciones que falten
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
+        run: supabase db push
+
+      - name: Estado final
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
+        run: supabase migration list

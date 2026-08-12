@@ -13,12 +13,22 @@
 - Nunca decirle "está en el repo" o "mirá el archivo X" para algo que
   tiene que ejecutar. Si lo tiene que correr él, va pegado en el chat.
 
-El repo ya venía con esa costumbre: `migracion-ola1.sql`,
-`migracion-ola2.sql`, `migracion-completa.sql` — todos con el
-encabezado "Correr en el SQL Editor de Supabase".
+## Migraciones: ahora las aplica GitHub
 
-Los archivos `.sql` igual se guardan en el repo, pero como registro de
-lo que se hizo, no como forma de entrega.
+Desde agosto 2026 los cambios de base **ya no se pegan a mano**. Viven
+en `supabase/migrations/` y GitHub Actions los aplica solo: primero en
+Pruebas, y en Producción sólo después de una aprobación.
+
+- Un cambio de base = un archivo nuevo en `supabase/migrations/`,
+  nombrado `AAAAMMDDHHMMSS_descripcion.sql`. Se publica y se aplica solo.
+- **Nunca editar una migración ya aplicada.** Si algo salió mal, va una
+  migración nueva que lo corrija.
+- El detalle está en `supabase/LEEME.md`, incluida la preparación de una
+  sola vez (tres claves en GitHub y el ambiente de producción).
+
+Lo que Juanjo sí corre a mano sigue siendo cualquier cosa puntual de
+diagnóstico o de emergencia (`supabase/herramientas/`), y eso va pegado
+en el chat como siempre.
 
 ## Las dos bases
 

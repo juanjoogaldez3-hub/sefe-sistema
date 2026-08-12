@@ -1,0 +1,12 @@
+# ============================================================
+# Configuración de la herramienta de Supabase (CLI)
+# ============================================================
+# Es sólo un nombre local del proyecto. La base contra la que se
+# trabaja NO se define acá: la elige el flujo de GitHub según sea
+# Pruebas o Producción (.github/workflows/migraciones.yml).
+#
+# Así el mismo repo sirve para todas las bases: la de SEFE, la de
+# Pruebas, y las de los clientes que se sumen.
+# ============================================================
+
+project_id = "sefe"
