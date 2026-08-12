@@ -1133,6 +1133,28 @@
 // ═══════════════════════════════════════════════════════════
 const FEL_BACKEND_URL = 'https://sefe-backend.onrender.com-TU-BACKEND'; // MODO PRUEBAS: simulado, no toca SAT
 
+// ============================================================
+//  Funciones que se están probando
+// ============================================================
+//  El código de una función nueva viaja a los dos entornos, porque
+//  se publica la misma rama. Lo que decide si se ve o no es la
+//  bandera en config.js, que SÍ es distinto en cada uno.
+//
+//  Así se puede desarrollar algo grande a la vista de todos sin
+//  que aparezca en producción hasta que esté probado.
+function funcionActiva(nombre){
+  try{ return !!(SEFE_CONFIG && SEFE_CONFIG.funciones && SEFE_CONFIG.funciones[nombre]); }
+  catch(e){ return false; }
+}
+window.funcionActiva=funcionActiva;
+// Dejar constancia en la consola de en qué entorno se está trabajando.
+try{
+  const _ent=(typeof SEFE_CONFIG!=='undefined'&&SEFE_CONFIG.entorno)||'(sin definir)';
+  const _act=Object.entries((typeof SEFE_CONFIG!=='undefined'&&SEFE_CONFIG.funciones)||{})
+    .filter(([,v])=>v).map(([k])=>k);
+  console.log('SEFE · entorno: '+_ent+(_act.length?' · en prueba: '+_act.join(', '):''));
+}catch(e){}
+
 const $=s=>document.querySelector(s);
 const money=n=>'Q '+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2});
 // Formato de moneda según la cuenta (GTQ → "Q", USD → "$")
