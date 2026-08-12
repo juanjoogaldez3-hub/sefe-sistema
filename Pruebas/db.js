@@ -161,7 +161,16 @@ async function cargarTodo() {
       }
     } catch(e){ /* tabla aún no creada */ }
 
-    console.log('✓ Datos cargados desde Supabase');
+    // Marca de que los datos vienen REALMENTE de la base.
+    //
+    // No alcanza con que la consulta no haya reventado: con RLS activo
+    // y sin sesión, Supabase devuelve listas vacías SIN error. Por eso
+    // la marca se pone sólo si llegaron usuarios, que es lo mínimo que
+    // el sistema necesita para resolver roles y permisos.
+    window._sefeDatosBase = Array.isArray(usuarios) && usuarios.length > 0;
+    console.log(window._sefeDatosBase
+      ? '✓ Datos cargados desde Supabase'
+      : '⚠️ Supabase respondió sin datos (¿sin sesión todavía?)');
     return true;
   } catch (e) {
     console.error('Error cargando datos:', e);
