@@ -3212,13 +3212,43 @@ function verDoc(id){
 window.verDoc=verDoc;
 
 // Imprimir/descargar: si hay PDF oficial de EcoFactura, abrirlo; si no, imprimir la vista
-function imprimirDoc(){
+// ============================================================
+//  Esperar a que las imágenes estén listas antes de imprimir
+// ============================================================
+//  El logo va incrustado en el HTML como imagen en base64 (~40 KB).
+//  Aunque no se descargue de internet, el navegador igual necesita un
+//  momento para decodificarla. Si se llama a window.print() antes de
+//  eso, el PDF sale SIN LOGO — y a la segunda sale bien, porque ya
+//  quedó decodificada. De ahí el "hay que cerrar y volver a abrir".
+//
+//  Espera a que todas las imágenes del contenedor estén listas, más
+//  dos cuadros de dibujo para que el navegador alcance a pintarlas.
+//  Con tope de 3 segundos: si una imagen nunca carga, se imprime
+//  igual en vez de dejar al usuario esperando para siempre.
+function esperarImagenes(contenedor){
+  const cont=contenedor||document;
+  const imgs=Array.prototype.slice.call(cont.querySelectorAll('img'));
+  const listas=imgs.map(img=>{
+    if(img.complete && img.naturalWidth>0){
+      return img.decode ? img.decode().catch(()=>{}) : Promise.resolve();
+    }
+    return new Promise(res=>{ img.onload=img.onerror=()=>res(); });
+  });
+  const pintado=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  const tope=new Promise(r=>setTimeout(r,3000));
+  return Promise.race([Promise.all(listas).then(pintado), tope]);
+}
+window.esperarImagenes=esperarImagenes;
+
+async function imprimirDoc(){
   if(window._pdfActual){
     // Abrir el PDF oficial de EcoFactura en pestaña nueva (desde ahí se imprime/descarga)
     const w=window.open('','_blank');
     if(w){ w.document.write('<iframe src="'+window._pdfActual+'" style="width:100%;height:100%;border:none"></iframe>'); w.document.title='Factura EcoFactura'; }
     else { toast('Permití las ventanas emergentes para ver el PDF',null,true); }
   } else {
+    // Sin esto el logo no alcanza a dibujarse y el PDF sale sin él.
+    await esperarImagenes(document.getElementById('docov')||document);
     window.print();
   }
 }
@@ -8643,11 +8673,15 @@ function _pdfShell(o){
     </div>`}
   </div>`;
 }
-function _abrirPDF(html){
+async function _abrirPDF(html){
   let old=document.getElementById('rep-print-area');if(old)old.remove();
   const div=document.createElement('div');div.id='rep-print-area';
   div.innerHTML=html;
-  document.body.appendChild(div);window.print();
+  document.body.appendChild(div);
+  // Esperar a que el logo esté dibujado. Antes se imprimía en la misma
+  // línea en que se armaba el HTML, así que el reporte salía sin logo.
+  await esperarImagenes(div);
+  window.print();
   setTimeout(()=>{const e=document.getElementById('rep-print-area');if(e)e.remove();},1000);
 }
 function exportarPDF(){
