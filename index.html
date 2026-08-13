@@ -2455,7 +2455,7 @@ function rowDoc(withActions){
       <td style="font-weight:600">${noCol}</td>
       <td><span class="pill ${cls}">${lblFinal}</span>${origen}</td>
       <td>${f.clienteComercial||f.clienteNombre}</td>
-      ${withActions?`<td style="color:var(--muted)">${new Date(fechaDoc(f)).toLocaleDateString('es-GT')}</td>`:''}
+      ${withActions?`<td style="color:var(--muted)">${fdate(fechaDoc(f))}</td>`:''}
       <td class="num" style="font-weight:600">${money(f.totales.total)}</td>
       ${withActions?`<td class="num">${(f.tipoDoc==='cambiaria'&&f.estado!=='anulada')?(()=>{const _inf=arInfo(f);const _c=_inf.saldo<=0.001?'var(--ok)':(_inf.abon>0?'var(--warn)':'var(--danger)');return `<span style="color:${_c};font-weight:700">${money(_inf.saldo)}</span>`;})():'<span style="color:var(--muted)">—</span>'}</td>`:''}
       <td><span class="badge ${ec}">${en}</span></td>
@@ -3000,7 +3000,7 @@ function notaPrestamoHTML(f){
   const dir=cli.direccion||'';
   const razon=f.clienteNombre||f.clienteComercial||'Cliente';
   const comercial=(f.clienteComercial&&f.clienteComercial!==razon)?f.clienteComercial:'';
-  const fechaLarga=f.creada?new Date(f.creada).toLocaleDateString('es-GT',{day:'numeric',month:'long',year:'numeric'}):'';
+  const fechaLarga=f.creada?fdate(f.creada):'';
   const firmante='Gerencia General';
   const filas=(f.items||[]).map(it=>`<tr>
       <td class="num" style="padding:12px 16px;font-size:13px;font-weight:600;border-bottom:1px solid #EEF1E8">${it.codigo||'—'}</td>
@@ -3071,7 +3071,7 @@ function notaEnvioHTML(f){
   const dirFiscal=cli.direccion||'';
   const dirEntrega=cli.direccionEntrega||dirFiscal;
   const cc=cli.contactoCompras||{};
-  const fechaLarga=f.creada?new Date(f.creada).toLocaleDateString('es-GT',{day:'numeric',month:'long',year:'numeric'}):'';
+  const fechaLarga=f.creada?fdate(f.creada):'';
   const firmante='Gerencia General';
   let totalGen=0;
   const filas=(f.items||[]).map(it=>{
@@ -3156,7 +3156,7 @@ function verDoc(id){
     const nombreArch=(esAnulada?'Anulacion-':'Factura-')+(f.serie||'')+'-'+(f.numeroDte||f.numero)+'.pdf';
     const bannerAnulada=esAnulada?`<div style="background:#FDECEA;border:1.5px solid var(--danger);color:#B3261E;border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
         <svg viewBox="0 0 24 24" style="width:22px;height:22px;flex:none" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M4.9 4.9 19.1 19.1"/></svg>
-        <div><b>FACTURA ANULADA</b>${f.anuladoFecha?` · ${new Date(f.anuladoFecha).toLocaleDateString('es-GT',{day:'2-digit',month:'long',year:'numeric'})}`:''}${f.motivo?`<div style="font-size:12px;font-weight:500;margin-top:2px">Motivo: ${f.motivo}</div>`:''}${!f.pdfAnulacionBase64?`<div style="font-size:11.5px;color:#8A1C13;margin-top:3px">Se muestra la factura original. La anulación está registrada ante SAT.</div>`:''}</div>
+        <div><b>FACTURA ANULADA</b>${f.anuladoFecha?` · ${fdate(f.anuladoFecha)}`:''}${f.motivo?`<div style="font-size:12px;font-weight:500;margin-top:2px">Motivo: ${f.motivo}</div>`:''}${!f.pdfAnulacionBase64?`<div style="font-size:11.5px;color:#8A1C13;margin-top:3px">Se muestra la factura original. La anulación está registrada ante SAT.</div>`:''}</div>
       </div>`:'';
     $('#doc-sheet').innerHTML=`
       ${bannerAnulada}
@@ -3215,7 +3215,7 @@ function verDoc(id){
     </div>${stamp}
     <div class="ds-meta">
       <div><div class="mt-l">Facturado a</div><div class="mt-v">${f.nombreFacturado||f.clienteNombre}</div><div class="mt-s">NIT: ${f.nitFacturado||f.clienteNit}</div>${f.nitFacturado?`<div class="mt-s" style="color:var(--muted-2);font-size:10.5px">Venta registrada a: ${f.clienteComercial||f.clienteNombre}</div>`:''}</div>
-      <div style="text-align:right"><div class="mt-l">Fecha</div><div class="mt-v">${new Date(f.creada).toLocaleDateString('es-GT',{day:'2-digit',month:'long',year:'numeric'})}</div>${f.ordenCompra?`<div class="mt-s">OC: ${f.ordenCompra}</div>`:''}</div>
+      <div style="text-align:right"><div class="mt-l">Fecha</div><div class="mt-v">${fdate(f.creada)}</div>${f.ordenCompra?`<div class="mt-s">OC: ${f.ordenCompra}</div>`:''}</div>
     </div>
     <table class="ds-table"><thead><tr><th>Descripción</th><th style="text-align:center">Cant.</th><th style="text-align:right">Precio</th><th style="text-align:right">Total</th></tr></thead>
     <tbody>${tablaBody}</tbody></table>
@@ -3311,7 +3311,7 @@ function nombreArchivoFactura(f){
 // Bloque de comprobante de recepción / entrega en el PDF
 function reciboEntregaHTML(f){
   const ei=f.entregaInfo;if(!ei)return '';
-  const fechaEnt=new Date(ei.fecha).toLocaleString('es-GT',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const fechaEnt=fdatehora(ei.fecha);
   const modoTxt={efectivo:'Pagado en efectivo'+(ei.monto?' · '+money(ei.monto):''),cheque:'Pagado con cheque '+(ei.cheque||'')+(ei.banco?' ('+ei.banco+')':'')+(ei.monto?' · '+money(ei.monto):''),contrasena:'Contraseña de pago No. '+(ei.contrasena||''),credito:'Recibido a crédito'}[ei.modoPago]||'';
   return `<div style="margin-top:22px;border-top:1.5px dashed var(--line-strong);padding-top:16px">
     <div style="font-size:10px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Comprobante de recepción</div>
@@ -4328,7 +4328,7 @@ window.cliSetTab=cliSetTab;
 function estadoCuentaPDF(cliId){
   const c=clientes.find(x=>x.id===cliId);if(!c)return;
   const st=clienteStats(c);
-  const hoy=new Date().toLocaleDateString('es-GT',{day:'2-digit',month:'long',year:'numeric'});
+  const hoy=fdate(new Date());
   const vend=c.vendedorId?vendedores.find(v=>v.id===c.vendedorId)?.nombre:null;
   // Solo facturas con saldo pendiente (una línea por factura)
   const pendientes=st.facturas.filter(f=>arInfo(f).saldo>0.01).sort((a,b)=>new Date(a.creada)-new Date(b.creada));
@@ -4398,7 +4398,7 @@ window.estadoCuentaPDF=estadoCuentaPDF;
 function estadoCuentaGrupoPDF(cliId){
   const c=clientes.find(x=>x.id===cliId);if(!c)return;
   const g=grupoStats(c);
-  const hoy=new Date().toLocaleDateString('es-GT',{day:'2-digit',month:'long',year:'numeric'});
+  const hoy=fdate(new Date());
   const vend=c.vendedorId?vendedores.find(v=>v.id===c.vendedorId)?.nombre:null;
   // Filas por sede con su saldo
   const filasSedes=g.porSede.map(x=>{
@@ -4582,16 +4582,46 @@ function arInfo(f){
   const vencido=estado!=='pagado'&&venc&&new Date()>venc;
   return {abon,saldo,estado,vencido,venc,cr,totalAjustado};
 }
-function fdate(d){
-  if(!d)return '—';
-  // Un string "YYYY-MM-DD" (solo fecha) lo interpreta JS como medianoche UTC,
-  // y al mostrarlo en zona GT (UTC-6) se corre un día hacia atrás. Para evitarlo
-  // lo construimos como fecha LOCAL usando sus componentes.
+// ============================================================
+//  FECHAS — todo el sistema muestra dd-mm-yyyy
+// ============================================================
+//  fdate()     → 12-08-2026
+//  fdatehora() → 12-08-2026 14:35
+//
+//  Toda fecha que se MUESTRE tiene que pasar por acá. Las que se
+//  guardan, se comparan o van en un campo de calendario siguen en
+//  aaaa-mm-dd, que es lo que exige el navegador y lo único que se
+//  ordena bien alfabéticamente. Son dos cosas distintas: el formato
+//  de guardar y el de mostrar.
+// ============================================================
+
+// Interpreta la fecha respetando la zona de Guatemala.
+function _fechaDe(d){
+  // Un texto "AAAA-MM-DD" (sólo fecha) JS lo toma como medianoche UTC,
+  // y al mostrarlo en GT (UTC-6) se corre un día hacia atrás. Por eso
+  // se arma como fecha LOCAL a partir de sus partes.
   const m=(typeof d==='string')&&d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   const fecha=m?new Date(+m[1],+m[2]-1,+m[3]):new Date(d);
-  const dd=String(fecha.getDate()).padStart(2,'0'),mm=String(fecha.getMonth()+1).padStart(2,'0');
-  return `${dd}-${mm}-${fecha.getFullYear()}`;
+  return isNaN(fecha.getTime())?null:fecha;
 }
+function fdate(d){
+  if(!d)return '—';
+  const f=_fechaDe(d);
+  if(!f)return '—';   // antes devolvía "NaN-NaN-NaN"
+  const z=n=>String(n).padStart(2,'0');
+  return `${z(f.getDate())}-${z(f.getMonth()+1)}-${f.getFullYear()}`;
+}
+// Igual, pero con la hora. Para auditoría y los "generado el" de los
+// reportes, donde saber la hora sí importa.
+function fdatehora(d){
+  if(!d)return '—';
+  const f=_fechaDe(d);
+  if(!f)return '—';
+  const z=n=>String(n).padStart(2,'0');
+  return `${z(f.getDate())}-${z(f.getMonth()+1)}-${f.getFullYear()} ${z(f.getHours())}:${z(f.getMinutes())}`;
+}
+window.fdate=fdate;
+window.fdatehora=fdatehora;
 function cobrosEnFiltro(f,ai){
   const cli=$('#cb-cliente')?.value,est=$('#cb-estado')?.value,met=$('#cb-metodo')?.value,desde=$('#cb-desde')?.value,hasta=$('#cb-hasta')?.value;
   if(cli&&String(f.clienteId)!==cli)return false;
@@ -5333,7 +5363,7 @@ async function exportarPorPagarExcel(){
     const prov=_ppProv?(proveedores.find(p=>String(p.id)===String(_ppProv))?.nombre||'—'):'Todos';
     const est=_ppEstados.size?[..._ppEstados].map(e=>({vencido:'Vencido',pendiente:'Pendiente',parcial:'Parcial',pagado:'Pagado'})[e]).join(', '):'Todos';
     const per=_ppPeriodo?({mes:'Este mes',mesant:'Mes anterior','2m':'Últimos 2 meses','3m':'Últimos 3 meses'})[_ppPeriodo]:'Todo el tiempo';
-    const meta=[['Reporte:','CUENTAS POR PAGAR'],['Proveedor:',prov],['Estado:',est],['Período:',per],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
+    const meta=[['Reporte:','CUENTAS POR PAGAR'],['Proveedor:',prov],['Estado:',est],['Período:',per],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],[]];
     const ws=XLSX.utils.aoa_to_sheet(meta);
     XLSX.utils.sheet_add_json(ws,_ppExport,{origin:-1});
     const totSaldo=Math.round(_ppExport.reduce((s,r)=>s+(Number(r.Saldo)||0),0)*100)/100;
@@ -5470,7 +5500,7 @@ function renderBancos(){
   const monedaCuenta=id=>{const c=cuentasBanco.find(x=>x.id===id);return c?c.moneda:'GTQ';};
   const tb=document.getElementById('t-movimientos');
   if(tb)tb.innerHTML=movs.map(m=>`<tr>
-      <td style="color:var(--muted)">${(m.fecha||'').slice(0,10)}</td>
+      <td style="color:var(--muted)">${m.fecha?fdate(String(m.fecha).slice(0,10)):'—'}</td>
       <td>${nombreCuenta(m.cuentaId)}</td>
       <td>${m.concepto||'—'}</td>
       <td><span class="badge b-muted" style="font-size:10px">${CAT_MOV_LBL[m.categoria]||m.categoria||'otro'}</span></td>
@@ -5712,7 +5742,7 @@ async function estadoCuentaBancoExcel(id){
       ['Banco',(c.banco||'')+(c.numero?' · No. '+c.numero:'')],
       ['Tipo',TIPO_CUENTA_LBL[c.tipo]||c.tipo],
       ['Período',(desde||'inicio')+' a '+(hasta||'hoy')],
-      ['Generado',new Date().toLocaleString('es-GT')],
+      ['Generado',fdatehora(new Date())],
       []
     ];
     const cab=['Fecha','Concepto','Categoría','Referencia','Origen','Entrada','Salida','Saldo'];
@@ -7117,7 +7147,7 @@ window.verTrazabilidad=function(id){
   if(!p)return;
   const {movs,totalEntra,totalSale}=trazabilidadProducto(p);
   const filas=movs.length?movs.map(m=>{
-    const fecha=new Date(m.fecha).toLocaleDateString('es-GT',{day:'2-digit',month:'short',year:'numeric'});
+    const fecha=fdate(m.fecha);
     const esEntrada=m.tipo==='entrada';
     const signo=esEntrada?'+':'−';
     const color=esEntrada?'var(--ok,#1a7f37)':'var(--danger,#c0392b)';
@@ -8400,8 +8430,8 @@ function renderReportes(){
             <table style="width:100%"><thead><tr><th style="font-size:10px">Factura</th><th style="font-size:10px">Emitida</th><th style="font-size:10px">Vence</th><th style="font-size:10px">Días</th><th style="font-size:10px">Tramo</th><th style="font-size:10px">Saldo</th></tr></thead><tbody>
             ${o.facts.sort((a,b)=>b.dias-a.dias).map(f=>`<tr>
               <td style="font-size:11.5px">${f.num}</td>
-              <td style="font-size:11.5px;color:var(--muted)">${f.emitida?f.emitida.slice(0,10):'—'}</td>
-              <td style="font-size:11.5px;color:${f.vencido?'var(--danger)':'var(--muted)'}">${f.vence?f.vence.slice(0,10):'—'}</td>
+              <td style="font-size:11.5px;color:var(--muted)">${f.emitida?fdate(String(f.emitida).slice(0,10)):'—'}</td>
+              <td style="font-size:11.5px;color:${f.vencido?'var(--danger)':'var(--muted)'}">${f.vence?fdate(String(f.vence).slice(0,10)):'—'}</td>
               <td class="num" style="font-size:11.5px">${f.dias}</td>
               <td>${tramoBadge(f.tramo)}</td>
               <td class="num" style="font-size:11.5px;font-weight:600">${money(f.saldo)}</td>
@@ -8619,7 +8649,7 @@ async function exportarExcel(){
   catch(_e){XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');}
   const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const _esInv=(repType==='invactual'||repType==='invcosto');
-  const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],[]];
+  const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
   // Estado de cuenta: nombres de cliente y "TOTALES CLIENTE" en negrita (si la librería soporta estilos).
@@ -8667,7 +8697,7 @@ function _pdfTD(extra){return 'padding:7px 10px;border-bottom:1px solid #E7EBDF;
 function _pdfSec(t){return '<div style="font-size:10.5px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.8px;margin:22px 0 8px;display:flex;align-items:center;gap:10px"><span>'+t+'</span><span style="flex:1;height:1px;background:#D6DCC9"></span></div>';}
 function _pdfShell(o){
   const hoy=new Date();
-  const fecha=hoy.toLocaleDateString('es-GT',{day:'2-digit',month:'long',year:'numeric'});
+  const fecha=fdate(hoy);
   const hora=hoy.toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'});
   const usuario=(typeof currentUser!=='undefined'&&currentUser)?currentUser:'';
   const pageSize=o.tamano?o.tamano:('letter '+(o.orientacion||'portrait'));
@@ -8691,7 +8721,7 @@ function _pdfShell(o){
     ${o.body}
     ${o.sinPie?'':`<div style="position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #D6DCC9;padding-top:5px;display:flex;justify-content:space-between;font-size:9px;color:#909584">
       <span>SEFE, S.A.</span>
-      <span>SEFE · Sistema de Pedidos y Facturación · ${hoy.toLocaleDateString('es-GT')}</span>
+      <span>SEFE · Sistema de Pedidos y Facturación · ${fdate(hoy)}</span>
     </div>`}
   </div>`;
 }
@@ -8738,7 +8768,7 @@ async function exportarInventarioExcel(){
   const data=_filasInventario();
   if(!data.length){toast('Sin productos para exportar','El inventario está vacío',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const meta=[['Inventario · Soluciones Efectivas GT'],['Generado el:',new Date().toLocaleString('es-GT')],['Generado por:',currentUser],['Marca:',_filtroMarca||'Todas las marcas'],['Total productos:',data.length],[]];
+  const meta=[['Inventario · Soluciones Efectivas GT'],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],['Marca:',_filtroMarca||'Todas las marcas'],['Total productos:',data.length],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,data,{origin:'A7'});
   ws['!cols']=[{wch:14},{wch:48},{wch:16},{wch:30},{wch:18}];
@@ -9520,7 +9550,7 @@ function corteCajaHTML(entregas){
   </div>`;};
   const porDepositar=cobrosHoy.filter(c=>c.estado==='cobrado');
   return `<div class="panel" style="margin-top:16px">
-    <div class="panel-head"><h3>💰 Corte del día</h3><span style="font-size:12px;color:var(--muted)">${new Date().toLocaleDateString('es-GT')}</span></div>
+    <div class="panel-head"><h3>💰 Corte del día</h3><span style="font-size:12px;color:var(--muted)">${fdate(new Date())}</span></div>
     <div class="panel-body">
       ${fila('💵 Efectivo cobrado ('+efectivo.length+')',money(totalEf),'var(--green)')}
       ${fila('🏦 Cheques cobrados ('+cheques.length+')',money(totalCh))}
@@ -9755,7 +9785,7 @@ function renderAuditoria(){
   }
   $('#t-aud').innerHTML=rows.map(e=>`<tr>
     <td style="color:var(--muted-2);font-weight:700;font-size:11px">#${String(e.seq).padStart(4,'0')}</td>
-    <td style="color:var(--muted);white-space:nowrap">${new Date(e.fecha).toLocaleString('es-GT')}</td>
+    <td style="color:var(--muted);white-space:nowrap">${fdatehora(e.fecha)}</td>
     <td style="font-weight:600">${e.usuario}</td>
     <td><span class="aud-badge">${e.rol}</span></td>
     <td><span class="badge b-info" style="font-size:11px">${e.accion}</span></td>
@@ -9768,7 +9798,7 @@ window.limpiarAuditoria=limpiarAuditoria;
 async function exportarAuditoria(){
   if(!auditLog.length){toast('Sin registros','No hay eventos de auditoría',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const data=auditLog.map(e=>({'Fecha/Hora':new Date(e.fecha).toLocaleString('es-GT'),Usuario:e.usuario,Rol:e.rol,Acción:e.accion,Detalle:e.detalle}));
+  const data=auditLog.map(e=>({'Fecha/Hora':fdatehora(e.fecha),Usuario:e.usuario,Rol:e.rol,Acción:e.accion,Detalle:e.detalle}));
   const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Auditoría');
   XLSX.writeFile(wb,`SEFE_Auditoria_${fechaHoyGT()}.xlsx`);
