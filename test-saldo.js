@@ -157,5 +157,30 @@ ok('factura sin abonos no rompe el orden',
 ok('el saldo final sigue cuadrando', movs2[movs2.length - 1].balance === 1000,
   'dio ' + movs2[movs2.length - 1].balance);
 
+console.log('\n═══ SIGLAS: RE recibo, RT retención, NC nota ═══');
+// Una retención no es un tipo aparte en la base: es un abono cuyo
+// método empieza con "Retenci". Misma regla que el reporte de
+// Retenciones IVA/ISR.
+const esRetencion = a => /^Retenci/i.test(String((a && a.metodo) || ''));
+const refRecibo = a => {
+  const sigla = esRetencion(a) ? 'RT' : 'RE';
+  const num = (a && (a.noRecibo || a.referencia)) || '';
+  return num ? (sigla + '-' + num) : sigla;
+};
+
+ok('abono con recibo → RE-1201', refRecibo({ noRecibo: '1201' }) === 'RE-1201', refRecibo({ noRecibo: '1201' }));
+ok('retención IVA → RT', refRecibo({ metodo: 'Retención IVA', noRecibo: '77' }) === 'RT-77', refRecibo({ metodo: 'Retención IVA', noRecibo: '77' }));
+ok('retención ISR → RT', refRecibo({ metodo: 'Retencion ISR', noRecibo: '88' }) === 'RT-88', refRecibo({ metodo: 'Retencion ISR', noRecibo: '88' }));
+ok('sin recibo usa la referencia', refRecibo({ referencia: '5253' }) === 'RE-5253', refRecibo({ referencia: '5253' }));
+ok('sin nada queda sólo la sigla', refRecibo({}) === 'RE', refRecibo({}));
+ok('el método "Transferencia" NO es retención', refRecibo({ metodo: 'Transferencia', noRecibo: '9' }) === 'RE-9', refRecibo({ metodo: 'Transferencia', noRecibo: '9' }));
+
+// En el Excel se pone negrita sólo a lo que NO es un documento.
+const esDoc = d => /^(FA |RE|RT|NC)/.test(d);
+ok('FA, RE, RT y NC NO van en negrita',
+  ['FA A-1042', 'RE-1201', 'RT-77', 'NC-14'].every(esDoc));
+ok('el nombre del cliente y los totales SÍ van en negrita',
+  !esDoc('TIENDA LA BENDICIÓN') && !esDoc('TOTALES CLIENTE'));
+
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
