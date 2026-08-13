@@ -4209,34 +4209,70 @@ function renderCliDet(){
     // `facturas` ya viene de clienteStats ordenado de la más vieja a la
     // más nueva, que es justo lo que se pidió.
     const filas=facturas.map(f=>{
-      const abonos=(f.abonos||[]).slice().sort((a,b)=>
-        String(a.fecha||'').localeCompare(String(b.fecha||''))||((a._id||0)-(b._id||0)));
+      const info=arInfo(f);
+      // Todo lo que se aplica CONTRA la factura, junto y en orden: los
+      // abonos y las notas de crédito.
+      //
+      // Las notas de crédito tienen que estar: reducen la factura igual
+      // que un abono (así lo calcula arInfo). Si no se mostraran, la
+      // columna de Saldo no cerraría con el saldo que muestra el resto
+      // del sistema, y eso es peor que un renglón de más.
+      const aplicaciones=[
+        ...(f.abonos||[]).map(a=>({
+          fecha:a.fecha, clase:'abono', monto:Number(a.monto)||0,
+          anulado:!!a.anulado, noRecibo:a.noRecibo, orden:a._id||0 })),
+        ...documentos.filter(d=>d.tipoDoc==='notaCredito'&&d.facturaOrigenId===f.id&&d.estado!=='anulada')
+          .map(d=>({
+            fecha:d.creada, clase:'nc', monto:Number(d.totales.total)||0,
+            anulado:false, doc:(d.serie?d.serie+'-':'')+(d.numeroDte||''), orden:d.id||0 })),
+      ].sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||''))||(a.orden-b.orden));
+
+      // El saldo arranca en el total de la factura y va bajando.
+      let saldo=Number(f.totales.total)||0;
       const filaFactura=`<tr style="border-top:2px solid var(--line-strong)">
         <td style="color:var(--muted);white-space:nowrap">${fdate(f.creada)}</td>
         <td style="font-weight:600">Factura ${escHtml((f.serie?f.serie+'-':'')+(f.numeroDte||''))}</td>
         <td class="num" style="font-weight:600">${money(f.totales.total)}</td>
+        <td class="num" style="font-weight:600">${money(saldo)}</td>
       </tr>`;
-      const filasAbono=abonos.map(a=>{
-        // Todo abono debería llevar número de recibo. Los que no tienen
-        // son de antes de que se usara esa práctica: se marcan en gris
-        // para que se note cuáles quedaron incompletos.
-        const detalle=a.noRecibo
-          ? 'Abono Recibo '+escHtml(a.noRecibo)
-          : 'Abono <span style="color:var(--muted-2)">· sin recibo</span>';
-        const tachado=a.anulado?'text-decoration:line-through;opacity:.55;':'';
+
+      const filasAplic=aplicaciones.map(x=>{
+        // Un abono anulado NO baja el saldo: se muestra tachado y el
+        // saldo queda igual, para que se vea que existió pero no contó.
+        if(!x.anulado) saldo=Math.round((saldo-x.monto)*100)/100;
+        let detalle;
+        if(x.clase==='nc'){
+          detalle='Nota de crédito '+escHtml(x.doc||'');
+        }else{
+          // Todo abono debería llevar número de recibo. Los que no tienen
+          // son de antes de que se usara esa práctica: se marcan en gris
+          // para que se note cuáles quedaron incompletos.
+          detalle=x.noRecibo
+            ? 'Abono Recibo '+escHtml(x.noRecibo)
+            : 'Abono <span style="color:var(--muted-2)">· sin recibo</span>';
+        }
+        const tachado=x.anulado?'text-decoration:line-through;opacity:.55;':'';
         return `<tr>
-          <td style="color:var(--muted);white-space:nowrap;padding-left:24px;${tachado}">${fdate(a.fecha)}</td>
-          <td style="color:var(--muted);padding-left:24px;${tachado}">${detalle}${a.anulado?' <span class="badge b-danger" style="font-size:9px">ANULADO</span>':''}</td>
-          <td class="num" style="${tachado}">${money(a.monto)}</td>
+          <td style="color:var(--muted);white-space:nowrap;padding-left:24px;${tachado}">${fdate(x.fecha)}</td>
+          <td style="color:var(--muted);padding-left:24px;${tachado}">${detalle}${x.anulado?' <span class="badge b-danger" style="font-size:9px">ANULADO</span>':''}</td>
+          <td class="num" style="${tachado}">${money(x.monto)}</td>
+          <td class="num" style="color:var(--muted)">${x.anulado?'—':money(saldo)}</td>
         </tr>`;
       }).join('');
-      const sinAbonos=abonos.length?'':
-        `<tr><td></td><td style="color:var(--muted-2);padding-left:24px">Sin abonos registrados</td><td></td></tr>`;
-      return filaFactura+filasAbono+sinAbonos;
+
+      const sinAplic=aplicaciones.length?'':
+        `<tr><td></td><td style="color:var(--muted-2);padding-left:24px">Sin abonos registrados</td><td></td><td></td></tr>`;
+      return filaFactura+filasAplic+sinAplic;
     }).join('');
+
+    const saldoTotal=facturas.reduce((s,f)=>s+arInfo(f).saldo,0);
     body=`<div class="panel"><div class="panel-head"><h3>Facturas y abonos</h3></div>
-      <table><thead><tr><th>Fecha</th><th>Detalle</th><th class="num">Monto</th></tr></thead><tbody>
-      ${filas||'<tr><td colspan="3" class="empty">Este cliente no tiene facturas emitidas</td></tr>'}
+      <table><thead><tr><th>Fecha</th><th>Detalle</th><th class="num">Monto</th><th class="num">Saldo</th></tr></thead><tbody>
+      ${filas||'<tr><td colspan="4" class="empty">Este cliente no tiene facturas emitidas</td></tr>'}
+      ${facturas.length?`<tr style="border-top:2px solid var(--line-strong)">
+        <td></td><td style="font-weight:700">SALDO TOTAL DEL CLIENTE</td><td></td>
+        <td class="num" style="font-weight:700;color:${saldoTotal>0.001?'var(--danger)':'var(--ok)'}">${money(saldoTotal)}</td>
+      </tr>`:''}
       </tbody></table></div>`;
   }else if(cliTab==='prestamos'){
     body=`<div class="panel"><div class="panel-head"><h3>Órdenes de préstamo emitidas</h3></div>
