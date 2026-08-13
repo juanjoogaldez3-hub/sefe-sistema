@@ -4205,7 +4205,7 @@ function renderCliDet(){
         <div style="display:flex;gap:9px;align-items:flex-end">
           <div style="flex:1"><label>Agregar producto</label><input id="cp-add" list="cp-prods" placeholder="Buscar por código o nombre…" onkeydown="if(event.key==='Enter')addPrecioProd()"><datalist id="cp-prods">${opts}</datalist></div>
           <button class="btn btn-ghost" onclick="addPrecioProd()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
-          <button class="btn btn-ghost" id="btn-guardar-precios" onclick="guardarPreciosCli()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Guardar precios</button>
+          <button class="btn btn-ghost" id="btn-guardar-precios-cli" onclick="guardarPreciosCli()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Guardar precios</button>
         </div>
       </div>
       <table><thead><tr><th>Producto</th><th>Precio base</th><th>Precio cliente</th><th>Descuento</th>${esAdmin?'<th>Margen</th>':''}<th></th></tr></thead><tbody>${rows}</tbody></table>
@@ -4578,7 +4578,7 @@ function setPrecioCli(prodId,val){const c=clientes.find(x=>x.id===cliActual);if(
   if(val===''||val==null)return;c.precios[prodId]=Number(val);
   // Marcar que hay cambios sin guardar (el botón "Guardar precios" los persiste)
   _preciosSinGuardar=true;
-  const btn=document.getElementById('btn-guardar-precios');
+  const btn=document.getElementById('btn-guardar-precios-cli');
   if(btn){btn.classList.add('btn-primary');btn.classList.remove('btn-ghost');btn.textContent='● Guardar precios';}
   _actualizarPromDescCli();
 }
@@ -4588,7 +4588,7 @@ function guardarPreciosCli(){
   const c=clientes.find(x=>x.id===cliActual);if(!c)return;
   if(typeof guardarCliente==='function')guardarCliente(c);
   _preciosSinGuardar=false;
-  const btn=document.getElementById('btn-guardar-precios');
+  const btn=document.getElementById('btn-guardar-precios-cli');
   if(btn){btn.classList.remove('btn-primary');btn.classList.add('btn-ghost');btn.textContent='✓ Precios guardados';
     setTimeout(()=>{if(btn)btn.textContent='Guardar precios';},2000);}
   toast('✓ Precios guardados','Los precios de '+c.nombre+' se guardaron correctamente');
@@ -4977,36 +4977,41 @@ function openAbono(id){
 window.openAbono=openAbono;
 
 // ---- Pago global (un recibo, varias facturas) ----
+// Todas las casillas de este modal se buscan SÓLO dentro de #ov-pago.
+// Motivo: closeMod() nunca vacía el #m-body, así que el HTML del último
+// modal genérico se queda pegado en la página, y como #ov está antes que
+// #ov-pago, un id repetido haría que leamos la casilla equivocada.
+function $pg(sel){return document.querySelector('#ov-pago '+sel);}
 function _pgTalonarioChange(){
-  const t=(talonarios||[]).find(x=>x.id===Number($('#pg-talonario')?.value));
+  const t=(talonarios||[]).find(x=>x.id===Number($pg('#pg-talonario')?.value));
   if(!t)return;
   const prox=proximoReciboLibre(t,recibosUsados());
-  if(prox!=null&&$('#pg-recibo'))$('#pg-recibo').value=prox;
+  if(prox!=null&&$pg('#pg-recibo'))$pg('#pg-recibo').value=prox;
 }
 window._pgTalonarioChange=_pgTalonarioChange;
 function openPagoGlobal(){
   // Poblar datalist de clientes
-  const list=$('#pg-cli-list');
+  const list=$pg('#pg-cli-list');
   if(list)list.innerHTML=clientes.map(c=>`<option value="${c.nombre} · ${c.nit}">`).join('');
-  $('#pg-cli-search').value='';$('#pg-cli-id').value='';
+  $pg('#pg-cli-search').value='';$pg('#pg-cli-id').value='';
   // Talonarios: llenar el selector y sugerir el próximo recibo libre
   const _tals=talonariosConLibres();
-  const _tsel=$('#pg-talonario');
+  const _tsel=$pg('#pg-talonario');
   if(_tsel&&_tals.length){
     const _mi=_tals.find(x=>x.t.asignadoA===currentUser)||_tals[0];
     _tsel.innerHTML=_tals.map(x=>`<option value="${x.t.id}" ${x.t.id===_mi.t.id?'selected':''}>${(x.t.descripcion||('Talón '+x.t.numeroInicial))} · ${x.t.asignadoA||'sin asignar'} (${x.t.numeroInicial}–${x.t.numeroFinal})</option>`).join('');
     if(_tsel.parentElement)_tsel.parentElement.style.display='';
-    $('#pg-recibo').value=_mi.proximo;
+    $pg('#pg-recibo').value=_mi.proximo;
   }else{
     if(_tsel){_tsel.innerHTML='';if(_tsel.parentElement)_tsel.parentElement.style.display='none';}
-    $('#pg-recibo').value='REC-'+String(Date.now()).slice(-6);
+    $pg('#pg-recibo').value='REC-'+String(Date.now()).slice(-6);
   }
-  $('#pg-fecha').value=fechaHoyGT();
-  $('#pg-met').value='Efectivo';$('#pg-ref').value='';
-  const _cw=$('#pg-cuenta-wrap');if(_cw)_cw.innerHTML=selectorCuentaBancoHTML('pg-cuenta','¿A qué cuenta entró el dinero?');
-  $('#pg-facturas-wrap').innerHTML='<div class="empty">Seleccioná un cliente para ver sus facturas pendientes.</div>';
-  $('#pg-distribuido').textContent='Q 0.00';$('#pg-restante').textContent='—';
-  $('#pg-err').style.display='none';
+  $pg('#pg-fecha').value=fechaHoyGT();
+  $pg('#pg-met').value='Efectivo';$pg('#pg-ref').value='';
+  const _cw=$pg('#pg-cuenta-wrap');if(_cw)_cw.innerHTML=selectorCuentaBancoHTML('pg-cuenta','¿A qué cuenta entró el dinero?');
+  $pg('#pg-facturas-wrap').innerHTML='<div class="empty">Seleccioná un cliente para ver sus facturas pendientes.</div>';
+  $pg('#pg-distribuido').textContent='Q 0.00';$pg('#pg-restante').textContent='—';
+  $pg('#pg-err').style.display='none';
   $('#ov-pago').classList.add('show');
 }
 window.openPagoGlobal=openPagoGlobal;
@@ -5014,13 +5019,13 @@ function closePagoGlobal(){$('#ov-pago').classList.remove('show');}
 window.closePagoGlobal=closePagoGlobal;
 /* cierre por clic afuera desactivado en pago global */
 function pgGetCliId(){
-  const v=($('#pg-cli-search').value||'').trim();
+  const v=($pg('#pg-cli-search').value||'').trim();
   const c=clientes.find(x=>`${x.nombre} · ${x.nit}`===v||x.nit.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase()===v.toLowerCase());
   return c?c.id:null;
 }
 function pgCargaFacturas(){
-  const cliId=pgGetCliId();if(!cliId){$('#pg-cli-id').value='';$('#pg-facturas-wrap').innerHTML='<div class="empty">Seleccioná un cliente para ver sus facturas pendientes.</div>';pgActualizaTotales();return;}
-  $('#pg-cli-id').value=String(cliId);
+  const cliId=pgGetCliId();if(!cliId){$pg('#pg-cli-id').value='';$pg('#pg-facturas-wrap').innerHTML='<div class="empty">Seleccioná un cliente para ver sus facturas pendientes.</div>';pgActualizaTotales();return;}
+  $pg('#pg-cli-id').value=String(cliId);
   const cli=clientes.find(c=>c.id===cliId);
   // Reunir todos los IDs relacionados por NIT (el cliente + sus sedes o su matriz + hermanas)
   const nit=cli.nit;
@@ -5029,8 +5034,8 @@ function pgCargaFacturas(){
   const pendientes=documentos.filter(d=>todosConNit.includes(d.clienteId)&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').map(d=>{
     const sede=clientes.find(c=>c.id===d.clienteId);return {d,sede,...arInfo(d)};
   }).filter(x=>x.saldo>0.001).sort((a,b)=>new Date(a.d.creada)-new Date(b.d.creada));
-  if(!pendientes.length){$('#pg-facturas-wrap').innerHTML=`<div class="empty">${hayVarias?`Este NIT (${nit}) no tiene facturas pendientes en ninguna sede.`:'Este cliente no tiene facturas pendientes de pago.'}</div>`;pgActualizaTotales();return;}
-  $('#pg-facturas-wrap').innerHTML=`
+  if(!pendientes.length){$pg('#pg-facturas-wrap').innerHTML=`<div class="empty">${hayVarias?`Este NIT (${nit}) no tiene facturas pendientes en ninguna sede.`:'Este cliente no tiene facturas pendientes de pago.'}</div>`;pgActualizaTotales();return;}
+  $pg('#pg-facturas-wrap').innerHTML=`
     <div style="font-size:11px;font-weight:600;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
       Facturas pendientes${hayVarias?` · NIT ${nit} (${todosConNit.length} sedes)`:''}
     </div>
@@ -5064,25 +5069,25 @@ function pgCargaFacturas(){
 }
 window.pgCargaFacturas=pgCargaFacturas;
 function pgActualizaTotales(){
-  const inputs=Array.from(document.querySelectorAll('.pg-monto-input'));
+  const inputs=Array.from(document.querySelectorAll('#ov-pago .pg-monto-input'));
   const dist=inputs.reduce((s,i)=>s+(Number(i.value)||0),0);
-  $('#pg-distribuido').textContent=money(dist);
-  $('#pg-distribuido').style.color=dist>0?'var(--ok)':'var(--green)';
-  $('#pg-restante').textContent='—';$('#pg-restante').style.color='var(--muted)';
+  $pg('#pg-distribuido').textContent=money(dist);
+  $pg('#pg-distribuido').style.color=dist>0?'var(--ok)':'var(--green)';
+  $pg('#pg-restante').textContent='—';$pg('#pg-restante').style.color='var(--muted)';
 }
 window.pgActualizaTotales=pgActualizaTotales;
 function pgAplicarSaldo(docId,saldo){
-  const inp=document.querySelector(`.pg-monto-input[data-id="${docId}"]`);
+  const inp=document.querySelector(`#ov-pago .pg-monto-input[data-id="${docId}"]`);
   if(inp){inp.value=saldo.toFixed(2);pgActualizaTotales();}
 }
 window.pgAplicarSaldo=pgAplicarSaldo;
 function pgLimpiarTodo(){
-  document.querySelectorAll('.pg-monto-input').forEach(i=>i.value='');pgActualizaTotales();
+  document.querySelectorAll('#ov-pago .pg-monto-input').forEach(i=>i.value='');pgActualizaTotales();
 }
 window.pgLimpiarTodo=pgLimpiarTodo;
 function pgDistribuirFIFO(){
   // Obtener inputs ordenados por fecha (ya vienen en orden FIFO)
-  const inputs=Array.from(document.querySelectorAll('.pg-monto-input'));
+  const inputs=Array.from(document.querySelectorAll('#ov-pago .pg-monto-input'));
   // Primero pedimos el monto total a distribuir
   const totalStr=prompt('Monto total del pago a distribuir (Q):');
   if(!totalStr)return;
@@ -5101,26 +5106,26 @@ function pgDistribuirFIFO(){
 window.pgDistribuirFIFO=pgDistribuirFIFO;
 function guardarPagoGlobal(){
   const cliId=pgGetCliId();
-  if(!cliId){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='Seleccioná un cliente';return;}
-  const recibo=$('#pg-recibo').value.trim();
-  if(!recibo){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='Ingresá el número de recibo';return;}
-  const _tsel2=$('#pg-talonario');
+  if(!cliId){$pg('#pg-err').style.display='flex';$pg('#pg-err').querySelector('span').textContent='Seleccioná un cliente';return;}
+  const recibo=$pg('#pg-recibo').value.trim();
+  if(!recibo){$pg('#pg-err').style.display='flex';$pg('#pg-err').querySelector('span').textContent='Ingresá el número de recibo';return;}
+  const _tsel2=$pg('#pg-talonario');
   if(_tsel2&&_tsel2.value&&_tsel2.options.length){
     const _t=(talonarios||[]).find(x=>x.id===Number(_tsel2.value));
     const _n=parseInt(recibo.replace(/\D/g,''),10);
-    if(!_t||isNaN(_n)||_n<_t.numeroInicial||_n>_t.numeroFinal){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='El No. de recibo debe pertenecer al talonario seleccionado'+(_t?(' ('+_t.numeroInicial+'–'+_t.numeroFinal+')'):'');return;}
-    if(recibosUsados().has(_n)){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='Ese recibo ('+_n+') ya fue usado. Elegí el siguiente libre.';return;}
+    if(!_t||isNaN(_n)||_n<_t.numeroInicial||_n>_t.numeroFinal){$pg('#pg-err').style.display='flex';$pg('#pg-err').querySelector('span').textContent='El No. de recibo debe pertenecer al talonario seleccionado'+(_t?(' ('+_t.numeroInicial+'–'+_t.numeroFinal+')'):'');return;}
+    if(recibosUsados().has(_n)){$pg('#pg-err').style.display='flex';$pg('#pg-err').querySelector('span').textContent='Ese recibo ('+_n+') ya fue usado. Elegí el siguiente libre.';return;}
   }
-  const inputs=Array.from(document.querySelectorAll('.pg-monto-input')).filter(i=>Number(i.value)>0);
-  if(!inputs.length){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='Asigná al menos un monto a una factura';return;}
+  const inputs=Array.from(document.querySelectorAll('#ov-pago .pg-monto-input')).filter(i=>Number(i.value)>0);
+  if(!inputs.length){$pg('#pg-err').style.display='flex';$pg('#pg-err').querySelector('span').textContent='Asigná al menos un monto a una factura';return;}
   // Validar que ningún monto supere el saldo de su factura
   for(const inp of inputs){
     const monto=Number(inp.value);const saldo=Number(inp.dataset.saldo);
-    if(monto>saldo+0.001){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent=`El monto supera el saldo de la factura (máx. ${money(saldo)})`;return;}
+    if(monto>saldo+0.001){$pg('#pg-err').style.display='flex';$pg('#pg-err').querySelector('span').textContent=`El monto supera el saldo de la factura (máx. ${money(saldo)})`;return;}
   }
-  const fecha=$('#pg-fecha').value||fechaHoyGT();
-  const metodo=$('#pg-met').value;const referencia=$('#pg-ref').value;
-  const cuentaBancoId=$('#pg-cuenta')?.value||null;
+  const fecha=$pg('#pg-fecha').value||fechaHoyGT();
+  const metodo=$pg('#pg-met').value;const referencia=$pg('#pg-ref').value;
+  const cuentaBancoId=$pg('#pg-cuenta')?.value||null;
   const hoy=new Date().toISOString();
   let facturasAbonadas=0;
   inputs.forEach(inp=>{
@@ -5144,8 +5149,13 @@ function guardarPagoGlobal(){
       categoria:'cobro',origen:'cobro',origenId:Number(cliId)||null,referencia,fecha});
   }
   closePagoGlobal();renderCobros();
-  logAudit('Pago global','Recibo '+recibo+' · '+money(totalDist)+' en '+facturasAbonadas+' factura'+(facturasAbonadas!==1?'s':''));
-  toast('✓ Pago registrado','Recibo '+recibo+' · '+money(totalDist)+' distribuidos en '+facturasAbonadas+' factura'+(facturasAbonadas!==1?'s':''));
+  logAudit('Pago global','Recibo '+recibo+' · '+money(totalDist)+' en '+facturasAbonadas+' factura'+(facturasAbonadas!==1?'s':'')+(cuentaBancoId?'':' · SIN cuenta de banco'));
+  const _detalle='Recibo '+recibo+' · '+money(totalDist)+' distribuidos en '+facturasAbonadas+' factura'+(facturasAbonadas!==1?'s':'');
+  // Si no se eligió cuenta, el cobro NO entra a bancos. Antes esto pasaba en
+  // silencio y el movimiento simplemente no aparecía; ahora se avisa.
+  if(!cuentaBancoId&&cuentasActivasBanco().length)
+    toast('✓ Pago registrado · sin cuenta',_detalle+'. No se registró movimiento en bancos porque no se eligió cuenta.');
+  else toast('✓ Pago registrado',_detalle);
 }
 window.guardarPagoGlobal=guardarPagoGlobal;
 
@@ -6016,23 +6026,24 @@ function openAbonoProv(id){
   const recSugerido='EG-'+String(totalPagos+1).padStart(4,'0');
   openMod('Registrar pago · CMP-'+padn(c.id),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${c.proveedorNombre} · Saldo pendiente: <b style="color:var(--ink)">${money(saldo)}</b></p>
-     <div class="row"><div><label>Monto del pago</label><input id="pg-monto" type="number" step="0.01" value="${saldo.toFixed(2)}"></div><div><label>Fecha</label><input id="pg-fecha" type="date" value="${hoy}"></div></div>
-     <div class="row"><div><label>No. de comprobante de egreso</label><input id="pg-recibo" value="${recSugerido}"></div><div><label>Método</label><select id="pg-met"><option>Transferencia</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option></select></div></div>
-     <div class="row"><div><label>No. cheque / autorización / transferencia</label><input id="pg-ref" placeholder="Según la forma de pago"></div></div>
-     <div class="row">${selectorCuentaBancoHTML('pg-cuenta','¿De qué cuenta salió el dinero?')}</div>
+     <div class="row"><div><label>Monto del pago</label><input id="pp-monto" type="number" step="0.01" value="${saldo.toFixed(2)}"></div><div><label>Fecha</label><input id="pp-fecha" type="date" value="${hoy}"></div></div>
+     <div class="row"><div><label>No. de comprobante de egreso</label><input id="pp-recibo" value="${recSugerido}"></div><div><label>Método</label><select id="pp-met"><option>Transferencia</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option></select></div></div>
+     <div class="row"><div><label>No. cheque / autorización / transferencia</label><input id="pp-ref" placeholder="Según la forma de pago"></div></div>
+     <div class="row">${selectorCuentaBancoHTML('pp-cuenta','¿De qué cuenta salió el dinero?')}</div>
      ${compFotoHTML()}
-     <div class="note n-danger" id="pg-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
-    ()=>{const monto=Number($('#pg-monto').value);
-      if(!(monto>0)){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='El monto debe ser mayor a cero';return;}
-      if(monto>saldo+0.001){$('#pg-err').style.display='flex';$('#pg-err').querySelector('span').textContent='El pago no puede superar el saldo de '+money(saldo);return;}
-      c.abonos=c.abonos||[];const _pago={fecha:$('#pg-fecha').value||hoy,monto,metodo:$('#pg-met').value,referencia:$('#pg-ref').value,noRecibo:$('#pg-recibo').value,comprobante:_compFoto,cuentaBancoId:($('#pg-cuenta')?.value||null),registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};c.abonos.push(_pago);
-      if($('#pg-cuenta')?.value){
-        registrarMovimientoBanco({cuentaId:$('#pg-cuenta').value,tipo:'salida',monto,
-          concepto:'Pago a '+c.proveedorNombre+' · '+($('#pg-recibo').value||''),
-          categoria:'proveedor',origen:'pago_proveedor',origenId:c.id,referencia:$('#pg-ref').value,fecha:_pago.fecha,beneficiario:c.proveedorNombre});
+     <div class="note n-danger" id="pp-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
+    ()=>{const monto=Number($('#pp-monto').value);
+      if(!(monto>0)){$('#pp-err').style.display='flex';$('#pp-err').querySelector('span').textContent='El monto debe ser mayor a cero';return;}
+      if(monto>saldo+0.001){$('#pp-err').style.display='flex';$('#pp-err').querySelector('span').textContent='El pago no puede superar el saldo de '+money(saldo);return;}
+      const _noRec=$('#pp-recibo').value;
+      c.abonos=c.abonos||[];const _pago={fecha:$('#pp-fecha').value||hoy,monto,metodo:$('#pp-met').value,referencia:$('#pp-ref').value,noRecibo:_noRec,comprobante:_compFoto,cuentaBancoId:($('#pp-cuenta')?.value||null),registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};c.abonos.push(_pago);
+      if($('#pp-cuenta')?.value){
+        registrarMovimientoBanco({cuentaId:$('#pp-cuenta').value,tipo:'salida',monto,
+          concepto:'Pago a '+c.proveedorNombre+' · '+(_noRec||''),
+          categoria:'proveedor',origen:'pago_proveedor',origenId:c.id,referencia:$('#pp-ref').value,fecha:_pago.fecha,beneficiario:c.proveedorNombre});
       }
-      logAudit('Pago a proveedor','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+money(monto)+' · '+$('#pg-recibo').value);
-      closeMod();renderPorPagar();renderCompras();toast('✓ Pago registrado',$('#pg-recibo').value+' · saldo '+money(apInfo(c).saldo));
+      logAudit('Pago a proveedor','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+money(monto)+' · '+_noRec);
+      closeMod();renderPorPagar();renderCompras();toast('✓ Pago registrado',_noRec+' · saldo '+money(apInfo(c).saldo));
       if(typeof guardarPagoProveedor==='function')guardarPagoProveedor(c.id,_pago);});
 }
 window.openAbonoProv=openAbonoProv;
@@ -10109,8 +10120,8 @@ function openPagoGlobalCliente(cliId){
   openPagoGlobal();
   setTimeout(()=>{
     const cli=clientes.find(c=>c.id===cliId);if(!cli)return;
-    $('#pg-cli-search').value=`${cli.nombre} · ${cli.nit}`;
-    $('#pg-cli-id').value=String(cliId);
+    $pg('#pg-cli-search').value=`${cli.nombre} · ${cli.nit}`;
+    $pg('#pg-cli-id').value=String(cliId);
     pgCargaFacturas();
   },50);
 }
