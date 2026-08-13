@@ -3395,8 +3395,10 @@ function clienteStats(c){
     const _desde=movimientos.length;
     movimientos.push({fecha:f.creada,doc:f.serie+'-'+f.numeroDte,detalle:'Factura Cambiaria',cargo:f.totales.total,abono:0});
     (f.abonos||[]).forEach(a=>{
-      if(a.anulado)movimientos.push({fecha:a.anuladoFecha||a.fecha,doc:f.serie+'-'+f.numeroDte,detalle:`Abono ANULADO (${money(a.monto)} · ${a.motivoAnulacion||'sin motivo'})`,cargo:0,abono:0});
-      else movimientos.push({fecha:a.fecha,doc:f.serie+'-'+f.numeroDte,detalle:'Abono'+(a.metodo?' · '+a.metodo:'')+(a.referencia?' ('+a.referencia+')':''),cargo:0,abono:Number(a.monto)});
+      if(a.anulado)movimientos.push({fecha:a.anuladoFecha||a.fecha,doc:refRecibo(a),detalle:`${esRetencion(a)?'Retención':'Abono'} ANULADO (${money(a.monto)} · ${a.motivoAnulacion||'sin motivo'})`,cargo:0,abono:0});
+      // En una retención el método ya dice "Retención IVA/ISR", así que
+      // se usa tal cual: anteponerle "Retención ·" lo dejaría repetido.
+      else movimientos.push({fecha:a.fecha,doc:refRecibo(a),detalle:(esRetencion(a)?String(a.metodo||'Retención'):('Abono'+(a.metodo?' · '+a.metodo:'')))+(a.referencia?' ('+a.referencia+')':''),cargo:0,abono:Number(a.monto)});
     });
     documentos.filter(d=>d.facturaOrigenId===f.id).forEach(n=>{
       if(n.estado==='anulada')movimientos.push({fecha:n.anuladoFecha||n.creada,doc:n.serie+'-'+n.numeroDte,detalle:`${(TIPO_LBL[n.tipoDoc]||['Documento'])[0]} ANULADA (${money(n.totales.total)} · ${n.motivo||'sin motivo'})`,cargo:0,abono:0});
@@ -4667,6 +4669,27 @@ function dirCiudadAlertHTML(f){
   return `<div class="note" style="background:var(--warn-bg);border:1px solid #E8D08A;color:var(--warn);margin-bottom:14px"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>Este cliente no tiene <b>dirección fiscal</b> cargada — la factura saldrá con <b>"Ciudad"</b>. Podés cancelar y agregarla en <b>Editar datos → Dirección</b>.</span></div>`;
 }
 // ============================================================
+//  Con qué sigla se identifica cada cosa en la columna Documento
+// ============================================================
+//   FA  factura
+//   RE  recibo de un abono
+//   RT  retención de IVA o ISR
+//   NC  nota de crédito
+//
+//  Una retención NO es un tipo aparte en la base: se registra como un
+//  abono cuyo método empieza con "Retenci" (Retención IVA / ISR). Es
+//  la misma regla que usa el reporte de Retenciones.
+//
+//  Si el abono no trae número —los históricos, de antes de que se
+//  usara recibo— queda sólo la sigla.
+function esRetencion(a){return /^Retenci/i.test(String((a&&a.metodo)||''));}
+function refRecibo(a){
+  const sigla=esRetencion(a)?'RT':'RE';
+  const num=(a&&(a.noRecibo||a.referencia))||'';
+  return num?(sigla+'-'+num):sigla;
+}
+
+// ============================================================
 //  Lo que se aplica CONTRA una factura y le baja el saldo
 // ============================================================
 //  Devuelve, en orden de fecha, los abonos y las notas de crédito de
@@ -4680,19 +4703,23 @@ function dirCiudadAlertHTML(f){
 function aplicacionesDeFactura(f){
   return [
     ...(f.abonos||[]).map(a=>({
-      fecha:a.fecha, clase:'abono', monto:Number(a.monto)||0,
-      anulado:!!a.anulado, noRecibo:a.noRecibo, orden:a._id||0 })),
+      fecha:a.fecha, clase:esRetencion(a)?'retencion':'abono', monto:Number(a.monto)||0,
+      anulado:!!a.anulado, noRecibo:a.noRecibo, referencia:a.referencia,
+      metodo:a.metodo, ref:refRecibo(a), orden:a._id||0 })),
     ...documentos.filter(d=>d.tipoDoc==='notaCredito'&&d.facturaOrigenId===f.id&&d.estado!=='anulada')
       .map(d=>({
         fecha:d.creada, clase:'nc', monto:Number(d.totales.total)||0,
-        anulado:false, doc:(d.serie?d.serie+'-':'')+(d.numeroDte||''), orden:d.id||0 })),
+        anulado:false, doc:(d.serie?d.serie+'-':'')+(d.numeroDte||''),
+        ref:(d.serie?d.serie+'-':'')+(d.numeroDte||'')||'NC', orden:d.id||0 })),
   ].sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||''))||(a.orden-b.orden));
 }
 // El texto del renglón. En texto plano, para que sirva igual en
 // pantalla y al exportar a Excel.
 function detalleAplicacion(x){
   if(x.clase==='nc')return 'Nota de crédito '+(x.doc||'');
-  return 'Abono '+(x.noRecibo?('Recibo '+x.noRecibo):'· sin recibo');
+  const etiqueta=x.clase==='retencion'?'Retención':'Abono';
+  const num=x.noRecibo||x.referencia||'';
+  return num?(etiqueta+' '+x.ref):(etiqueta+' · sin recibo');
 }
 function arInfo(f){
   const {cr}=notasDe(f);
@@ -8708,7 +8735,7 @@ function renderReportes(){
             <td class="num" style="${tachado}">${money(x.monto)}</td>
             <td class="num" style="color:var(--muted)">${x.anulado?'—':money(saldo)}</td>
           </tr>`;
-          exportData.push({Documento:'', Fecha:fdate(x.fecha),
+          exportData.push({Documento:x.ref||'', Fecha:fdate(x.fecha),
             Detalle:det+(x.anulado?' (ANULADO)':''),
             Monto:Math.round(x.monto*100)/100,
             Saldo:x.anulado?'':Math.round(saldo*100)/100});
@@ -8877,7 +8904,17 @@ async function exportarExcel(){
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
   // Estado de cuenta: nombres de cliente y "TOTALES CLIENTE" en negrita (si la librería soporta estilos).
-  if(_styled&&(repType==='estcta'||repType==='factabo')){repLastData.forEach((row,i)=>{const doc=(row&&row.Documento)||'';if(doc&&!/^FA /.test(doc)){const ref='A'+(7+i);if(ws[ref])ws[ref].s={font:{bold:true}};}});}
+  // Negrita en las filas que encabezan o cierran un bloque: el nombre
+  // del cliente y "TOTALES CLIENTE". Se reconocen porque su primera
+  // columna NO es un documento.
+  //
+  // En "Facturas y abonos" los documentos son FA (factura), RE (recibo),
+  // RT (retención) y NC (nota de crédito); en el estado de cuenta
+  // general sólo hay FA.
+  if(_styled&&(repType==='estcta'||repType==='factabo')){
+    const _esDoc=repType==='factabo'?/^(FA |RE|RT|NC)/:/^FA /;
+    repLastData.forEach((row,i)=>{const doc=(row&&row.Documento)||'';if(doc&&!_esDoc.test(doc)){const ref='A'+(7+i);if(ws[ref])ws[ref].s={font:{bold:true}};}});
+  }
   // Ancho de columnas automático según el contenido (para que no salgan cortadas).
   if(repLastData.length){const _keys=Object.keys(repLastData[0]);ws['!cols']=_keys.map(k=>{let w=String(k).length;repLastData.forEach(r=>{const v=r[k];const l=(v==null?'':String(v)).length;if(l>w)w=l;});return {wch:Math.min(Math.max(w+2,9),60)};});}
   // Formato moneda (Q) en las columnas de importe del estado de cuenta.
