@@ -890,6 +890,7 @@
           <button class="ct-tab" data-r="cprod">Compras por producto</button>
           <button class="ct-tab" data-r="cxc">Pendientes por cliente</button>
           <button class="ct-tab" data-r="estcta">Estado de cuenta general</button>
+          <button class="ct-tab" data-r="factabo">Facturas y abonos</button>
           <button class="ct-tab" data-r="banco">Movimientos de banco</button>
           <button class="ct-tab" data-r="recibos">Recibos</button>
           <button class="ct-tab" data-r="pagos">Pagos por cliente</button>
@@ -4207,15 +4208,7 @@ function renderCliDet(){
       // que un abono (así lo calcula arInfo). Si no se mostraran, la
       // columna de Saldo no cerraría con el saldo que muestra el resto
       // del sistema, y eso es peor que un renglón de más.
-      const aplicaciones=[
-        ...(f.abonos||[]).map(a=>({
-          fecha:a.fecha, clase:'abono', monto:Number(a.monto)||0,
-          anulado:!!a.anulado, noRecibo:a.noRecibo, orden:a._id||0 })),
-        ...documentos.filter(d=>d.tipoDoc==='notaCredito'&&d.facturaOrigenId===f.id&&d.estado!=='anulada')
-          .map(d=>({
-            fecha:d.creada, clase:'nc', monto:Number(d.totales.total)||0,
-            anulado:false, doc:(d.serie?d.serie+'-':'')+(d.numeroDte||''), orden:d.id||0 })),
-      ].sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||''))||(a.orden-b.orden));
+      const aplicaciones=aplicacionesDeFactura(f);
 
       // El saldo arranca en el total de la factura y va bajando.
       let saldo=Number(f.totales.total)||0;
@@ -4230,17 +4223,12 @@ function renderCliDet(){
         // Un abono anulado NO baja el saldo: se muestra tachado y el
         // saldo queda igual, para que se vea que existió pero no contó.
         if(!x.anulado) saldo=Math.round((saldo-x.monto)*100)/100;
-        let detalle;
-        if(x.clase==='nc'){
-          detalle='Nota de crédito '+escHtml(x.doc||'');
-        }else{
-          // Todo abono debería llevar número de recibo. Los que no tienen
-          // son de antes de que se usara esa práctica: se marcan en gris
-          // para que se note cuáles quedaron incompletos.
-          detalle=x.noRecibo
-            ? 'Abono Recibo '+escHtml(x.noRecibo)
-            : 'Abono <span style="color:var(--muted-2)">· sin recibo</span>';
-        }
+        // Todo abono debería llevar número de recibo. Los que no tienen
+        // son de antes de que se usara esa práctica: se marcan en gris
+        // para que se note cuáles quedaron incompletos.
+        const detalle=(x.clase==='abono'&&!x.noRecibo)
+          ? 'Abono <span style="color:var(--muted-2)">· sin recibo</span>'
+          : escHtml(detalleAplicacion(x));
         const tachado=x.anulado?'text-decoration:line-through;opacity:.55;':'';
         return `<tr>
           <td style="color:var(--muted);white-space:nowrap;padding-left:24px;${tachado}">${fdate(x.fecha)}</td>
@@ -4643,6 +4631,34 @@ function dirFiscalDoc(f){
 function dirCiudadAlertHTML(f){
   if(typeof dirFiscalDoc!=='function'||dirFiscalDoc(f)!=='Ciudad')return '';
   return `<div class="note" style="background:var(--warn-bg);border:1px solid #E8D08A;color:var(--warn);margin-bottom:14px"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>Este cliente no tiene <b>dirección fiscal</b> cargada — la factura saldrá con <b>"Ciudad"</b>. Podés cancelar y agregarla en <b>Editar datos → Dirección</b>.</span></div>`;
+}
+// ============================================================
+//  Lo que se aplica CONTRA una factura y le baja el saldo
+// ============================================================
+//  Devuelve, en orden de fecha, los abonos y las notas de crédito de
+//  una factura. Las notas van incluidas porque reducen la factura
+//  igual que un abono — así lo calcula arInfo().
+//
+//  Vive en un solo lugar a propósito: lo usan la pestaña "Facturas y
+//  abonos" de la ficha del cliente y el reporte del mismo nombre. Si
+//  cada uno lo calculara por su cuenta, tarde o temprano dirían
+//  números distintos sobre la misma factura.
+function aplicacionesDeFactura(f){
+  return [
+    ...(f.abonos||[]).map(a=>({
+      fecha:a.fecha, clase:'abono', monto:Number(a.monto)||0,
+      anulado:!!a.anulado, noRecibo:a.noRecibo, orden:a._id||0 })),
+    ...documentos.filter(d=>d.tipoDoc==='notaCredito'&&d.facturaOrigenId===f.id&&d.estado!=='anulada')
+      .map(d=>({
+        fecha:d.creada, clase:'nc', monto:Number(d.totales.total)||0,
+        anulado:false, doc:(d.serie?d.serie+'-':'')+(d.numeroDte||''), orden:d.id||0 })),
+  ].sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||''))||(a.orden-b.orden));
+}
+// El texto del renglón. En texto plano, para que sirva igual en
+// pantalla y al exportar a Excel.
+function detalleAplicacion(x){
+  if(x.clase==='nc')return 'Nota de crédito '+(x.doc||'');
+  return 'Abono '+(x.noRecibo?('Recibo '+x.noRecibo):'· sin recibo');
 }
 function arInfo(f){
   const {cr}=notasDe(f);
@@ -6841,6 +6857,7 @@ const MODULOS_PERMISOS=[
   {key:'rep_dircli',lbl:'Listado de clientes',grp:'Reportes · Clientes y cobros'},
   {key:'rep_cxc',lbl:'Pendientes por cliente',grp:'Reportes · Clientes y cobros'},
   {key:'rep_estcta',lbl:'Estado de cuenta general',grp:'Reportes · Clientes y cobros'},
+  {key:'rep_factabo',lbl:'Facturas y abonos',grp:'Reportes · Clientes y cobros'},
   {key:'rep_recibos',lbl:'Recibos',grp:'Reportes · Clientes y cobros'},
   {key:'rep_pagos',lbl:'Pagos por cliente',grp:'Reportes · Clientes y cobros'},
   {key:'rep_retenciones',lbl:'Retenciones IVA/ISR',grp:'Reportes · Clientes y cobros'},
@@ -6854,7 +6871,7 @@ const MODULOS_PERMISOS=[
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','comision','dircli','factem','cardex','invactual','invcosto','canalvend','cprov','cprod','cxc','estcta','banco','recibos','pagos','retenciones'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','comision','dircli','factem','cardex','invactual','invcosto','canalvend','cprov','cprod','cxc','estcta','factabo','banco','recibos','pagos','retenciones'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
@@ -7462,6 +7479,10 @@ function renderRepFilters(){
       ${sel('rf-tc','Tiempo de crédito',tcOpts,repFiltros.tiempoCredito,'tiempoCredito')}
       <div><label>Solo vencidos</label><label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:13px;font-weight:500;cursor:pointer"><input type="checkbox" ${repFiltros.soloVencidos?'checked':''} style="width:auto;margin:0" onchange="setRepFiltro('soloVencidos',this.checked)">Mostrar solo vencidos</label></div>
     </div>`;
+  }
+  else if(repType==='factabo'){
+    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    html=`<div class="rep-filter-bar">${sel('rf-cli-fa','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
   }
   else if(repType==='recibos'||repType==='pagos'){
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
@@ -8583,6 +8604,78 @@ function renderReportes(){
       </tr>`).join(''):'<tr><td colspan="8" class="empty">Sin recibos en el período</td></tr>'}</tbody></table>
       ${filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:15px;font-weight:600;border-top:1.5px solid var(--line-strong)">Total: ${money(totalRec)}</div>`:''}</div>`;
   }
+  else if(repType==='factabo'){
+    // FACTURAS Y ABONOS — el mismo detalle que la pestaña de la ficha
+    // del cliente, pero para varios clientes y exportable.
+    //
+    // Cada factura, y debajo lo que se le aplicó (abonos y notas de
+    // crédito), con el saldo bajando renglón por renglón. Ordenado por
+    // cliente y, dentro de cada uno, por fecha de emisión de la vieja
+    // a la nueva.
+    const facts=documentos
+      .filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&enRango(d.creada,r))
+      .filter(d=>!repFiltros.cliente||String(d.clienteId)===repFiltros.cliente)
+      .sort((a,b)=>{
+        const na=(a.clienteComercial||a.clienteNombre||''), nb=(b.clienteComercial||b.clienteNombre||'');
+        return na.localeCompare(nb,'es')
+            || String(a.creada||'').localeCompare(String(b.creada||''))
+            || ((a.id||0)-(b.id||0));
+      });
+
+    let filasHTML='', saldoTotal=0, nFact=0, clienteAnterior=null;
+    facts.forEach(f=>{
+      const cli=f.clienteComercial||f.clienteNombre||'—';
+      if(cli!==clienteAnterior){
+        clienteAnterior=cli;
+        filasHTML+=`<tr style="background:var(--surface-2)"><td colspan="5"
+          style="font-family:var(--disp);font-weight:700;padding-top:14px">${escHtml(cli)}</td></tr>`;
+      }
+      nFact++;
+      let saldo=Number(f.totales.total)||0;
+      const numFact=(f.serie?f.serie+'-':'')+(f.numeroDte||'');
+      filasHTML+=`<tr style="border-top:2px solid var(--line-strong)">
+        <td style="color:var(--muted);white-space:nowrap">${fdate(f.creada)}</td>
+        <td style="color:var(--muted-2)"></td>
+        <td style="font-weight:600">Factura ${escHtml(numFact)}</td>
+        <td class="num" style="font-weight:600">${money(f.totales.total)}</td>
+        <td class="num" style="font-weight:600">${money(saldo)}</td>
+      </tr>`;
+      exportData.push({Cliente:cli, Fecha:fdate(f.creada), Documento:numFact,
+        Detalle:'Factura', Monto:f.totales.total, Saldo:saldo});
+
+      const aplic=aplicacionesDeFactura(f);
+      aplic.forEach(x=>{
+        if(!x.anulado)saldo=Math.round((saldo-x.monto)*100)/100;
+        const det=detalleAplicacion(x);
+        const tachado=x.anulado?'text-decoration:line-through;opacity:.55;':'';
+        filasHTML+=`<tr>
+          <td style="color:var(--muted);white-space:nowrap;${tachado}">${fdate(x.fecha)}</td>
+          <td></td>
+          <td style="color:var(--muted);padding-left:22px;${tachado}">${escHtml(det)}${x.anulado?' <span class="badge b-danger" style="font-size:9px">ANULADO</span>':''}</td>
+          <td class="num" style="${tachado}">${money(x.monto)}</td>
+          <td class="num" style="color:var(--muted)">${x.anulado?'—':money(saldo)}</td>
+        </tr>`;
+        exportData.push({Cliente:cli, Fecha:fdate(x.fecha), Documento:numFact,
+          Detalle:det+(x.anulado?' (ANULADO)':''), Monto:x.monto,
+          Saldo:x.anulado?'':saldo});
+      });
+      if(!aplic.length){
+        filasHTML+=`<tr><td></td><td></td><td style="color:var(--muted-2);padding-left:22px">Sin abonos registrados</td><td></td><td></td></tr>`;
+      }
+      saldoTotal=Math.round((saldoTotal+arInfo(f).saldo)*100)/100;
+    });
+
+    const totalFacturado=facts.reduce((s,f)=>s+(Number(f.totales.total)||0),0);
+    html+=`<div class="kpis stagger">${kpiHTML([
+      {ic:'i-blue',svg:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',lbl:'Facturas',val:nFact,sub:'en el período'},
+      {ic:'i-lime',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Total facturado',val:money(totalFacturado)},
+      {ic:'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'Saldo pendiente',val:money(saldoTotal),sub:'de esas facturas'}
+    ])}</div>
+      <div class="panel"><div class="panel-head"><h3>Facturas y abonos</h3></div>
+      <table><thead><tr><th>Fecha</th><th></th><th>Detalle</th><th class="num">Monto</th><th class="num">Saldo</th></tr></thead><tbody>
+      ${filasHTML||'<tr><td colspan="5" class="empty">Sin facturas en el período seleccionado</td></tr>'}
+      </tbody></table></div>`;
+  }
   else if(repType==='pagos'){
     // Reporte de Pagos agrupado por cliente
     const porCli={};
@@ -8712,7 +8805,7 @@ async function exportarExcel(){
   let XLSX,_styled=false;
   try{const _m=await import('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/+esm');XLSX=_m.default||_m;if(XLSX&&XLSX.utils)_styled=true;else throw 0;}
   catch(_e){XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',factabo:'FACTURAS Y ABONOS',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const _esInv=(repType==='invactual'||repType==='invcosto');
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
@@ -8803,7 +8896,7 @@ async function _abrirPDF(html){
 }
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',factabo:'FACTURAS Y ABONOS',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia','Cantidad','Costo unitario','Costo total',
