@@ -3439,7 +3439,14 @@ function fichaIntegral(c,st){
   const maxB=Math.max(1,st.buckets.c30,st.buckets.c60,st.buckets.c90,st.buckets.c90p);
   const ageRow=(lbl,v,color)=>`<div class="hbar-row"><div class="hbar-name">${lbl}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.round(v/maxB*100)}%;background:${color}"></div></div><div class="hbar-val num">${money(v)}</div></div>`;
   const hayMora=st.buckets.c30+st.buckets.c60+st.buckets.c90+st.buckets.c90p>0;
-  const movRows=st.movimientos.length?st.movimientos.slice().reverse().map(m=>`<tr>
+  // Del más viejo al más nuevo, que es como se lee un estado de cuenta.
+  //
+  // Antes se mostraba al revés, y eso rompía la columna de Saldo: el
+  // saldo corrido se calcula sumando en orden cronológico (ver
+  // clienteStats), así que listado de nuevo a viejo cada fila mostraba
+  // un acumulado que no correspondía a lo que se venía leyendo. El
+  // encabezado ya decía "orden cronológico"; ahora es cierto.
+  const movRows=st.movimientos.length?st.movimientos.map(m=>`<tr>
       <td style="color:var(--muted)">${fdate(m.fecha)}</td>
       <td style="font-weight:600">${m.doc}</td>
       <td style="color:var(--muted)">${m.detalle}</td>
