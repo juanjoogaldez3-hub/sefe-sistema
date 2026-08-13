@@ -4188,6 +4188,46 @@ function renderCliDet(){
       <table><thead><tr><th>No.</th><th>Tipo</th><th>Fecha</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>
       ${facturas.length?facturas.slice().reverse().map(f=>`<tr><td style="font-weight:600">${f.serie}-${f.numeroDte}</td><td><span class="pill ${(TIPO_LBL[f.tipoDoc]||["","p-ped"])[1]}">${(TIPO_LBL[f.tipoDoc]||["Documento"])[0]}</span></td><td style="color:var(--muted)">${fdate(f.creada)}</td><td class="num" style="font-weight:600">${money(f.totales.total)}</td><td><span class="badge b-ok">${f.estado}</span></td><td><button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin Facturas Cambiarias emitidas</td></tr>'}
       </tbody></table></div>`;
+  }else if(cliTab==='factabonos'){
+    // Estado de cuenta ordenado por EMISIÓN DE FACTURA: cada factura y,
+    // debajo, los abonos que se le aplicaron.
+    //
+    // Es distinto de la tabla de Movimientos de arriba, que mezcla todo
+    // por fecha. Éste sirve para cobrar: de un vistazo se ve qué se le
+    // abonó a cada factura, sin tener que cruzar el diario.
+    //
+    // `facturas` ya viene de clienteStats ordenado de la más vieja a la
+    // más nueva, que es justo lo que se pidió.
+    const filas=facturas.map(f=>{
+      const abonos=(f.abonos||[]).slice().sort((a,b)=>
+        String(a.fecha||'').localeCompare(String(b.fecha||''))||((a._id||0)-(b._id||0)));
+      const filaFactura=`<tr style="border-top:2px solid var(--line-strong)">
+        <td style="color:var(--muted);white-space:nowrap">${fdate(f.creada)}</td>
+        <td style="font-weight:600">Factura ${escHtml((f.serie?f.serie+'-':'')+(f.numeroDte||''))}</td>
+        <td class="num" style="font-weight:600">${money(f.totales.total)}</td>
+      </tr>`;
+      const filasAbono=abonos.map(a=>{
+        // Todo abono debería llevar número de recibo. Los que no tienen
+        // son de antes de que se usara esa práctica: se marcan en gris
+        // para que se note cuáles quedaron incompletos.
+        const detalle=a.noRecibo
+          ? 'Abono Recibo '+escHtml(a.noRecibo)
+          : 'Abono <span style="color:var(--muted-2)">· sin recibo</span>';
+        const tachado=a.anulado?'text-decoration:line-through;opacity:.55;':'';
+        return `<tr>
+          <td style="color:var(--muted);white-space:nowrap;padding-left:24px;${tachado}">${fdate(a.fecha)}</td>
+          <td style="color:var(--muted);padding-left:24px;${tachado}">${detalle}${a.anulado?' <span class="badge b-danger" style="font-size:9px">ANULADO</span>':''}</td>
+          <td class="num" style="${tachado}">${money(a.monto)}</td>
+        </tr>`;
+      }).join('');
+      const sinAbonos=abonos.length?'':
+        `<tr><td></td><td style="color:var(--muted-2);padding-left:24px">Sin abonos registrados</td><td></td></tr>`;
+      return filaFactura+filasAbono+sinAbonos;
+    }).join('');
+    body=`<div class="panel"><div class="panel-head"><h3>Facturas y abonos</h3></div>
+      <table><thead><tr><th>Fecha</th><th>Detalle</th><th class="num">Monto</th></tr></thead><tbody>
+      ${filas||'<tr><td colspan="3" class="empty">Este cliente no tiene facturas emitidas</td></tr>'}
+      </tbody></table></div>`;
   }else if(cliTab==='prestamos'){
     body=`<div class="panel"><div class="panel-head"><h3>Órdenes de préstamo emitidas</h3></div>
       <table><thead><tr><th>No.</th><th>Fecha</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>
@@ -4316,7 +4356,7 @@ function renderCliDet(){
       </div>
     </div></div>
     ${fichaIntegral(c,st)}
-    <div class="ct-tabs">${tabBtn('precios','Precios')}${tabBtn('facturas','Facturas Cambiarias')}${tabBtn('prestamos','Órdenes de préstamo')}${tabBtn('cobros','Cobros')}${tabBtn('seguimiento','Seguimiento')}${tabBtn('reportes','Reportes de ventas')}</div>
+    <div class="ct-tabs">${tabBtn('precios','Precios')}${tabBtn('facturas','Facturas Cambiarias')}${tabBtn('factabonos','Facturas y abonos')}${tabBtn('prestamos','Órdenes de préstamo')}${tabBtn('cobros','Cobros')}${tabBtn('seguimiento','Seguimiento')}${tabBtn('reportes','Reportes de ventas')}</div>
     ${body}`;
 }
 function cliSetTab(t){cliTab=t;renderCliDet();}
