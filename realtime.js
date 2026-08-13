@@ -218,6 +218,8 @@
   let intentos = 0;
   let vigilante = null;
   let vigilanteAuth = null;      // escucha la renovación del token (RLS)
+  let temporizadorResync = null; // espera a que la conexión se estabilice
+  let ultimoResync = 0;          // para no recargar más de una vez por minuto
 
   // ============================================================
   //  3. HELPERS
@@ -515,6 +517,38 @@
   // ============================================================
   //  7. RESINCRONIZACIÓN
   // ============================================================
+  //  ── POR QUÉ NO SE RECARGA EN CADA RECONEXIÓN ────────────────
+  //  resincronizar() baja las 18 tablas COMPLETAS, incluida toda la
+  //  auditoría. Es caro.
+  //
+  //  Si la conexión está inestable y reconecta tres veces en veinte
+  //  segundos, eso serían tres descargas completas seguidas — y esa
+  //  carga es justamente lo que provoca el siguiente corte. Se
+  //  retroalimenta y el sistema se arrastra.
+  //
+  //  Por eso: se espera a que la conexión se quede QUIETA unos
+  //  segundos, y no se recarga más de una vez por minuto. Si sigue
+  //  inestable, se deja para cuando se calme.
+  const ESPERA_RESYNC = 4000;        // que la conexión se estabilice
+  const MINIMO_ENTRE_RESYNC = 60000; // no más de una recarga por minuto
+
+  function programarResincronizacion() {
+    clearTimeout(temporizadorResync);
+    temporizadorResync = setTimeout(() => {
+      temporizadorResync = null;
+      if (!activo) return;
+      // ¿Volvió a caerse mientras esperábamos? Que se estabilice primero.
+      if (estadoConexion !== 'vivo') { huboCaida = true; return; }
+      const desde = Date.now() - ultimoResync;
+      if (ultimoResync && desde < MINIMO_ENTRE_RESYNC) {
+        console.log('[realtime] recarga omitida: ya hubo una hace ' + Math.round(desde / 1000) + 's');
+        return;
+      }
+      ultimoResync = Date.now();
+      resincronizar('reconexión');
+    }, ESPERA_RESYNC);
+  }
+
   //  Si el websocket se cae (wifi, laptop dormida, túnel), los
   //  eventos de ese hueco se pierden PARA SIEMPRE — no hay forma
   //  de pedirlos después. Así que al volver, recargamos todo.
@@ -577,27 +611,52 @@
     desconectarCanal();
     pintarConexion('conectando');
 
-    // Un solo canal con todas las suscripciones: más liviano que
-    // abrir un canal por tabla.
-    canal = sb.channel('sefe-live');
-    Object.keys(TABLAS).forEach((tabla) => {
-      canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla },
-        (payload) => alCambio(tabla, payload));
-    });
+    // Pasarle al websocket la credencial de la sesión ANTES de
+    // suscribirse.
+    //
+    // Con RLS activo el servidor tiene que saber quién sos para
+    // decidir qué cambios puede mandarte. Si el websocket sale sin
+    // credencial, para la base es un visitante anónimo — que desde
+    // hoy no tiene permiso para nada — así que rechaza la suscripción,
+    // se reintenta, vuelve a fallar, y el indicador queda parpadeando
+    // entre "En vivo" y "Conectando…" sin parar.
+    ponerCredencial().then(() => {
+      if (!activo) return;
 
-    canal.subscribe((estado) => {
-      if (estado === 'SUBSCRIBED') {
-        intentos = 0;
-        pintarConexion('vivo');
-        // Si veníamos de una caída, perdimos eventos: recargar.
-        if (huboCaida) { huboCaida = false; resincronizar('reconexión'); }
-      } else if (estado === 'CHANNEL_ERROR' || estado === 'TIMED_OUT' || estado === 'CLOSED') {
-        if (!activo) return;
-        huboCaida = true;
-        pintarConexion('caido');
-        reconectarConEspera();
-      }
+      // Un solo canal con todas las suscripciones: más liviano que
+      // abrir un canal por tabla.
+      canal = sb.channel('sefe-live');
+      Object.keys(TABLAS).forEach((tabla) => {
+        canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla },
+          (payload) => alCambio(tabla, payload));
+      });
+
+      canal.subscribe((estado) => {
+        if (estado === 'SUBSCRIBED') {
+          intentos = 0;
+          pintarConexion('vivo');
+          if (huboCaida) { huboCaida = false; programarResincronizacion(); }
+        } else if (estado === 'CHANNEL_ERROR' || estado === 'TIMED_OUT' || estado === 'CLOSED') {
+          if (!activo) return;
+          huboCaida = true;
+          pintarConexion('caido');
+          reconectarConEspera();
+        }
+      });
     });
+  }
+
+  // Le entrega al websocket el token de la sesión actual.
+  function ponerCredencial() {
+    try {
+      if (typeof sb === 'undefined' || !sb.auth || !sb.auth.getSession) return Promise.resolve();
+      return sb.auth.getSession().then(({ data }) => {
+        const token = data && data.session && data.session.access_token;
+        if (token && sb.realtime && sb.realtime.setAuth) {
+          try { sb.realtime.setAuth(token); } catch (e) {}
+        }
+      }).catch(() => {});
+    } catch (e) { return Promise.resolve(); }
   }
 
   // Reintento con espera creciente: 2s, 4s, 8s… hasta 30s.
@@ -660,6 +719,8 @@
     activo = false;
     desconectarCanal();
     if (vigilanteAuth) { try { vigilanteAuth.unsubscribe(); } catch (e) {} vigilanteAuth = null; }
+    clearTimeout(temporizadorResync);
+    temporizadorResync = null;
     clearInterval(vigilante);
     clearTimeout(temporizador);
     clearTimeout(reintento);
@@ -696,7 +757,9 @@
   // Para diagnosticar desde la consola del navegador:
   window._realtime = {
     estado: () => ({ activo, conexion: estadoConexion, pendientes: cambiosPendientes,
-                     vistas: [...vistasPendientes], bloqueo: motivoBloqueo() }),
+                     vistas: [...vistasPendientes], bloqueo: motivoBloqueo(),
+                     reintentos: intentos, recargaPendiente: !!temporizadorResync,
+                     segundosDesdeUltimaRecarga: ultimoResync ? Math.round((Date.now()-ultimoResync)/1000) : null }),
     tablas: () => Object.keys(TABLAS),
   };
 })();

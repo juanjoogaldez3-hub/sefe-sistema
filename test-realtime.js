@@ -53,11 +53,27 @@ const doc = {
 
 // ---------- Supabase simulado: captura los callbacks del canal ----------
 const suscripciones = {};
+const espia = { credenciales: [], recargas: 0, ordenOk: null };
+let avisarEstado = null;   // para simular cortes de conexión
 const canalFalso = {
   on(_tipo, cfg, cb){ suscripciones[cfg.table] = cb; return canalFalso; },
-  subscribe(cb){ if(cb) cb('SUBSCRIBED'); return canalFalso; },
+  subscribe(cb){
+    avisarEstado = cb;
+    // Al momento de suscribirse, ¿ya se había entregado la credencial?
+    // Si no, con RLS activo la base rechaza todo.
+    if (espia.ordenOk === null) espia.ordenOk = espia.credenciales.length > 0;
+    if(cb) cb('SUBSCRIBED');
+    return canalFalso;
+  },
 };
-const sbFalso = { channel(){ return canalFalso; }, removeChannel(){}, auth:{} };
+const sbFalso = {
+  channel(){ return canalFalso; },
+  removeChannel(){},
+  auth:{
+    getSession: () => Promise.resolve({ data:{ session:{ access_token:'token-de-prueba' } } }),
+  },
+  realtime:{ setAuth: (t) => { espia.credenciales.push(t); } },
+};
 
 // ---------- Contexto ----------
 const ctx = {
@@ -105,6 +121,11 @@ const emitir = (tabla, eventType, nueva, vieja) => {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 (async () => {
+// Conectar es asíncrono: primero se le pide la credencial de sesión al
+// navegador y recién después se suscribe. Sin esto, con RLS activo el
+// websocket sale como anónimo y la base le rechaza todo.
+await esperar(50);
+
 console.log('\n═══ TABLAS SUSCRITAS ═══');
 ok('se suscribió a las 17 tablas', Object.keys(suscripciones).length === 17,
    'suscritas: ' + Object.keys(suscripciones).length);
@@ -270,7 +291,46 @@ ok('NO se duplica el pedido', ctx.documentos.length===1,
    'quedaron ' + ctx.documentos.length);
 ok('reemplaza el id provisorio por el real', ctx.documentos[0].id===4321);
 
-console.log('\n═══ 12. PARADA LIMPIA ═══');
+console.log('\n═══ 12. LA CREDENCIAL VA ANTES DE SUSCRIBIRSE ═══');
+// Con RLS activo el websocket tiene que decirle a la base quién sos.
+// Si sale sin credencial es un anónimo, la base le rechaza todo, se
+// reintenta, y el indicador queda parpadeando "En vivo / Conectando…".
+ok('se entregó la credencial de sesión', espia.credenciales.length>0 &&
+   espia.credenciales[0]==='token-de-prueba');
+ok('se entregó ANTES de suscribirse', espia.ordenOk===true);
+
+console.log('\n═══ 13. UN PARPADEO NO RECARGA LA BASE ENTERA ═══');
+// resincronizar() baja las 18 tablas completas. Si la conexión está
+// inestable, recargar en cada reconexión genera tres descargas en
+// veinte segundos — y esa carga provoca el siguiente corte.
+ctx.cargarTodo = () => { espia.recargas++; return Promise.resolve(true); };
+espia.recargas = 0;
+
+// Simular tres cortes con su reconexión, como en el video
+for (let i=0; i<3; i++){
+  avisarEstado('CHANNEL_ERROR');
+  await esperar(30);
+  avisarEstado('SUBSCRIBED');
+  await esperar(30);
+}
+await esperar(200);
+ok('no recarga de inmediato en cada reconexión', espia.recargas===0,
+   'recargó ' + espia.recargas + ' veces');
+
+// Pasada la espera de estabilización, recarga UNA sola vez
+await esperar(4500);
+ok('tras estabilizarse, recarga una sola vez', espia.recargas===1,
+   'recargó ' + espia.recargas + ' veces');
+
+// Otro corte enseguida: no debe recargar de nuevo tan pronto
+avisarEstado('CHANNEL_ERROR');
+await esperar(30);
+avisarEstado('SUBSCRIBED');
+await esperar(4500);
+ok('no recarga dos veces seguidas en menos de un minuto', espia.recargas===1,
+   'recargó ' + espia.recargas + ' veces');
+
+console.log('\n═══ 14. PARADA LIMPIA ═══');
 ctx.detenerRealtime();
 ok('queda inactivo', ctx._realtime.estado().activo===false);
 
