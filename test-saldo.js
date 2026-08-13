@@ -100,5 +100,62 @@ ok('los abonos salen del más viejo al más nuevo',
   orden[0].fecha === '2026-06-20' && orden[1].fecha === '2026-06-28',
   orden.map(x => x.fecha).join(' , '));
 
+console.log('\n═══ MOVIMIENTOS: CADA FACTURA CON SUS ABONOS ═══');
+// La tabla de Movimientos de la ficha agrupa los abonos con SU factura,
+// y ordena los grupos por fecha de emisión. Antes era una lista plana
+// por fecha, y un abono de julio quedaba lejos de la factura de junio
+// que estaba pagando.
+function armarMovimientos(facts) {
+  const movs = [];
+  facts.forEach(f => {
+    const desde = movs.length;
+    movs.push({ fecha: f.creada, doc: f.doc, detalle: 'Factura', cargo: f.total, abono: 0 });
+    (f.abonos || []).forEach(a => movs.push({ fecha: a.fecha, doc: f.doc, detalle: 'Abono', cargo: 0, abono: a.monto }));
+    for (let i = desde; i < movs.length; i++) {
+      movs[i].fFac = f.creada; movs[i].idFac = f.id; movs[i].esFac = (i === desde);
+    }
+  });
+  movs.sort((a, b) =>
+    (new Date(a.fFac || 0) - new Date(b.fFac || 0))
+    || ((a.idFac || 0) - (b.idFac || 0))
+    || ((b.esFac ? 1 : 0) - (a.esFac ? 1 : 0))
+    || (new Date(a.fecha || 0) - new Date(b.fecha || 0)));
+  let bal = 0; movs.forEach(m => { bal += m.cargo - m.abono; m.balance = bal; });
+  return movs;
+}
+
+// Los abonos de la primera factura se pagaron DESPUÉS de emitida la
+// segunda: es el caso donde el orden plano los separaba.
+const movs = armarMovimientos([
+  { id: 1, doc: 'A-1042', creada: '2026-06-01', total: 5000, abonos: [
+    { fecha: '2026-07-05', monto: 2000 }, { fecha: '2026-07-20', monto: 1500 }] },
+  { id: 2, doc: 'A-1067', creada: '2026-06-15', total: 3200, abonos: [
+    { fecha: '2026-06-25', monto: 3200 }] },
+]);
+
+ok('los abonos quedan pegados a su factura',
+  movs.map(m => m.doc).join(',') === 'A-1042,A-1042,A-1042,A-1067,A-1067',
+  movs.map(m => m.doc).join(','));
+ok('la factura encabeza su grupo',
+  movs[0].detalle === 'Factura' && movs[3].detalle === 'Factura',
+  movs.map(m => m.detalle).join(','));
+ok('los grupos van por fecha de emisión de la factura',
+  movs[0].fFac === '2026-06-01' && movs[3].fFac === '2026-06-15');
+ok('dentro del grupo, los abonos por su propia fecha',
+  movs[1].fecha === '2026-07-05' && movs[2].fecha === '2026-07-20');
+ok('el saldo final es el correcto (8200 − 6700)',
+  movs[movs.length - 1].balance === 1500, 'dio ' + movs[movs.length - 1].balance);
+
+// Una factura sin abonos no debe romper el agrupado
+const movs2 = armarMovimientos([
+  { id: 1, doc: 'A-1', creada: '2026-06-01', total: 1000, abonos: [] },
+  { id: 2, doc: 'A-2', creada: '2026-05-01', total: 500, abonos: [{ fecha: '2026-05-10', monto: 500 }] },
+]);
+ok('factura sin abonos no rompe el orden',
+  movs2.map(m => m.doc).join(',') === 'A-2,A-2,A-1',
+  movs2.map(m => m.doc).join(','));
+ok('el saldo final sigue cuadrando', movs2[movs2.length - 1].balance === 1000,
+  'dio ' + movs2[movs2.length - 1].balance);
+
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

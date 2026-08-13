@@ -3379,6 +3379,10 @@ function clienteStats(c){
     if(dias<=30)buckets.c30+=ai.saldo;else if(dias<=60)buckets.c60+=ai.saldo;else if(dias<=90)buckets.c90+=ai.saldo;else buckets.c90p+=ai.saldo;});
   const movimientos=[];
   facturas.forEach(f=>{
+    // Se anota desde dónde arrancan los movimientos de ESTA factura,
+    // para marcarlos todos al final del bloque sin tener que repetir
+    // los datos en cada push.
+    const _desde=movimientos.length;
     movimientos.push({fecha:f.creada,doc:f.serie+'-'+f.numeroDte,detalle:'Factura Cambiaria',cargo:f.totales.total,abono:0});
     (f.abonos||[]).forEach(a=>{
       if(a.anulado)movimientos.push({fecha:a.anuladoFecha||a.fecha,doc:f.serie+'-'+f.numeroDte,detalle:`Abono ANULADO (${money(a.monto)} · ${a.motivoAnulacion||'sin motivo'})`,cargo:0,abono:0});
@@ -3388,8 +3392,28 @@ function clienteStats(c){
       if(n.estado==='anulada')movimientos.push({fecha:n.anuladoFecha||n.creada,doc:n.serie+'-'+n.numeroDte,detalle:`${(TIPO_LBL[n.tipoDoc]||['Documento'])[0]} ANULADA (${money(n.totales.total)} · ${n.motivo||'sin motivo'})`,cargo:0,abono:0});
       else if(n.tipoDoc==='notaCredito')movimientos.push({fecha:n.creada,doc:n.serie+'-'+n.numeroDte,detalle:'Nota de Crédito · '+(n.motivo||''),cargo:0,abono:n.totales.total});
     });
+    // Marcar todo lo que salió de esta factura: la propia factura, sus
+    // abonos y sus notas. Con esto se pueden agrupar después.
+    for(let i=_desde;i<movimientos.length;i++){
+      movimientos[i].fFac=f.creada;      // fecha de emisión de la factura
+      movimientos[i].idFac=f.id;
+      movimientos[i].esFac=(i===_desde); // la factura encabeza su grupo
+    }
   });
-  movimientos.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+  // Los abonos van PEGADOS A SU FACTURA, y los grupos se ordenan por la
+  // fecha de emisión de la factura.
+  //
+  // Antes era una lista plana por fecha: un abono de julio quedaba lejos
+  // de la factura de junio que estaba pagando, y había que ir cruzando
+  // renglones para entender qué pagaba qué.
+  movimientos.sort((a,b)=>
+    (new Date(a.fFac||0)-new Date(b.fFac||0))          // por fecha de la factura
+    || ((a.idFac||0)-(b.idFac||0))                     // desempate estable
+    || ((b.esFac?1:0)-(a.esFac?1:0))                   // la factura, arriba de su grupo
+    || (new Date(a.fecha||0)-new Date(b.fecha||0))     // y sus movimientos por fecha
+  );
+  // El saldo corrido se calcula DESPUÉS de ordenar, en el mismo orden en
+  // que se va a leer. Al revés, la columna no cuadraría con la pantalla.
   let bal=0;movimientos.forEach(m=>{bal+=m.cargo-m.abono;m.balance=bal;});
   return {facturas,totalFacturado,totalCobrado,saldoActual,vencidos,ultima,frecuencia,promPago,buckets,movimientos};
 }
@@ -3450,7 +3474,7 @@ function fichaIntegral(c,st){
     ${ageRow('0–30 días',st.buckets.c30,'var(--warn)')}${ageRow('31–60 días',st.buckets.c60,'#D98A2B')}${ageRow('61–90 días',st.buckets.c90,'#C45A2C')}${ageRow('+90 días',st.buckets.c90p,'var(--danger)')}`:''}
   </div>
   <div style="border-top:1px solid var(--line)">
-    <div style="padding:13px 20px 0;font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px">Movimientos (cargos y abonos, orden cronológico)</div>
+    <div style="padding:13px 20px 0;font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px">Movimientos (cada factura con sus abonos, por fecha de factura)</div>
     <div style="max-height:300px;overflow:auto">
       <table><thead><tr><th>Fecha</th><th>Documento</th><th>Detalle</th><th>Cargo</th><th>Abono</th><th>Saldo</th></tr></thead><tbody>${movRows}</tbody></table>
     </div>
