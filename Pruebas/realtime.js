@@ -231,6 +231,30 @@
     return el ? el.id.replace(/^v-/, '') : null;
   }
 
+  // Editores que viven DENTRO de una vista, no como modal.
+  //
+  // El de cotizaciones es el caso: "Nueva cotización" no es una
+  // ventana aparte, es una sección de la misma pantalla que se
+  // muestra y se esconde. Y lo PRIMERO que hace renderCotizaciones()
+  // es esconderla — así que redibujar mientras alguien está armando
+  // una cotización se la cierra y le borra todo lo cargado.
+  //
+  // Como no son modales, el chequeo de '.overlay.show' no los ve.
+  // Si aparecen más pantallas con esta forma, se agregan acá.
+  const EDITORES_EN_VISTA = ['cot-editor'];
+
+  function hayEditorAbierto() {
+    return EDITORES_EN_VISTA.some((id) => {
+      const el = document.getElementById(id);
+      if (!el || (el.style && el.style.display === 'none')) return false;
+      // offsetParent vacío = escondido, él o alguno de sus padres.
+      // Se usa != a propósito: si el entorno no sabe contestar
+      // (undefined), se asume que NO hay editor abierto. Ante la duda
+      // conviene redibujar de más y no dejar la pantalla congelada.
+      return el.offsetParent != null;
+    });
+  }
+
   // ¿Podemos re-renderizar sin arruinarle el trabajo a alguien?
   // Devuelve el motivo del bloqueo, o null si hay vía libre.
   function motivoBloqueo() {
@@ -238,7 +262,9 @@
     if (document.hidden) return 'oculta';
     // 2. Modal abierto (los dos tipos que usa SEFE).
     if (document.querySelector('.overlay.show, .doc-overlay.show')) return 'modal';
-    // 3. Cursor dentro de un campo: nadie escribe y ve cómo se le borra.
+    // 3. Editor abierto dentro de la propia vista.
+    if (hayEditorAbierto()) return 'editor';
+    // 4. Cursor dentro de un campo: nadie escribe y ve cómo se le borra.
     const el = document.activeElement;
     if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) && el.type !== 'hidden' && !el.readOnly) {
       return 'foco';
@@ -295,6 +321,21 @@
     return lista.findIndex((x) => sinGuardar(x, campoId) && esElMismo(x, obj, identidad));
   }
 
+  // Igual que esIgual(), pero sin mirar el id.
+  //
+  // Cuando adoptamos una copia local, lo único que cambia es que ahora
+  // tiene el id que le puso la base. En pantalla no cambió nada — y
+  // redibujar de gusto tiene costo: en cotizaciones, por ejemplo,
+  // cierra el editor abierto.
+  function esIgualSalvoId(local, nuevo, campoId) {
+    if (!local) return false;
+    for (const k in nuevo) {
+      if (k === campoId) continue;
+      if (JSON.stringify(local[k]) !== JSON.stringify(nuevo[k])) return false;
+    }
+    return true;
+  }
+
   // ============================================================
   //  4. APLICAR UN CAMBIO AL ESTADO LOCAL
   // ============================================================
@@ -330,8 +371,11 @@
       const j = buscarCopiaLocal(arr, obj, idCampo, cfg.identidad);
       if (j >= 0) {
         (cfg.conservar || []).forEach((k) => { obj[k] = arr[j][k]; });
+        // Si lo único que cambió fue el id, en pantalla no hay nada
+        // nuevo: se adopta pero NO se pide redibujar.
+        const soloElId = esIgualSalvoId(arr[j], obj, idCampo);
         arr.splice(j, 1, obj);
-        return true;
+        return !soloElId;
       }
       // Fila nueva de verdad. `alFrente` es para auditLog, que va al revés.
       if (cfg.alFrente) arr.unshift(obj);
@@ -377,7 +421,11 @@
       // se creó recién y todavía no tenía _id. Este es el caso que hacía
       // aparecer los pagos a proveedor duplicados.
       const j = buscarCopiaLocal(lista, obj, cfg.idLocal, cfg.identidad);
-      if (j >= 0) { lista.splice(j, 1, obj); return true; }
+      if (j >= 0) {
+        const soloElId = esIgualSalvoId(lista[j], obj, cfg.idLocal);
+        lista.splice(j, 1, obj);
+        return !soloElId;
+      }
       lista.push(obj);
       return true;
     }

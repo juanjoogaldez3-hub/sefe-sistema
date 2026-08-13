@@ -31,7 +31,7 @@ function ok(nombre, cond, extra) {
 
 // ---------- DOM simulado ----------
 const estadoDOM = { vistaActiva: 'documentos', modalAbierto: false, foco: null, oculta: false };
-const nodo = () => ({ id:'', className:'', textContent:'', innerHTML:'', style:{}, type:'',
+const nodo = () => ({ id:'', className:'', textContent:'', innerHTML:'', style:{}, type:'', offsetParent:null,
   classList:{ _s:new Set(), add(c){this._s.add(c);}, remove(c){this._s.delete(c);},
               contains(c){return this._s.has(c);} },
   appendChild(){}, insertBefore(){}, onclick:null, parentNode:{ insertBefore(){} } });
@@ -330,7 +330,52 @@ await esperar(4500);
 ok('no recarga dos veces seguidas en menos de un minuto', espia.recargas===1,
    'recargó ' + espia.recargas + ' veces');
 
-console.log('\n═══ 14. PARADA LIMPIA ═══');
+console.log('\n═══ 14. NO CERRAR LA COTIZACIÓN QUE SE ESTÁ ARMANDO ═══');
+// "Nueva cotización" no es una ventana aparte: es una sección de la
+// misma pantalla. Y lo PRIMERO que hace renderCotizaciones() es
+// esconderla. Si alguien más crea una cotización mientras vos armás la
+// tuya, redibujar te la cierra y te borra todo lo cargado.
+estadoDOM.vistaActiva = 'cotizaciones';
+ctx.cotizaciones.length = 0;
+const editor = doc.getElementById('cot-editor');
+editor.offsetParent = {};          // visible: el editor está abierto
+const rCot = renders.renderCotizaciones;
+
+emitir('cotizaciones','INSERT',{ id:55, numero:3, cliente_nombre:'Otro cliente',
+  items:[], estado:'borrador', creada:'2026-08-12T20:00:00.000Z' });
+await esperar(600);
+ok('con el editor abierto NO redibuja', renders.renderCotizaciones===rCot,
+   'redibujó ' + (renders.renderCotizaciones-rCot) + ' veces');
+ok('pero sí guarda el cambio por debajo', ctx.cotizaciones.length===1);
+ok('lo reporta como bloqueo por editor', ctx._realtime.estado().bloqueo==='editor',
+   'bloqueo=' + ctx._realtime.estado().bloqueo);
+
+editor.offsetParent = null;        // se cerró el editor
+await esperar(1500);
+ok('al cerrar el editor, recién ahí redibuja', renders.renderCotizaciones===rCot+1);
+
+console.log('\n═══ 15. EL ECO DEL PROPIO GUARDADO NO REDIBUJA ═══');
+// Al guardar, la base devuelve la fila con su id. Adoptamos ese id,
+// pero en pantalla no cambió nada: redibujar de gusto es lo que
+// cerraba el editor.
+ctx.cotizaciones.length = 0;
+const selloCot = '2026-08-12T21:30:00.000Z';
+const filaCot = { id:77, numero:4, cliente_nombre:'Mi cliente', items:[],
+  estado:'borrador', creada:selloCot };
+// La copia local con el mismo contenido, pero con id provisorio: es lo
+// que hay en pantalla justo después de guardar y antes de que llegue
+// la respuesta de la base.
+const copiaLocal = ctx.mapCotizacionFromDB(filaCot);
+copiaLocal.id = -1755000000001;
+ctx.cotizaciones.push(copiaLocal);
+const rCot2 = renders.renderCotizaciones;
+emitir('cotizaciones','INSERT', filaCot);
+await esperar(600);
+ok('adopta el id de la base', ctx.cotizaciones.length===1 && ctx.cotizaciones[0].id===77);
+ok('y NO redibuja, porque nada cambió en pantalla', renders.renderCotizaciones===rCot2,
+   'redibujó ' + (renders.renderCotizaciones-rCot2) + ' veces');
+
+console.log('\n═══ 16. PARADA LIMPIA ═══');
 ctx.detenerRealtime();
 ok('queda inactivo', ctx._realtime.estado().activo===false);
 
