@@ -2675,8 +2675,10 @@ async function facturarPedido(id,dias){
 window.facturarPedido=facturarPedido;
 
 // Abrir el PDF que devuelve EcoFactura (viene en Base64)
-function verFacturaPDF(id){
+async function verFacturaPDF(id){
   const f=documentos.find(d=>d.id===id);
+  // El PDF ya no viene en la carga inicial: se trae a pedido la primera vez.
+  if(f && !(f.estado==='anulada' && f.pdfAnulacionBase64) && typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
   // Si la factura está anulada y tenemos el PDF de anulación, mostrar ese (no el original)
   const pdf=(f && f.estado==='anulada' && f.pdfAnulacionBase64)?f.pdfAnulacionBase64:(f&&f.pdfBase64);
   if(!f||!pdf){toast('Esta factura no tiene PDF','Las facturas simuladas no generan PDF',true);return;}
@@ -3134,8 +3136,11 @@ function notaEnvioHTML(f){
     </div>
   </div>`;
 }
-function verDoc(id){
+async function verDoc(id){
   const f=documentos.find(d=>d.id===id);
+  // El PDF oficial ya no viene en la carga inicial (pesaba 24 MB): si esta
+  // factura tiene uno, se trae a pedido antes de decidir cómo mostrarla.
+  if(f && !f.pdfBase64 && f.autorizacion && typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
 
   // Si la factura tiene el PDF oficial de EcoFactura, mostrarlo directamente
   if(f.pdfBase64){
@@ -3268,8 +3273,9 @@ async function imprimirDoc(){
 window.imprimirDoc=imprimirDoc;
 
 // Descargar el PDF oficial de EcoFactura como archivo
-function descargarFacturaPDF(id){
+async function descargarFacturaPDF(id){
   const f=documentos.find(d=>d.id===id);
+  if(f && !(f.estado==='anulada' && f.pdfAnulacionBase64) && typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
   const pdf=(f && f.estado==='anulada' && f.pdfAnulacionBase64)?f.pdfAnulacionBase64:(f&&f.pdfBase64);
   if(!f||!pdf){toast('Esta factura no tiene PDF',null,true);return;}
   try{
