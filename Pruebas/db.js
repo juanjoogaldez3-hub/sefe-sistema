@@ -30,11 +30,12 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 // pide de a 1000 hasta traer todo. Necesario para tablas grandes
 // como documentos y abonos.
 // ============================================================
-async function fetchAll(tabla, ordenCampo){
+async function fetchAll(tabla, ordenCampo, cols){
   const PAGE=1000;
   let desde=0, todo=[];
+  const sel=cols||'*';
   while(true){
-    const {data,error}=await sb.from(tabla).select('*').order(ordenCampo).range(desde,desde+PAGE-1);
+    const {data,error}=await sb.from(tabla).select(sel).order(ordenCampo).range(desde,desde+PAGE-1);
     if(error){console.error('Error cargando '+tabla+':',error);break;}
     if(!data||!data.length)break;
     todo=todo.concat(data);
@@ -43,6 +44,29 @@ async function fetchAll(tabla, ordenCampo){
   }
   return {data:todo};
 }
+
+// Columnas de 'documentos' SIN los blobs pesados (pdf_base64, xml_base64).
+// Esos dos guardan el PDF y el XML de cada factura en base64 y son el 90%
+// del peso de la base. No se necesitan para ver listas, cobros ni dashboard;
+// sólo al abrir o imprimir UNA factura. Por eso la carga inicial los omite
+// (bajaba 24 MB en cada login) y se traen a pedido con asegurarPdfDoc().
+const DOC_COLS_SIN_BLOBS='id,numero,tipo_doc,cliente_id,cliente_nombre,cliente_comercial,cliente_nit,vendedor_id,vendedor_nombre,sub_vendedor_nombre,items,totales,estado,estado_pago,inventario_rebajado,autorizacion,serie,numero_dte,orden_compra,observaciones,nota_interna,dias_credito,vencimiento,exenta,escenario_exenta,piloto_id,orden_ruta,estado_entrega,entrega_info,anulado,motivo_anulacion,fecha_certificacion,factura_origen_id,nit_facturado,nombre_facturado,creada';
+
+// Trae el PDF/XML de UNA factura sólo cuando se necesita (verla, imprimirla,
+// descargarla) y lo deja cacheado en el objeto en memoria. Si ya está, no
+// hace nada. Devuelve el PDF en base64 o null.
+async function asegurarPdfDoc(f){
+  if(!f)return null;
+  if(f.pdfBase64)return f.pdfBase64;      // ya cargado en esta sesión
+  if(!f.autorizacion)return null;         // no es un documento con PDF oficial
+  try{
+    const {data,error}=await sb.from('documentos').select('pdf_base64,xml_base64').eq('id',f.id).single();
+    if(error){console.error('Error trayendo el PDF de la factura:',error);return null;}
+    if(data){f.pdfBase64=data.pdf_base64;f.xmlBase64=data.xml_base64;}
+    return f.pdfBase64||null;
+  }catch(e){console.error('Error trayendo el PDF de la factura:',e);return null;}
+}
+if(typeof window!=='undefined')window.asegurarPdfDoc=asegurarPdfDoc;
 
 // ============================================================
 // CARGA INICIAL — trae todo de la base y llena los arrays de la app
@@ -59,7 +83,7 @@ async function cargarTodo() {
       sb.from('vendedores').select('*').order('id'),
       sb.from('pilotos').select('*').order('id'),
       sb.from('proveedores').select('*').order('id'),
-      fetchAll('documentos','id'),
+      fetchAll('documentos','id',DOC_COLS_SIN_BLOBS),
       fetchAll('abonos','id'),
       sb.from('cobros_ruta').select('*').order('id'),
       sb.from('compras').select('*').order('id'),
