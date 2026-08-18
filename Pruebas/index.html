@@ -5589,7 +5589,7 @@ function montoEnLetras(monto,moneda){
 }
 const TIPO_CUENTA_LBL={monetaria:'Monetaria',ahorro:'Ahorro',efectivo:'Efectivo / Caja'};
 const CAT_MOV_LBL={cobro:'Cobro',proveedor:'Proveedor',pagos:'Pagos',pago_prestamo:'Pago préstamo',pago_intereses:'Pago intereses',planilla:'Planilla',servicios:'Servicios',alquiler:'Alquiler',impuestos:'Impuestos',combustible:'Combustible',transporte:'Transporte / Fletes',mantenimiento:'Mantenimiento / Reparaciones',papeleria:'Papelería / Útiles',publicidad:'Publicidad / Mercadeo',honorarios:'Honorarios profesionales',comisiones_banco:'Comisiones bancarias',viaticos:'Viáticos',seguros:'Seguros',transferencia:'Transferencia',ajuste:'Ajuste',otro:'Otro'};
-const CAT_MOV_OPCIONES=['proveedor','pagos','pago_prestamo','pago_intereses','planilla','servicios','alquiler','impuestos','combustible','transporte','mantenimiento','papeleria','publicidad','honorarios','comisiones_banco','viaticos','seguros','transferencia','ajuste','otro'];
+const CAT_MOV_OPCIONES=['cobro','proveedor','pagos','pago_prestamo','pago_intereses','planilla','servicios','alquiler','impuestos','combustible','transporte','mantenimiento','papeleria','publicidad','honorarios','comisiones_banco','viaticos','seguros','transferencia','ajuste','otro'];
 function renderBancos(){
   const lista=cuentasBanco.filter(c=>c.activo!==false);
   $('#bancos-empty').style.display=lista.length?'none':'block';
