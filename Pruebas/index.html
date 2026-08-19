@@ -3012,7 +3012,7 @@ function notaPrestamoHTML(f){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
       <div>
         <img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:172px;height:auto;display:block">
-        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">Soluciones Efectivas, S.A.<br>NIT 1234567-8 · Guatemala, C.A.</div>
+        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">Soluciones Efectivas, S.A.<br>NIT 10777860-2 · Guatemala, C.A.</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="display:inline-block;background:var(--green);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.3px;padding:8px 16px;border-radius:8px">NOTA DE PRÉSTAMO</div>
@@ -3091,7 +3091,7 @@ function notaEnvioHTML(f){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
       <div>
         <img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:172px;height:auto;display:block">
-        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">Soluciones Efectivas, S.A.<br>NIT 1234567-8 · Guatemala, C.A.</div>
+        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">Soluciones Efectivas, S.A.<br>NIT 10777860-2 · Guatemala, C.A.</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="display:inline-block;background:var(--green);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.3px;padding:8px 16px;border-radius:8px">NOTA DE ENVÍO</div>
@@ -3211,7 +3211,7 @@ async function verDoc(id){
     :f.items.map(it=>`<tr><td><b>${it.nombre}</b><br><span style="font-size:10px;color:var(--muted)">${it.codigo}</span></td><td style="text-align:center" class="num">${it.cantidad}</td><td style="text-align:right" class="num">${money(it.precio)}</td><td style="text-align:right;font-weight:600" class="num">${money(it.cantidad*it.precio-it.descuento)}</td></tr>`).join('');
   $('#doc-sheet').innerHTML=`
     <div class="ds-head">
-      <div class="ds-emisor"><div class="ds-mk">SE</div><div><h4>Soluciones Efectivas GT</h4><p>NIT: 1234567-8<br>Guatemala, Guatemala</p></div></div>
+      <div class="ds-emisor"><div class="ds-mk">SE</div><div><h4>Soluciones Efectivas GT</h4><p>NIT: 10777860-2<br>Guatemala, Guatemala</p></div></div>
       <div class="ds-doctype"><div class="dt">${TIPO_TIT[f.tipoDoc]}</div><p>${docTypeRef}</p></div>
     </div>${stamp}
     <div class="ds-meta">
