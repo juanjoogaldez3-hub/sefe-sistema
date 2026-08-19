@@ -8889,7 +8889,8 @@ function renderReportes(){
     let lista=productos.filter(p=>p.activo!==false);
     if(repFiltros.marca_prod)lista=lista.filter(p=>(p.marca||'')===repFiltros.marca_prod);
     lista=lista.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
-    // Cada producto es una fila; los caja/unidad se parten en 2 filas: cajas (código) y unidades sueltas (subcódigo -U).
+    // Cada producto es una fila; los caja_unidad se parten en 2 filas: caja (sufijo -C)
+    // y unidades sueltas (sufijo -U), diferenciadas con etiqueta de color.
     const _filas=[];
     lista.forEach(p=>{
       const e=exDe(p);
