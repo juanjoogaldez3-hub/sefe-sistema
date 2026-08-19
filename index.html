@@ -5445,18 +5445,28 @@ function openFacturaProv(id){
   openMod('Registrar factura del proveedor · CMP-'+padn(c.id),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${c.proveedorNombre} · Total: <b style="color:var(--ink)">${money(c.total)}</b></p>
      <div class="row"><div><label>No. de factura del proveedor</label><input id="fp-doc" placeholder="FACT-…"></div><div><label>Fecha</label><input id="fp-fecha" type="date" value="${hoy}"></div></div>
-     <div class="row"><div><label>Forma de pago</label><select id="fp-pago"><option value="contado">Contado (pagada)</option><option value="credito" ${prov.diasCredito>0?'selected':''}>Crédito</option></select></div><div id="fp-dias-wrap" style="${prov.diasCredito>0?'':'display:none'}"><label>Días de crédito</label><input id="fp-dias" type="number" value="${prov.diasCredito||30}"></div></div>`,
+     <div class="row"><div><label>Forma de pago</label><select id="fp-pago"><option value="contado">Contado (pagada)</option><option value="credito" ${prov.diasCredito>0?'selected':''}>Crédito</option></select></div><div id="fp-dias-wrap" style="${prov.diasCredito>0?'':'display:none'}"><label>Días de crédito</label><input id="fp-dias" type="number" value="${prov.diasCredito||30}"></div></div>
+     <div class="row" id="fp-cuenta-wrap" style="${prov.diasCredito>0?'display:none':''}">${selectorCuentaBancoHTML('fp-cuenta','¿De qué cuenta salió el dinero? (contado)',(cuentasActivasBanco()[0]||{}).id)}</div>`,
     ()=>{const tipoPago=$('#fp-pago').value;const dias=Number($('#fp-dias').value)||0;const fechaF=$('#fp-fecha').value?new Date($('#fp-fecha').value+'T12:00:00').toISOString():new Date().toISOString();
+      const cuentaContado=tipoPago==='contado'?($('#fp-cuenta')?.value||null):null;
       Object.assign(c,{facturada:true,docProv:$('#fp-doc').value||'—',tipoPago,diasCredito:tipoPago==='credito'?dias:0,
         vencimiento:tipoPago==='credito'?new Date(new Date(fechaF).getTime()+dias*86400000).toISOString():null,
-        abonos:tipoPago==='contado'?[{fecha:fechaF.slice(0,10),monto:c.total,metodo:'Contado',registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false}]:[]});
+        abonos:tipoPago==='contado'?[{fecha:fechaF.slice(0,10),monto:c.total,metodo:'Contado',referencia:($('#fp-doc').value||null),cuentaBancoId:cuentaContado,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false}]:[]});
       // El abono de contado vive en pagos_proveedor: si no se guarda ahí, se pierde al recargar
       if(tipoPago==='contado'&&c.abonos[0]&&typeof guardarPagoProveedor==='function')guardarPagoProveedor(c.id,c.abonos[0]);
+      // Contado con cuenta: salida de banco + póliza de cheque, igual que "Registrar pago".
+      // Antes el contado no generaba ni movimiento ni póliza.
+      if(tipoPago==='contado'&&cuentaContado&&typeof registrarMovimientoBanco==='function'){
+        registrarMovimientoBanco({cuentaId:cuentaContado,tipo:'salida',monto:c.total,
+          concepto:'Pago contado · '+c.proveedorNombre+(c.docProv&&c.docProv!=='—'?(' · '+c.docProv):''),
+          categoria:'proveedor',origen:'pago_proveedor',origenId:c.id,referencia:c.docProv||null,
+          fecha:fechaF.slice(0,10),beneficiario:c.proveedorNombre});
+      }
       closeMod();renderCompras();
-      toast('✓ Factura registrada',tipoPago==='credito'?('Cuenta por pagar · vence en '+dias+' días'):'Pagada de contado');
-      logAudit('Factura de proveedor','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+tipoPago);
+      toast('✓ Factura registrada',tipoPago==='credito'?('Cuenta por pagar · vence en '+dias+' días'):('Pagada de contado'+(cuentaContado?' · con movimiento de banco':'')));
+      logAudit('Factura de proveedor','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+tipoPago+(cuentaContado?' · con movimiento de banco':''));
       if(typeof guardarCompra==='function')guardarCompra(c);});
-  setTimeout(()=>{const s=$('#fp-pago');if(s)s.onchange=()=>{$('#fp-dias-wrap').style.display=s.value==='credito'?'block':'none';};},0);
+  setTimeout(()=>{const s=$('#fp-pago');if(s)s.onchange=()=>{const cred=s.value==='credito';$('#fp-dias-wrap').style.display=cred?'block':'none';const cw=$('#fp-cuenta-wrap');if(cw)cw.style.display=cred?'none':'';};},0);
 }
 window.openFacturaProv=openFacturaProv;
 let _ppProv='';
