@@ -50,7 +50,7 @@ async function fetchAll(tabla, ordenCampo, cols){
 // del peso de la base. No se necesitan para ver listas, cobros ni dashboard;
 // sólo al abrir o imprimir UNA factura. Por eso la carga inicial los omite
 // (bajaba 24 MB en cada login) y se traen a pedido con asegurarPdfDoc().
-const DOC_COLS_SIN_BLOBS='id,numero,tipo_doc,cliente_id,cliente_nombre,cliente_comercial,cliente_nit,vendedor_id,vendedor_nombre,sub_vendedor_nombre,items,totales,estado,estado_pago,inventario_rebajado,autorizacion,serie,numero_dte,orden_compra,observaciones,nota_interna,dias_credito,vencimiento,exenta,escenario_exenta,piloto_id,orden_ruta,estado_entrega,entrega_info,anulado,motivo_anulacion,fecha_certificacion,factura_origen_id,nit_facturado,nombre_facturado,creada';
+const DOC_COLS_SIN_BLOBS='id,numero,tipo_doc,cliente_id,cliente_nombre,cliente_comercial,cliente_nit,vendedor_id,vendedor_nombre,sub_vendedor_nombre,items,totales,estado,estado_pago,inventario_rebajado,autorizacion,serie,numero_dte,orden_compra,observaciones,nota_interna,dias_credito,vencimiento,exenta,escenario_exenta,piloto_id,orden_ruta,estado_entrega,entrega_info,anulado,motivo_anulacion,fecha_certificacion,factura_origen_id,nit_facturado,nombre_facturado,sede,creada';
 
 // Trae el PDF/XML de UNA factura sólo cuando se necesita (verla, imprimirla,
 // descargarla) y lo deja cacheado en el objeto en memoria. Si ya está, no
@@ -260,6 +260,7 @@ function mapDocumentoFromDB(d, todosAbonos){
     entregaInfo:d.entrega_info, anulado:d.anulado, motivoAnulacion:d.motivo_anulacion,
     pdfBase64:d.pdf_base64, xmlBase64:d.xml_base64, fechaCertificacion:d.fecha_certificacion,
     facturaOrigenId:d.factura_origen_id, nitFacturado:d.nit_facturado, nombreFacturado:d.nombre_facturado,
+    sede:d.sede,
     creada:d.creada, abonos
   };
 }
@@ -383,6 +384,7 @@ async function guardarDocumento(d){
     entrega_info:d.entregaInfo, anulado:d.anulado, motivo_anulacion:d.motivoAnulacion,
     pdf_base64:d.pdfBase64, xml_base64:d.xmlBase64, fecha_certificacion:d.fechaCertificacion,
     factura_origen_id:d.facturaOrigenId||null, nit_facturado:d.nitFacturado||null, nombre_facturado:d.nombreFacturado||null,
+    sede:d.sede||null,
     creada:d.creada
   };
   if (d._nuevo) {

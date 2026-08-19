@@ -1118,6 +1118,7 @@
     <div class="doc-bar no-print">
       <div class="t" id="doc-bar-t">Vista previa</div>
       <div class="doc-bar-btns">
+        <button class="btn btn-ghost btn-sm" id="doc-sede-btn" style="display:none" onclick="editarSedeNP()"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Sede</button>
         <button class="btn btn-ghost btn-sm" onclick="imprimirDoc()"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>Imprimir / PDF</button>
         <button class="btn btn-ghost btn-sm" onclick="closeDoc()">Cerrar</button>
       </div>
@@ -3033,7 +3034,7 @@ function notaPrestamoHTML(f){
     <div style="height:3px;background:var(--lime);width:100%;border-radius:2px;margin:22px 0 26px"></div>
     <div style="font-size:13.5px;line-height:1.6">
       <div style="font-size:11px;font-weight:700;color:#9aa089;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">Señores</div>
-      <div style="font-family:var(--disp);font-size:16px;font-weight:700">${razon}</div>
+      <div style="font-family:var(--disp);font-size:16px;font-weight:700">${razon}${f.sede?` · ${String(f.sede).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}`:""}</div>
       ${comercial?`<div style="color:#3a3f33">${comercial}</div>`:''}
       ${dir?`<div style="color:#3a3f33">${dir}</div>`:''}
       <div style="color:#7a7f6e;margin-top:2px">Presente.</div>
@@ -3150,8 +3151,31 @@ function notaEnvioHTML(f){
     </div>
   </div>`;
 }
+let _docSedeId=null;
+// Poner/cambiar la sede de una Nota de préstamo (texto libre; sale al lado del nombre).
+function editarSedeNP(){
+  const f=documentos.find(d=>d.id===_docSedeId);
+  if(!f||f.tipoDoc!=='prestamo'){toast('Abrí una nota de préstamo primero',null,true);return;}
+  const _esc=s=>String(s||'').replace(/"/g,'&quot;');
+  openMod('Sede · '+refPed(f),
+    `<label>Sede <span style="color:var(--muted);font-weight:400">(sale al lado del nombre; dejala vacía para quitarla)</span></label>
+     <input id="np-sede" maxlength="120" value="${_esc(f.sede)}" placeholder="Ej. Zona 10, Bodega Central…" autocomplete="off">`,
+    ()=>{
+      f.sede=(($('#np-sede')?.value)||'').trim()||null;
+      if(typeof guardarDocumento==='function')guardarDocumento(f);
+      closeMod();
+      $('#doc-sheet').innerHTML=notaPrestamoHTML(f);
+      logAudit('Sede en NP',refPed(f)+' · '+(f.sede||'(sin sede)'));
+      toast('✓ Sede actualizada',f.sede||'Sede quitada');
+    });
+}
+window.editarSedeNP=editarSedeNP;
 async function verDoc(id){
   const f=documentos.find(d=>d.id===id);
+  // Botón "Sede" sólo para notas de préstamo; se oculta para el resto.
+  const _sedeBtn=document.getElementById('doc-sede-btn');
+  if(_sedeBtn)_sedeBtn.style.display=(f&&f.tipoDoc==='prestamo')?'':'none';
+  if(f&&f.tipoDoc==='prestamo')_docSedeId=f.id;
   // El PDF oficial ya no viene en la carga inicial (pesaba 24 MB): si esta
   // factura tiene uno, se trae a pedido antes de decidir cómo mostrarla.
   if(f && !f.pdfBase64 && f.autorizacion && typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
