@@ -8669,19 +8669,22 @@ function renderReportes(){
       if(repFiltros.tiempoCredito){const c=clientes.find(x=>x.id===d.clienteId);if(!c||String(c.tiempoCredito||0)!==repFiltros.tiempoCredito)return;}
       const inf=arInfo(d);if(inf.saldo<=0.001)return;
       if(repFiltros.soloVencidos&&!inf.vencido)return;
-      const k=d.clienteComercial||d.clienteNombre;
-      if(!porCli[k])porCli[k]={n:0,total:0,abonado:0,saldo:0,venc:0};
+      // Por cliente_id (estable), no por nombre: si no, el mismo cliente sale
+      // en dos filas (nombre viejo sin comercial vs. nuevo con comercial).
+      const k=(d.clienteId!=null)?('#'+d.clienteId):(d.clienteComercial||d.clienteNombre||'—');
+      if(!porCli[k])porCli[k]={nombre:(d.clienteComercial||d.clienteNombre||'—'),n:0,total:0,abonado:0,saldo:0,venc:0};
+      if(d.clienteComercial)porCli[k].nombre=d.clienteComercial;
       porCli[k].n++;porCli[k].total+=d.totales.total;porCli[k].abonado+=inf.abon;porCli[k].saldo+=inf.saldo;if(inf.vencido)porCli[k].venc+=inf.saldo;
     });
     const arr=Object.entries(porCli).sort((a,b)=>b[1].saldo-a[1].saldo);
     const totalSaldo=arr.reduce((s,[,o])=>s+o.saldo,0);
-    exportData=arr.map(([n,o])=>({Cliente:n,Facturas:o.n,Total:o.total,Abonado:o.abonado,Saldo:o.saldo,'Vencido':o.venc}));
+    exportData=arr.map(([,o])=>({Cliente:o.nombre,Facturas:o.n,Total:o.total,Abonado:o.abonado,Saldo:o.saldo,'Vencido':o.venc}));
     html+=`<div class="kpis stagger">${kpiHTML([
       {ic:'i-warn',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>',lbl:'Total pendiente',val:money(totalSaldo),sub:arr.length+' clientes'},
       {ic:'i-blue',svg:'<path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/>',lbl:'Vencido',val:money(arr.reduce((s,[,o])=>s+o.venc,0))}])}</div>
       <div class="panel"><div class="panel-head"><h3>Facturas pendientes de pago por cliente</h3></div>
       <table><thead><tr><th>Cliente</th><th>Facturas</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Vencido</th></tr></thead><tbody>
-      ${arr.length?arr.map(([n,o])=>`<tr><td style="font-weight:600">${n}</td><td class="num">${o.n}</td><td class="num" style="color:var(--muted)">${money(o.total)}</td><td class="num" style="color:var(--muted)">${money(o.abonado)}</td><td class="num" style="font-weight:700">${money(o.saldo)}</td><td class="num" style="color:${o.venc>0?'var(--danger)':'var(--muted-2)'}">${money(o.venc)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin saldos pendientes</td></tr>'}${arr.length?`<tr style="border-top:2px solid var(--line-strong);font-weight:700"><td>Total</td><td class="num">${arr.reduce((s,[,o])=>s+o.n,0)}</td><td class="num">${money(arr.reduce((s,[,o])=>s+o.total,0))}</td><td class="num">${money(arr.reduce((s,[,o])=>s+o.abonado,0))}</td><td class="num">${money(totalSaldo)}</td><td class="num" style="color:var(--danger)">${money(arr.reduce((s,[,o])=>s+o.venc,0))}</td></tr>`:''}</tbody></table></div>`;
+      ${arr.length?arr.map(([,o])=>`<tr><td style="font-weight:600">${o.nombre}</td><td class="num">${o.n}</td><td class="num" style="color:var(--muted)">${money(o.total)}</td><td class="num" style="color:var(--muted)">${money(o.abonado)}</td><td class="num" style="font-weight:700">${money(o.saldo)}</td><td class="num" style="color:${o.venc>0?'var(--danger)':'var(--muted-2)'}">${money(o.venc)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin saldos pendientes</td></tr>'}${arr.length?`<tr style="border-top:2px solid var(--line-strong);font-weight:700"><td>Total</td><td class="num">${arr.reduce((s,[,o])=>s+o.n,0)}</td><td class="num">${money(arr.reduce((s,[,o])=>s+o.total,0))}</td><td class="num">${money(arr.reduce((s,[,o])=>s+o.abonado,0))}</td><td class="num">${money(totalSaldo)}</td><td class="num" style="color:var(--danger)">${money(arr.reduce((s,[,o])=>s+o.venc,0))}</td></tr>`:''}</tbody></table></div>`;
   }
   else if(repType==='estcta'){
     const hoy=new Date();
@@ -8846,15 +8849,19 @@ function renderReportes(){
 
     // Agrupar por cliente, y dentro de cada uno las facturas de la más
     // vieja a la más nueva.
-    const porCli={};
+    // Por cliente_id (estable), no por nombre: si no, el mismo cliente sale en
+    // dos bloques (nombre viejo sin comercial vs. nuevo con comercial).
+    const porCli={}, nombreCli={};
     facts.forEach(f=>{
-      const k=f.clienteComercial||f.clienteNombre||'—';
+      const k=(f.clienteId!=null)?('#'+f.clienteId):(f.clienteComercial||f.clienteNombre||'—');
+      if(f.clienteComercial)nombreCli[k]=f.clienteComercial;
+      else if(!nombreCli[k])nombreCli[k]=f.clienteNombre||'—';
       if(!porCli[k])porCli[k]=[];
       porCli[k].push(f);
     });
     Object.keys(porCli).forEach(k=>porCli[k].sort((a,b)=>
       String(a.creada||'').localeCompare(String(b.creada||''))||((a.id||0)-(b.id||0))));
-    const clis=Object.keys(porCli).sort((a,b)=>a.localeCompare(b,'es'));
+    const clis=Object.keys(porCli).sort((a,b)=>(nombreCli[a]||a).localeCompare(nombreCli[b]||b,'es'));
 
     let filasHTML='', saldoTotal=0, nFact=0;
     // El Excel sigue la misma forma que el Estado de cuenta general:
@@ -8864,9 +8871,10 @@ function renderReportes(){
     const vacio=()=>({Fecha:'',Detalle:'',Monto:'',Saldo:''});
 
     clis.forEach(cli=>{
+      const cliNom=nombreCli[cli]||cli;
       filasHTML+=`<tr style="background:var(--surface-2)"><td colspan="5"
-        style="font-family:var(--disp);font-weight:700;padding-top:14px">${escHtml(cli)}</td></tr>`;
-      exportData.push(Object.assign({Documento:cli},vacio()));
+        style="font-family:var(--disp);font-weight:700;padding-top:14px">${escHtml(cliNom)}</td></tr>`;
+      exportData.push(Object.assign({Documento:cliNom},vacio()));
 
       let facturadoCli=0, saldoCli=0;
       porCli[cli].forEach(f=>{
@@ -8910,7 +8918,7 @@ function renderReportes(){
 
       saldoTotal=Math.round((saldoTotal+saldoCli)*100)/100;
       filasHTML+=`<tr style="border-top:2px solid var(--line-strong);background:var(--surface-2)">
-        <td></td><td></td><td style="font-weight:700">TOTALES ${escHtml(cli)}</td>
+        <td></td><td></td><td style="font-weight:700">TOTALES ${escHtml(cliNom)}</td>
         <td class="num" style="font-weight:700">${money(facturadoCli)}</td>
         <td class="num" style="font-weight:700;color:${saldoCli>0.001?'var(--danger)':'var(--ok)'}">${money(saldoCli)}</td>
       </tr>`;
@@ -8935,27 +8943,30 @@ function renderReportes(){
     const porCli={};
     documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
       if(repFiltros.cliente&&String(d.clienteId)!==repFiltros.cliente)return;
-      const k=d.clienteComercial||d.clienteNombre;
+      // Por cliente_id (estable), no por nombre: si no, el mismo cliente sale
+      // en dos filas (nombre viejo sin comercial vs. nuevo con comercial).
+      const k=(d.clienteId!=null)?('#'+d.clienteId):(d.clienteComercial||d.clienteNombre||'—');
       (d.abonos||[]).filter(a=>!a.anulado).forEach(a=>{
         if(repFiltros.metodoRec&&a.metodo!==repFiltros.metodoRec)return;
         if(!enRango(a.registradoEl||a.fecha,r))return;
-        if(!porCli[k])porCli[k]={total:0,abonos:[],facturas:new Set()};
+        if(!porCli[k])porCli[k]={nombre:(d.clienteComercial||d.clienteNombre||'—'),total:0,abonos:[],facturas:new Set()};
+        if(d.clienteComercial)porCli[k].nombre=d.clienteComercial;
         porCli[k].total+=a.monto;porCli[k].abonos.push({...a,factura:d.serie+'-'+d.numeroDte});porCli[k].facturas.add(d.id);
       });
     });
     const arr=Object.entries(porCli).sort((a,b)=>b[1].total-a[1].total);
     const totalPag=arr.reduce((s,[,o])=>s+o.total,0);
-    exportData=arr.map(([n,o])=>({Cliente:n,Recibos:o.abonos.length,Facturas:o.facturas.size,'Total pagado':o.total}));
+    exportData=arr.map(([,o])=>({Cliente:o.nombre,Recibos:o.abonos.length,Facturas:o.facturas.size,'Total pagado':o.total}));
     html+=`<div class="kpis stagger">${kpiHTML([
       {ic:'i-green',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Total cobrado',val:money(totalPag),sub:'en el período'},
       {ic:'i-blue',svg:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',lbl:'Clientes',val:arr.length,sub:'con pagos'}])}</div>
       <div class="panel"><div class="panel-head"><h3>Pagos por cliente</h3></div>
-      <div class="panel-body">${hbars(arr.map(([n,o])=>({n,v:o.total})))}</div></div>
+      <div class="panel-body">${hbars(arr.map(([,o])=>({n:o.nombre,v:o.total})))}</div></div>
       <div class="panel"><table><thead><tr><th>Cliente</th><th>Recibos</th><th>Facturas</th><th>Total pagado</th></tr></thead><tbody>
-      ${arr.length?arr.map(([n,o])=>`<tr><td style="font-weight:600">${n}</td><td class="num">${o.abonos.length}</td><td class="num">${o.facturas.size}</td><td class="num" style="font-weight:700;color:var(--ok)">${money(o.total)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">Sin pagos en el período</td></tr>'}
+      ${arr.length?arr.map(([,o])=>`<tr><td style="font-weight:600">${o.nombre}</td><td class="num">${o.abonos.length}</td><td class="num">${o.facturas.size}</td><td class="num" style="font-weight:700;color:var(--ok)">${money(o.total)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">Sin pagos en el período</td></tr>'}
       </tbody></table>
       ${arr.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:15px;font-weight:600;border-top:1.5px solid var(--line-strong)">Total: ${money(totalPag)}</div>`:''}</div>
-      ${repFiltros.cliente&&arr.length?`<div class="panel"><div class="panel-head"><h3>Detalle de recibos · ${arr[0][0]}</h3></div>
+      ${repFiltros.cliente&&arr.length?`<div class="panel"><div class="panel-head"><h3>Detalle de recibos · ${arr[0][1].nombre}</h3></div>
       <table><thead><tr><th>No. Recibo</th><th>Factura</th><th>Fecha</th><th>Monto</th><th>Método</th></tr></thead><tbody>
       ${arr[0][1].abonos.map(a=>`<tr><td style="font-weight:700;color:var(--green)">${a.noRecibo||'—'}</td><td style="color:var(--muted)">${a.factura}</td><td style="color:var(--muted)">${fdate(a.fecha)}</td><td class="num" style="font-weight:600">${money(a.monto)}</td><td>${a.metodo||'—'}</td></tr>`).join('')}</tbody></table></div>`:''}`
   }
