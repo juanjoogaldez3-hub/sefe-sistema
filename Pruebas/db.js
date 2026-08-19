@@ -613,6 +613,17 @@ async function anularPagoProveedorDB(pago){
   if(error)console.error('Error anulando pago a proveedor:',error);
 }
 
+// Asignarle la cuenta de banco a un pago que se registró sin ella
+// (compra al contado que quedó "sin asignar"). Se usa desde Bancos.
+async function actualizarCuentaPagoProveedor(pago){
+  if(!pago._id)return;
+  const {error}=await sb.from('pagos_proveedor').update({
+    cuenta_banco_id:pago.cuentaBancoId||null
+  }).eq('id', pago._id);
+  if(error)console.error('Error asignando la cuenta al pago:',error);
+}
+if(typeof window!=='undefined')window.actualizarCuentaPagoProveedor=actualizarCuentaPagoProveedor;
+
 // Guardar/actualizar un usuario en la tabla usuarios
 async function guardarUsuario(u){
   const row = {
