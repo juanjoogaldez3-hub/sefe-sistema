@@ -8889,15 +8889,15 @@ function renderReportes(){
     let lista=productos.filter(p=>p.activo!==false);
     if(repFiltros.marca_prod)lista=lista.filter(p=>(p.marca||'')===repFiltros.marca_prod);
     lista=lista.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
-    // Cada producto es una fila; los caja/unidad se parten en 2 filas: cajas (código) y unidades sueltas (subcódigo -U).
+    // Una fila por producto, en su unidad base. Los caja_unidad se muestran en
+    // UNIDADES (no partidos en cajas + sueltas), porque el inventario se maneja en
+    // unidades. Antes se partían en 2 filas y el "Total existencias" sumaba cajas
+    // con unidades como si fueran lo mismo (2 cajas + 6 und daba 8, no 102).
     const _filas=[];
     lista.forEach(p=>{
       const e=exDe(p);
-      if(p.tipoEmpaque==='caja_unidad'){
-        const upc=Number(p.unidadesPorCaja)||1,cj=Math.floor(e/upc),un=Math.max(0,Math.round(e-cj*upc));
-        _filas.push({codigo:p.codigo||'',nombre:p.nombre||'',marca:p.marca||'',medida:'Caja',cant:cj});
-        _filas.push({codigo:(p.codigo||'')+'-U',nombre:p.nombre||'',marca:p.marca||'',medida:'Unidad',cant:un});
-      }else _filas.push({codigo:p.codigo||'',nombre:p.nombre||'',marca:p.marca||'',medida:medidaProducto(p),cant:e});
+      const medida=p.tipoEmpaque==='caja_unidad'?(p.unidad||'UNI'):medidaProducto(p);
+      _filas.push({codigo:p.codigo||'',nombre:p.nombre||'',marca:p.marca||'',medida,cant:e});
     });
     exportData=_filas.map(f=>({'Código':f.codigo,Producto:f.nombre,Marca:f.marca,'Unidad de medida':f.medida,Existencias:f.cant}));
     const totU=_filas.reduce((s,f)=>s+f.cant,0);
