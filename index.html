@@ -6140,20 +6140,26 @@ function openAbonoProv(id){
      <div class="row">${selectorCuentaBancoHTML('pp-cuenta','¿De qué cuenta salió el dinero?')}</div>
      ${compFotoHTML()}
      <div class="note n-danger" id="pp-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
-    ()=>{const monto=Number($('#pp-monto').value);
+    async ()=>{const monto=Number($('#pp-monto').value);
       if(!(monto>0)){$('#pp-err').style.display='flex';$('#pp-err').querySelector('span').textContent='El monto debe ser mayor a cero';return;}
       if(monto>saldo+0.001){$('#pp-err').style.display='flex';$('#pp-err').querySelector('span').textContent='El pago no puede superar el saldo de '+money(saldo);return;}
-      const _noRec=$('#pp-recibo').value;
-      c.abonos=c.abonos||[];const _pago={fecha:$('#pp-fecha').value||hoy,monto,metodo:$('#pp-met').value,referencia:$('#pp-ref').value,noRecibo:_noRec,comprobante:_compFoto,cuentaBancoId:($('#pp-cuenta')?.value||null),registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};c.abonos.push(_pago);
-      // Movimiento de banco: salida de la cuenta elegida
-      if($('#pp-cuenta')?.value){
-        registrarMovimientoBanco({cuentaId:$('#pp-cuenta').value,tipo:'salida',monto,
+      const _noRec=$('#pp-recibo').value, _cuenta=$('#pp-cuenta')?.value||null, _ref=$('#pp-ref').value;
+      const _pago={fecha:$('#pp-fecha').value||hoy,monto,metodo:$('#pp-met').value,referencia:_ref,noRecibo:_noRec,comprobante:_compFoto,cuentaBancoId:_cuenta,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
+      // Guardar el abono PRIMERO y esperar confirmación. Si falla, no seguimos: así
+      // nunca queda un movimiento de banco sin su abono (la compra mostraría pendiente).
+      const _btn=$('#m-save');if(_btn)_btn.disabled=true;
+      let _ok=true;
+      if(typeof guardarPagoProveedor==='function')_ok=await guardarPagoProveedor(c.id,_pago);
+      if(_ok===false){if(_btn)_btn.disabled=false;$('#pp-err').style.display='flex';$('#pp-err').querySelector('span').textContent='No se pudo guardar el pago. Revisá tu conexión e intentá de nuevo.';return;}
+      c.abonos=c.abonos||[];c.abonos.push(_pago);
+      // Movimiento de banco: salida de la cuenta elegida (recién ahora que el abono quedó guardado)
+      if(_cuenta){
+        registrarMovimientoBanco({cuentaId:_cuenta,tipo:'salida',monto,
           concepto:'Pago a '+c.proveedorNombre+' · '+(_noRec||''),
-          categoria:'proveedor',origen:'pago_proveedor',origenId:c.id,referencia:$('#pp-ref').value,fecha:_pago.fecha,beneficiario:c.proveedorNombre});
+          categoria:'proveedor',origen:'pago_proveedor',origenId:c.id,referencia:_ref,fecha:_pago.fecha,beneficiario:c.proveedorNombre});
       }
       logAudit('Pago a proveedor','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+money(monto)+' · '+_noRec);
-      closeMod();renderPorPagar();renderCompras();toast('✓ Pago registrado',_noRec+' · saldo '+money(apInfo(c).saldo));
-      if(typeof guardarPagoProveedor==='function')guardarPagoProveedor(c.id,_pago);});
+      closeMod();renderPorPagar();renderCompras();toast('✓ Pago registrado',_noRec+' · saldo '+money(apInfo(c).saldo));});
 }
 window.openAbonoProv=openAbonoProv;
 

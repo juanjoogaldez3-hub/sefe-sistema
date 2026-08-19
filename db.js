@@ -462,7 +462,8 @@ async function guardarPagoProveedor(compraId, pago){
     cuenta_banco_id:pago.cuentaBancoId||null
   };
   const {data,error} = await sb.from('pagos_proveedor').insert(row).select().single();
-  if(error)console.error('Error guardando pago a proveedor:',error); else pago._id = data.id;
+  if(error){console.error('Error guardando pago a proveedor:',error);return false;}
+  pago._id = data.id; return true;
 }
 
 async function guardarProducto(p){
