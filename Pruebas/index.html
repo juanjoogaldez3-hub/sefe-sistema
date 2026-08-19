@@ -3928,7 +3928,11 @@ function cotAddProducto(pid){
   else{
     let precio=Number(p.precio)||0;
     if(cotClienteSel&&typeof precioCliente==='function'){try{const pc=precioCliente(cotClienteSel,p);if(pc>0)precio=pc;}catch(e){}}
-    cotCart.push({id:p.id,codigo:p.codigo,nombre:p.nombre,precioBase:precio,precio:precio,cantidad:1,descuento:0,unidad:p.unidad,modoVenta:'unidad',tipoEmpaque:p.tipoEmpaque||'unidad',unidadesPorCaja:p.unidadesPorCaja});
+    // El precio que se usa es el de CAJA, así que el modo debe ser 'caja' para
+    // los productos por caja; si no, al pasar a pedido se reserva mal el stock
+    // (rebajaba 1 unidad en vez de 1 caja).
+    const modoVenta=(p.tipoEmpaque==='caja'||p.tipoEmpaque==='caja_unidad')?'caja':'unidad';
+    cotCart.push({id:p.id,codigo:p.codigo,nombre:p.nombre,precioBase:precio,precio:precio,cantidad:1,descuento:0,unidad:p.unidad,modoVenta,tipoEmpaque:p.tipoEmpaque||'unidad',unidadesPorCaja:p.unidadesPorCaja});
   }
   cotRenderCart();
 }
@@ -4021,7 +4025,12 @@ function convertirCotizacionAPedido(id){
     const vend=vendedores.find(v=>v.id===(c.vendedorId||(cli&&cli.vendedorId)))||vendedores[0];
     const items=(c.items||[]).map(it=>{
       const eff=Math.round(Number(it.precio)*(1-(Number(it.descuento)||0)/100)*100)/100;
-      return {id:it.id,codigo:it.codigo,nombre:it.nombre,precio:eff,unidad:it.unidad,cantidad:Number(it.cantidad),descuento:0,modoVenta:it.modoVenta||'unidad',tipoEmpaque:it.tipoEmpaque||'unidad',unidadesPorCaja:it.unidadesPorCaja};
+      // El modo se deriva del producto real: la cotización usa el precio de caja,
+      // así que un producto por caja se reserva como caja (no como unidad).
+      const _p=productos.find(x=>x.id===it.id);
+      const _te=(_p&&_p.tipoEmpaque)||it.tipoEmpaque||'unidad';
+      const _modo=(_te==='caja'||_te==='caja_unidad')?'caja':(it.modoVenta||'unidad');
+      return {id:it.id,codigo:it.codigo,nombre:it.nombre,precio:eff,unidad:it.unidad,cantidad:Number(it.cantidad),descuento:0,modoVenta:_modo,tipoEmpaque:_te,unidadesPorCaja:(_p&&_p.unidadesPorCaja)||it.unidadesPorCaja};
     });
     const total=items.reduce((s,it)=>s+it.precio*it.cantidad,0);
     const doc={id:-Date.now(),numero:corr,tipoDoc:'pedido',clienteId:c.clienteId,clienteNombre:c.clienteNombre,clienteComercial:c.clienteComercial,clienteNit:c.clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',subVendedorNombre:null,items,totales:{total},estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:'',observaciones:'Generado desde COT-'+padn(c.numero),notaInterna:'',nitFacturado:(cli&&cli.nit)||c.clienteNit,nombreFacturado:(cli&&cli.nombre)||c.clienteComercial,_nuevo:true};
