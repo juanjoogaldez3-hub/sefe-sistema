@@ -8895,7 +8895,7 @@ function renderReportes(){
     lista.forEach(p=>{
       const e=exDe(p);
       if(p.tipoEmpaque==='caja_unidad'){
-        const upc=Number(p.unidadesPorCaja)||1,cj=Math.floor(e/upc),un=Math.max(0,Math.round(e-cj*upc));
+        const upc=Number(p.unidadesPorCaja)||1,cj=Math.max(0,Number(p.stockCajas)||0),un=Math.max(0,Math.round(e-cj*upc)); // cajas REALES (stock_cajas), no el resultado de dividir las unidades sueltas
         _filas.push({codigo:(p.codigo||'')+'-C',nombre:p.nombre||'',marca:p.marca||'',medida:'Caja',cant:cj});
         _filas.push({codigo:(p.codigo||'')+'-U',nombre:p.nombre||'',marca:p.marca||'',medida:'Unidad',cant:un});
       }else _filas.push({codigo:p.codigo||'',nombre:p.nombre||'',marca:p.marca||'',medida:medidaProducto(p),cant:e});
