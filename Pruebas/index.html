@@ -7908,12 +7908,14 @@ function renderReportes(){
       {ic:'i-lime',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>',lbl:'Por cobrar actual',val:money(porCobrar)},
       {ic:'i-warn',svg:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',lbl:'Clientes',val:new Set(ventas.map(d=>d.clienteId)).size,sub:'compraron'}])}</div>`;
     const meses=mesesSerie(ventas,d=>d.creada,d=>d.totales.total);
-    const porCli={};ventas.forEach(d=>{const k=d.clienteComercial||d.clienteNombre;porCli[k]=(porCli[k]||0)+d.totales.total;});
+    // Por cliente_id (estable): el mismo cliente traía el nombre comercial vacío
+    // en las facturas viejas y lleno en las nuevas; por nombre se duplicaría.
+    const porCli={};ventas.forEach(d=>{const k=(d.clienteId!=null)?('#'+d.clienteId):(d.clienteComercial||d.clienteNombre||'Sin cliente');const nom=d.clienteComercial||d.clienteNombre||'Sin cliente';if(!porCli[k])porCli[k]={nombre:nom,total:0};if(d.clienteComercial)porCli[k].nombre=d.clienteComercial;porCli[k].total+=d.totales.total;});
     const porP={};ventas.forEach(d=>d.items.forEach(it=>{porP[it.nombre]=(porP[it.nombre]||0)+(it.cantidad*it.precio-(it.descuento||0));}));
-    exportData=Object.entries(porCli).sort((a,b)=>b[1]-a[1]).map(([n,v])=>({Cliente:n,Total:v}));
+    exportData=Object.values(porCli).sort((a,b)=>b.total-a.total).map(o=>({Cliente:o.nombre,Total:o.total}));
     html+=`<div class="rep-grid2" style="margin-bottom:16px">
       <div class="panel" style="margin:0"><div class="panel-head"><h3>Ventas por mes</h3></div><div class="panel-body">${barsHTML(meses)}</div></div>
-      <div class="panel" style="margin:0"><div class="panel-head"><h3>Top clientes</h3></div><div class="panel-body">${hbars(Object.entries(porCli).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([n,v])=>({n,v})))}</div></div></div>
+      <div class="panel" style="margin:0"><div class="panel-head"><h3>Top clientes</h3></div><div class="panel-body">${hbars(Object.values(porCli).sort((a,b)=>b.total-a.total).slice(0,6).map(o=>({n:o.nombre,v:o.total})))}</div></div></div>
       <div class="panel"><div class="panel-head"><h3>Productos más vendidos</h3></div><div class="panel-body">${hbars(Object.entries(porP).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([n,v])=>({n,v,c:'var(--green)'})))}</div></div>`;
   }
   else if(repType==='costos'){
@@ -7994,9 +7996,15 @@ function renderReportes(){
     // colapsar los clientes por defecto (mostrar solo vendedores y sus clientes,
     // sin los productos). El usuario expande lo que quiera ver.
     const primeraVez=!gruposColapsados.__inicializado;
+    const nombresCli={}; // id-clave del cliente -> nombre para mostrar
     ventas.forEach(d=>{
       const vend=d.vendedorNombre||'Sin vendedor';
-      const cli=d.clienteComercial||d.clienteNombre||'Sin cliente';
+      // Por cliente_id (estable), no por nombre: el nombre comercial venía vacío
+      // en las facturas viejas y lleno en las nuevas; por nombre el mismo cliente
+      // se partía en dos.
+      const cli=(d.clienteId!=null)?('#'+d.clienteId):(d.clienteComercial||d.clienteNombre||'Sin cliente');
+      if(d.clienteComercial)nombresCli[cli]=d.clienteComercial;
+      else if(!nombresCli[cli])nombresCli[cli]=d.clienteNombre||'Sin cliente';
       if(!grupos[vend])grupos[vend]={};
       if(!grupos[vend][cli])grupos[vend][cli]={};
       const _dtP=new Date(d.creada);
@@ -8027,7 +8035,7 @@ function renderReportes(){
     vendOrden.forEach(vend=>{
       let vVenta=0,vCosto=0;
       let filasVend='';
-      const cliOrden=Object.keys(grupos[vend]).sort();
+      const cliOrden=Object.keys(grupos[vend]).sort((a,b)=>(nombresCli[a]||a).localeCompare(nombresCli[b]||b,'es'));
       cliOrden.forEach(cli=>{
         let cVenta=0,cCosto=0;
         let filasCli='';
@@ -8045,7 +8053,7 @@ function renderReportes(){
             <td class="num" style="color:var(--muted)">${money(p.costoTotal)}</td>
             <td class="num" style="color:var(--green);font-weight:600">${money(margenQ)}</td>
             <td class="num" style="color:var(--green)">${margenPct.toFixed(1)}%</td></tr>`;
-          expFilas.push({Vendedor:vend,Cliente:cli,'Código':p.codigo,Producto:p.nombre,Cantidad:p.cant,'Precio Unit.':p.vUnit,'Venta Total':p.ventaTotal,'Costo Unit.':p.costoUnit,'Costo Total':p.costoTotal,'Margen Q':margenQ,'Margen %':margenPct.toFixed(1)});
+          expFilas.push({Vendedor:vend,Cliente:(nombresCli[cli]||cli),'Código':p.codigo,Producto:p.nombre,Cantidad:p.cant,'Precio Unit.':p.vUnit,'Venta Total':p.ventaTotal,'Costo Unit.':p.costoUnit,'Costo Total':p.costoTotal,'Margen Q':margenQ,'Margen %':margenPct.toFixed(1)});
         });
         vVenta+=cVenta;vCosto+=cCosto;
         const cMargen=cVenta-cCosto;
@@ -8054,8 +8062,8 @@ function renderReportes(){
         // Primera vez: colapsar clientes por defecto (para no saturar con miles de productos)
         if(primeraVez&&gruposColapsados[cliKey]===undefined)gruposColapsados[cliKey]=true;
         // Encabezado de cliente (clickeable para colapsar) + sus productos + subtotal
-        filasVend+=`<tr data-pertenece="1" data-vend="${vend}" data-grupo-key="${cliKey}" style="background:var(--surface-2);cursor:pointer" onclick="toggleGrupo('${cliKey.replace(/'/g,"\\'")}')"><td colspan="8" style="font-weight:700;font-size:12.5px;padding:7px 10px;color:var(--ink)"><span class="flecha-grupo" style="display:inline-block;width:14px;color:var(--muted)">▾</span>${cli}</td></tr>`+filasCli+
-          `<tr data-pertenece="1" data-vend="${vend}" data-cli="${cli}" style="border-bottom:1px solid var(--line)"><td style="text-align:right;font-size:11px;color:var(--muted);font-style:italic">Subtotal ${cli}:</td><td></td><td></td><td class="num" style="font-weight:600;font-size:11.5px">${money(cVenta)}</td><td></td><td class="num" style="font-size:11.5px;color:var(--muted)">${money(cCosto)}</td><td class="num" style="font-weight:600;font-size:11.5px;color:var(--green)">${money(cMargen)}</td><td class="num" style="font-size:11.5px;color:var(--green)">${cPct.toFixed(1)}%</td></tr>`;
+        filasVend+=`<tr data-pertenece="1" data-vend="${vend}" data-grupo-key="${cliKey}" style="background:var(--surface-2);cursor:pointer" onclick="toggleGrupo('${cliKey.replace(/'/g,"\\'")}')"><td colspan="8" style="font-weight:700;font-size:12.5px;padding:7px 10px;color:var(--ink)"><span class="flecha-grupo" style="display:inline-block;width:14px;color:var(--muted)">▾</span>${nombresCli[cli]||cli}</td></tr>`+filasCli+
+          `<tr data-pertenece="1" data-vend="${vend}" data-cli="${cli}" style="border-bottom:1px solid var(--line)"><td style="text-align:right;font-size:11px;color:var(--muted);font-style:italic">Subtotal ${nombresCli[cli]||cli}:</td><td></td><td></td><td class="num" style="font-weight:600;font-size:11.5px">${money(cVenta)}</td><td></td><td class="num" style="font-size:11.5px;color:var(--muted)">${money(cCosto)}</td><td class="num" style="font-weight:600;font-size:11.5px;color:var(--green)">${money(cMargen)}</td><td class="num" style="font-size:11.5px;color:var(--green)">${cPct.toFixed(1)}%</td></tr>`;
       });
       gVenta+=vVenta;gCosto+=vCosto;
       const vMargen=vVenta-vCosto;
@@ -8096,11 +8104,16 @@ function renderReportes(){
     const grupos={};
     ventas.forEach(d=>{
       const vend=d.vendedorNombre||'Sin vendedor';
-      const cli=d.clienteComercial||d.clienteNombre||'Sin cliente';
+      // Por cliente_id (estable), no por nombre: el mismo cliente traía el
+      // nombre comercial vacío en las facturas viejas y lleno en las nuevas;
+      // por nombre se partía en dos filas y agosto caía en la otra.
+      const cli=(d.clienteId!=null)?('#'+d.clienteId):(d.clienteComercial||d.clienteNombre||'Sin cliente');
+      const nombre=d.clienteComercial||d.clienteNombre||'Sin cliente';
       const mk=mesKey(d);
       const monto=Number(d.totales?.total||0); // con IVA (total facturado)
       if(!grupos[vend])grupos[vend]={};
-      if(!grupos[vend][cli])grupos[vend][cli]={meses:{},total:0};
+      if(!grupos[vend][cli])grupos[vend][cli]={meses:{},total:0,nombre};
+      if(d.clienteComercial)grupos[vend][cli].nombre=d.clienteComercial;
       grupos[vend][cli].meses[mk]=(grupos[vend][cli].meses[mk]||0)+monto;
       grupos[vend][cli].total+=monto;
     });
@@ -8117,7 +8130,8 @@ function renderReportes(){
       // encabezado vendedor (clickeable)
       cuerpo+=`<tr data-grupo-key="${vendKey}" style="background:var(--green);cursor:pointer" onclick="toggleGrupo('${vendKey.replace(/'/g,"\\'")}')"><td colspan="${meses.length+2}" style="color:#fff;font-weight:700;font-size:13px;padding:8px 12px"><span class="flecha-grupo" style="display:inline-block;width:14px">▾</span>${vend}</td></tr>`;
       // clientes ordenados por total desc
-      Object.entries(clientesV).sort((a,b)=>b[1].total-a[1].total).forEach(([cli,info])=>{
+      Object.entries(clientesV).sort((a,b)=>b[1].total-a[1].total).forEach(([cliKey,info])=>{
+        const cli=info.nombre;
         let celdas='';
         const filaExp={Vendedor:vend,Cliente:cli};
         meses.forEach(m=>{
@@ -8179,11 +8193,17 @@ function renderReportes(){
     const meses=[...mesesSet].sort();
     const porCli={};
     ventas.forEach(d=>{
-      const cli=d.clienteComercial||d.clienteNombre||'Sin cliente';
+      // Agrupar por cliente_id (identidad estable), NO por nombre. Las facturas
+      // históricas traían el nombre comercial vacío (se agrupaban por el nombre
+      // legal) y las nuevas lo traen lleno (se agrupaban por el comercial); por
+      // nombre, el mismo cliente se partía en dos filas y agosto caía en la otra.
+      const key=(d.clienteId!=null)?('#'+d.clienteId):(d.clienteComercial||d.clienteNombre||'Sin cliente');
+      const nombre=d.clienteComercial||d.clienteNombre||'Sin cliente';
       const mk=mesKey(d),monto=Number(d.totales?.total||0);
-      if(!porCli[cli])porCli[cli]={meses:{},total:0};
-      porCli[cli].meses[mk]=(porCli[cli].meses[mk]||0)+monto;
-      porCli[cli].total+=monto;
+      if(!porCli[key])porCli[key]={meses:{},total:0,nombre};
+      if(d.clienteComercial)porCli[key].nombre=d.clienteComercial; // etiqueta preferida: el nombre comercial
+      porCli[key].meses[mk]=(porCli[key].meses[mk]||0)+monto;
+      porCli[key].total+=monto;
     });
     const ultM=meses[meses.length-1],prevM=meses[meses.length-2],hayComp=meses.length>=2;
     const filas=Object.entries(porCli).sort((a,b)=>b[1].total-a[1].total);
@@ -8195,7 +8215,8 @@ function renderReportes(){
       const pct=pv?Math.abs(dif/pv*100):(Math.abs(dif)>0.005?100:0);
       return `<td class="num" style="color:${col};font-weight:${peso};white-space:nowrap">${arr} ${money(Math.abs(dif))}${pv?` <span style="font-size:10.5px">(${dif>=0?'+':'-'}${pct.toFixed(0)}%)</span>`:''}</td>`;
     };
-    filas.forEach(([cli,info])=>{
+    filas.forEach(([key,info])=>{
+      const cli=info.nombre;
       let celdas='';const filaExp={Cliente:cli};
       meses.forEach(m=>{
         const val=info.meses[m]||0;totalesGen[m]+=val;
