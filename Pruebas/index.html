@@ -1443,6 +1443,7 @@ let talonarios=[];
 let recibosAnulados=[];
 let cuentasBanco=[];
 let movimientosBanco=[];
+let creditosCliente=[]; // saldo a favor de clientes (sobrepagos / anticipos)
 let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====
@@ -3386,6 +3387,17 @@ window.closeDoc=closeDoc;
 $('#docov').onclick=e=>{if(e.target.id==='docov')closeDoc();};
 
 function saldoCliente(c){return documentos.filter(d=>d.clienteId===c.id&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,f)=>s+arInfo(f).saldo,0);}
+// ── Saldo a favor del cliente (sobrepagos / anticipos) ──────
+// Lo que ENTRÓ de crédito menos lo que ya se APLICÓ, sin anulados.
+function saldoFavor(clienteId){
+  if(clienteId==null)return 0;
+  const cid=Number(clienteId);
+  let s=0;
+  (creditosCliente||[]).forEach(c=>{ if(c.anulado)return; if(Number(c.clienteId)!==cid)return;
+    s += (c.tipo==='aplicacion' ? -Number(c.monto||0) : Number(c.monto||0)); });
+  return Math.round(s*100)/100;
+}
+window.saldoFavor=saldoFavor;
 function tcLabel(n){return n===0?'Contado':n+' días';}
 function renderCli(){
   const acc=$('#cli-acciones');
@@ -3507,6 +3519,7 @@ function fichaIntegral(c,st){
     k('Total facturado',money(st.totalFacturado),st.facturas.length+' Factura(s) Cambiaria(s)'),
     k('Total cobrado',money(st.totalCobrado)),
     k('Saldo actual',money(st.saldoActual),null,st.saldoActual>0?'var(--warn)':'var(--ok)'),
+    (saldoFavor(c.id)>0.001?k('Saldo a favor',money(saldoFavor(c.id)),'a aplicar en próximas facturas','var(--ok)'):''),
     k('Documentos vencidos',st.vencidos.length,st.vencidos.length?'requiere gestión':'al día',st.vencidos.length?'var(--danger)':'var(--ok)'),
     k('Última compra',st.ultima?fdate(st.ultima):'—'),
     k('Frecuencia de compra',st.frecuencia?'cada '+st.frecuencia+' días':'—'),
@@ -5006,11 +5019,14 @@ function openAbono(id){
   const _hayTal=_tals.length>0;
   const _miTal=_tals.find(x=>x.t.asignadoA===currentUser)||_tals[0];
   const _recIni=_hayTal?_miTal.proximo:String(Date.now()).slice(-6);
+  const _favor=saldoFavor(f.clienteId);
   openMod('Registrar abono · '+f.serie+'-'+f.numeroDte,
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${f.clienteNombre} · Saldo pendiente: <b style="color:var(--ink)">${money(saldo)}</b></p>
+     ${(_favor>0.001&&saldo>0.001)?`<div class="note n-ok" style="margin-bottom:12px"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Este cliente tiene <b>${money(_favor)}</b> de saldo a favor. <a href="#" onclick="aplicarSaldoFavor(${f.id});return false" style="color:var(--brand);font-weight:600">Aplicarlo a esta factura</a></span></div>`:''}
      ${_hayTal?`<div class="row"><div><label>Talonario</label><select id="ab-talonario" onchange="_abTalonarioChange()">${_tals.map(x=>`<option value="${x.t.id}" ${x.t.id===_miTal.t.id?'selected':''}>${(x.t.descripcion||('Talón '+x.t.numeroInicial))} · ${x.t.asignadoA||'sin asignar'} (${x.t.numeroInicial}–${x.t.numeroFinal})</option>`).join('')}</select></div></div>`:`<div class="note" style="margin-bottom:12px;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>No hay talonarios con recibos libres. Cargá uno en <b>Talonarios</b>; por ahora el número queda libre.</span></div>`}
      <div class="row"><div><label>No. de recibo ${_hayTal?'<span style="color:var(--muted);font-weight:400">(del talonario)</span>':''}</label><input id="ab-recibo" value="${_recIni}"></div><div><label>Fecha</label><input id="ab-fecha" type="date" value="${hoy}"></div></div>
-     <div class="row"><div><label>Monto del abono</label><input id="ab-monto" type="number" step="0.01" value="${saldo.toFixed(2)}"></div><div><label>Método</label><select id="ab-met"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>Depósito</option><option>Tarjeta</option></select></div></div>
+     <div class="row"><div><label>Monto del abono</label><input id="ab-monto" type="number" step="0.01" value="${saldo.toFixed(2)}" data-saldo="${saldo.toFixed(2)}" oninput="_abChkExceso()"></div><div><label>Método</label><select id="ab-met"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>Depósito</option><option>Tarjeta</option></select></div></div>
+     <div id="ab-exceso" style="display:none;font-size:11.5px;color:#7A4A07;background:var(--warn-bg,#fff8e6);border:1px solid rgba(168,130,0,.2);border-radius:8px;padding:7px 10px;margin:-4px 0 10px"></div>
      <div class="row"><div><label>Referencia / No. boleta / cheque</label><input id="ab-ref" placeholder="Opcional"></div></div>
      <div class="row">${selectorCuentaBancoHTML('ab-cuenta','¿A qué cuenta entró el dinero?')}</div>
      ${compFotoHTML()}
@@ -5018,32 +5034,98 @@ function openAbono(id){
     ()=>{
       const monto=Number($('#ab-monto').value);
       if(!(monto>0)){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El monto debe ser mayor a cero';return;}
-      if(monto>saldo+0.001){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El abono no puede superar el saldo de '+money(saldo);return;}
       if(_hayTal){
         const _t=(talonarios||[]).find(x=>x.id===Number($('#ab-talonario')?.value));
         const _n=parseInt(($('#ab-recibo')?.value||'').replace(/\D/g,''),10);
         if(!_t||isNaN(_n)||_n<_t.numeroInicial||_n>_t.numeroFinal){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El No. de recibo debe pertenecer al talonario seleccionado'+(_t?(' ('+_t.numeroInicial+'–'+_t.numeroFinal+')'):'');return;}
         if(recibosUsados().has(_n)){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='Ese recibo ('+_n+') ya fue usado. Elegí el siguiente libre.';return;}
       }
-      f.abonos=f.abonos||[];
-      const _ab={fecha:$('#ab-fecha').value||hoy,monto,metodo:$('#ab-met').value,referencia:$('#ab-ref').value,
-        noRecibo:$('#ab-recibo').value.trim(),comprobante:_compFoto,cuentaBancoId:($('#ab-cuenta')?.value||null),
-        registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
-      f.abonos.push(_ab);
-      if($('#ab-cuenta')?.value){
-        registrarMovimientoBanco({cuentaId:$('#ab-cuenta').value,tipo:'entrada',monto,
-          concepto:'Cobro '+(_ab.noRecibo||'')+' · '+(f.clienteComercial||f.clienteNombre),
-          categoria:'cobro',origen:'cobro',origenId:f.id,referencia:_ab.referencia,fecha:_ab.fecha});
+      // Interruptor: sin la tabla de saldo a favor (migración no aplicada aún),
+      // se mantiene el bloqueo viejo para no crear créditos que no se guardan.
+      if(!window._saldoFavorTabla && monto>saldo+0.001){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El abono no puede superar el saldo de '+money(saldo);return;}
+      // Sobrepago permitido: se aplica hasta el saldo y el resto queda como
+      // SALDO A FAVOR del cliente. El banco registra lo que entró de verdad.
+      const aplicado=Math.min(monto,Math.max(0,saldo));
+      const exceso=Math.round((monto-aplicado)*100)/100;
+      const _cta=($('#ab-cuenta')?.value||null), _fecha=$('#ab-fecha').value||hoy;
+      const _rec=$('#ab-recibo').value.trim(), _met=$('#ab-met').value, _ref=$('#ab-ref').value;
+      // 1) Abono a la factura (por lo que se aplica)
+      if(aplicado>0.001){
+        f.abonos=f.abonos||[];
+        const _ab={fecha:_fecha,monto:aplicado,metodo:_met,referencia:_ref,
+          noRecibo:_rec,comprobante:_compFoto,cuentaBancoId:_cta,
+          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
+        f.abonos.push(_ab);
+        f.estadoPago=arInfo(f).estado;
+        if(typeof guardarAbono==='function')guardarAbono(f.id,_ab);
+        if(typeof guardarDocumento==='function')guardarDocumento(f);
       }
-      const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
+      // 2) Excedente → saldo a favor del cliente
+      if(exceso>0.001){
+        const _cr={clienteId:f.clienteId,tipo:'ingreso',monto:exceso,fecha:_fecha,documentoId:f.id,
+          noRecibo:_rec,metodo:_met,referencia:_ref,cuentaBancoId:_cta,
+          concepto:'Sobrepago recibo '+(_rec||'—')+' · '+(f.clienteComercial||f.clienteNombre),
+          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
+        creditosCliente=creditosCliente||[];creditosCliente.push(_cr);
+        if(typeof guardarCredito==='function')guardarCredito(_cr);
+      }
+      // 3) Movimiento de banco por lo que REALMENTE entró (depósito completo)
+      if(_cta){
+        registrarMovimientoBanco({cuentaId:_cta,tipo:'entrada',monto,
+          concepto:'Cobro '+(_rec||'')+' · '+(f.clienteComercial||f.clienteNombre)+(exceso>0.001?' (incluye saldo a favor '+money(exceso)+')':''),
+          categoria:'cobro',origen:'cobro',origenId:f.id,referencia:_ref,fecha:_fecha});
+      }
       closeMod();renderCobros();
-      logAudit('Abono registrado','Recibo '+($('#ab-recibo').value||'—')+' · '+f.serie+'-'+f.numeroDte+' · '+(f.clienteComercial||f.clienteNombre)+' · '+money(monto));
-      toast('✓ Abono registrado','Recibo '+($('#ab-recibo').value||'—')+' · saldo '+money(nuevo.saldo));
-      if(typeof guardarAbono==='function')guardarAbono(f.id,_ab);
-      if(typeof guardarDocumento==='function')guardarDocumento(f);
+      logAudit('Abono registrado','Recibo '+(_rec||'—')+' · '+f.serie+'-'+f.numeroDte+' · '+(f.clienteComercial||f.clienteNombre)+' · '+money(monto)+(exceso>0.001?' (saldo a favor '+money(exceso)+')':''));
+      toast(exceso>0.001?'✓ Cobro con saldo a favor':'✓ Abono registrado',
+        (aplicado>0.001?'Aplicado '+money(aplicado):'')+(exceso>0.001?(aplicado>0.001?' · ':'')+'Saldo a favor '+money(exceso):' · saldo '+money(arInfo(f).saldo)));
     });
 }
 window.openAbono=openAbono;
+// Aviso en vivo del sobrepago dentro del modal de abono: si el monto supera
+// el saldo, muestra cuánto se aplica y cuánto queda como saldo a favor.
+function _abChkExceso(){
+  const inp=document.getElementById('ab-monto'), box=document.getElementById('ab-exceso');
+  if(!inp||!box)return;
+  const saldo=Number(inp.dataset.saldo||0), monto=Number(inp.value||0);
+  const exceso=Math.round((monto-saldo)*100)/100;
+  if(exceso>0.001){box.style.display='block';
+    box.innerHTML=`Se aplican <b>${money(Math.max(0,saldo))}</b> a esta factura y <b>${money(exceso)}</b> quedan como <b>saldo a favor</b> del cliente.`;}
+  else box.style.display='none';
+}
+window._abChkExceso=_abChkExceso;
+// Aplicar el saldo a favor del cliente a una factura pendiente. Crea un abono
+// financiado por el crédito (método "Saldo a favor") y consume el crédito.
+// NO genera movimiento de banco: ese dinero ya entró cuando se registró el
+// sobrepago/anticipo.
+function aplicarSaldoFavor(id){
+  if(!canRegistrarAbono()){toast('Sin permiso','Tu rol no puede registrar cobros',true);return;}
+  const f=documentos.find(d=>d.id===id);if(!f)return;
+  const saldo=arInfo(f).saldo, disp=saldoFavor(f.clienteId);
+  if(disp<=0.001){toast('Sin saldo a favor','Este cliente no tiene saldo a favor disponible',true);return;}
+  if(saldo<=0.001){toast('Sin saldo pendiente','Esta factura ya está saldada',true);return;}
+  const aplicar=Math.round(Math.min(saldo,disp)*100)/100;
+  confirmar('Aplicar saldo a favor',`Se aplicarán <b>${money(aplicar)}</b> del saldo a favor del cliente a la factura <b>${f.serie}-${f.numeroDte}</b> (saldo ${money(saldo)}).<br><span style="font-size:11.5px;color:var(--muted)">No entra dinero a banco: ese saldo ya había ingresado.</span>`,'Aplicar',()=>{
+    const hoy=fechaHoyGT(), ahora=new Date().toISOString();
+    f.abonos=f.abonos||[];
+    const _ab={fecha:hoy,monto:aplicar,metodo:'Saldo a favor',referencia:'Aplicación de saldo a favor',
+      noRecibo:'',comprobante:null,cuentaBancoId:null,
+      registradoPor:currentUser,registradoEl:ahora,anulado:false};
+    f.abonos.push(_ab);
+    f.estadoPago=arInfo(f).estado;
+    if(typeof guardarAbono==='function')guardarAbono(f.id,_ab);
+    if(typeof guardarDocumento==='function')guardarDocumento(f);
+    const _cr={clienteId:f.clienteId,tipo:'aplicacion',monto:aplicar,fecha:hoy,documentoId:f.id,
+      metodo:'Saldo a favor',concepto:'Aplicado a factura '+f.serie+'-'+f.numeroDte,
+      registradoPor:currentUser,registradoEl:ahora,anulado:false};
+    creditosCliente=creditosCliente||[];creditosCliente.push(_cr);
+    if(typeof guardarCredito==='function')guardarCredito(_cr);
+    closeMod();renderCobros();
+    logAudit('Saldo a favor aplicado',f.serie+'-'+f.numeroDte+' · '+(f.clienteComercial||f.clienteNombre)+' · '+money(aplicar));
+    toast('✓ Saldo a favor aplicado',money(aplicar)+' a '+f.serie+'-'+f.numeroDte+' · queda a favor '+money(saldoFavor(f.clienteId)));
+  });
+}
+window.aplicarSaldoFavor=aplicarSaldoFavor;
 
 // ---- Pago global (un recibo, varias facturas) ----
 // Todas las casillas de este modal se buscan SÓLO dentro de #ov-pago.
@@ -5342,6 +5424,14 @@ function openAnularAbono(facturaId,abonoIdx){
         registrarMovimientoBanco({cuentaId:a.cuentaBancoId,tipo:'salida',monto:a.monto,
           concepto:'Reversa de cobro anulado '+(a.noRecibo||'')+' · '+(f.clienteComercial||f.clienteNombre),
           categoria:'cobro',origen:'cobro_anulado',origenId:f.id,referencia:a.referencia,fecha:fechaHoyGT(),sinPoliza:true});
+      }
+      // Si el abono se pagó con saldo a favor, devolver ese crédito al cliente.
+      if(a.metodo==='Saldo a favor'){
+        const _cr={clienteId:f.clienteId,tipo:'ingreso',monto:a.monto,fecha:fechaHoyGT(),documentoId:f.id,
+          metodo:'Saldo a favor',concepto:'Reverso por anulación de aplicación · '+f.serie+'-'+f.numeroDte,
+          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
+        creditosCliente=creditosCliente||[];creditosCliente.push(_cr);
+        if(typeof guardarCredito==='function')guardarCredito(_cr);
       }
       const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
       openHistorialAbonos(facturaId);renderCobros();
@@ -9876,26 +9966,43 @@ function procesarCobro(id){
     ()=>{
       const monto=Number($('#ab-monto').value);
       if(!(monto>0)){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El monto debe ser mayor a cero';return;}
-      if(monto>saldo+0.001){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El abono no puede superar el saldo de '+money(saldo);return;}
       if(!($('#ab-cuenta')?.value)){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='Elegí la cuenta de banco a la que entró el dinero';return;}
-      d.abonos=d.abonos||[];
-      const _ab={fecha:$('#ab-fecha').value||hoy,monto,metodo:$('#ab-met').value,referencia:$('#ab-ref').value,
-        noRecibo:$('#ab-recibo').value.trim(),comprobante:_compFoto,cuentaBancoId:($('#ab-cuenta')?.value||null),
-        registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,origenCobroRuta:c.id};
-      d.abonos.push(_ab);
-      // Movimiento de banco: el cobro en ruta ya pasó por el banco (boleta de depósito)
-      if(_ab.cuentaBancoId&&typeof registrarMovimientoBanco==='function'){
-        registrarMovimientoBanco({cuentaId:_ab.cuentaBancoId,tipo:'entrada',monto,
-          concepto:'Cobro en ruta '+(_ab.noRecibo||'')+' · '+(d.clienteComercial||d.clienteNombre),
-          categoria:'cobro',origen:'cobro',origenId:d.id,referencia:_ab.referencia,fecha:_ab.fecha});
+      // Interruptor: sin la tabla de saldo a favor, se mantiene el bloqueo viejo.
+      if(!window._saldoFavorTabla && monto>saldo+0.001){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El abono no puede superar el saldo de '+money(saldo);return;}
+      // Sobrepago: se aplica hasta el saldo y el resto queda como saldo a favor
+      // del cliente. El banco registra lo que el piloto depositó de verdad.
+      const aplicado=Math.min(monto,Math.max(0,saldo));
+      const exceso=Math.round((monto-aplicado)*100)/100;
+      const _cta=$('#ab-cuenta')?.value||null, _fecha=$('#ab-fecha').value||hoy;
+      const _rec=$('#ab-recibo').value.trim(), _met=$('#ab-met').value, _ref=$('#ab-ref').value;
+      if(aplicado>0.001){
+        d.abonos=d.abonos||[];
+        const _ab={fecha:_fecha,monto:aplicado,metodo:_met,referencia:_ref,
+          noRecibo:_rec,comprobante:_compFoto,cuentaBancoId:_cta,
+          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,origenCobroRuta:c.id};
+        d.abonos.push(_ab);
+        d.estadoPago=arInfo(d).estado;
+        if(typeof guardarAbono==='function')guardarAbono(d.id,_ab);
+        if(typeof guardarDocumento==='function')guardarDocumento(d);
+      }
+      if(exceso>0.001){
+        const _cr={clienteId:d.clienteId,tipo:'ingreso',monto:exceso,fecha:_fecha,documentoId:d.id,
+          noRecibo:_rec,metodo:_met,referencia:_ref,cuentaBancoId:_cta,
+          concepto:'Sobrepago en ruta recibo '+(_rec||'—')+' · '+(d.clienteComercial||d.clienteNombre),
+          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
+        creditosCliente=creditosCliente||[];creditosCliente.push(_cr);
+        if(typeof guardarCredito==='function')guardarCredito(_cr);
+      }
+      // Movimiento de banco por lo que realmente entró (depósito completo)
+      if(_cta&&typeof registrarMovimientoBanco==='function'){
+        registrarMovimientoBanco({cuentaId:_cta,tipo:'entrada',monto,
+          concepto:'Cobro en ruta '+(_rec||'')+' · '+(d.clienteComercial||d.clienteNombre)+(exceso>0.001?' (incluye saldo a favor '+money(exceso)+')':''),
+          categoria:'cobro',origen:'cobro',origenId:d.id,referencia:_ref,fecha:_fecha});
       }
       c.estado='procesado';c.procesadoPor=currentUser;c.procesadoFecha=new Date().toISOString();
-      const nuevo=arInfo(d);d.estadoPago=nuevo.estado;
       closeMod();renderDespachos();
-      logAudit('Cobro en ruta procesado',docNum+' · '+c.cliente+' · '+money(monto)+' · saldo '+money(nuevo.saldo));
-      toast('✓ Abono aplicado',docNum+' · saldo '+money(nuevo.saldo));
-      if(typeof guardarAbono==='function')guardarAbono(d.id,_ab);
-      if(typeof guardarDocumento==='function')guardarDocumento(d);
+      logAudit('Cobro en ruta procesado',docNum+' · '+c.cliente+' · '+money(monto)+(exceso>0.001?' (saldo a favor '+money(exceso)+')':'')+' · saldo '+money(arInfo(d).saldo));
+      toast(exceso>0.001?'✓ Cobro con saldo a favor':'✓ Abono aplicado',docNum+' · '+(exceso>0.001?'saldo a favor '+money(exceso):'saldo '+money(arInfo(d).saldo)));
       if(typeof guardarCobroRuta==='function')guardarCobroRuta(c);
     });
 }

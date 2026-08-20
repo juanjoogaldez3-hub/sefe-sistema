@@ -185,6 +185,19 @@ async function cargarTodo() {
       }
     } catch(e){ /* tabla aún no creada */ }
 
+    // Saldo a favor de clientes. Tolera que la tabla no exista todavía
+    // (así el código puede publicarse antes de correr la migración).
+    // La marca _saldoFavorTabla es el "interruptor": el sobrepago sólo se
+    // habilita cuando la tabla existe de verdad (sin ella, un crédito no se
+    // podría guardar y el banco quedaría descuadrado).
+    try {
+      const rCred = await sb.from('creditos_cliente').select('*');
+      if (!rCred.error) {
+        if (typeof creditosCliente !== 'undefined') creditosCliente = (rCred.data||[]).map(mapCreditoFromDB);
+        if (typeof window !== 'undefined') window._saldoFavorTabla = true;
+      }
+    } catch(e){ /* tabla aún no creada */ }
+
     // Marca de que los datos vienen REALMENTE de la base.
     //
     // No alcanza con que la consulta no haya reventado: con RLS activo
@@ -572,6 +585,36 @@ async function borrarCotizacion(id){
   if(error)console.error('Error borrando cotización:',error);
 }
 if(typeof window!=='undefined'){window.guardarCotizacion=guardarCotizacion;window.borrarCotizacion=borrarCotizacion;}
+
+// ── Saldo a favor de clientes (creditos_cliente) ────────────
+// Libro del saldo a favor: 'ingreso' entra crédito (sobrepago/anticipo),
+// 'aplicacion' lo usa en una factura. El saldo se calcula en la app.
+function mapCreditoFromDB(c){
+  return {
+    id:c.id, clienteId:c.cliente_id, tipo:c.tipo||'ingreso', monto:Number(c.monto)||0,
+    fecha:c.fecha, documentoId:c.documento_id, noRecibo:c.no_recibo, metodo:c.metodo,
+    referencia:c.referencia, cuentaBancoId:c.cuenta_banco_id, concepto:c.concepto,
+    registradoPor:c.registrado_por, registradoEl:c.registrado_el,
+    anulado:c.anulado===true, motivoAnulacion:c.motivo_anulacion, _id:c.id
+  };
+}
+async function guardarCredito(cr){
+  const row={
+    cliente_id:cr.clienteId, tipo:cr.tipo||'ingreso', monto:cr.monto, fecha:cr.fecha||null,
+    documento_id:cr.documentoId||null, no_recibo:cr.noRecibo||null, metodo:cr.metodo||null,
+    referencia:cr.referencia||null, cuenta_banco_id:cr.cuentaBancoId||null, concepto:cr.concepto||null,
+    registrado_por:cr.registradoPor||null, registrado_el:cr.registradoEl||null, anulado:cr.anulado===true
+  };
+  const {data,error}=await sb.from('creditos_cliente').insert(row).select().single();
+  if(error){console.error('Error guardando saldo a favor:',error);return false;}
+  cr.id=data.id; cr._id=data.id; return true;
+}
+async function anularCreditoDB(cr){
+  if(!cr._id&&!cr.id)return;
+  const {error}=await sb.from('creditos_cliente').update({anulado:true,motivo_anulacion:cr.motivoAnulacion||null}).eq('id',cr._id||cr.id);
+  if(error)console.error('Error anulando saldo a favor:',error);
+}
+if(typeof window!=='undefined'){window.guardarCredito=guardarCredito;window.anularCreditoDB=anularCreditoDB;}
 
 async function guardarAuditoria(entry){
   const row = {
