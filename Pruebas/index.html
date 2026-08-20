@@ -1829,7 +1829,7 @@ function renderPanel(){
   const hoyStr=fechaHoyGT();
   const hojE=new Date();
   const saludo=hojE.getHours()<12?'Buenos días':hojE.getHours()<19?'Buenas tardes':'Buenas noches';
-  const fechaLarga=hojE.toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const fechaLarga=hojE.toLocaleDateString('es-GT',{weekday:'long'})+' '+fdate(hojE);
   const facturasHoy=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.creada?.slice(0,10)===hoyStr);
   const ventasHoy=facturasHoy.reduce((s,d)=>s+d.totales.total,0);
   let cobradoHoy=0;misDocsBase.forEach(d=>(d.abonos||[]).forEach(a=>{if(!a.anulado&&a.fecha===hoyStr)cobradoHoy+=Number(a.monto);}));
@@ -5913,7 +5913,7 @@ function _estadoCuentaBancoData(id,desde,hasta){
     const ent=m.tipo==='entrada'?Number(m.monto||0):0,sal=m.tipo==='salida'?Number(m.monto||0):0;
     run+=ent-sal;totEnt+=ent;totSal+=sal;
     const k=m.categoria||'otro';if(!porCat[k])porCat[k]={ent:0,sal:0};porCat[k].ent+=ent;porCat[k].sal+=sal;
-    return {fecha:(m.fecha||'').slice(0,10),concepto:m.concepto||'—',categoria:CAT_MOV_LBL[m.categoria]||m.categoria||'Otro',referencia:m.referencia||'',ent,sal,saldo:run,origen:m.origen||'manual'};
+    return {fecha:fdate((m.fecha||'').slice(0,10)),concepto:m.concepto||'—',categoria:CAT_MOV_LBL[m.categoria]||m.categoria||'Otro',referencia:m.referencia||'',ent,sal,saldo:run,origen:m.origen||'manual'};
   });
   return {cuenta:c,saldoAntes,filas,totEnt,totSal,saldoFinal:run,porCat};
 }
@@ -5967,7 +5967,7 @@ window._renderEstadoCtaBco=function(id){
       {ic:(d.saldoFinal>=0?'i-blue':'i-danger'),svg:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',lbl:'Saldo final',val:M(d.saldoFinal)}])}</div>
     <div style="overflow-y:auto;overflow-x:hidden;max-height:46vh;border:1px solid var(--line);border-radius:8px">
     <table style="margin:0;width:100%;table-layout:fixed"><colgroup><col style="width:11%"><col style="width:34%"><col style="width:13%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th class="num">Entrada</th><th class="num">Salida</th><th class="num">Saldo</th></tr></thead><tbody>
-      <tr style="background:var(--bg-soft,#f6f8f2)"><td colspan="5" style="font-weight:600;color:var(--muted)">Saldo inicial ${desde?('al '+desde):'(apertura de la cuenta)'}</td><td class="num" style="font-weight:700">${M(d.saldoAntes)}</td></tr>
+      <tr style="background:var(--bg-soft,#f6f8f2)"><td colspan="5" style="font-weight:600;color:var(--muted)">Saldo inicial ${desde?('al '+fdate(desde)):'(apertura de la cuenta)'}</td><td class="num" style="font-weight:700">${M(d.saldoAntes)}</td></tr>
       ${filasHTML}
       <tr style="border-top:2px solid var(--line-strong);font-weight:700"><td colspan="3">TOTALES DEL PERÍODO</td><td class="num" style="color:var(--ok)">${M(d.totEnt)}</td><td class="num" style="color:var(--danger)">${M(d.totSal)}</td><td class="num">${M(d.saldoFinal)}</td></tr>
     </tbody></table></div>`;
@@ -6031,12 +6031,12 @@ async function estadoCuentaBancoExcel(id){
       ['Cuenta',c.nombre||''],
       ['Banco',(c.banco||'')+(c.numero?' · No. '+c.numero:'')],
       ['Tipo',TIPO_CUENTA_LBL[c.tipo]||c.tipo],
-      ['Período',(desde||'inicio')+' a '+(hasta||'hoy')],
+      ['Período',(desde?fdate(desde):'inicio')+' a '+(hasta?fdate(hasta):'hoy')],
       ['Generado',fdatehora(new Date())],
       []
     ];
     const cab=['Fecha','Concepto','Categoría','Referencia','Origen','Entrada','Salida','Saldo'];
-    const filas=[['','Saldo inicial'+(desde?(' al '+desde):' (apertura)'),'','','','','',d.saldoAntes]];
+    const filas=[['','Saldo inicial'+(desde?(' al '+fdate(desde)):' (apertura)'),'','','','','',d.saldoAntes]];
     d.filas.forEach(f=>filas.push([f.fecha,f.concepto,f.categoria,f.referencia,f.origen==='manual'?'Manual':'Automático',f.ent||0,f.sal||0,f.saldo]));
     filas.push(['','TOTALES','','','','',d.totEnt,d.totSal]);
     filas.push(['','SALDO FINAL','','','','','',d.saldoFinal]);
