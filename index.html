@@ -1246,17 +1246,34 @@ function _pintarMasFilas(tbodyId){
 }
 window._pintarMasFilas=_pintarMasFilas;
 
+// ¿Esta fila es "de estructura" (encabezado de grupo, subtotal, total o
+// separador) y por lo tanto NO se debe reordenar al ordenar la tabla?
+// Se usa para ordenar tablas agrupadas sin romper la jerarquía: sólo se
+// reordenan las corridas de filas de datos entre dos filas de estructura.
+function _esFilaEstructural(tr){
+  if(!tr||tr.tagName!=='TR')return true;
+  if(tr.dataset&&tr.dataset.totalsRow==='1')return true;
+  if(tr.hasAttribute&&tr.hasAttribute('data-grupo-key'))return true;
+  if([...tr.children].some(td=>Number(td.getAttribute('colspan')||1)>1))return true;
+  const t0=(tr.cells&&tr.cells[0]?tr.cells[0].textContent:'').trim();
+  if(/^(sub)?total(es)?\b/i.test(t0))return true;
+  if(!tr.textContent.trim())return true; // separador vacío
+  return false;
+}
 function enhanceTable(tbodyId,opts){
   const _doSort=!opts||opts.sort!==false;
+  const _noSearch=!!(opts&&opts.noSearch);
   const tbody=document.getElementById(tbodyId);if(!tbody)return;
   const table=tbody.closest('table');if(!table)return;
   if(!table.dataset.enhanced){
     table.dataset.enhanced='1';
-    const wrap=document.createElement('div');
-    wrap.className='tbl-toolbar';
-    wrap.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input class="tbl-search" placeholder="Buscar en la tabla…"><span class="tbl-count"></span>';
-    table.parentNode.insertBefore(wrap,table);
-    wrap.querySelector('.tbl-search').oninput=()=>applyTableFilter(table);
+    if(!_noSearch){
+      const wrap=document.createElement('div');
+      wrap.className='tbl-toolbar';
+      wrap.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input class="tbl-search" placeholder="Buscar en la tabla…"><span class="tbl-count"></span>';
+      table.parentNode.insertBefore(wrap,table);
+      wrap.querySelector('.tbl-search').oninput=()=>applyTableFilter(table);
+    }
     if(_doSort)Array.from(table.querySelectorAll('thead th')).forEach((th,idx)=>{
       const txt=th.textContent.trim();if(!txt)return;
       th.classList.add('sortable');th.dataset.dir='0';
@@ -1291,19 +1308,27 @@ function enhanceTable(tbodyId,opts){
           stP.filas.sort((a,b)=>cmpFn(valDe(a),valDe(b)));
           stP.mostradas=0;tb.innerHTML='';_pintarMasFilas(tbId);
         }else{
-          // Tabla normal: ordenar el DOM
-          const rows=Array.from(tb.querySelectorAll('tr'));
-          rows.sort((a,b)=>{
-            const ca=a.cells[idx],cb=b.cells[idx];if(!ca||!cb)return 0;
-            return cmpFn(ca.textContent.trim(),cb.textContent.trim());
-          });
-          rows.forEach(r=>tb.appendChild(r));
+          // Tabla normal: ordenar el DOM, pero SÓLO las corridas de filas de
+          // datos, dejando fijas las de estructura (encabezados de grupo,
+          // subtotales, totales y separadores). Así funciona igual en tablas
+          // planas y en las agrupadas, sin romper la jerarquía.
+          const cmpRow=(a,b)=>{const ca=a.cells[idx],cb=b.cells[idx];if(!ca||!cb)return 0;return cmpFn(ca.textContent.trim(),cb.textContent.trim());};
+          const rows=Array.from(tb.children).filter(n=>n.tagName==='TR');
+          let p=0;
+          while(p<rows.length){
+            if(_esFilaEstructural(rows[p])){p++;continue;}
+            let q=p;while(q<rows.length&&!_esFilaEstructural(rows[q]))q++;
+            const corrida=rows.slice(p,q).sort(cmpRow);
+            const antes=rows[q]||null;
+            corrida.forEach(r=>tb.insertBefore(r,antes));
+            p=q;
+          }
         }
         if(opts&&typeof opts.onSort==='function')opts.onSort(idx,dir);
       };
     });
   }
-  applyTableFilter(table);
+  if(!_noSearch)applyTableFilter(table);
 }
 function applyTableFilter(table){
   const wrap=table.previousElementSibling;if(!wrap||!wrap.classList.contains('tbl-toolbar'))return;
@@ -7875,28 +7900,34 @@ function agregarTotalesReportes(){
     tbl.dataset.totales='1';
   });
 }
-// Hace ordenables + buscables las tablas planas de reporte (clic en el encabezado),
-// y mantiene repLastData (lo que exporta el Excel) en el mismo orden que la pantalla.
+// Hace ordenables las tablas de reporte al hacer clic en el encabezado.
+// Las planas además tienen buscador y sincronizan el orden con el Excel.
+// Las agrupadas (con grupos y subtotales) se ordenan por corridas de datos
+// sin romper la jerarquía; ahí no va buscador ni sync con Excel.
 function prepararOrdenReportes(){
   const cont=document.getElementById('rep-body'); if(!cont)return;
-  // Reportes agrupados/jerárquicos: no se ordenan libremente (romperían la agrupación)
-  if(['estcta','vendedor','cliprod','climes','climescomp','dircli'].includes(repType))return;
   cont.querySelectorAll('table').forEach((tbl,ti)=>{
     if(tbl.dataset.ordenable)return;
     if(tbl.closest('td'))return; // no enganchar tablas anidadas (detalles dentro de una celda)
     const thead=tbl.querySelector('thead'), tbody=tbl.querySelector('tbody');
     if(!thead||!tbody)return;
     const rows=[...tbody.querySelectorAll(':scope > tr')];
-    const dataRows=rows.filter(r=>r.dataset.totalsRow!=='1');
-    // saltar tablas jerárquicas (con colspan en filas de datos) o demasiado cortas
-    const tieneColspan=dataRows.some(r=>[...r.children].some(td=>Number(td.getAttribute('colspan')||1)>1));
-    if(tieneColspan||dataRows.length<2)return;
-    // Sincronización con el Excel solo si hay 1 fila de datos por registro de repLastData
-    const puedeSync=Array.isArray(repLastData)&&repLastData.length===dataRows.length;
+    // Filas de datos = las que NO son estructura (encabezados de grupo,
+    // subtotales, totales, separadores).
+    const dataRows=rows.filter(r=>!_esFilaEstructural(r));
+    if(dataRows.length<2)return;
+    // ¿Es agrupada? Sólo cuenta como agrupada si hay bandas de grupo
+    // (data-grupo-key) o filas con colspan (encabezados/separadores de sección);
+    // una simple fila de "Total" al pie NO la vuelve agrupada. En las agrupadas
+    // no va buscador ni sync con Excel (el orden en pantalla puede no
+    // corresponder 1:1 con repLastData).
+    const esAgrupada=rows.some(r=>r.hasAttribute('data-grupo-key')||[...r.children].some(td=>Number(td.getAttribute('colspan')||1)>1));
+    // Sincronización con el Excel solo si hay 1 fila de datos por registro.
+    const puedeSync=!esAgrupada&&Array.isArray(repLastData)&&repLastData.length===dataRows.length;
     if(puedeSync)dataRows.forEach((r,i)=>{r.dataset.ri=String(i);});
     if(!tbody.id)tbody.id='rep-tbody-'+ti;
     tbl.dataset.ordenable='1';
-    enhanceTable(tbody.id,{onSort:()=>{
+    enhanceTable(tbody.id,{noSearch:esAgrupada,onSort:()=>{
       // La fila de TOTALES siempre al final
       const tot=tbody.querySelector('tr[data-totals-row]'); if(tot)tbody.appendChild(tot);
       // Reordenar repLastData según el nuevo orden de pantalla (para que el Excel lo siga)
