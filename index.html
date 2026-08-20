@@ -8207,11 +8207,25 @@ function renderReportes(){
     const MESES_ES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     const mesLbl=k=>{const [a,m]=k.split('-');return MESES_ES[Number(m)-1]+' '+a;};
     const mesAbbr=k=>{const [a,m]=k.split('-');return MESES_ES[Number(m)-1].slice(0,3)+' '+a.slice(2);};
+    // Esta es una COMPARATIVA: siempre tiene que incluir el mes en curso y el
+    // anterior para poder comparar. Sin importar el período elegido, forzamos
+    // que el rango llegue hasta hoy y empiece a más tardar en el mes pasado.
+    // (Ej.: filtro "Este mes" → sale este mes y el anterior, no uno solo.)
+    const _ahora=new Date();
+    const _finCurso=new Date(_ahora.getFullYear(),_ahora.getMonth()+1,0,23,59,59); // último día del mes actual
+    const _iniPrev=new Date(_ahora.getFullYear(),_ahora.getMonth()-1,1);           // 1° del mes anterior
+    const _rComp={start:(r.start<_iniPrev?r.start:_iniPrev),end:(r.end>_finCurso?r.end:_finCurso)};
+    let ventasC=documentos.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&enRango(d.creada,_rComp));
+    if(repFiltros.cliente)ventasC=ventasC.filter(d=>String(d.clienteId)===repFiltros.cliente);
+    if(repFiltros.vendedor_simple)ventasC=ventasC.filter(d=>d.vendedorNombre===repFiltros.vendedor_simple);
+    const _mkDate=dt=>dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
     const mesesSet=new Set();
-    ventas.forEach(d=>mesesSet.add(mesKey(d)));
+    ventasC.forEach(d=>mesesSet.add(mesKey(d)));
+    mesesSet.add(_mkDate(_ahora));   // el mes en curso SIEMPRE es columna
+    mesesSet.add(_mkDate(_iniPrev)); // y el anterior, para que siempre haya con qué comparar
     const meses=[...mesesSet].sort();
     const porCli={};
-    ventas.forEach(d=>{
+    ventasC.forEach(d=>{
       // Agrupar por cliente_id (identidad estable), NO por nombre. Las facturas
       // históricas traían el nombre comercial vacío (se agrupaban por el nombre
       // legal) y las nuevas lo traen lleno (se agrupaban por el comercial); por
