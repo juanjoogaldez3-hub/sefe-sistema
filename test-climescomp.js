@@ -60,6 +60,7 @@ const rEsteMes = { start: new FakeDate('2026-08-01T00:00:00'), end: new FakeDate
 
 // ── Caso 1: BONANZA con dos nombres pero mismo id, filtrando "Este mes" ──
 const ventas1 = [
+  doc(1900, null, 'CLIENTE VIEJO JUNIO', 6, 7777),                      // JUNIO: NO debe salir en "Este mes"
   doc(1822, null, 'BONANZA LA PONDEROSA, S.A.', 7, 18180.20),           // julio (nombre viejo)
   doc(1822, 'BONANZA LA PONDEROSA', 'BONANZA ...S.A.', 8, 13210),        // agosto (nombre comercial)
   doc(1821, null, 'ALFONSO MARROQUIN', 7, 4265),                        // otro cliente, sólo julio
@@ -67,9 +68,11 @@ const ventas1 = [
 ];
 const r1 = correr(ventas1, rEsteMes);
 
-console.log('\n═══ "Este mes" trae este mes Y el anterior ═══');
+console.log('\n═══ "Este mes" trae EXACTAMENTE este mes y el anterior ═══');
 ok('aparece agosto (mes en curso)', r1.meses.includes('2026-08'));
 ok('aparece julio (mes anterior), aunque el filtro era "este mes"', r1.meses.includes('2026-07'), 'meses: ' + r1.meses.join(','));
+ok('junio (más viejo) NO aparece', !r1.meses.includes('2026-06'), 'meses: ' + r1.meses.join(','));
+ok('son exactamente dos columnas', r1.meses.length === 2, 'meses: ' + r1.meses.join(','));
 
 console.log('\n═══ El cliente con dos nombres queda en UNA fila ═══');
 ok('BONANZA (id 1822) es una sola entrada', !!r1.porCli['#1822'], 'no se agrupó por id');
