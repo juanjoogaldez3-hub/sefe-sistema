@@ -90,7 +90,7 @@ async function cargarTodo() {
       fetchAll('pagos_proveedor','id'),
       sb.from('roles').select('*'),
       sb.from('usuarios').select('*').order('id'),
-      fetchAll('auditoria','seq'),
+      sb.from('auditoria').select('*').order('seq',{ascending:false}).limit(1),
       sb.from('dashboard_config').select('*'),
       sb.from('talonarios').select('*').order('numero_inicial'),
       sb.from('recibos_anulados').select('*'),
@@ -130,8 +130,13 @@ async function cargarTodo() {
       };
     });
     // Auditoría
-    auditLog = (rAudit.data||[]).map(mapAuditoriaFromDB).reverse();
-    auditSeq = auditLog.length ? Math.max(...auditLog.map(a=>a.seq)) : 0;
+    // Sólo se baja el ÚLTIMO registro de auditoría (para la cadena de hashes y
+    // el correlativo). El historial completo se carga a pedido al abrir el
+    // módulo de auditoría — así el login no baja una tabla que crece sin fin
+    // (era una de las que más egress consumía).
+    auditLog = (rAudit.data||[]).map(mapAuditoriaFromDB); // ya viene el más nuevo primero
+    auditSeq = auditLog.length ? auditLog[0].seq : 0;
+    if (typeof window !== 'undefined') window._auditFullLoaded = false;
 
     // Dashboard config por rol (si la variable global existe)
     if (typeof dashboardConfig !== 'undefined') {

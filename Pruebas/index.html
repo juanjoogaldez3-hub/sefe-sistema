@@ -10447,7 +10447,31 @@ function verificarIntegridadAuditoria(){
   return {ok:true,total:ordenado.length};
 }
 window.verificarIntegridadAuditoria=verificarIntegridadAuditoria;
-function renderAuditoria(){
+// Trae el historial COMPLETO de auditoría, a pedido, al abrir el módulo.
+// En el login sólo se baja el último registro (para no gastar egress con una
+// tabla que crece sin fin). Se hace una sola vez por sesión, y no pisa la
+// cadena de hashes si la carga fallara.
+let _auditCargando=null;
+async function _cargarAuditoriaCompleta(){
+  if(window._auditFullLoaded)return;
+  if(_auditCargando)return _auditCargando;
+  _auditCargando=(async()=>{
+    try{
+      const r=await fetchAll('auditoria','seq');            // ascendente por seq
+      const full=(r.data||[]).map(mapAuditoriaFromDB);
+      if(full.length>=auditLog.length){                    // sólo si trajo todo (no pisar por un error)
+        auditLog=full.reverse();                           // más nuevo primero
+        if(auditLog.length)auditSeq=Math.max(auditSeq,auditLog[0].seq);
+        window._auditFullLoaded=true;
+      }
+    }catch(e){console.error('Error cargando la auditoría completa:',e);}
+    _auditCargando=null;
+  })();
+  return _auditCargando;
+}
+window._cargarAuditoriaCompleta=_cargarAuditoriaCompleta;
+async function renderAuditoria(){
+  await _cargarAuditoriaCompleta();
   const selUsr=$('#aud-usr');
   if(selUsr&&selUsr.dataset.built!=='1'){
     selUsr.innerHTML='<option value="">Todos</option>'+usuarios.map(u=>`<option value="${u.nombre}">${u.nombre}</option>`).join('');
