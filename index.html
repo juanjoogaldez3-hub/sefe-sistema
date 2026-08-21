@@ -5509,6 +5509,19 @@ function costoUnitVentaMes(it,anio,mes){
 }
 // Costo total de una línea de venta (cantidad en su unidad de venta), ya ajustado caja/unidad.
 function costoLineaMes(it,anio,mes){ return costoUnitVentaMes(it,anio,mes)*(Number(it.cantidad)||0); }
+// Costo total de un documento de venta.
+//  · Con líneas → suma el costo por línea (costo promedio móvil del mes).
+//  · Sin líneas (facturas históricas importadas sólo con el total, sin detalle
+//    de productos) → usa el costo histórico guardado en la factura (repartido
+//    desde el Excel de ventas-vs-costos por vendedor/mes).
+function costoDoc(d){
+  const items=d.items||[];
+  if(items.length){
+    const dt=new Date(d.creada);
+    return items.reduce((a,it)=>a+costoLineaMes(it,dt.getFullYear(),dt.getMonth()),0);
+  }
+  return Number(d.costoHistorico)||0;
+}
 
 function recTotal(c){return c.items.reduce((s,it)=>s+it.cantidad,0);}
 function limpiarFiltroCompras(){['cmp-prov','cmp-rec','cmp-desde','cmp-hasta'].forEach(id=>{const e=$('#'+id);if(e)e.value='';});renderCompras();}
@@ -8058,7 +8071,7 @@ function renderReportes(){
       <div class="panel"><div class="panel-head"><h3>Productos más vendidos</h3></div><div class="panel-body">${hbars(Object.entries(porP).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([n,v])=>({n,v,c:'var(--green)'})))}</div></div>`;
   }
   else if(repType==='costos'){
-    let vTot=0,cTot=0;ventas.forEach(d=>{vTot+=d.totales.total;const dt=new Date(d.creada);d.items.forEach(it=>{cTot+=costoLineaMes(it,dt.getFullYear(),dt.getMonth());});});
+    let vTot=0,cTot=0;ventas.forEach(d=>{vTot+=d.totales.total;cTot+=costoDoc(d);});
     const margen=vTot-cTot;const pct=vTot?(margen/vTot*100):0;
     html+=`<div class="kpis stagger">${kpiHTML([
       {ic:'i-blue',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Ventas',val:money(vTot)},
@@ -8067,7 +8080,7 @@ function renderReportes(){
       {ic:'i-lime',svg:'<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',lbl:'Margen %',val:pct.toFixed(1)+'%'}])}</div>`;
     const ejeV=mesesEje(ventas,d=>d.creada);
     const mv=mesesSerie(ventas,d=>d.creada,d=>d.totales.total,ejeV);
-    const mc=mesesSerie(ventas,d=>d.creada,d=>{const dt=new Date(d.creada);return d.items.reduce((a,it)=>a+costoLineaMes(it,dt.getFullYear(),dt.getMonth()),0);},ejeV);
+    const mc=mesesSerie(ventas,d=>d.creada,d=>costoDoc(d),ejeV);
     const max=Math.max(1,...mv.map(m=>m.v));
     exportData=mv.map((m,i)=>{const mg=m.v-mc[i].v;return {Mes:m.lbl,Ventas:m.v,Costo:mc[i].v,Margen:mg,'Margen%':m.v?(mg/m.v*100).toFixed(1):0};});
     html+=`<div class="panel"><div class="panel-head"><h3>Ventas vs costos por mes</h3>
@@ -8084,8 +8097,9 @@ function renderReportes(){
     // por vendedor: monto total y por mes
     const datos={};const ejeVend=mesesEje(ventas,d=>d.creada);seleccionados.forEach(n=>{datos[n]={v:0,c:0,n:0,meses:mesesSerie(ventas.filter(d=>d.vendedorNombre===n),d=>d.creada,d=>d.totales.total,ejeVend)};});
     ventas.filter(d=>seleccionados.includes(d.vendedorNombre||'Sin asignar')).forEach(d=>{const k=d.vendedorNombre||'Sin asignar';if(datos[k]){datos[k].v+=d.totales.total;datos[k].n++;
-      // costo de lo vendido por este vendedor (costo promedio del mes de la venta)
-      const dtV=new Date(d.creada);d.items.forEach(it=>{datos[k].c+=costoLineaMes(it,dtV.getFullYear(),dtV.getMonth());});
+      // costo de lo vendido por este vendedor (costo promedio del mes; para
+      // las facturas históricas sin líneas usa el costo histórico guardado)
+      datos[k].c+=costoDoc(d);
     }});
     // Ocultar vendedores sin ventas en el período (salvo que se hayan elegido explícitamente)
     const activos=repFiltros.vendedores.length?seleccionados:seleccionados.filter(n=>datos[n].n>0);

@@ -198,6 +198,17 @@ async function cargarTodo() {
       }
     } catch(e){ /* tabla aún no creada */ }
 
+    // Costo histórico por factura (margen del período importado sin detalle).
+    // Se trae aparte para tolerar que la columna no exista todavía; si no está,
+    // simplemente no se llena y el costo de esas facturas queda en 0.
+    try {
+      const rCH = await sb.from('documentos').select('id,costo_historico');
+      if (!rCH.error && Array.isArray(documentos)) {
+        const byId = {}; (rCH.data||[]).forEach(r=>{ if(r.costo_historico!=null) byId[r.id]=Number(r.costo_historico); });
+        documentos.forEach(d=>{ if(byId[d.id]!=null) d.costoHistorico=byId[d.id]; });
+      }
+    } catch(e){ /* columna aún no creada */ }
+
     // Marca de que los datos vienen REALMENTE de la base.
     //
     // No alcanza con que la consulta no haya reventado: con RLS activo
@@ -273,7 +284,7 @@ function mapDocumentoFromDB(d, todosAbonos){
     entregaInfo:d.entrega_info, anulado:d.anulado, motivoAnulacion:d.motivo_anulacion,
     pdfBase64:d.pdf_base64, xmlBase64:d.xml_base64, fechaCertificacion:d.fecha_certificacion,
     facturaOrigenId:d.factura_origen_id, nitFacturado:d.nit_facturado, nombreFacturado:d.nombre_facturado,
-    sede:d.sede,
+    sede:d.sede, costoHistorico:d.costo_historico,
     creada:d.creada, abonos
   };
 }
