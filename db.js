@@ -202,8 +202,10 @@ async function cargarTodo() {
     // Se trae aparte para tolerar que la columna no exista todavía; si no está,
     // simplemente no se llena y el costo de esas facturas queda en 0.
     try {
-      const rCH = await sb.from('documentos').select('id,costo_historico');
-      if (!rCH.error && Array.isArray(documentos)) {
+      // Paginado (fetchAll): sin esto Supabase corta en 1000 filas y muchas
+      // facturas se quedarían sin su costo histórico → el reporte sumaría de menos.
+      const rCH = await fetchAll('documentos','id','id,costo_historico');
+      if (Array.isArray(documentos)) {
         const byId = {}; (rCH.data||[]).forEach(r=>{ if(r.costo_historico!=null) byId[r.id]=Number(r.costo_historico); });
         documentos.forEach(d=>{ if(byId[d.id]!=null) d.costoHistorico=byId[d.id]; });
       }
