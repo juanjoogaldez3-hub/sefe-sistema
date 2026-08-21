@@ -286,7 +286,7 @@ function mapDocumentoFromDB(d, todosAbonos){
     entregaInfo:d.entrega_info, anulado:d.anulado, motivoAnulacion:d.motivo_anulacion,
     pdfBase64:d.pdf_base64, xmlBase64:d.xml_base64, fechaCertificacion:d.fecha_certificacion,
     facturaOrigenId:d.factura_origen_id, nitFacturado:d.nit_facturado, nombreFacturado:d.nombre_facturado,
-    sede:d.sede, costoHistorico:d.costo_historico,
+    sede:d.sede,
     creada:d.creada, abonos
   };
 }
