@@ -703,6 +703,7 @@
             <label style="margin:0;font-size:11.5px;white-space:nowrap">Hasta</label><input type="date" id="docs-hasta" style="max-width:150px">
             <button class="btn btn-ghost btn-sm" onclick="esteMesDocs()">Este mes</button>
             <button class="btn btn-ghost btn-sm" onclick="limpiarFechaDocs()">Limpiar</button>
+            <label style="margin:0;font-size:11.5px;white-space:nowrap;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="docs-ver-anulados" style="width:auto;margin:0" onchange="renderDocs()">Ver anulados</label>
           </div>
           <table><thead><tr><th>No.</th><th>Tipo</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="t-docs"></tbody></table>
           <div class="empty" id="docs-empty">Todavía no hay documentos.</div>
@@ -2502,6 +2503,10 @@ document.addEventListener('click',e=>{
   else if(!e.target.closest('.acts-btn'))document.querySelectorAll('.acts-drop.open').forEach(d=>d.classList.remove('open'));
 });
 function docsEnRango(d){
+  // Por defecto los anulados no se muestran (hacen bulto). El check "Ver
+  // anulados" los vuelve a mostrar. No se borran: siguen en la base (las
+  // facturas anuladas son registro fiscal), sólo se ocultan de la lista.
+  if(!$('#docs-ver-anulados')?.checked && (d.estado==='anulada'||d.anulado))return false;
   const tipo=$('#docs-tipo')?.value;
   if(tipo&&d.tipoDoc!==tipo)return false;
   const desde=$('#docs-desde')?.value,hasta=$('#docs-hasta')?.value;
