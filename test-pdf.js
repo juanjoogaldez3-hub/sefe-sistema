@@ -16,7 +16,7 @@
 
 // Extrae esperarImagenes() del index.html real y la prueba con un DOM simulado.
 const fs=require('fs'), vm=require('vm');
-const src=fs.readFileSync(__dirname + '/index.html','utf8');
+const src = require('./test-fuente');
 const m=src.match(/function esperarImagenes\(contenedor\)\{[\s\S]*?\n\}/);
 if(!m){ console.log('✗ no se encontró la función'); process.exit(1); }
 

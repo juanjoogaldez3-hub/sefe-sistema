@@ -37,16 +37,25 @@ const idsDe = txt => {
   return out;
 };
 
+// Devuelve { htmlFijo, js } de un archivo, sirviendo dos formas:
+//  - inline: el JS vive en un <script> gigante dentro del archivo (ej. Pruebas).
+//  - partido: el JS vive en módulos js/app-*.js y el archivo sólo trae el HTML
+//    y las etiquetas <script src="js/app-N.js"> (la raíz, tras separar el código).
+function fuentesDe(ruta) {
+  const lineas = fs.readFileSync(__dirname + '/' + ruta, 'utf8').split('\n');
+  const iInline = lineas.findIndex(l => l.trim() === '<script>');
+  if (iInline >= 0) {
+    return { htmlFijo: lineas.slice(0, iInline).join('\n'), js: lineas.slice(iInline).join('\n') };
+  }
+  const iSrc = lineas.findIndex(l => /<script src="js\/app-/.test(l));
+  if (iSrc < 0) { console.log('✗ no se encontró ni <script> inline ni módulos js/app-*'); process.exit(1); }
+  // El JS son los módulos concatenados en orden (igual que en el navegador).
+  return { htmlFijo: lineas.slice(0, iSrc).join('\n'), js: require('./test-fuente') };
+}
+
 function revisar(ruta) {
   console.log('\n══════ ' + ruta + ' ══════');
-  const lineas = fs.readFileSync(__dirname + '/' + ruta, 'utf8').split('\n');
-
-  // El HTML fijo termina donde arranca el <script> de la aplicación
-  const iScript = lineas.findIndex(l => l.trim() === '<script>');
-  if (iScript < 0) { console.log('✗ no se encontró el <script> de la aplicación'); process.exit(1); }
-
-  const htmlFijo = lineas.slice(0, iScript).join('\n');
-  const js = lineas.slice(iScript).join('\n');
+  const { htmlFijo, js } = fuentesDe(ruta);
 
   const fijos = idsDe(htmlFijo);
   const repetidosEnHtml = [...fijos].filter(([, n]) => n > 1).map(([id]) => id);
