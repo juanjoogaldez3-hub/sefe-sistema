@@ -8386,15 +8386,20 @@ function renderReportes(){
       porCli[key].total+=monto;
     });
     const ultM=meses[meses.length-1],prevM=meses[meses.length-2],hayComp=meses.length>=2;
-    // Orden de las filas: por Total (default) o por la diferencia del último mes
-    // vs. el anterior — "Más creció" (mayor alza arriba) / "Más cayó" (mayor
-    // baja arriba). La diferencia se mide en quetzales. Si no hay dos meses para
-    // comparar, cae al orden por Total.
+    // Orden de las filas: por Total (default) o por la VARIACIÓN % del último
+    // mes vs. el anterior — "Más creció" (mayor % arriba) / "Más cayó" (menor %
+    // arriba). El % es el mismo que muestra la columna: base 0 → +100% si hay
+    // venta nueva, −100% si dejó de comprar. Empate de % se desempata por el
+    // monto (Q). Si no hay dos meses para comparar, cae al orden por Total.
     const _difCli=info=>((info.meses[ultM]||0)-(info.meses[prevM]||0));
+    const _pctCli=info=>{const u=info.meses[ultM]||0,pv=info.meses[prevM]||0,dif=u-pv;const mag=pv?Math.abs(dif/pv*100):(Math.abs(dif)>0.005?100:0);return dif>=0?mag:-mag;};
     const _ordCC=repFiltros.climescompOrden||'total';
     const filas=Object.entries(porCli).sort((a,b)=>{
-      if(hayComp&&_ordCC==='crecio')return _difCli(b[1])-_difCli(a[1]);
-      if(hayComp&&_ordCC==='cayo')return _difCli(a[1])-_difCli(b[1]);
+      if(hayComp&&(_ordCC==='crecio'||_ordCC==='cayo')){
+        const pa=_pctCli(a[1]),pb=_pctCli(b[1]);
+        if(pa!==pb)return _ordCC==='crecio'?pb-pa:pa-pb;
+        return _ordCC==='crecio'?_difCli(b[1])-_difCli(a[1]):_difCli(a[1])-_difCli(b[1]);
+      }
       return b[1].total-a[1].total;
     });
     const totalesGen={};meses.forEach(m=>totalesGen[m]=0);let granTotal=0;
