@@ -3461,16 +3461,16 @@ function clienteStats(c){
     // para marcarlos todos al final del bloque sin tener que repetir
     // los datos en cada push.
     const _desde=movimientos.length;
-    movimientos.push({fecha:f.creada,doc:f.serie+'-'+f.numeroDte,detalle:'Factura Cambiaria',cargo:f.totales.total,abono:0});
+    movimientos.push({fecha:f.creada,doc:f.serie+'-'+f.numeroDte,detalle:'Factura Cambiaria',cargo:f.totales.total,abono:0,mov:'factura'});
     (f.abonos||[]).forEach(a=>{
-      if(a.anulado)movimientos.push({fecha:a.anuladoFecha||a.fecha,doc:refRecibo(a),detalle:`${esRetencion(a)?'Retención':'Abono'} ANULADO (${money(a.monto)} · ${a.motivoAnulacion||'sin motivo'})`,cargo:0,abono:0});
+      if(a.anulado)movimientos.push({fecha:a.anuladoFecha||a.fecha,doc:refRecibo(a),detalle:`${esRetencion(a)?'Retención':'Abono'} ANULADO (${money(a.monto)} · ${a.motivoAnulacion||'sin motivo'})`,cargo:0,abono:0,mov:'abono'});
       // En una retención el método ya dice "Retención IVA/ISR", así que
       // se usa tal cual: anteponerle "Retención ·" lo dejaría repetido.
-      else movimientos.push({fecha:a.fecha,doc:refRecibo(a),detalle:(esRetencion(a)?String(a.metodo||'Retención'):('Abono'+(a.metodo?' · '+a.metodo:'')))+(a.referencia?' ('+a.referencia+')':''),cargo:0,abono:Number(a.monto)});
+      else movimientos.push({fecha:a.fecha,doc:refRecibo(a),detalle:(esRetencion(a)?String(a.metodo||'Retención'):('Abono'+(a.metodo?' · '+a.metodo:'')))+(a.referencia?' ('+a.referencia+')':''),cargo:0,abono:Number(a.monto),mov:'abono'});
     });
     documentos.filter(d=>d.facturaOrigenId===f.id).forEach(n=>{
-      if(n.estado==='anulada')movimientos.push({fecha:n.anuladoFecha||n.creada,doc:n.serie+'-'+n.numeroDte,detalle:`${(TIPO_LBL[n.tipoDoc]||['Documento'])[0]} ANULADA (${money(n.totales.total)} · ${n.motivo||'sin motivo'})`,cargo:0,abono:0});
-      else if(n.tipoDoc==='notaCredito')movimientos.push({fecha:n.creada,doc:n.serie+'-'+n.numeroDte,detalle:'Nota de Crédito · '+(n.motivo||''),cargo:0,abono:n.totales.total});
+      if(n.estado==='anulada')movimientos.push({fecha:n.anuladoFecha||n.creada,doc:n.serie+'-'+n.numeroDte,detalle:`${(TIPO_LBL[n.tipoDoc]||['Documento'])[0]} ANULADA (${money(n.totales.total)} · ${n.motivo||'sin motivo'})`,cargo:0,abono:0,mov:'nota',docId:n.id});
+      else if(n.tipoDoc==='notaCredito')movimientos.push({fecha:n.creada,doc:n.serie+'-'+n.numeroDte,detalle:'Nota de Crédito · '+(n.motivo||''),cargo:0,abono:n.totales.total,mov:'nota',docId:n.id});
     });
     // Marcar todo lo que salió de esta factura: la propia factura, sus
     // abonos y sus notas. Con esto se pueden agrupar después.
@@ -3542,13 +3542,21 @@ function fichaIntegral(c,st){
   // clienteStats), así que listado de nuevo a viejo cada fila mostraba
   // un acumulado que no correspondía a lo que se venía leyendo. El
   // encabezado ya decía "orden cronológico"; ahora es cierto.
+  // Acciones por fila: ver/imprimir la factura o la nota; ver los abonos.
+  const _accMov=m=>{
+    if(m.mov==='factura')return `<button class="btn btn-ghost btn-sm" onclick="verDoc(${m.idFac})">Ver</button><button class="btn btn-ghost btn-sm" onclick="descargarFacturaPDF(${m.idFac})" title="Descargar PDF">PDF</button>`;
+    if(m.mov==='nota')return `<button class="btn btn-ghost btn-sm" onclick="verDoc(${m.docId})">Ver</button><button class="btn btn-ghost btn-sm" onclick="descargarFacturaPDF(${m.docId})" title="Descargar PDF">PDF</button>`;
+    if(m.mov==='abono')return `<button class="btn btn-ghost btn-sm" onclick="openHistorialAbonos(${m.idFac})">Ver abono</button>`;
+    return '';
+  };
   const movRows=st.movimientos.length?st.movimientos.map(m=>`<tr>
       <td style="color:var(--muted)">${fdate(m.fecha)}</td>
       <td style="font-weight:600">${m.doc}</td>
       <td style="color:var(--muted)">${m.detalle}</td>
       <td class="num" style="color:${m.cargo?'var(--ink)':'var(--muted-2)'}">${m.cargo?money(m.cargo):'—'}</td>
       <td class="num" style="color:${m.abono?'var(--ok)':'var(--muted-2)'}">${m.abono?money(m.abono):'—'}</td>
-      <td class="num" style="font-weight:700;color:${m.balance>0?'var(--warn)':'var(--ok)'}">${money(m.balance)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin movimientos todavía</td></tr>';
+      <td class="num" style="font-weight:700;color:${m.balance>0?'var(--warn)':'var(--ok)'}">${money(m.balance)}</td>
+      <td><div class="acts">${_accMov(m)}</div></td></tr>`).join(''):'<tr><td colspan="7" class="empty">Sin movimientos todavía</td></tr>';
   return `<div class="panel"><div class="panel-head"><h3>Estado de cuenta</h3></div><div class="panel-body">
     <div class="kpis" style="margin-bottom:${hayMora?'16px':'0'}">${kpis.join('')}</div>
     ${hayMora?`<div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Antigüedad de saldos</div>
@@ -3557,7 +3565,7 @@ function fichaIntegral(c,st){
   <div style="border-top:1px solid var(--line)">
     <div style="padding:13px 20px 0;font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px">Movimientos (cada factura con sus abonos, por fecha de factura)</div>
     <div style="max-height:300px;overflow:auto">
-      <table><thead><tr><th>Fecha</th><th>Documento</th><th>Detalle</th><th>Cargo</th><th>Abono</th><th>Saldo</th></tr></thead><tbody>${movRows}</tbody></table>
+      <table><thead><tr><th>Fecha</th><th>Documento</th><th>Detalle</th><th>Cargo</th><th>Abono</th><th>Saldo</th><th>Acciones</th></tr></thead><tbody>${movRows}</tbody></table>
     </div>
   </div></div>`;
 }

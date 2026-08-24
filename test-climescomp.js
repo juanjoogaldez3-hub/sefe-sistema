@@ -21,7 +21,7 @@
 // ============================================================
 
 const fs = require('fs'), vm = require('vm');
-const src = fs.readFileSync(__dirname + '/index.html', 'utf8');
+const src = require('./test-fuente');
 
 let fallos = 0, pruebas = 0;
 const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t + (c ? '' : '  → ' + e)); if (!c) fallos++; };
