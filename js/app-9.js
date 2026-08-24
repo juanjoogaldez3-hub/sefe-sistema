@@ -331,7 +331,17 @@ function renderReportes(){
       porCli[key].total+=monto;
     });
     const ultM=meses[meses.length-1],prevM=meses[meses.length-2],hayComp=meses.length>=2;
-    const filas=Object.entries(porCli).sort((a,b)=>b[1].total-a[1].total);
+    // Orden de las filas: por Total (default) o por la diferencia del último mes
+    // vs. el anterior — "Más creció" (mayor alza arriba) / "Más cayó" (mayor
+    // baja arriba). La diferencia se mide en quetzales. Si no hay dos meses para
+    // comparar, cae al orden por Total.
+    const _difCli=info=>((info.meses[ultM]||0)-(info.meses[prevM]||0));
+    const _ordCC=repFiltros.climescompOrden||'total';
+    const filas=Object.entries(porCli).sort((a,b)=>{
+      if(hayComp&&_ordCC==='crecio')return _difCli(b[1])-_difCli(a[1]);
+      if(hayComp&&_ordCC==='cayo')return _difCli(a[1])-_difCli(b[1]);
+      return b[1].total-a[1].total;
+    });
     const totalesGen={};meses.forEach(m=>totalesGen[m]=0);let granTotal=0;
     const expFilas=[];let cuerpo='';
     const varTd=(dif,pv,peso)=>{
