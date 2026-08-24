@@ -115,13 +115,16 @@ Ya no hay que pegar SQL en el chat.
 
 **Un cliente nuevo:**
 
-1. Crear su proyecto en Supabase
-2. Agregar su contraseña como una clave más
-3. Agregar unas líneas al flujo de GitHub
+1. Crear su proyecto en Supabase (base vacía)
+2. Agregar su contraseña como una clave más, y unas líneas al flujo de
+   GitHub apuntando a su proyecto
+3. Agregar su bloque en `config.js` (url, key y dominio — hay una
+   plantilla lista al final del archivo) y apuntar su dominio al sitio
 
-Sus migraciones se aplican todas en orden, desde la primera, y queda
-con exactamente el mismo esquema que SEFE. Sin baseline: esa base es
-nueva, así que todo se aplica de verdad.
+Sus migraciones se aplican todas en orden, **desde la primera
+(`baseline_esquema`, que crea las tablas)**, y queda con exactamente el
+mismo esquema que SEFE. NO se corre `baseline.sql`: esa base es nueva,
+así que todo se aplica de verdad.
 
 ---
 
@@ -130,14 +133,23 @@ nueva, así que todo se aplica de verdad.
 ```
 supabase/
   config.toml                          nombre local del proyecto
-  baseline.sql                         marca lo ya aplicado (una vez por base)
+  baseline.sql                         marca lo ya aplicado (una vez por base existente)
+  MEJORAS.md                           ideas de mejora del esquema, para retomar
   migrations/
+    20260101000000_baseline_esquema.sql  crea TODA la base desde cero (cliente nuevo)
     20260805000000_base_historico.sql  todo lo de antes, junto
     20260812024415_realtime.sql        publicar tablas para el tiempo real
     20260812030419_rls.sql             seguridad a nivel de base
+    20260819120000_sede_documento.sql  columna 'sede' en documentos
+    20260820130000_creditos_cliente.sql tabla de saldo a favor
+    20260820160000_costo_historico_documento.sql  costo guardado por documento
   herramientas/
     rls-revertir.sql                   botón de pánico: apaga RLS
 ```
+
+El `baseline_esquema` es la PRIMERA migración: crea las tablas vacías.
+En Producción y Pruebas es un no-op (todo ya existe); en la base de un
+cliente nuevo es la que arma toda la estructura antes que las demás.
 
 El nombre de cada migración empieza con la fecha y hora, y ese orden
 es el que manda: se aplican de la más vieja a la más nueva.

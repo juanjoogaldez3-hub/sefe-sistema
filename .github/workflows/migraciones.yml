@@ -76,7 +76,9 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD_PRUEBAS }}
-        run: supabase db push
+        # --include-all: aplica también migraciones con fecha anterior a la
+        # última ya aplicada (el baseline). En bases existentes es no-op.
+        run: supabase db push --include-all
 
       - name: Estado final
         env:
@@ -130,7 +132,9 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
-        run: supabase db push
+        # --include-all: aplica también migraciones con fecha anterior a la
+        # última ya aplicada (el baseline). En bases existentes es no-op.
+        run: supabase db push --include-all
 
       - name: Estado final
         env:
