@@ -30,10 +30,13 @@ const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t +
 // Ojo: hay dos reportes con mesKey; anclamos al de la comparativa (climescomp).
 const anclaComp = src.indexOf("else if(repType==='climescomp'){");
 const ini = src.indexOf('const mesKey=d=>{const f=new Date(d.creada);', anclaComp);
-const finMarca = 'const filas=Object.entries(porCli).sort((a,b)=>b[1].total-a[1].total);';
-const fin = src.indexOf(finMarca, ini);
-if (ini < 0 || fin < 0) { console.log('✗ no se encontró el bloque de la comparativa'); process.exit(1); }
-const bloque = src.slice(ini, fin + finMarca.length);
+// El orden de 'filas' ahora es un bloque de varias líneas (Total / Más creció /
+// Más cayó); tomamos hasta el cierre de ese .sort(...).
+const finAncla = 'return b[1].total-a[1].total;';
+const finIdx = src.indexOf(finAncla, ini);
+const fin = finIdx >= 0 ? src.indexOf('});', finIdx) : -1;
+if (ini < 0 || finIdx < 0 || fin < 0) { console.log('✗ no se encontró el bloque de la comparativa'); process.exit(1); }
+const bloque = src.slice(ini, fin + 2);
 
 // Fecha fija: 19 de agosto de 2026 (así "mes en curso" = agosto, anterior = julio).
 const NOW = '2026-08-19T12:00:00';

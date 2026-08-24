@@ -295,7 +295,10 @@ function renderRepFilters(){
   else if(repType==='climescomp'||repType==='comision'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
-    html=`<div class="rep-filter-bar">${sel('rf-vend-cc','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}${sel('rf-cli-cc','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
+    // En la Comparativa cliente/mes se puede ordenar por Total (default) o por
+    // la diferencia del último mes vs. el anterior: "Más creció" / "Más cayó".
+    const ordCC=repType==='climescomp'?`<div><label>Ordenar por</label><select style="margin-top:4px;height:34px" onchange="setRepFiltro('climescompOrden',this.value)"><option value="total"${(repFiltros.climescompOrden||'total')==='total'?' selected':''}>Total</option><option value="crecio"${repFiltros.climescompOrden==='crecio'?' selected':''}>Más creció</option><option value="cayo"${repFiltros.climescompOrden==='cayo'?' selected':''}>Más cayó</option></select></div>`:'';
+    html=`<div class="rep-filter-bar">${sel('rf-vend-cc','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}${sel('rf-cli-cc','Cliente',cliOpts,repFiltros.cliente,'cliente')}${ordCC}</div>`;
   }
   else if(repType==='prodmescomp'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
