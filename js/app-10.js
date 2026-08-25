@@ -1,58 +1,157 @@
+// ============================================================
+//  ESTÁNDAR DE DESCARGAS EXCEL (una sola pinta para las cinco)
+//  Membrete + encabezado verde + montos en Q + filas alternadas
+//  + totales resaltados + anchos automáticos. Antes cada Excel
+//  salía distinto y "plano"; ahora todas llaman a estos ayudantes.
+// ============================================================
+const _XLS_VERDE='173916', _XLS_VERDE_BORDE='0F2A0D', _XLS_CEBRA='F4F6EF',
+      _XLS_LINEA='E4E8DA', _XLS_TOTAL_BG='E7ECDB', _XLS_MONEY='"Q"#,##0.00';
+
+// Carga la librería de Excel CON estilos (colores, negrita); si falla,
+// respaldo a SheetJS normal (exporta bien, pero sin colores). {XLSX, styled}.
+async function _cargarXLSX(){
+  try{
+    const _m=await import('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/+esm');
+    const X=_m.default||_m;
+    if(X&&X.utils)return {XLSX:X,styled:true};
+  }catch(_e){}
+  const X=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
+  return {XLSX:X,styled:false};
+}
+window._cargarXLSX=_cargarXLSX;
+
+// Ancho de columna automático: mide el texto más largo de cada columna
+// para que nada salga cortado ni pegado.
+function _anchosExcel(XLSX,ws,nCols){
+  const rng=XLSX.utils.decode_range(ws['!ref']);
+  const cols=[];
+  for(let c=0;c<nCols;c++){
+    let w=9;
+    for(let r=rng.s.r;r<=rng.e.r;r++){
+      const cell=ws[XLSX.utils.encode_cell({c,r})];
+      if(!cell)continue;
+      const v=cell.v==null?'':String(cell.v);
+      // el dinero ocupa un poco más por la "Q" y los decimales
+      const l=cell.z===_XLS_MONEY?Math.max(v.length,11)+2:v.length;
+      if(l>w)w=l;
+    }
+    cols.push({wch:Math.min(w+2,60)});
+  }
+  return cols;
+}
+
+// Aplica el formato estándar a una hoja ya armada (membrete arriba + tabla).
+//   o = { styled, headerRow, nCols, dataRows, moneyCols:[idx...],
+//         totalRow, brandRow, metaRows:[idx...], cebra }
+// Índices de fila/columna en base 0. Las moneyCols reciben el formato de
+// quetzales y se alinean a la derecha. Sin librería de estilos igual deja
+// anchos y formato Q (lo único que respeta SheetJS normal).
+function _estiloExcelHoja(XLSX,ws,o){
+  const enc=(c,r)=>XLSX.utils.encode_cell({c,r});
+  const money=new Set(o.moneyCols||[]);
+  const nCols=o.nCols, hr=o.headerRow, nData=o.dataRows||0;
+  // Formato de quetzales en columnas de dinero (datos + fila de total).
+  const filasQ=[]; for(let i=0;i<nData;i++)filasQ.push(hr+1+i);
+  if(o.totalRow!=null)filasQ.push(o.totalRow);
+  money.forEach(c=>filasQ.forEach(r=>{const ref=enc(c,r);if(ws[ref]&&typeof ws[ref].v==='number')ws[ref].z=_XLS_MONEY;}));
+  // Anchos automáticos.
+  ws['!cols']=_anchosExcel(XLSX,ws,nCols);
+  if(!o.styled)return;
+  const bFino={style:'thin',color:{rgb:_XLS_LINEA}};
+  const bordes={top:bFino,bottom:bFino,left:bFino,right:bFino};
+  const bV={style:'thin',color:{rgb:_XLS_VERDE_BORDE}};
+  // Encabezado de columnas: verde corporativo, letra blanca, centrado vertical.
+  for(let c=0;c<nCols;c++){
+    const ref=enc(c,hr); if(!ws[ref])ws[ref]={t:'s',v:''};
+    ws[ref].s={font:{bold:true,color:{rgb:'FFFFFF'},sz:11},
+      fill:{patternType:'solid',fgColor:{rgb:_XLS_VERDE}},
+      alignment:{horizontal:money.has(c)?'right':'left',vertical:'center',wrapText:false},
+      border:{top:bV,bottom:bV,left:bV,right:bV}};
+  }
+  // Datos: bordes finos + filas alternadas (cebra).
+  for(let i=0;i<nData;i++){
+    const r=hr+1+i, zebra=(o.cebra!==false)&&(i%2===1);
+    for(let c=0;c<nCols;c++){
+      const ref=enc(c,r); if(!ws[ref])continue;
+      const s=ws[ref].s||{};
+      s.border=bordes;
+      if(zebra)s.fill={patternType:'solid',fgColor:{rgb:_XLS_CEBRA}};
+      if(money.has(c))s.alignment=Object.assign({},s.alignment,{horizontal:'right'});
+      ws[ref].s=s;
+    }
+  }
+  // Membrete: nombre de la empresa en grande y verde.
+  if(o.brandRow!=null){
+    const ref=enc(0,o.brandRow); if(ws[ref])ws[ref].s={font:{bold:true,sz:16,color:{rgb:_XLS_VERDE}}};
+  }
+  // Membrete: etiquetas (Reporte:, Período:, …) en negrita verde.
+  (o.metaRows||[]).forEach(r=>{const ref=enc(0,r);if(ws[ref]){const s=ws[ref].s||{};s.font=Object.assign({bold:true,color:{rgb:_XLS_VERDE}},s.font);ws[ref].s=s;}});
+  // Fila de totales: negrita, fondo lima suave, línea verde arriba.
+  if(o.totalRow!=null){
+    const bTop={style:'medium',color:{rgb:_XLS_VERDE}};
+    for(let c=0;c<nCols;c++){
+      const ref=enc(c,o.totalRow); if(!ws[ref])continue;
+      const s=ws[ref].s||{};
+      ws[ref].s=Object.assign(s,{font:{bold:true,color:{rgb:_XLS_VERDE}},
+        fill:{patternType:'solid',fgColor:{rgb:_XLS_TOTAL_BG}},
+        border:{top:bTop,bottom:bFino,left:bFino,right:bFino}});
+      if(money.has(c))ws[ref].s.alignment={horizontal:'right'};
+    }
+  }
+}
+window._estiloExcelHoja=_estiloExcelHoja;
+
 // ---- Exportación Excel ----
 async function exportarExcel(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
   try{
-  // Librería con soporte de estilos (negrita, etc.); si falla, respaldo a SheetJS normal (exporta sin estilos).
-  let XLSX,_styled=false;
-  try{const _m=await import('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/+esm');XLSX=_m.default||_m;if(XLSX&&XLSX.utils)_styled=true;else throw 0;}
-  catch(_e){XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');}
+  const {XLSX,styled:_styled}=await _cargarXLSX();
   const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',factabo:'FACTURAS Y ABONOS',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO',invmov:'MOVIMIENTO DE INVENTARIO'};
   const _esInv=(repType==='invactual'||repType==='invcosto');
   // Reportes cuyos números son CANTIDADES (unidades), nunca dinero: no llevan formato "Q".
   const _soloCant=(repType==='invmov'||repType==='invactual');
-  const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],[]];
+  const meta=[
+    ['SEFE, S.A.'],
+    ['Reporte:',TIPO_NOMBRES[repType]||repType],
+    [_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],
+    ['Generado el:',fdatehora(new Date())],
+    ['Generado por:',currentUser],
+    []
+  ];
+  const HR=6; // fila (0-index) del encabezado de columnas (tras el membrete)
   const ws=XLSX.utils.aoa_to_sheet(meta);
-  XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
-  // Estado de cuenta: nombres de cliente y "TOTALES CLIENTE" en negrita (si la librería soporta estilos).
-  // Negrita en las filas que encabezan o cierran un bloque: el nombre
-  // del cliente y "TOTALES CLIENTE". Se reconocen porque su primera
-  // columna NO es un documento.
-  //
-  // En "Facturas y abonos" los documentos son FA (factura), RE (recibo),
-  // RT (retención) y NC (nota de crédito); en el estado de cuenta
-  // general sólo hay FA.
+  XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A'+(HR+1)});
+  const _keys=Object.keys(repLastData[0]);
+  // Columnas de dinero (por nombre; excluye %, cantidades, fechas). En los
+  // reportes de sólo-cantidades (inventario en unidades) no hay dinero.
+  const _incM=/precio|costo|venta|valor|saldo|monto|margen\s*q|\biva\b|neto|entrada|salida|abono|ganancia|compra|d[eé]bito|cr[eé]dito|pendiente|total|corriente/i;
+  const _mesM=/^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/i;
+  const _excM=/%|porcentaje|unidad|cantidad|existencia|recibos?|[oó]rdenes|d[ií]as?/i;
+  const _cur=['Corriente','30 Días','60 Días','90 Días','+90 Días'];
+  const moneyCols=_soloCant?[]:_keys.map((k,i)=>(_cur.indexOf(k)>=0||(!_excM.test(k)&&(_incM.test(k)||_mesM.test(k)||/^Δ/.test(k))))?i:-1).filter(i=>i>=0);
+  // Fila de TOTALES al pie (suma de columnas numéricas), si el reporte no la trae ya.
+  let totalRow=null;
+  const _yaTot=repLastData.some(r=>_keys.some(k=>typeof r[k]==='string'&&/^\s*(sub)?total/i.test(r[k])));
+  const _excT=/%|porcentaje|unitari|precio\s*lista|fecha|d[ií]as?/i;
+  const _sumCols=_keys.filter(k=>!_excT.test(k)&&repLastData.some(r=>typeof r[k]==='number'));
+  if(!_yaTot&&_sumCols.length){
+    totalRow=HR+1+repLastData.length;
+    _keys.forEach((kk,ci)=>{
+      const val=ci===0?'TOTALES':(_sumCols.indexOf(kk)>=0?repLastData.reduce((s,r)=>s+(typeof r[kk]==='number'?r[kk]:0),0):null);
+      if(val===null)return;
+      const ref=XLSX.utils.encode_cell({c:ci,r:totalRow});
+      ws[ref]={t:typeof val==='number'?'n':'s',v:val};
+    });
+    ws['!ref']=XLSX.utils.encode_range({s:{c:0,r:0},e:{c:_keys.length-1,r:totalRow}});
+  }
+  // Formato estándar: membrete, encabezado verde, Q, filas alternadas, totales, anchos.
+  _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:repLastData.length,moneyCols,totalRow,brandRow:0,metaRows:[1,2,3,4]});
+  // Estado de cuenta / Facturas y abonos: los nombres de cliente y "TOTALES
+  // CLIENTE" (filas cuya 1ª columna NO es un documento) van en negrita.
+  // Documentos: FA/RE/RT/NC en "Facturas y abonos"; sólo FA en estado de cuenta.
   if(_styled&&(repType==='estcta'||repType==='factabo')){
     const _esDoc=repType==='factabo'?/^(FA |RE|RT|NC)/:/^FA /;
-    repLastData.forEach((row,i)=>{const doc=(row&&row.Documento)||'';if(doc&&!_esDoc.test(doc)){const ref='A'+(7+i);if(ws[ref])ws[ref].s={font:{bold:true}};}});
-  }
-  // Ancho de columnas automático según el contenido (para que no salgan cortadas).
-  if(repLastData.length){const _keys=Object.keys(repLastData[0]);ws['!cols']=_keys.map(k=>{let w=String(k).length;repLastData.forEach(r=>{const v=r[k];const l=(v==null?'':String(v)).length;if(l>w)w=l;});return {wch:Math.min(Math.max(w+2,9),60)};});}
-  // Formato moneda (Q) en las columnas de importe del estado de cuenta.
-  if(repType==='estcta'&&repLastData.length){const _k=Object.keys(repLastData[0]);const _cur=['Corriente','30 Días','60 Días','90 Días','+90 Días'];repLastData.forEach((r,i)=>{_k.forEach((kk,ci)=>{if(_cur.indexOf(kk)>=0&&typeof r[kk]==='number'){const ref=XLSX.utils.encode_cell({c:ci,r:6+i});if(ws[ref])ws[ref].z='"Q"#,##0.00';}});});}
-  // Formato moneda (Q) en columnas de importe del resto de reportes (por nombre; excluye % y cantidades).
-  if(repType!=='estcta'&&!_soloCant&&repLastData.length){const _k=Object.keys(repLastData[0]);const _inc=/precio|costo|venta|valor|saldo|monto|margen\s*q|\biva\b|neto|entrada|salida|abono|ganancia|compra|d[eé]bito|cr[eé]dito|pendiente|total|corriente/i;const _mes=/^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/i;const _exc=/%|porcentaje|unidad|cantidad|existencia|recibos?|[oó]rdenes/i;const _money=_k.filter(k=>!_exc.test(k)&&(_inc.test(k)||_mes.test(k)||/^Δ/.test(k)));repLastData.forEach((r,i)=>{_k.forEach((kk,ci)=>{if(_money.indexOf(kk)>=0&&typeof r[kk]==='number'){const ref=XLSX.utils.encode_cell({c:ci,r:6+i});if(ws[ref])ws[ref].z='"Q"#,##0.00';}});});}
-  // Fila de TOTALES al pie (suma de columnas numéricas), si el reporte no la trae ya.
-  if(repLastData.length){
-    const _k=Object.keys(repLastData[0]);
-    const _yaTot=repLastData.some(r=>_k.some(k=>typeof r[k]==='string'&&/^\s*(sub)?total/i.test(r[k])));
-    const _excT=/%|porcentaje|unitari|precio\s*lista|fecha|d[ií]as?/i;
-    const _sumCols=_k.filter(k=>!_excT.test(k)&&repLastData.some(r=>typeof r[k]==='number'));
-    if(!_yaTot&&_sumCols.length){
-      const _incM=/precio|costo|venta|valor|saldo|monto|margen\s*q|\biva\b|neto|entrada|salida|abono|ganancia|compra|d[eé]bito|cr[eé]dito|pendiente|total|corriente/i;
-      const _excM=/%|porcentaje|unidad|cantidad|existencia|recibos?|[oó]rdenes/i;
-      const _mesM=/^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/i;
-      const _esMoney=k=>!_soloCant&&!_excM.test(k)&&(_incM.test(k)||_mesM.test(k)||/^Δ/.test(k));
-      const _rt=6+repLastData.length; // fila (0-index) de los totales
-      _k.forEach((kk,ci)=>{
-        const val=ci===0?'TOTALES':(_sumCols.indexOf(kk)>=0?repLastData.reduce((s,r)=>s+(typeof r[kk]==='number'?r[kk]:0),0):null);
-        if(val===null)return;
-        const ref=XLSX.utils.encode_cell({c:ci,r:_rt});
-        ws[ref]={t:typeof val==='number'?'n':'s',v:val};
-        if(typeof val==='number'&&_esMoney(kk))ws[ref].z='"Q"#,##0.00';
-        if(_styled)ws[ref].s={font:{bold:true}};
-      });
-      ws['!ref']=XLSX.utils.encode_range({s:{c:0,r:0},e:{c:_k.length-1,r:_rt}});
-    }
+    repLastData.forEach((row,i)=>{const doc=(row&&row.Documento)||'';if(doc&&!_esDoc.test(doc)){const ref='A'+(HR+2+i);if(ws[ref])ws[ref].s=Object.assign({},ws[ref].s,{font:{bold:true}});}});
   }
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,String(TIPO_NOMBRES[repType]||'Reporte').replace(/[\\\/?*\[\]:]/g,' ').slice(0,31));
   XLSX.writeFile(wb,`SEFE_${repType}_${fechaHoyGT()}.xlsx`);

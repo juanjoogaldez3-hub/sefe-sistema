@@ -254,9 +254,21 @@ function limpiarAuditoria(){['aud-usr','aud-acc','aud-desde','aud-hasta'].forEac
 window.limpiarAuditoria=limpiarAuditoria;
 async function exportarAuditoria(){
   if(!auditLog.length){toast('Sin registros','No hay eventos de auditoría',true);return;}
-  const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
+  const {XLSX,styled:_styled}=await _cargarXLSX();
   const data=auditLog.map(e=>({'Fecha/Hora':fdatehora(e.fecha),Usuario:e.usuario,Rol:e.rol,Acción:e.accion,Detalle:e.detalle}));
-  const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();
+  const meta=[
+    ['SEFE, S.A.'],
+    ['Reporte:','BITÁCORA DE AUDITORÍA'],
+    ['Registros:',data.length],
+    ['Generado el:',fdatehora(new Date())],
+    ['Generado por:',currentUser],
+    []
+  ];
+  const HR=6;
+  const ws=XLSX.utils.aoa_to_sheet(meta);
+  XLSX.utils.sheet_add_json(ws,data,{origin:'A'+(HR+1)});
+  _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:Object.keys(data[0]).length,dataRows:data.length,moneyCols:[],totalRow:null,brandRow:0,metaRows:[1,2,3,4]});
+  const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Auditoría');
   XLSX.writeFile(wb,`SEFE_Auditoria_${fechaHoyGT()}.xlsx`);
   toast('✓ Excel descargado');
