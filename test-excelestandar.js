@@ -93,6 +93,17 @@ ok('se calcularon anchos para las 6 columnas', Array.isArray(ws['!cols']) && ws[
 ok('la columna Producto (nombre largo) se ensancha', ws['!cols'][1].wch > ws['!cols'][0].wch);
 ok('ningún ancho pasa de 60', ws['!cols'].every(c=>c.wch<=60));
 
+console.log('\n═══ Formato contable (estados de cuenta) ═══');
+const wsC = {};
+const setC=(c,r,v)=>{wsC[XLSX.utils.encode_cell({c,r})]={t:typeof v==='number'?'n':'s',v};};
+['Concepto','Debe','Haber','Saldo'].forEach((h,c)=>setC(c,0,h));
+setC(0,1,'Cobro'); setC(1,1,0); setC(2,1,500); setC(3,1,500);
+wsC['!ref']=XLSX.utils.encode_range({s:{c:0,r:0},e:{c:3,r:1}});
+const CONTABLE='_("Q"* #,##0.00_);_("Q"* (#,##0.00);_("Q"* "-"??_);_(@_)';
+estilo(XLSX, wsC, { styled:true, headerRow:0, nCols:4, dataRows:1, moneyCols:[1,2,3], totalRow:null, moneyFmt:CONTABLE });
+ok('con moneyFmt contable, el dinero usa ese formato (no el Q simple)', wsC[XLSX.utils.encode_cell({c:2,r:1})].z===CONTABLE, wsC[XLSX.utils.encode_cell({c:2,r:1})].z);
+ok('la columna no-dinero (Concepto) queda sin formato', wsC[XLSX.utils.encode_cell({c:0,r:1})].z===undefined);
+
 console.log('\n═══ Sin librería de estilos: igual deja Q y anchos, sin colores ═══');
 const ws2 = {};
 const set2=(c,r,v)=>{ws2[XLSX.utils.encode_cell({c,r})]={t:typeof v==='number'?'n':'s',v};};
