@@ -468,22 +468,21 @@ window.cotizacionPDF=cotizacionPDF;
 async function cotizacionExcel(id){
   const c=cotizaciones.find(x=>x.id===id);if(!c){toast('No encontrada',null,true);return;}
   try{
-    let XLSX;
-    try{const _m=await import('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/+esm');XLSX=_m.default||_m;if(!(XLSX&&XLSX.utils))throw 0;}
-    catch(_e){XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');}
+    const {XLSX,styled:_styled}=await _cargarXLSX();
     const fecha=c.creada?fdate(String(c.creada).slice(0,10)):fdate(fechaHoyGT());
     const meta=[
-      ['COTIZACIÓN','COT-'+padn(c.numero)],
-      ['Cliente',c.clienteComercial||c.clienteNombre||''],
-      ['NIT',c.clienteNit||''],
-      ['Contacto cliente',c.clienteContacto||''],
-      ['Tel. cliente',c.clienteTel||''],
-      ['Correo cliente',c.clienteEmail||''],
-      ['Fecha',fecha],
-      ['Válida hasta',c.fechaVence?fdate(c.fechaVence):''],
-      ['Atiende',c.vendedorNombre||''],
-      ['Tel. vendedor',c.vendedorTel||''],
-      ['Correo vendedor',c.vendedorEmail||''],
+      ['SEFE, S.A.'],
+      ['Cotización:','COT-'+padn(c.numero)],
+      ['Cliente:',c.clienteComercial||c.clienteNombre||''],
+      ['NIT:',c.clienteNit||''],
+      ['Contacto cliente:',c.clienteContacto||''],
+      ['Tel. cliente:',c.clienteTel||''],
+      ['Correo cliente:',c.clienteEmail||''],
+      ['Fecha:',fecha],
+      ['Válida hasta:',c.fechaVence?fdate(c.fechaVence):''],
+      ['Atiende:',c.vendedorNombre||''],
+      ['Tel. vendedor:',c.vendedorTel||''],
+      ['Correo vendedor:',c.vendedorEmail||''],
       []
     ];
     const ws=XLSX.utils.aoa_to_sheet(meta);
@@ -491,13 +490,12 @@ async function cotizacionExcel(id){
       const eff=Number(it.precio)*(1-(Number(it.descuento)||0)/100);
       return {'Código':it.codigo||'','Descripción':it.nombre||'','Cantidad':Number(it.cantidad),'Precio unit.':Number(it.precio),'Desc %':Number(it.descuento)||0,'Subtotal':Math.round(eff*Number(it.cantidad)*100)/100};
     });
-    const HDR=12; // fila 0-index del encabezado de la tabla (A13)
-    XLSX.utils.sheet_add_json(ws,filas,{origin:'A13'});
-    filas.forEach((r,i)=>{[3,5].forEach(ci=>{const ref=XLSX.utils.encode_cell({c:ci,r:HDR+1+i});if(ws[ref])ws[ref].z='"Q"#,##0.00';});});
-    const rt=HDR+1+filas.length;
-    XLSX.utils.sheet_add_aoa(ws,[['','','','','TOTAL (IVA incl.)',cotTotal(c)]],{origin:{r:rt,c:0}});
-    const refT=XLSX.utils.encode_cell({c:5,r:rt});if(ws[refT])ws[refT].z='"Q"#,##0.00';
-    ws['!cols']=[{wch:14},{wch:42},{wch:10},{wch:14},{wch:8},{wch:15}];
+    const HDR=13; // fila 0-index del encabezado de la tabla (tras el membrete)
+    XLSX.utils.sheet_add_json(ws,filas,{origin:'A'+(HDR+1)});
+    const totalRow=HDR+1+filas.length;
+    XLSX.utils.sheet_add_aoa(ws,[['','','','','TOTAL (IVA incl.)',cotTotal(c)]],{origin:{r:totalRow,c:0}});
+    // Formato estándar: membrete, encabezado verde, Q en precio/subtotal, totales, anchos.
+    _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HDR,nCols:6,dataRows:filas.length,moneyCols:[3,5],totalRow,brandRow:0,metaRows:[1,2,3,4,5,6,7,8,9,10,11]});
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'COT-'+padn(c.numero));
     XLSX.writeFile(wb,`SEFE_cotizacion_COT-${padn(c.numero)}.xlsx`);
     toast('✓ Excel descargado','SEFE_cotizacion_COT-'+padn(c.numero)+'.xlsx');

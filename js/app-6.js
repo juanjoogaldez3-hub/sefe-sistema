@@ -119,15 +119,32 @@ function renderPorPagar(){
 async function exportarPorPagarExcel(){
   if(!_ppExport.length){toast('Sin datos para exportar',null,true);return;}
   try{
-    const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
+    const {XLSX,styled:_styled}=await _cargarXLSX();
     const prov=_ppProv?(proveedores.find(p=>String(p.id)===String(_ppProv))?.nombre||'—'):'Todos';
     const est=_ppEstados.size?[..._ppEstados].map(e=>({vencido:'Vencido',pendiente:'Pendiente',parcial:'Parcial',pagado:'Pagado'})[e]).join(', '):'Todos';
     const per=_ppPeriodo?({mes:'Este mes',mesant:'Mes anterior','2m':'Últimos 2 meses','3m':'Últimos 3 meses'})[_ppPeriodo]:'Todo el tiempo';
-    const meta=[['Reporte:','CUENTAS POR PAGAR'],['Proveedor:',prov],['Estado:',est],['Período:',per],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],[]];
+    const meta=[
+      ['SEFE, S.A.'],
+      ['Reporte:','CUENTAS POR PAGAR'],
+      ['Proveedor:',prov],['Estado:',est],['Período:',per],
+      ['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],
+      []
+    ];
+    const HR=8; // encabezado de columnas tras el membrete
     const ws=XLSX.utils.aoa_to_sheet(meta);
-    XLSX.utils.sheet_add_json(ws,_ppExport,{origin:-1});
-    const totSaldo=Math.round(_ppExport.reduce((s,r)=>s+(Number(r.Saldo)||0),0)*100)/100;
-    XLSX.utils.sheet_add_aoa(ws,[[],['','','','','','','TOTAL SALDO:',totSaldo]],{origin:-1});
+    XLSX.utils.sheet_add_json(ws,_ppExport,{origin:'A'+(HR+1)});
+    const _keys=Object.keys(_ppExport[0]);
+    const moneyCols=_keys.map((k,i)=>/total|abonad|saldo/i.test(k)?i:-1).filter(i=>i>=0);
+    // Fila de totales (Total, Abonado, Saldo).
+    const totalRow=HR+1+_ppExport.length;
+    _keys.forEach((k,ci)=>{
+      const val=ci===0?'TOTALES':(moneyCols.indexOf(ci)>=0?Math.round(_ppExport.reduce((s,r)=>s+(Number(r[k])||0),0)*100)/100:null);
+      if(val===null)return;
+      const ref=XLSX.utils.encode_cell({c:ci,r:totalRow});
+      ws[ref]={t:typeof val==='number'?'n':'s',v:val};
+    });
+    ws['!ref']=XLSX.utils.encode_range({s:{c:0,r:0},e:{c:_keys.length-1,r:totalRow}});
+    _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:_ppExport.length,moneyCols,totalRow,brandRow:0,metaRows:[1,2,3,4,5,6]});
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Por pagar');
     XLSX.writeFile(wb,'SEFE_por_pagar_'+fechaHoyGT()+'.xlsx');
     toast('✓ Excel descargado','SEFE_por_pagar_'+fechaHoyGT()+'.xlsx');
@@ -558,39 +575,57 @@ async function estadoCuentaBancoExcel(id){
   const d=_estadoCuentaBancoData(id,desde,hasta);if(!d)return;
   const c=d.cuenta;
   try{
-    const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-    // Hoja 1: Movimientos (libro mayor con saldo corriente)
+    const {XLSX,styled:_styled}=await _cargarXLSX();
+    const _Q='"Q"#,##0.00';
+    // ── Hoja 1: Movimientos (libro mayor con saldo corriente) ──
     const meta=[
-      ['SEFE — ESTADO DE CUENTA BANCARIO'],
-      ['Cuenta',c.nombre||''],
-      ['Banco',(c.banco||'')+(c.numero?' · No. '+c.numero:'')],
-      ['Tipo',TIPO_CUENTA_LBL[c.tipo]||c.tipo],
-      ['Período',(desde?fdate(desde):'inicio')+' a '+(hasta?fdate(hasta):'hoy')],
-      ['Generado',fdatehora(new Date())],
+      ['SEFE, S.A.'],
+      ['Reporte:','ESTADO DE CUENTA BANCARIO'],
+      ['Cuenta:',c.nombre||''],
+      ['Banco:',(c.banco||'')+(c.numero?' · No. '+c.numero:'')],
+      ['Tipo:',TIPO_CUENTA_LBL[c.tipo]||c.tipo],
+      ['Período:',(desde?fdate(desde):'inicio')+' a '+(hasta?fdate(hasta):'hoy')],
+      ['Generado:',fdatehora(new Date())],
       []
     ];
+    const HR=8; // encabezado de columnas tras el membrete
     const cab=['Fecha','Concepto','Categoría','Referencia','Origen','Entrada','Salida','Saldo'];
     const filas=[['','Saldo inicial'+(desde?(' al '+fdate(desde)):' (apertura)'),'','','','','',d.saldoAntes]];
     d.filas.forEach(f=>filas.push([f.fecha,f.concepto,f.categoria,f.referencia,f.origen==='manual'?'Manual':'Automático',f.ent||0,f.sal||0,f.saldo]));
     // Columnas: Fecha, Concepto, Categoría, Referencia, Origen, Entrada, Salida, Saldo.
-    // Los totales van en Entrada (idx 5) y Salida (idx 6); Saldo (idx 7) queda vacío
-    // (el saldo final va en su propia fila). Antes había un '' de más y los totales
-    // caían corridos una columna a la derecha.
+    // Los totales van en Entrada (idx 5) y Salida (idx 6); el saldo final va en su fila.
     filas.push(['','TOTALES','','','',d.totEnt,d.totSal,'']);
     filas.push(['','SALDO FINAL','','','','','',d.saldoFinal]);
     const ws1=XLSX.utils.aoa_to_sheet(meta);
-    XLSX.utils.sheet_add_aoa(ws1,[cab],{origin:'A8'});
-    XLSX.utils.sheet_add_aoa(ws1,filas,{origin:'A9'});
-    ws1['!cols']=[{wch:12},{wch:40},{wch:16},{wch:16},{wch:12},{wch:14},{wch:14},{wch:16}];
-    // Hoja 2: Resumen por categoría
-    const resumen=[['RESUMEN POR CATEGORÍA'],[],['Categoría','Entradas','Salidas','Neto']];
+    XLSX.utils.sheet_add_aoa(ws1,[cab],{origin:'A'+(HR+1)});
+    XLSX.utils.sheet_add_aoa(ws1,filas,{origin:'A'+(HR+2)});
+    const nData1=1+d.filas.length;   // saldo inicial + movimientos
+    const totalRow1=HR+1+nData1;     // fila TOTALES
+    _estiloExcelHoja(XLSX,ws1,{styled:_styled,headerRow:HR,nCols:8,dataRows:nData1,moneyCols:[5,6,7],totalRow:totalRow1,brandRow:0,metaRows:[1,2,3,4,5,6]});
+    // Fila SALDO FINAL (debajo de TOTALES): saldo en Q y negrita.
+    const _rf=totalRow1+1, _refS=XLSX.utils.encode_cell({c:7,r:_rf});
+    if(ws1[_refS]){ws1[_refS].z=_Q;if(_styled)ws1[_refS].s={font:{bold:true,color:{rgb:'173916'}},alignment:{horizontal:'right'}};}
+    const _refL=XLSX.utils.encode_cell({c:1,r:_rf}); if(_styled&&ws1[_refL])ws1[_refL].s={font:{bold:true,color:{rgb:'173916'}}};
+    // ── Hoja 2: Resumen por categoría ──
+    const resumen=[
+      ['SEFE, S.A.'],
+      ['Reporte:','RESUMEN POR CATEGORÍA'],
+      ['Cuenta:',c.nombre||''],
+      [],
+      ['Categoría','Entradas','Salidas','Neto']
+    ];
+    const HR2=4;
     Object.entries(d.porCat).sort((a,b)=>(b[1].ent+b[1].sal)-(a[1].ent+a[1].sal)).forEach(([k,o])=>{
       resumen.push([CAT_MOV_LBL[k]||k,o.ent,o.sal,o.ent-o.sal]);
     });
-    resumen.push([]);resumen.push(['TOTAL',d.totEnt,d.totSal,d.totEnt-d.totSal]);
-    resumen.push([]);resumen.push(['Saldo inicial',d.saldoAntes]);resumen.push(['Saldo final',d.saldoFinal]);
+    const nCats=Object.keys(d.porCat).length;
+    const totalRow2=HR2+1+nCats;
+    resumen.push(['TOTAL',d.totEnt,d.totSal,d.totEnt-d.totSal]);
+    resumen.push([]);resumen.push(['Saldo inicial:',d.saldoAntes]);resumen.push(['Saldo final:',d.saldoFinal]);
     const ws2=XLSX.utils.aoa_to_sheet(resumen);
-    ws2['!cols']=[{wch:22},{wch:16},{wch:16},{wch:16}];
+    _estiloExcelHoja(XLSX,ws2,{styled:_styled,headerRow:HR2,nCols:4,dataRows:nCats,moneyCols:[1,2,3],totalRow:totalRow2,brandRow:0,metaRows:[1,2]});
+    // Saldo inicial/final del pie: Q + etiqueta en negrita.
+    [totalRow2+2,totalRow2+3].forEach(r=>{const rv=XLSX.utils.encode_cell({c:1,r});if(ws2[rv])ws2[rv].z=_Q;const rl=XLSX.utils.encode_cell({c:0,r});if(_styled&&ws2[rl])ws2[rl].s={font:{bold:true,color:{rgb:'173916'}}};});
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws1,'Movimientos');
     XLSX.utils.book_append_sheet(wb,ws2,'Resumen');
