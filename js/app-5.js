@@ -477,6 +477,9 @@ function openAbono(id){
       // Interruptor: sin la tabla de saldo a favor (migración no aplicada aún),
       // se mantiene el bloqueo viejo para no crear créditos que no se guardan.
       if(!window._saldoFavorTabla && monto>saldo+0.001){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='El abono no puede superar el saldo de '+money(saldo);return;}
+      // Todo cobro tiene que entrar a una cuenta (cualquier método). Sin cuenta el
+      // dinero no llega a bancos y el saldo del banco queda mal (ver RE-30202).
+      if(!($('#ab-cuenta')?.value)){$('#ab-err').style.display='flex';$('#ab-err').querySelector('span').textContent='Elegí la cuenta de banco a la que entró el dinero';return;}
       // Sobrepago permitido: se aplica hasta el saldo y el resto queda como
       // SALDO A FAVOR del cliente. El banco registra lo que entró de verdad.
       const aplicado=Math.min(monto,Math.max(0,saldo));
@@ -711,6 +714,8 @@ function guardarPagoGlobal(){
   const fecha=$pg('#pg-fecha').value||fechaHoyGT();
   const metodo=$pg('#pg-met').value;const referencia=$pg('#pg-ref').value;
   const cuentaBancoId=$pg('#pg-cuenta')?.value||null;
+  // Todo cobro tiene que entrar a una cuenta (cualquier método).
+  if(!cuentaBancoId){$pg('#pg-err').style.display='flex';$pg('#pg-err').querySelector('span').textContent='Elegí la cuenta de banco a la que entró el dinero';return;}
   const hoy=new Date().toISOString();
   let facturasAbonadas=0;
   inputs.forEach(inp=>{
