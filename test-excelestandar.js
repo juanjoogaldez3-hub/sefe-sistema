@@ -43,14 +43,15 @@ const HR = 6, nData = 3, totalRow = HR + 1 + nData; // 6,7,8,9,10
 const ws = {};
 const set = (c, r, v) => { ws[XLSX.utils.encode_cell({c,r})] = { t: typeof v==='number'?'n':'s', v }; };
 set(0,0,'SEFE, S.A.');
-set(0,1,'Reporte:'); set(1,1,'VENTAS POR PRODUCTO');
+set(0,1,'VENTAS POR PRODUCTO');            // título grande centrado
+set(0,2,'Período:'); set(1,2,'agosto 2026'); // etiqueta de meta
 ['Código','Producto','Marca','Cantidad','Precio venta','Total'].forEach((h,c)=>set(c,HR,h));
 const datos = [['ET0884','Aceite','La Patrona',240,18.5,4440],['HG1102','Detergente muy largo nombre','Xedex',86,62,5332],['BE0455','Gaseosa','Salvavidas',312,14.75,4602]];
 datos.forEach((row,i)=>row.forEach((v,c)=>set(c,HR+1+i,v)));
 ['TOTALES','','',638,'',14374].forEach((v,c)=>{ if(v!=='') set(c,totalRow,v); });
 ws['!ref'] = XLSX.utils.encode_range({s:{c:0,r:0},e:{c:5,r:totalRow}});
 
-estilo(XLSX, ws, { styled:true, headerRow:HR, nCols:6, dataRows:nData, moneyCols:[4,5], totalRow, brandRow:0, metaRows:[1] });
+estilo(XLSX, ws, { styled:true, headerRow:HR, nCols:6, dataRows:nData, moneyCols:[4,5], totalRow, brandRow:0, titleRow:1, metaRows:[2] });
 
 const cell = (c,r)=>ws[XLSX.utils.encode_cell({c,r})];
 
@@ -79,9 +80,13 @@ ok('total con fondo lima E7ECDB', t0.s.fill.fgColor.rgb==='E7ECDB');
 ok('total con línea verde arriba (medium)', t0.s.border.top.style==='medium' && t0.s.border.top.color.rgb==='173916');
 ok('total de columna dinero también en Q', t5.z==='"Q"#,##0.00', t5.z);
 
-console.log('\n═══ Membrete ═══');
-ok('nombre de empresa (brandRow) grande y verde', cell(0,0).s.font.sz===16 && cell(0,0).s.font.color.rgb==='173916');
-ok('etiqueta de meta (Reporte:) en negrita verde', cell(0,1).s.font.bold===true && cell(0,1).s.font.color.rgb==='173916');
+console.log('\n═══ Membrete y título grande centrado ═══');
+ok('nombre de empresa (brandRow) chico y verde', cell(0,0).s.font.sz===12 && cell(0,0).s.font.color.rgb==='173916');
+const tit = cell(0,1);
+ok('título del reporte grande (sz 18) y verde', tit.s.font.sz===18 && tit.s.font.color.rgb==='173916');
+ok('título del reporte centrado', tit.s.alignment.horizontal==='center');
+ok('título fusionado a lo ancho de las 6 columnas', Array.isArray(ws['!merges']) && ws['!merges'].some(m=>m.s.r===1 && m.s.c===0 && m.e.c===5));
+ok('etiqueta de meta (Período:) en negrita verde', cell(0,2).s.font.bold===true && cell(0,2).s.font.color.rgb==='173916');
 
 console.log('\n═══ Anchos automáticos ═══');
 ok('se calcularon anchos para las 6 columnas', Array.isArray(ws['!cols']) && ws['!cols'].length===6);

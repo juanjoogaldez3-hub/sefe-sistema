@@ -258,7 +258,7 @@ async function exportarAuditoria(){
   const data=auditLog.map(e=>({'Fecha/Hora':fdatehora(e.fecha),Usuario:e.usuario,Rol:e.rol,Acción:e.accion,Detalle:e.detalle}));
   const meta=[
     ['SEFE, S.A.'],
-    ['Reporte:','BITÁCORA DE AUDITORÍA'],
+    ['BITÁCORA DE AUDITORÍA'],
     ['Registros:',data.length],
     ['Generado el:',fdatehora(new Date())],
     ['Generado por:',currentUser],
@@ -267,7 +267,7 @@ async function exportarAuditoria(){
   const HR=6;
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,data,{origin:'A'+(HR+1)});
-  _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:Object.keys(data[0]).length,dataRows:data.length,moneyCols:[],totalRow:null,brandRow:0,metaRows:[1,2,3,4]});
+  _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:Object.keys(data[0]).length,dataRows:data.length,moneyCols:[],totalRow:null,brandRow:0,titleRow:1,metaRows:[2,3,4]});
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Auditoría');
   XLSX.writeFile(wb,`SEFE_Auditoria_${fechaHoyGT()}.xlsx`);
