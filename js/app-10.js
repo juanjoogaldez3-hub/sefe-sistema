@@ -6,6 +6,10 @@
 // ============================================================
 const _XLS_VERDE='173916', _XLS_VERDE_BORDE='0F2A0D', _XLS_CEBRA='F4F6EF',
       _XLS_LINEA='E4E8DA', _XLS_TOTAL_BG='E7ECDB', _XLS_MONEY='"Q"#,##0.00';
+// Formato CONTABLE (para estados de cuenta): la "Q" pegada a la izquierda, el
+// número alineado a la derecha, negativos entre paréntesis y el cero como guión.
+const _XLS_CONTABLE='_("Q"* #,##0.00_);_("Q"* (#,##0.00);_("Q"* "-"??_);_(@_)';
+window._XLS_CONTABLE=_XLS_CONTABLE;
 
 // Carga la librería de Excel CON estilos (colores, negrita); si falla,
 // respaldo a SheetJS normal (exporta bien, pero sin colores). {XLSX, styled}.
@@ -31,8 +35,9 @@ function _anchosExcel(XLSX,ws,nCols){
       const cell=ws[XLSX.utils.encode_cell({c,r})];
       if(!cell)continue;
       const v=cell.v==null?'':String(cell.v);
-      // el dinero ocupa un poco más por la "Q" y los decimales
-      const l=cell.z===_XLS_MONEY?Math.max(v.length,11)+2:v.length;
+      // el dinero ocupa un poco más por la "Q", los decimales y (contable) los paréntesis
+      const esMoney=cell.z&&/Q/.test(cell.z);
+      const l=esMoney?Math.max(v.length,11)+3:v.length;
       if(l>w)w=l;
     }
     cols.push({wch:Math.min(w+2,60)});
@@ -50,10 +55,12 @@ function _estiloExcelHoja(XLSX,ws,o){
   const enc=(c,r)=>XLSX.utils.encode_cell({c,r});
   const money=new Set(o.moneyCols||[]);
   const nCols=o.nCols, hr=o.headerRow, nData=o.dataRows||0;
-  // Formato de quetzales en columnas de dinero (datos + fila de total).
+  // Formato de dinero en columnas de dinero (datos + fila de total). Por
+  // defecto quetzales simple; los estados de cuenta pasan el formato contable.
+  const fmt=o.moneyFmt||_XLS_MONEY;
   const filasQ=[]; for(let i=0;i<nData;i++)filasQ.push(hr+1+i);
   if(o.totalRow!=null)filasQ.push(o.totalRow);
-  money.forEach(c=>filasQ.forEach(r=>{const ref=enc(c,r);if(ws[ref]&&typeof ws[ref].v==='number')ws[ref].z=_XLS_MONEY;}));
+  money.forEach(c=>filasQ.forEach(r=>{const ref=enc(c,r);if(ws[ref]&&typeof ws[ref].v==='number')ws[ref].z=fmt;}));
   // Anchos automáticos.
   ws['!cols']=_anchosExcel(XLSX,ws,nCols);
   // Título grande del reporte: se fusiona sobre todas las columnas (aunque no
@@ -136,11 +143,13 @@ async function exportarExcel(){
   const _keys=Object.keys(repLastData[0]);
   // Columnas de dinero (por nombre; excluye %, cantidades, fechas). En los
   // reportes de sólo-cantidades (inventario en unidades) no hay dinero.
-  const _incM=/precio|costo|venta|valor|saldo|monto|margen\s*q|\biva\b|neto|entrada|salida|abono|ganancia|compra|d[eé]bito|cr[eé]dito|pendiente|total|corriente/i;
+  const _incM=/precio|costo|venta|valor|saldo|monto|margen\s*q|\biva\b|neto|entrada|salida|abono|ganancia|compra|d[eé]bito|cr[eé]dito|pendiente|total|corriente|\bdebe\b|haber|vencido/i;
   const _mesM=/^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/i;
-  const _excM=/%|porcentaje|unidad|cantidad|existencia|recibos?|[oó]rdenes|d[ií]as?/i;
+  const _excM=/%|porcentaje|unidad|cantidad|existencia|recibos?|[oó]rdenes|d[ií]as?|facturas\b/i;
   const _cur=['Corriente','30 Días','60 Días','90 Días','+90 Días'];
   const moneyCols=_soloCant?[]:_keys.map((k,i)=>(_cur.indexOf(k)>=0||(!_excM.test(k)&&(_incM.test(k)||_mesM.test(k)||/^Δ/.test(k))))?i:-1).filter(i=>i>=0);
+  // Estados de cuenta (con saldo/movimientos): montos en formato contable.
+  const _esEstadoCuenta=['estcta','cxc','factabo','banco'].indexOf(repType)>=0;
   // Fila de TOTALES al pie (suma de columnas numéricas), si el reporte no la trae ya.
   let totalRow=null;
   const _yaTot=repLastData.some(r=>_keys.some(k=>typeof r[k]==='string'&&/^\s*(sub)?total/i.test(r[k])));
@@ -157,7 +166,7 @@ async function exportarExcel(){
     ws['!ref']=XLSX.utils.encode_range({s:{c:0,r:0},e:{c:_keys.length-1,r:totalRow}});
   }
   // Formato estándar: membrete, encabezado verde, Q, filas alternadas, totales, anchos.
-  _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:repLastData.length,moneyCols,totalRow,brandRow:0,titleRow:1,metaRows:[2,3,4]});
+  _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:repLastData.length,moneyCols,totalRow,brandRow:0,titleRow:1,metaRows:[2,3,4],moneyFmt:_esEstadoCuenta?_XLS_CONTABLE:undefined});
   // Estado de cuenta / Facturas y abonos: los nombres de cliente y "TOTALES
   // CLIENTE" (filas cuya 1ª columna NO es un documento) van en negrita.
   // Documentos: FA/RE/RT/NC en "Facturas y abonos"; sólo FA en estado de cuenta.
@@ -223,7 +232,7 @@ function exportarPDF(){
   const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',factabo:'FACTURAS Y ABONOS',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO',invmov:'MOVIMIENTO DE INVENTARIO'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia','Cantidad','Costo unitario','Costo total',
+  const esNum=(c)=>['ValorAbono','Monto','Debe','Haber','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia','Cantidad','Costo unitario','Costo total',
     'Abonado','Vencido','0-30 días','30-90 días','90+ días','Saldo total','Entradas','Salidas','Saldo actual',
     'Total pagado','Recibos','Unidades compradas','Órdenes'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
   const ths=cols.map(c=>`<th style="${_pdfTH(esNum(c)?'text-align:right':'')}">${c}</th>`).join('');

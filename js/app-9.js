@@ -1080,15 +1080,15 @@ function renderReportes(){
     // una fila con el nombre del cliente, las filas del detalle, y una
     // de TOTALES CLIENTE. Las que NO empiezan con "FA " salen en
     // negrita (ver exportarExcel), así se leen los bloques de un vistazo.
-    const vacio=()=>({Fecha:'',Detalle:'',Monto:'',Saldo:''});
+    const vacio=()=>({Fecha:'',Detalle:'',Debe:'',Haber:'',Saldo:''});
 
     clis.forEach(cli=>{
       const cliNom=nombreCli[cli]||cli;
-      filasHTML+=`<tr style="background:var(--surface-2)"><td colspan="5"
+      filasHTML+=`<tr style="background:var(--surface-2)"><td colspan="6"
         style="font-family:var(--disp);font-weight:700;padding-top:14px">${escHtml(cliNom)}</td></tr>`;
       exportData.push(Object.assign({Documento:cliNom},vacio()));
 
-      let facturadoCli=0, saldoCli=0;
+      let facturadoCli=0, saldoCli=0, abonadoCli=0;
       porCli[cli].forEach(f=>{
         nFact++;
         let saldo=Number(f.totales.total)||0;
@@ -1099,31 +1099,33 @@ function renderReportes(){
           <td></td>
           <td style="font-weight:600">Factura ${escHtml(numFact)}</td>
           <td class="num" style="font-weight:600">${money(f.totales.total)}</td>
+          <td class="num"></td>
           <td class="num" style="font-weight:600">${money(saldo)}</td>
         </tr>`;
         exportData.push({Documento:'FA '+numFact, Fecha:fdate(f.creada),
-          Detalle:'Factura', Monto:Math.round(saldo*100)/100, Saldo:Math.round(saldo*100)/100});
+          Detalle:'Factura', Debe:Math.round(saldo*100)/100, Haber:'', Saldo:Math.round(saldo*100)/100});
 
         const aplic=aplicacionesDeFactura(f);
         aplic.forEach(x=>{
-          if(!x.anulado)saldo=Math.round((saldo-x.monto)*100)/100;
+          if(!x.anulado){saldo=Math.round((saldo-x.monto)*100)/100;abonadoCli=Math.round((abonadoCli+x.monto)*100)/100;}
           const det=detalleAplicacion(x);
           const tachado=x.anulado?'text-decoration:line-through;opacity:.55;':'';
           filasHTML+=`<tr>
             <td style="color:var(--muted);white-space:nowrap;${tachado}">${fdate(x.fecha)}</td>
             <td></td>
             <td style="color:var(--muted);padding-left:22px;${tachado}">${escHtml(det)}${x.anulado?' <span class="badge b-danger" style="font-size:9px">ANULADO</span>':''}</td>
+            <td class="num"></td>
             <td class="num" style="${tachado}">${money(x.monto)}</td>
             <td class="num" style="color:var(--muted)">${x.anulado?'—':money(saldo)}</td>
           </tr>`;
           exportData.push({Documento:x.ref||'', Fecha:fdate(x.fecha),
             Detalle:det+(x.anulado?' (ANULADO)':''),
-            Monto:Math.round(x.monto*100)/100,
+            Debe:'', Haber:Math.round(x.monto*100)/100,
             Saldo:x.anulado?'':Math.round(saldo*100)/100});
         });
         if(!aplic.length){
-          filasHTML+=`<tr><td></td><td></td><td style="color:var(--muted-2);padding-left:22px">Sin abonos registrados</td><td></td><td></td></tr>`;
-          exportData.push({Documento:'', Fecha:'', Detalle:'Sin abonos registrados', Monto:'', Saldo:''});
+          filasHTML+=`<tr><td></td><td></td><td style="color:var(--muted-2);padding-left:22px">Sin abonos registrados</td><td></td><td></td><td></td></tr>`;
+          exportData.push({Documento:'', Fecha:'', Detalle:'Sin abonos registrados', Debe:'', Haber:'', Saldo:''});
         }
         saldoCli=Math.round((saldoCli+arInfo(f).saldo)*100)/100;
       });
@@ -1132,10 +1134,11 @@ function renderReportes(){
       filasHTML+=`<tr style="border-top:2px solid var(--line-strong);background:var(--surface-2)">
         <td></td><td></td><td style="font-weight:700">TOTALES ${escHtml(cliNom)}</td>
         <td class="num" style="font-weight:700">${money(facturadoCli)}</td>
+        <td class="num" style="font-weight:700">${money(abonadoCli)}</td>
         <td class="num" style="font-weight:700;color:${saldoCli>0.001?'var(--danger)':'var(--ok)'}">${money(saldoCli)}</td>
       </tr>`;
       exportData.push({Documento:'TOTALES CLIENTE', Fecha:'', Detalle:'',
-        Monto:Math.round(facturadoCli*100)/100, Saldo:Math.round(saldoCli*100)/100});
+        Debe:Math.round(facturadoCli*100)/100, Haber:Math.round(abonadoCli*100)/100, Saldo:Math.round(saldoCli*100)/100});
       exportData.push(Object.assign({Documento:''},vacio()));
     });
 
@@ -1146,8 +1149,8 @@ function renderReportes(){
       {ic:'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'Saldo pendiente',val:money(saldoTotal),sub:'de esas facturas'}
     ])}</div>
       <div class="panel"><div class="panel-head"><h3>Facturas y abonos</h3></div>
-      <table><thead><tr><th>Fecha</th><th></th><th>Detalle</th><th class="num">Monto</th><th class="num">Saldo</th></tr></thead><tbody>
-      ${filasHTML||'<tr><td colspan="5" class="empty">Sin facturas en el período seleccionado</td></tr>'}
+      <table><thead><tr><th>Fecha</th><th></th><th>Detalle</th><th class="num">Debe</th><th class="num">Haber</th><th class="num">Saldo</th></tr></thead><tbody>
+      ${filasHTML||'<tr><td colspan="6" class="empty">Sin facturas en el período seleccionado</td></tr>'}
       </tbody></table></div>`;
   }
   else if(repType==='pagos'){

@@ -6,8 +6,8 @@
 //
 //  Dos cosas: (1) que _estadoCuentaBancoData calcule bien el saldo inicial,
 //  los totales de entradas/salidas, el saldo corriente y el final; (2) que la
-//  fila de TOTALES del Excel ponga los totales en las columnas Entrada/Salida
-//  (antes se corrían una columna y "la sumatoria salía mal").
+//  fila de TOTALES del Excel (ahora en formato contable) ponga los totales en
+//  Debe(salidas) y Haber(entradas), en ese orden.
 // ============================================================
 const vm = require('vm');
 const src = require('./test-fuente');
@@ -47,15 +47,14 @@ ok('3 movimientos en el rango (el anulado se excluye)', d.filas.length === 3);
 ok('el saldo corriente acumula (1150, 1120, 1140)',
   d.filas.map(x => x.saldo).join(',') === '1150,1120,1140', d.filas.map(x => x.saldo).join(','));
 
-// ---- (2) Alineación de la fila TOTALES en el Excel ----
-console.log('\n═══ Fila TOTALES del Excel: columnas correctas ═══');
+// ---- (2) Fila TOTALES en el Excel: formato contable Debe/Haber ----
+console.log('\n═══ Fila TOTALES del Excel: Debe(salidas)/Haber(entradas) ═══');
 const idxT = src.indexOf("filas.push(['','TOTALES'");
-const lineaT = idxT >= 0 ? src.slice(idxT, src.indexOf('\n', idxT)) : '';
-// Cabecera: Fecha,Concepto,Categoría,Referencia,Origen,Entrada,Salida,Saldo
-// Correcto: los totales van en Entrada(5) y Salida(6), Saldo(7) vacío.
-ok('los totales quedan en Entrada/Salida (no corridos a Salida/Saldo)',
-  /d\.totEnt,\s*d\.totSal,\s*''\]/.test(lineaT), lineaT.trim());
-ok('NO está el patrón viejo corrido', !/'',\s*d\.totEnt,\s*d\.totSal\]/.test(lineaT));
+const lineaT = idxT >= 0 ? src.slice(idxT, src.indexOf('\n', idxT)).replace(/\s/g, '') : '';
+// Cabecera: Fecha,Concepto,Categoría,Referencia,Origen,Debe,Haber,Saldo
+// Debe(5)=salidas=d.totSal, Haber(6)=entradas=d.totEnt, Saldo(7) vacío.
+ok('los totales quedan en Debe(salidas) y Haber(entradas)', /d\.totSal,d\.totEnt,''\]/.test(lineaT), lineaT);
+ok('NO quedó el orden viejo (Entrada/Salida)', !/d\.totEnt,d\.totSal,''\]/.test(lineaT));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

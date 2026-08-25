@@ -506,8 +506,8 @@ window._renderEstadoCtaBco=function(id){
       <td style="color:var(--muted);white-space:nowrap">${f.fecha}</td>
       <td style="word-break:break-word">${f.concepto}${f.referencia?`<span style="color:var(--muted-2);font-size:11px"> · ${f.referencia}</span>`:''}</td>
       <td><span class="badge b-muted" style="font-size:10px">${f.categoria}</span></td>
-      <td class="num" style="color:var(--ok)">${f.ent?M(f.ent):'—'}</td>
       <td class="num" style="color:var(--danger)">${f.sal?M(f.sal):'—'}</td>
+      <td class="num" style="color:var(--ok)">${f.ent?M(f.ent):'—'}</td>
       <td class="num" style="font-weight:700;color:${f.saldo>=0?'var(--ink)':'var(--danger)'}">${M(f.saldo)}</td>
     </tr>`).join(''):'<tr><td colspan="6" class="empty">Sin movimientos en el rango seleccionado</td></tr>';
   cont.innerHTML=`
@@ -517,10 +517,10 @@ window._renderEstadoCtaBco=function(id){
       {ic:'i-danger',svg:'<path d="M12 19V5M5 12l7-7 7 7"/>',lbl:'Salidas',val:M(d.totSal)},
       {ic:(d.saldoFinal>=0?'i-blue':'i-danger'),svg:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',lbl:'Saldo final',val:M(d.saldoFinal)}])}</div>
     <div style="overflow-y:auto;overflow-x:hidden;max-height:46vh;border:1px solid var(--line);border-radius:8px">
-    <table style="margin:0;width:100%;table-layout:fixed"><colgroup><col style="width:11%"><col style="width:34%"><col style="width:13%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th class="num">Entrada</th><th class="num">Salida</th><th class="num">Saldo</th></tr></thead><tbody>
+    <table style="margin:0;width:100%;table-layout:fixed"><colgroup><col style="width:11%"><col style="width:34%"><col style="width:13%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th class="num">Debe</th><th class="num">Haber</th><th class="num">Saldo</th></tr></thead><tbody>
       <tr style="background:var(--bg-soft,#f6f8f2)"><td colspan="5" style="font-weight:600;color:var(--muted)">Saldo inicial ${desde?('al '+fdate(desde)):'(apertura de la cuenta)'}</td><td class="num" style="font-weight:700">${M(d.saldoAntes)}</td></tr>
       ${filasHTML}
-      <tr style="border-top:2px solid var(--line-strong);font-weight:700"><td colspan="3">TOTALES DEL PERÍODO</td><td class="num" style="color:var(--ok)">${M(d.totEnt)}</td><td class="num" style="color:var(--danger)">${M(d.totSal)}</td><td class="num">${M(d.saldoFinal)}</td></tr>
+      <tr style="border-top:2px solid var(--line-strong);font-weight:700"><td colspan="3">TOTALES DEL PERÍODO</td><td class="num" style="color:var(--danger)">${M(d.totSal)}</td><td class="num" style="color:var(--ok)">${M(d.totEnt)}</td><td class="num">${M(d.saldoFinal)}</td></tr>
     </tbody></table></div>`;
 };
 // PDF del estado de cuenta bancario
@@ -534,8 +534,8 @@ function estadoCuentaBancoPDF(id){
     <td style="${_pdfTD()}">${f.fecha}</td>
     <td style="${_pdfTD()}">${f.concepto}${f.referencia?' · '+f.referencia:''}</td>
     <td style="${_pdfTD()}">${f.categoria}</td>
-    <td style="${_pdfTD('text-align:right;color:#2a7d2a')}">${f.ent?sm+' '+f.ent.toLocaleString('es-GT',{minimumFractionDigits:2}):'—'}</td>
     <td style="${_pdfTD('text-align:right;color:#BE4326')}">${f.sal?sm+' '+f.sal.toLocaleString('es-GT',{minimumFractionDigits:2}):'—'}</td>
+    <td style="${_pdfTD('text-align:right;color:#2a7d2a')}">${f.ent?sm+' '+f.ent.toLocaleString('es-GT',{minimumFractionDigits:2}):'—'}</td>
     <td style="${_pdfTD('text-align:right;font-weight:700')}">${sm} ${f.saldo.toLocaleString('es-GT',{minimumFractionDigits:2})}</td>
   </tr>`).join(''):'<tr><td colspan="6" style="padding:14px;text-align:center;color:#999">Sin movimientos en el período</td></tr>';
   const body=`
@@ -558,12 +558,12 @@ function estadoCuentaBancoPDF(id){
     <table style="width:100%;border-collapse:collapse">
       <thead><tr>
         <th style="${_pdfTH()}">Fecha</th><th style="${_pdfTH()}">Concepto</th><th style="${_pdfTH()}">Categoría</th>
-        <th style="${_pdfTH('text-align:right')}">Entrada</th><th style="${_pdfTH('text-align:right')}">Salida</th><th style="${_pdfTH('text-align:right')}">Saldo</th>
+        <th style="${_pdfTH('text-align:right')}">Debe</th><th style="${_pdfTH('text-align:right')}">Haber</th><th style="${_pdfTH('text-align:right')}">Saldo</th>
       </tr></thead>
       <tbody>
         <tr><td colspan="5" style="${_pdfTD('font-weight:600;color:#555')}">Saldo inicial ${desde?('al '+fdate(desde)):'(apertura)'}</td><td style="${_pdfTD('text-align:right;font-weight:700')}">${sm} ${d.saldoAntes.toLocaleString('es-GT',{minimumFractionDigits:2})}</td></tr>
         ${filas}
-        <tr style="background:#F4F7EF"><td colspan="3" style="${_pdfTD('font-weight:700')}">TOTALES</td><td style="${_pdfTD('text-align:right;font-weight:700;color:#2a7d2a')}">${sm} ${d.totEnt.toLocaleString('es-GT',{minimumFractionDigits:2})}</td><td style="${_pdfTD('text-align:right;font-weight:700;color:#BE4326')}">${sm} ${d.totSal.toLocaleString('es-GT',{minimumFractionDigits:2})}</td><td style="${_pdfTD('text-align:right;font-weight:800')}">${sm} ${d.saldoFinal.toLocaleString('es-GT',{minimumFractionDigits:2})}</td></tr>
+        <tr style="background:#F4F7EF"><td colspan="3" style="${_pdfTD('font-weight:700')}">TOTALES</td><td style="${_pdfTD('text-align:right;font-weight:700;color:#BE4326')}">${sm} ${d.totSal.toLocaleString('es-GT',{minimumFractionDigits:2})}</td><td style="${_pdfTD('text-align:right;font-weight:700;color:#2a7d2a')}">${sm} ${d.totEnt.toLocaleString('es-GT',{minimumFractionDigits:2})}</td><td style="${_pdfTD('text-align:right;font-weight:800')}">${sm} ${d.saldoFinal.toLocaleString('es-GT',{minimumFractionDigits:2})}</td></tr>
       </tbody>
     </table>`;
   _abrirPDF(_pdfShell({titulo:'ESTADO DE CUENTA BANCARIO',subtitulo:c.nombre||'',orientacion:'landscape',body}));
@@ -577,6 +577,7 @@ async function estadoCuentaBancoExcel(id){
   try{
     const {XLSX,styled:_styled}=await _cargarXLSX();
     const _Q='"Q"#,##0.00';
+    const _C='_("Q"* #,##0.00_);_("Q"* (#,##0.00);_("Q"* "-"??_);_(@_)'; // formato contable
     // ── Hoja 1: Movimientos (libro mayor con saldo corriente) ──
     const meta=[
       ['SEFE, S.A.'],
@@ -589,22 +590,23 @@ async function estadoCuentaBancoExcel(id){
       []
     ];
     const HR=8; // encabezado de columnas tras el membrete
-    const cab=['Fecha','Concepto','Categoría','Referencia','Origen','Entrada','Salida','Saldo'];
+    // Formato contable: Debe = salidas, Haber = entradas (como lo muestra el banco), y Saldo.
+    const cab=['Fecha','Concepto','Categoría','Referencia','Origen','Debe','Haber','Saldo'];
     const filas=[['','Saldo inicial'+(desde?(' al '+fdate(desde)):' (apertura)'),'','','','','',d.saldoAntes]];
-    d.filas.forEach(f=>filas.push([f.fecha,f.concepto,f.categoria,f.referencia,f.origen==='manual'?'Manual':'Automático',f.ent||0,f.sal||0,f.saldo]));
-    // Columnas: Fecha, Concepto, Categoría, Referencia, Origen, Entrada, Salida, Saldo.
-    // Los totales van en Entrada (idx 5) y Salida (idx 6); el saldo final va en su fila.
-    filas.push(['','TOTALES','','','',d.totEnt,d.totSal,'']);
+    d.filas.forEach(f=>filas.push([f.fecha,f.concepto,f.categoria,f.referencia,f.origen==='manual'?'Manual':'Automático',f.sal||0,f.ent||0,f.saldo]));
+    // Columnas: Fecha, Concepto, Categoría, Referencia, Origen, Debe(salidas), Haber(entradas), Saldo.
+    // Los totales van en Debe (idx 5) y Haber (idx 6); el saldo final va en su fila.
+    filas.push(['','TOTALES','','','',d.totSal,d.totEnt,'']);
     filas.push(['','SALDO FINAL','','','','','',d.saldoFinal]);
     const ws1=XLSX.utils.aoa_to_sheet(meta);
     XLSX.utils.sheet_add_aoa(ws1,[cab],{origin:'A'+(HR+1)});
     XLSX.utils.sheet_add_aoa(ws1,filas,{origin:'A'+(HR+2)});
     const nData1=1+d.filas.length;   // saldo inicial + movimientos
     const totalRow1=HR+1+nData1;     // fila TOTALES
-    _estiloExcelHoja(XLSX,ws1,{styled:_styled,headerRow:HR,nCols:8,dataRows:nData1,moneyCols:[5,6,7],totalRow:totalRow1,brandRow:0,titleRow:1,metaRows:[2,3,4,5,6]});
-    // Fila SALDO FINAL (debajo de TOTALES): saldo en Q y negrita.
+    _estiloExcelHoja(XLSX,ws1,{styled:_styled,headerRow:HR,nCols:8,dataRows:nData1,moneyCols:[5,6,7],totalRow:totalRow1,brandRow:0,titleRow:1,metaRows:[2,3,4,5,6],moneyFmt:_C});
+    // Fila SALDO FINAL (debajo de TOTALES): saldo en contable y negrita.
     const _rf=totalRow1+1, _refS=XLSX.utils.encode_cell({c:7,r:_rf});
-    if(ws1[_refS]){ws1[_refS].z=_Q;if(_styled)ws1[_refS].s={font:{bold:true,color:{rgb:'173916'}},alignment:{horizontal:'right'}};}
+    if(ws1[_refS]){ws1[_refS].z=_C;if(_styled)ws1[_refS].s={font:{bold:true,color:{rgb:'173916'}},alignment:{horizontal:'right'}};}
     const _refL=XLSX.utils.encode_cell({c:1,r:_rf}); if(_styled&&ws1[_refL])ws1[_refL].s={font:{bold:true,color:{rgb:'173916'}}};
     // ── Hoja 2: Resumen por categoría ──
     const resumen=[
@@ -612,20 +614,21 @@ async function estadoCuentaBancoExcel(id){
       ['RESUMEN POR CATEGORÍA'],
       ['Cuenta:',c.nombre||''],
       [],
-      ['Categoría','Entradas','Salidas','Neto']
+      ['Categoría','Debe','Haber','Neto']
     ];
     const HR2=4;
+    // Debe = salidas, Haber = entradas (mismo criterio que la hoja 1).
     Object.entries(d.porCat).sort((a,b)=>(b[1].ent+b[1].sal)-(a[1].ent+a[1].sal)).forEach(([k,o])=>{
-      resumen.push([CAT_MOV_LBL[k]||k,o.ent,o.sal,o.ent-o.sal]);
+      resumen.push([CAT_MOV_LBL[k]||k,o.sal,o.ent,o.ent-o.sal]);
     });
     const nCats=Object.keys(d.porCat).length;
     const totalRow2=HR2+1+nCats;
-    resumen.push(['TOTAL',d.totEnt,d.totSal,d.totEnt-d.totSal]);
+    resumen.push(['TOTAL',d.totSal,d.totEnt,d.totEnt-d.totSal]);
     resumen.push([]);resumen.push(['Saldo inicial:',d.saldoAntes]);resumen.push(['Saldo final:',d.saldoFinal]);
     const ws2=XLSX.utils.aoa_to_sheet(resumen);
-    _estiloExcelHoja(XLSX,ws2,{styled:_styled,headerRow:HR2,nCols:4,dataRows:nCats,moneyCols:[1,2,3],totalRow:totalRow2,brandRow:0,titleRow:1,metaRows:[2]});
-    // Saldo inicial/final del pie: Q + etiqueta en negrita.
-    [totalRow2+2,totalRow2+3].forEach(r=>{const rv=XLSX.utils.encode_cell({c:1,r});if(ws2[rv])ws2[rv].z=_Q;const rl=XLSX.utils.encode_cell({c:0,r});if(_styled&&ws2[rl])ws2[rl].s={font:{bold:true,color:{rgb:'173916'}}};});
+    _estiloExcelHoja(XLSX,ws2,{styled:_styled,headerRow:HR2,nCols:4,dataRows:nCats,moneyCols:[1,2,3],totalRow:totalRow2,brandRow:0,titleRow:1,metaRows:[2],moneyFmt:_C});
+    // Saldo inicial/final del pie: contable + etiqueta en negrita.
+    [totalRow2+2,totalRow2+3].forEach(r=>{const rv=XLSX.utils.encode_cell({c:1,r});if(ws2[rv])ws2[rv].z=_C;const rl=XLSX.utils.encode_cell({c:0,r});if(_styled&&ws2[rl])ws2[rl].s={font:{bold:true,color:{rgb:'173916'}}};});
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws1,'Movimientos');
     XLSX.utils.book_append_sheet(wb,ws2,'Resumen');
