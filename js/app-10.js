@@ -56,6 +56,12 @@ function _estiloExcelHoja(XLSX,ws,o){
   money.forEach(c=>filasQ.forEach(r=>{const ref=enc(c,r);if(ws[ref]&&typeof ws[ref].v==='number')ws[ref].z=_XLS_MONEY;}));
   // Anchos automáticos.
   ws['!cols']=_anchosExcel(XLSX,ws,nCols);
+  // Título grande del reporte: se fusiona sobre todas las columnas (aunque no
+  // haya librería de estilos, la fusión ya lo deja centrado a lo ancho).
+  if(o.titleRow!=null&&nCols>1){
+    ws['!merges']=ws['!merges']||[];
+    ws['!merges'].push({s:{c:0,r:o.titleRow},e:{c:nCols-1,r:o.titleRow}});
+  }
   if(!o.styled)return;
   const bFino={style:'thin',color:{rgb:_XLS_LINEA}};
   const bordes={top:bFino,bottom:bFino,left:bFino,right:bFino};
@@ -80,9 +86,15 @@ function _estiloExcelHoja(XLSX,ws,o){
       ws[ref].s=s;
     }
   }
-  // Membrete: nombre de la empresa en grande y verde.
+  // Membrete: nombre de la empresa (línea chica arriba a la izquierda).
   if(o.brandRow!=null){
-    const ref=enc(0,o.brandRow); if(ws[ref])ws[ref].s={font:{bold:true,sz:16,color:{rgb:_XLS_VERDE}}};
+    const ref=enc(0,o.brandRow); if(ws[ref])ws[ref].s={font:{bold:true,sz:12,color:{rgb:_XLS_VERDE}}};
+  }
+  // Título grande del reporte, centrado a lo ancho de la tabla.
+  if(o.titleRow!=null){
+    const ref=enc(0,o.titleRow);
+    if(ws[ref])ws[ref].s={font:{bold:true,sz:18,color:{rgb:_XLS_VERDE}},alignment:{horizontal:'center',vertical:'center'}};
+    ws['!rows']=ws['!rows']||[]; ws['!rows'][o.titleRow]={hpt:26};
   }
   // Membrete: etiquetas (Reporte:, Período:, …) en negrita verde.
   (o.metaRows||[]).forEach(r=>{const ref=enc(0,r);if(ws[ref]){const s=ws[ref].s||{};s.font=Object.assign({bold:true,color:{rgb:_XLS_VERDE}},s.font);ws[ref].s=s;}});
@@ -112,7 +124,7 @@ async function exportarExcel(){
   const _soloCant=(repType==='invmov'||repType==='invactual');
   const meta=[
     ['SEFE, S.A.'],
-    ['Reporte:',TIPO_NOMBRES[repType]||repType],
+    [TIPO_NOMBRES[repType]||repType],
     [_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],
     ['Generado el:',fdatehora(new Date())],
     ['Generado por:',currentUser],
@@ -145,7 +157,7 @@ async function exportarExcel(){
     ws['!ref']=XLSX.utils.encode_range({s:{c:0,r:0},e:{c:_keys.length-1,r:totalRow}});
   }
   // Formato estándar: membrete, encabezado verde, Q, filas alternadas, totales, anchos.
-  _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:repLastData.length,moneyCols,totalRow,brandRow:0,metaRows:[1,2,3,4]});
+  _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:repLastData.length,moneyCols,totalRow,brandRow:0,titleRow:1,metaRows:[2,3,4]});
   // Estado de cuenta / Facturas y abonos: los nombres de cliente y "TOTALES
   // CLIENTE" (filas cuya 1ª columna NO es un documento) van en negrita.
   // Documentos: FA/RE/RT/NC en "Facturas y abonos"; sólo FA en estado de cuenta.

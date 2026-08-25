@@ -125,7 +125,7 @@ async function exportarPorPagarExcel(){
     const per=_ppPeriodo?({mes:'Este mes',mesant:'Mes anterior','2m':'Últimos 2 meses','3m':'Últimos 3 meses'})[_ppPeriodo]:'Todo el tiempo';
     const meta=[
       ['SEFE, S.A.'],
-      ['Reporte:','CUENTAS POR PAGAR'],
+      ['CUENTAS POR PAGAR'],
       ['Proveedor:',prov],['Estado:',est],['Período:',per],
       ['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],
       []
@@ -144,7 +144,7 @@ async function exportarPorPagarExcel(){
       ws[ref]={t:typeof val==='number'?'n':'s',v:val};
     });
     ws['!ref']=XLSX.utils.encode_range({s:{c:0,r:0},e:{c:_keys.length-1,r:totalRow}});
-    _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:_ppExport.length,moneyCols,totalRow,brandRow:0,metaRows:[1,2,3,4,5,6]});
+    _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:_ppExport.length,moneyCols,totalRow,brandRow:0,titleRow:1,metaRows:[2,3,4,5,6]});
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Por pagar');
     XLSX.writeFile(wb,'SEFE_por_pagar_'+fechaHoyGT()+'.xlsx');
     toast('✓ Excel descargado','SEFE_por_pagar_'+fechaHoyGT()+'.xlsx');
@@ -580,7 +580,7 @@ async function estadoCuentaBancoExcel(id){
     // ── Hoja 1: Movimientos (libro mayor con saldo corriente) ──
     const meta=[
       ['SEFE, S.A.'],
-      ['Reporte:','ESTADO DE CUENTA BANCARIO'],
+      ['ESTADO DE CUENTA BANCARIO'],
       ['Cuenta:',c.nombre||''],
       ['Banco:',(c.banco||'')+(c.numero?' · No. '+c.numero:'')],
       ['Tipo:',TIPO_CUENTA_LBL[c.tipo]||c.tipo],
@@ -601,7 +601,7 @@ async function estadoCuentaBancoExcel(id){
     XLSX.utils.sheet_add_aoa(ws1,filas,{origin:'A'+(HR+2)});
     const nData1=1+d.filas.length;   // saldo inicial + movimientos
     const totalRow1=HR+1+nData1;     // fila TOTALES
-    _estiloExcelHoja(XLSX,ws1,{styled:_styled,headerRow:HR,nCols:8,dataRows:nData1,moneyCols:[5,6,7],totalRow:totalRow1,brandRow:0,metaRows:[1,2,3,4,5,6]});
+    _estiloExcelHoja(XLSX,ws1,{styled:_styled,headerRow:HR,nCols:8,dataRows:nData1,moneyCols:[5,6,7],totalRow:totalRow1,brandRow:0,titleRow:1,metaRows:[2,3,4,5,6]});
     // Fila SALDO FINAL (debajo de TOTALES): saldo en Q y negrita.
     const _rf=totalRow1+1, _refS=XLSX.utils.encode_cell({c:7,r:_rf});
     if(ws1[_refS]){ws1[_refS].z=_Q;if(_styled)ws1[_refS].s={font:{bold:true,color:{rgb:'173916'}},alignment:{horizontal:'right'}};}
@@ -609,7 +609,7 @@ async function estadoCuentaBancoExcel(id){
     // ── Hoja 2: Resumen por categoría ──
     const resumen=[
       ['SEFE, S.A.'],
-      ['Reporte:','RESUMEN POR CATEGORÍA'],
+      ['RESUMEN POR CATEGORÍA'],
       ['Cuenta:',c.nombre||''],
       [],
       ['Categoría','Entradas','Salidas','Neto']
@@ -623,7 +623,7 @@ async function estadoCuentaBancoExcel(id){
     resumen.push(['TOTAL',d.totEnt,d.totSal,d.totEnt-d.totSal]);
     resumen.push([]);resumen.push(['Saldo inicial:',d.saldoAntes]);resumen.push(['Saldo final:',d.saldoFinal]);
     const ws2=XLSX.utils.aoa_to_sheet(resumen);
-    _estiloExcelHoja(XLSX,ws2,{styled:_styled,headerRow:HR2,nCols:4,dataRows:nCats,moneyCols:[1,2,3],totalRow:totalRow2,brandRow:0,metaRows:[1,2]});
+    _estiloExcelHoja(XLSX,ws2,{styled:_styled,headerRow:HR2,nCols:4,dataRows:nCats,moneyCols:[1,2,3],totalRow:totalRow2,brandRow:0,titleRow:1,metaRows:[2]});
     // Saldo inicial/final del pie: Q + etiqueta en negrita.
     [totalRow2+2,totalRow2+3].forEach(r=>{const rv=XLSX.utils.encode_cell({c:1,r});if(ws2[rv])ws2[rv].z=_Q;const rl=XLSX.utils.encode_cell({c:0,r});if(_styled&&ws2[rl])ws2[rl].s={font:{bold:true,color:{rgb:'173916'}}};});
     const wb=XLSX.utils.book_new();
