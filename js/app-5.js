@@ -843,6 +843,20 @@ function openEditarAbono(facturaId,abonoIdx){
   const _b=$('#m-save'); if(_b){_b.className='btn btn-primary';_b.textContent='Guardar cambios';}
 }
 window.openEditarAbono=openEditarAbono;
+// Al anular un abono, borra el rastro del cobro en bancos: anula el movimiento
+// de ENTRADA original (origen 'cobro') que generó ese abono. Devuelve el
+// movimiento anulado, o null si el abono no había entrado a una cuenta (o no se
+// encuentra). NO crea ninguna reversa. Se empareja por factura + cuenta + monto,
+// igual que el ajuste al editar un abono.
+function _anularEntradaBancoDeAbono(f,a){
+  if(!a||!a.cuentaBancoId||typeof movimientosBanco==='undefined')return null;
+  const mv=movimientosBanco.find(m=>!m.anulado&&m.origen==='cobro'&&Number(m.origenId)===Number(f.id)&&Number(m.cuentaId)===Number(a.cuentaBancoId)&&Math.abs(Number(m.monto)-Number(a.monto))<0.01);
+  if(!mv)return null;
+  mv.anulado=true;
+  if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mv);
+  return mv;
+}
+window._anularEntradaBancoDeAbono=_anularEntradaBancoDeAbono;
 function openAnularAbono(facturaId,abonoIdx){
   const f=documentos.find(d=>d.id===facturaId);const a=f.abonos[abonoIdx];if(!a||a.anulado)return;
   openMod('Anular abono',
@@ -853,12 +867,14 @@ function openAnularAbono(facturaId,abonoIdx){
       const motivo=$('#an-motivo').value.trim();
       if(!motivo){$('#an-err').style.display='flex';return;}
       a.anulado=true;a.motivoAnulacion=motivo;a.anuladoPor=currentUser;a.anuladoFecha=new Date().toISOString();
-      // Si el cobro había entrado a una cuenta de banco, revertirlo con una salida compensatoria
-      if(a.cuentaBancoId&&typeof registrarMovimientoBanco==='function'){
-        registrarMovimientoBanco({cuentaId:a.cuentaBancoId,tipo:'salida',monto:a.monto,
-          concepto:'Reversa de cobro anulado '+(a.noRecibo||'')+' · '+(f.clienteComercial||f.clienteNombre),
-          categoria:'cobro',origen:'cobro_anulado',origenId:f.id,referencia:a.referencia,fecha:fechaHoyGT(),sinPoliza:true});
-      }
+      // Anular un abono = como si nunca hubiera existido: se BORRA el rastro en
+      // bancos. Antes se creaba una "Reversa de cobro anulado" (una salida
+      // compensatoria), pero eso partía la operación en dos (entrada un mes,
+      // reversa otro) y dejaba movimientos cuando en realidad fue un error de
+      // digitación. Ahora se ANULA la ENTRADA original: nunca entró, nunca salió.
+      // (Para correcciones chicas de monto/fecha se EDITA el abono, no se anula.)
+      const _mvEnt=_anularEntradaBancoDeAbono(f,a);
+      if(_mvEnt)logAudit('Banco · entrada de cobro anulada','Factura '+f.serie+'-'+f.numeroDte+' · cuenta '+_mvEnt.cuentaId+' · '+money(_mvEnt.monto)+' · por anulación de abono');
       // Si el abono se pagó con saldo a favor, devolver ese crédito al cliente.
       if(a.metodo==='Saldo a favor'){
         const _cr={clienteId:f.clienteId,tipo:'ingreso',monto:a.monto,fecha:fechaHoyGT(),documentoId:f.id,
