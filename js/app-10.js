@@ -64,7 +64,7 @@ function _estiloExcelHoja(XLSX,ws,o){
   for(let c=0;c<nCols;c++){
     const ref=enc(c,hr); if(!ws[ref])ws[ref]={t:'s',v:''};
     ws[ref].s={font:{bold:true,color:{rgb:'FFFFFF'},sz:11},
-      fill:{fgColor:{rgb:_XLS_VERDE}},
+      fill:{patternType:'solid',fgColor:{rgb:_XLS_VERDE}},
       alignment:{horizontal:money.has(c)?'right':'left',vertical:'center',wrapText:false},
       border:{top:bV,bottom:bV,left:bV,right:bV}};
   }
@@ -75,7 +75,7 @@ function _estiloExcelHoja(XLSX,ws,o){
       const ref=enc(c,r); if(!ws[ref])continue;
       const s=ws[ref].s||{};
       s.border=bordes;
-      if(zebra)s.fill={fgColor:{rgb:_XLS_CEBRA}};
+      if(zebra)s.fill={patternType:'solid',fgColor:{rgb:_XLS_CEBRA}};
       if(money.has(c))s.alignment=Object.assign({},s.alignment,{horizontal:'right'});
       ws[ref].s=s;
     }
@@ -93,7 +93,7 @@ function _estiloExcelHoja(XLSX,ws,o){
       const ref=enc(c,o.totalRow); if(!ws[ref])continue;
       const s=ws[ref].s||{};
       ws[ref].s=Object.assign(s,{font:{bold:true,color:{rgb:_XLS_VERDE}},
-        fill:{fgColor:{rgb:_XLS_TOTAL_BG}},
+        fill:{patternType:'solid',fgColor:{rgb:_XLS_TOTAL_BG}},
         border:{top:bTop,bottom:bFino,left:bFino,right:bFino}});
       if(money.has(c))ws[ref].s.alignment={horizontal:'right'};
     }
