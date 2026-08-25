@@ -572,7 +572,11 @@ async function estadoCuentaBancoExcel(id){
     const cab=['Fecha','Concepto','Categoría','Referencia','Origen','Entrada','Salida','Saldo'];
     const filas=[['','Saldo inicial'+(desde?(' al '+fdate(desde)):' (apertura)'),'','','','','',d.saldoAntes]];
     d.filas.forEach(f=>filas.push([f.fecha,f.concepto,f.categoria,f.referencia,f.origen==='manual'?'Manual':'Automático',f.ent||0,f.sal||0,f.saldo]));
-    filas.push(['','TOTALES','','','','',d.totEnt,d.totSal]);
+    // Columnas: Fecha, Concepto, Categoría, Referencia, Origen, Entrada, Salida, Saldo.
+    // Los totales van en Entrada (idx 5) y Salida (idx 6); Saldo (idx 7) queda vacío
+    // (el saldo final va en su propia fila). Antes había un '' de más y los totales
+    // caían corridos una columna a la derecha.
+    filas.push(['','TOTALES','','','',d.totEnt,d.totSal,'']);
     filas.push(['','SALDO FINAL','','','','','',d.saldoFinal]);
     const ws1=XLSX.utils.aoa_to_sheet(meta);
     XLSX.utils.sheet_add_aoa(ws1,[cab],{origin:'A8'});
