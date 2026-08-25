@@ -65,22 +65,35 @@ function registrarCompraDividida(facturas){
 window.registrarCompraDividida=registrarCompraDividida;
 
 // ---- Editar compra especial ----
-function editarCompraEspecial(id){
-  const c=compras.find(x=>x.id===id);if(!c||!c.especial||c.oficializada)return;
-  const ahora=new Date();const mesActual=ahora.getFullYear()+'-'+(ahora.getMonth()+1);
-  if(c.mes!==mesActual){toast('✗ Compra especial vencida','Solo se puede editar durante el mes de creación',true);return;}
-
-  const opts=productos.map(p=>`<option value="${p.skuProveedor||p.codigo} — ${p.nombreProveedor||p.nombre}">`).join('');
-  const rows=()=>c.items.map((it,i)=>`<tr>
+// Cualquier cambio (cantidad, costo, agregar, quitar) pide un MOTIVO que queda
+// en auditoría. El motivo se conserva durante la sesión de edición para no
+// re-escribirlo en cada cambio, y se limpia al abrir el editor de nuevo.
+let _motivoCompraEsp='';
+function _reqMotivoEsp(){
+  const m=(_motivoCompraEsp||'').trim();
+  if(!m){toast('Falta el motivo','Escribí por qué editás esta compra (queda en auditoría)',true);return null;}
+  return m;
+}
+function _espRows(c,id){
+  return c.items.map((it,i)=>`<tr>
     <td style="font-weight:600">${it.nombreProveedor||it.nombre}<div style="font-size:10.5px;color:var(--muted)">${it.skuProveedor||it.codigo}</div></td>
     <td><input type="number" min="1" value="${it.cantidad}" style="width:70px;text-align:right" onchange="updEspecialItem(${id},${i},this.value)"></td>
-    <td class="num" style="color:var(--muted)">${money(it.costo)}</td>
+    <td><input type="number" min="0" step="0.01" value="${it.costo}" style="width:90px;text-align:right" onchange="updEspecialItemCosto(${id},${i},this.value)"></td>
     <td class="num" style="font-weight:600">${money(it.cantidad*it.costo)}</td>
     <td><button class="x" onclick="quitarEspecialItem(${id},${i})">×</button></td>
   </tr>`).join('');
+}
+function editarCompraEspecial(id,mantenerMotivo){
+  const c=compras.find(x=>x.id===id);if(!c||!c.especial||c.oficializada)return;
+  const ahora=new Date();const mesActual=ahora.getFullYear()+'-'+(ahora.getMonth()+1);
+  if(c.mes!==mesActual){toast('✗ Compra especial vencida','Solo se puede editar durante el mes de creación',true);return;}
+  if(!mantenerMotivo)_motivoCompraEsp='';
 
+  const opts=productos.map(p=>`<option value="${p.skuProveedor||p.codigo} — ${p.nombreProveedor||p.nombre}">`).join('');
   openMod('Editar compra especial · CMP-'+padn(c.id),`
-    <p style="font-size:12.5px;color:var(--muted);margin-bottom:13px">${c.proveedorNombre} · Los cambios de cantidad ajustan el inventario en tiempo real.</p>
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">${c.proveedorNombre} · Los cambios de cantidad ajustan el inventario en tiempo real; el costo alimenta la reportería de promedio.</p>
+    <div style="margin-bottom:13px"><label style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.4px">Motivo del cambio (obligatorio)</label>
+      <input id="esp-motivo" value="${(_motivoCompraEsp||'').replace(/"/g,'&quot;')}" oninput="_motivoCompraEsp=this.value" placeholder="Ej. corrección de costo por alza de precio" style="width:100%;margin-top:4px"></div>
     <div style="display:flex;gap:8px;margin-bottom:13px">
       <input id="esp-add" list="esp-add-list" placeholder="Agregar producto…" autocomplete="off" style="flex:1">
       <datalist id="esp-add-list">${opts}</datalist>
@@ -92,13 +105,14 @@ function editarCompraEspecial(id){
       <th style="text-align:right;font-size:10.5px;color:var(--muted-2);padding:6px 0">Costo</th>
       <th style="text-align:right;font-size:10.5px;color:var(--muted-2);padding:6px 0">Subtotal</th>
       <th></th>
-    </tr></thead><tbody id="esp-rows">${rows()}</tbody></table>`,
+    </tr></thead><tbody id="esp-rows">${_espRows(c,id)}</tbody></table>`,
     ()=>closeMod());
   $('#m-save').textContent='Cerrar';$('#m-save').className='btn btn-ghost';
 }
 window.editarCompraEspecial=editarCompraEspecial;
 
 function updEspecialItem(compraId,idx,val){
+  const mot=_reqMotivoEsp();if(mot==null){editarCompraEspecial(compraId,true);return;}
   const c=compras.find(x=>x.id===compraId);if(!c)return;
   const it=c.items[idx];if(!it)return;
   const nuevaCant=Math.max(1,Number(val)||1);
@@ -107,33 +121,45 @@ function updEspecialItem(compraId,idx,val){
   if(prod)aplicarStock(prod,delta,'caja');
   it.cantidad=nuevaCant;it.recibido=nuevaCant;
   c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
-  if(delta&&prod)logAudit('Inventario · compra especial','CMP-'+padn(compraId)+' · '+(it.nombreProveedor||it.nombre)+' · '+(delta>0?'+':'')+delta+' und → stock '+prod.stock);
+  if(delta&&prod)logAudit('Inventario · compra especial','CMP-'+padn(compraId)+' · '+(it.nombreProveedor||it.nombre)+' · '+(delta>0?'+':'')+delta+' und → stock '+prod.stock+' · motivo: '+mot);
   if(typeof guardarCompra==='function')guardarCompra(c);
-  $('#esp-rows').innerHTML=c.items.map((it,i)=>`<tr>
-    <td style="font-weight:600">${it.nombreProveedor||it.nombre}</td>
-    <td><input type="number" min="1" value="${it.cantidad}" style="width:70px;text-align:right" onchange="updEspecialItem(${compraId},${i},this.value)"></td>
-    <td class="num" style="color:var(--muted)">${money(it.costo)}</td>
-    <td class="num" style="font-weight:600">${money(it.cantidad*it.costo)}</td>
-    <td><button class="x" onclick="quitarEspecialItem(${compraId},${i})">×</button></td>
-  </tr>`).join('');
+  $('#esp-rows').innerHTML=_espRows(c,compraId);
 }
 window.updEspecialItem=updEspecialItem;
 
+// Editar el COSTO de una línea (no toca inventario; sí el total y el promedio de reportería)
+function updEspecialItemCosto(compraId,idx,val){
+  const mot=_reqMotivoEsp();if(mot==null){editarCompraEspecial(compraId,true);return;}
+  const c=compras.find(x=>x.id===compraId);if(!c)return;
+  const it=c.items[idx];if(!it)return;
+  const nuevo=Math.max(0,Number(val)||0),viejo=Number(it.costo)||0;
+  if(nuevo!==viejo){
+    it.costo=nuevo;
+    c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
+    logAudit('Compra especial · costo','CMP-'+padn(compraId)+' · '+(it.nombreProveedor||it.nombre)+' · '+money(viejo)+' → '+money(nuevo)+' · motivo: '+mot);
+    if(typeof guardarCompra==='function')guardarCompra(c);
+  }
+  $('#esp-rows').innerHTML=_espRows(c,compraId);
+}
+window.updEspecialItemCosto=updEspecialItemCosto;
+
 function quitarEspecialItem(compraId,idx){
+  const mot=_reqMotivoEsp();if(mot==null){editarCompraEspecial(compraId,true);return;}
   const c=compras.find(x=>x.id===compraId);if(!c)return;
   const it=c.items[idx];
   const prod=productos.find(p=>p.id===it.id);
   if(prod)aplicarStock(prod,-it.cantidad,'caja');
-  logAudit('Inventario · compra especial','CMP-'+padn(compraId)+' · quitado '+(it.nombreProveedor||it.nombre)+' · -'+it.cantidad+' und → stock '+(prod?prod.stock:'?'));
+  logAudit('Inventario · compra especial','CMP-'+padn(compraId)+' · quitado '+(it.nombreProveedor||it.nombre)+' · -'+it.cantidad+' und → stock '+(prod?prod.stock:'?')+' · motivo: '+mot);
   c.items.splice(idx,1);
   c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
   if(typeof guardarCompra==='function')guardarCompra(c);
   if(!c.items.length){toast('Sin productos — la compra especial quedó vacía');closeMod();renderCompras();return;}
-  editarCompraEspecial(compraId);
+  editarCompraEspecial(compraId,true);
 }
 window.quitarEspecialItem=quitarEspecialItem;
 
 function addEspecialItem(compraId){
+  const mot=_reqMotivoEsp();if(mot==null)return;
   const c=compras.find(x=>x.id===compraId);if(!c)return;
   const v=($('#esp-add').value||'').trim();if(!v)return;
   const p=productos.find(x=>`${x.skuProveedor||x.codigo} — ${x.nombreProveedor||x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase().includes(v.toLowerCase()));
@@ -144,10 +170,10 @@ function addEspecialItem(compraId){
     const prod=productos.find(x=>x.id===p.id);if(prod)aplicarStock(prod,1,'caja');}
   c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
   const _pAdd=productos.find(x=>x.id===p.id);
-  logAudit('Inventario · compra especial','CMP-'+padn(compraId)+' · '+(p.nombreProveedor||p.nombre)+' · +1 und → stock '+(_pAdd?_pAdd.stock:'?'));
+  logAudit('Inventario · compra especial','CMP-'+padn(compraId)+' · '+(p.nombreProveedor||p.nombre)+' · +1 und → stock '+(_pAdd?_pAdd.stock:'?')+' · motivo: '+mot);
   if(typeof guardarCompra==='function')guardarCompra(c);
   $('#esp-add').value='';
-  editarCompraEspecial(compraId);
+  editarCompraEspecial(compraId,true);
 }
 window.addEspecialItem=addEspecialItem;
 
