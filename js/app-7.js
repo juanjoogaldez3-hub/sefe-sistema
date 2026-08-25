@@ -823,6 +823,7 @@ const MODULOS_PERMISOS=[
   {key:'rep_cardex',lbl:'Cardex de inventario',grp:'Reportes · Inventario'},
   {key:'rep_invactual',lbl:'Inventario actual',grp:'Reportes · Inventario'},
   {key:'rep_invcosto',lbl:'Inventario valorizado',grp:'Reportes · Inventario'},
+  {key:'rep_invmov',lbl:'Movimiento de inventario',grp:'Reportes · Inventario'},
   {key:'rep_cprov',lbl:'Compras por proveedor',grp:'Reportes · Compras y bancos'},
   {key:'rep_cprod',lbl:'Compras por producto',grp:'Reportes · Compras y bancos'},
   {key:'rep_banco',lbl:'Movimientos de banco',grp:'Reportes · Compras y bancos'},
@@ -830,7 +831,7 @@ const MODULOS_PERMISOS=[
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','prodmescomp','comision','dircli','factem','cardex','invactual','invcosto','canalvend','cprov','cprod','cxc','estcta','factabo','banco','recibos','pagos','retenciones'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','prodmescomp','comision','dircli','factem','cardex','invactual','invcosto','invmov','canalvend','cprov','cprod','cxc','estcta','factabo','banco','recibos','pagos','retenciones'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){
