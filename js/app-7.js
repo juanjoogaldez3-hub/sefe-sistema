@@ -177,6 +177,91 @@ function addEspecialItem(compraId){
 }
 window.addEspecialItem=addEspecialItem;
 
+// ---- Editar orden de compra PENDIENTE (aún no recibida) ----
+// Sólo mientras estadoRecepcion==='pendiente' (nada recibido → no hay inventario
+// que mover). Se edita cantidad y costo; una vez recibida, la orden es inamovible
+// (no aparece el botón Editar). Reusa el motivo obligatorio de arriba.
+function _pendRows(c,id){
+  return c.items.map((it,i)=>`<tr>
+    <td style="font-weight:600">${it.nombreProveedor||it.nombre}<div style="font-size:10.5px;color:var(--muted)">${it.skuProveedor||it.codigo}</div></td>
+    <td><input type="number" min="1" value="${it.cantidad}" style="width:70px;text-align:right" onchange="updPendItem(${id},${i},'cantidad',this.value)"></td>
+    <td><input type="number" min="0" step="0.01" value="${it.costo}" style="width:90px;text-align:right" onchange="updPendItem(${id},${i},'costo',this.value)"></td>
+    <td class="num" style="font-weight:600">${money(it.cantidad*it.costo)}</td>
+    <td>${c.items.length>1?`<button class="x" onclick="quitarPendItem(${id},${i})">×</button>`:''}</td>
+  </tr>`).join('');
+}
+function editarCompraPendiente(id,mantenerMotivo){
+  const c=compras.find(x=>x.id===id);
+  if(!c||c.especial||c.anulado||c.estadoRecepcion!=='pendiente'){toast('No editable','Sólo se pueden editar órdenes pendientes (sin recibir). Una vez recibida es inamovible.',true);return;}
+  if(!mantenerMotivo)_motivoCompraEsp='';
+  const opts=productos.map(p=>`<option value="${p.skuProveedor||p.codigo} — ${p.nombreProveedor||p.nombre}">`).join('');
+  openMod('Editar orden · CMP-'+padn(c.id),`
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">${c.proveedorNombre} · Orden <b>pendiente</b> (sin recibir). Editás cantidad y costo; no toca inventario hasta que la recibás.</p>
+    <div style="margin-bottom:13px"><label style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.4px">Motivo del cambio (obligatorio)</label>
+      <input id="pend-motivo" value="${(_motivoCompraEsp||'').replace(/"/g,'&quot;')}" oninput="_motivoCompraEsp=this.value" placeholder="Ej. corrección de cantidad pedida / costo" style="width:100%;margin-top:4px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:13px">
+      <input id="pend-add" list="pend-add-list" placeholder="Agregar producto…" autocomplete="off" style="flex:1">
+      <datalist id="pend-add-list">${opts}</datalist>
+      <button class="btn btn-primary btn-sm" onclick="addPendItem(${id})">Agregar</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse"><thead><tr>
+      <th style="text-align:left;font-size:10.5px;color:var(--muted-2);padding:6px 0;border-bottom:1px solid var(--line)">Producto</th>
+      <th style="text-align:right;font-size:10.5px;color:var(--muted-2);padding:6px 0">Cant.</th>
+      <th style="text-align:right;font-size:10.5px;color:var(--muted-2);padding:6px 0">Costo</th>
+      <th style="text-align:right;font-size:10.5px;color:var(--muted-2);padding:6px 0">Subtotal</th>
+      <th></th>
+    </tr></thead><tbody id="pend-rows">${_pendRows(c,id)}</tbody></table>`,
+    ()=>closeMod());
+  $('#m-save').textContent='Cerrar';$('#m-save').className='btn btn-ghost';
+}
+window.editarCompraPendiente=editarCompraPendiente;
+
+function updPendItem(compraId,idx,campo,val){
+  const mot=_reqMotivoEsp();if(mot==null){editarCompraPendiente(compraId,true);return;}
+  const c=compras.find(x=>x.id===compraId);if(!c||c.especial||c.estadoRecepcion!=='pendiente')return;
+  const it=c.items[idx];if(!it)return;
+  const viejo=Number(it[campo])||0;
+  const nuevo=campo==='cantidad'?Math.max(1,Number(val)||1):Math.max(0,Number(val)||0);
+  if(nuevo!==viejo){
+    it[campo]=nuevo;if(campo==='cantidad')it.recibido=0;
+    c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
+    logAudit('Orden de compra · editada','CMP-'+padn(compraId)+' · '+(it.nombreProveedor||it.nombre)+' · '+campo+' '+viejo+' → '+nuevo+' · motivo: '+mot);
+    if(typeof guardarCompra==='function')guardarCompra(c);
+  }
+  $('#pend-rows').innerHTML=_pendRows(c,compraId);
+}
+window.updPendItem=updPendItem;
+
+function quitarPendItem(compraId,idx){
+  const mot=_reqMotivoEsp();if(mot==null){editarCompraPendiente(compraId,true);return;}
+  const c=compras.find(x=>x.id===compraId);if(!c||c.especial||c.estadoRecepcion!=='pendiente')return;
+  if(c.items.length<=1){toast('No se puede vaciar la orden','Si querés eliminarla, usá el botón Eliminar de la lista',true);return;}
+  const it=c.items[idx];
+  logAudit('Orden de compra · editada','CMP-'+padn(compraId)+' · quitado '+(it.nombreProveedor||it.nombre)+' · motivo: '+mot);
+  c.items.splice(idx,1);
+  c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
+  if(typeof guardarCompra==='function')guardarCompra(c);
+  editarCompraPendiente(compraId,true);
+}
+window.quitarPendItem=quitarPendItem;
+
+function addPendItem(compraId){
+  const mot=_reqMotivoEsp();if(mot==null)return;
+  const c=compras.find(x=>x.id===compraId);if(!c||c.especial||c.estadoRecepcion!=='pendiente')return;
+  const v=($('#pend-add').value||'').trim();if(!v)return;
+  const p=productos.find(x=>`${x.skuProveedor||x.codigo} — ${x.nombreProveedor||x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase().includes(v.toLowerCase()));
+  if(!p){toast('✗ Producto no encontrado',null,true);return;}
+  const ex=c.items.find(it=>it.id===p.id);
+  if(ex)ex.cantidad++;
+  else c.items.push({id:p.id,codigo:p.codigo,skuProveedor:p.skuProveedor||p.codigo,nombre:p.nombre,nombreProveedor:p.nombreProveedor||p.nombre,costo:p.costo||0,cantidad:1,recibido:0});
+  c.total=c.items.reduce((s,x)=>s+x.cantidad*x.costo,0);
+  logAudit('Orden de compra · editada','CMP-'+padn(compraId)+' · agregado '+(p.nombreProveedor||p.nombre)+' · motivo: '+mot);
+  if(typeof guardarCompra==='function')guardarCompra(c);
+  $('#pend-add').value='';
+  editarCompraPendiente(compraId,true);
+}
+window.addPendItem=addPendItem;
+
 // ---- Oficializar compra especial ----
 function oficializarCompraEspecial(id){
   const c=compras.find(x=>x.id===id);if(!c||!c.especial)return;

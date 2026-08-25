@@ -997,6 +997,8 @@ function renderCompras(){
     }
     if(!c.especial&&c.estadoRecepcion==='recibida'&&!c.facturada)acts=`<button class="btn btn-primary btn-sm" onclick="openFacturaProv(${c.id})">Registrar factura</button>`+acts;
     if(!c.especial&&c.estadoRecepcion!=='recibida')acts=`<button class="btn btn-primary btn-sm" onclick="openRecibir(${c.id})">Recibir</button>`+acts;
+    // Editar sólo mientras la orden esté PENDIENTE (sin recibir). Una vez recibida, inamovible.
+    if(!c.especial&&c.estadoRecepcion==='pendiente'&&!c.anulado)acts=`<button class="btn btn-ghost btn-sm" onclick="editarCompraPendiente(${c.id})">Editar</button>`+acts;
     // Eliminar (sin inventario afectado) solo si no se ha recibido nada
     if(canAnular()&&c.estadoRecepcion==='pendiente'&&!c.especial)
       acts+=`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="confirmar('Eliminar compra','Se eliminará CMP-${padn(c.id)}. No hay inventario que revertir porque aún no se recibió mercadería.','Eliminar',()=>eliminarCompra(${c.id}))">Eliminar</button>`;
