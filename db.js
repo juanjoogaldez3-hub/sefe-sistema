@@ -50,7 +50,7 @@ async function fetchAll(tabla, ordenCampo, cols){
 // del peso de la base. No se necesitan para ver listas, cobros ni dashboard;
 // sólo al abrir o imprimir UNA factura. Por eso la carga inicial los omite
 // (bajaba 24 MB en cada login) y se traen a pedido con asegurarPdfDoc().
-const DOC_COLS_SIN_BLOBS='id,numero,tipo_doc,cliente_id,cliente_nombre,cliente_comercial,cliente_nit,vendedor_id,vendedor_nombre,sub_vendedor_nombre,items,totales,estado,estado_pago,inventario_rebajado,autorizacion,serie,numero_dte,orden_compra,observaciones,nota_interna,dias_credito,vencimiento,exenta,escenario_exenta,piloto_id,orden_ruta,estado_entrega,entrega_info,anulado,motivo_anulacion,fecha_certificacion,factura_origen_id,nit_facturado,nombre_facturado,sede,creada';
+const DOC_COLS_SIN_BLOBS='id,numero,tipo_doc,cliente_id,cliente_nombre,cliente_comercial,cliente_nit,vendedor_id,vendedor_nombre,sub_vendedor_nombre,items,totales,estado,estado_pago,inventario_rebajado,autorizacion,serie,numero_dte,orden_compra,observaciones,nota_interna,dias_credito,vencimiento,exenta,escenario_exenta,piloto_id,orden_ruta,estado_entrega,entrega_info,anulado,motivo_anulacion,fecha_certificacion,factura_origen_id,nit_facturado,nombre_facturado,sede,creada,costo_historico';
 
 // Trae el PDF/XML de UNA factura sólo cuando se necesita (verla, imprimirla,
 // descargarla) y lo deja cacheado en el objeto en memoria. Si ya está, no
@@ -203,18 +203,9 @@ async function cargarTodo() {
       }
     } catch(e){ /* tabla aún no creada */ }
 
-    // Costo histórico por factura (margen del período importado sin detalle).
-    // Se trae aparte para tolerar que la columna no exista todavía; si no está,
-    // simplemente no se llena y el costo de esas facturas queda en 0.
-    try {
-      // Paginado (fetchAll): sin esto Supabase corta en 1000 filas y muchas
-      // facturas se quedarían sin su costo histórico → el reporte sumaría de menos.
-      const rCH = await fetchAll('documentos','id','id,costo_historico');
-      if (Array.isArray(documentos)) {
-        const byId = {}; (rCH.data||[]).forEach(r=>{ if(r.costo_historico!=null) byId[r.id]=Number(r.costo_historico); });
-        documentos.forEach(d=>{ if(byId[d.id]!=null) d.costoHistorico=byId[d.id]; });
-      }
-    } catch(e){ /* columna aún no creada */ }
+    // (El costo histórico por factura ahora viene en la carga principal de
+    // 'documentos' — es una columna más en DOC_COLS_SIN_BLOBS y la llena el
+    // mapper. Antes se traía en una segunda recorrida completa de la tabla.)
 
     // Marca de que los datos vienen REALMENTE de la base.
     //
@@ -291,7 +282,7 @@ function mapDocumentoFromDB(d, todosAbonos){
     entregaInfo:d.entrega_info, anulado:d.anulado, motivoAnulacion:d.motivo_anulacion,
     pdfBase64:d.pdf_base64, xmlBase64:d.xml_base64, fechaCertificacion:d.fecha_certificacion,
     facturaOrigenId:d.factura_origen_id, nitFacturado:d.nit_facturado, nombreFacturado:d.nombre_facturado,
-    sede:d.sede,
+    sede:d.sede, costoHistorico:(d.costo_historico!=null?Number(d.costo_historico):undefined),
     creada:d.creada, abonos
   };
 }

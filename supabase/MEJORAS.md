@@ -25,16 +25,11 @@ consultada del sistema.
 (`documentos_archivos`, misma `id`) o a Supabase Storage. Va de la mano
 de la Fase 2 (velocidad).
 
-## 2. Índices que faltan para los reportes  ·  impacto ALTO, costo bajo
+## 2. Índices que faltan para los reportes  ·  ✅ HECHO (ago 2026)
 
-El sistema filtra y agrupa mucho por fecha y vendedor, pero no hay
-índice en:
-
-- `documentos(creada)` — las comparativas por mes hacen barrido completo.
-- `documentos(vendedor_id)` — reportes por vendedor.
-- `abonos(fecha)` — cobranza por período.
-
-Índices baratos de agregar; se sienten con datos de años.
+Agregados en `migrations/20260825120000_indices_reportes.sql`:
+`documentos(creada)`, `documentos(vendedor_id)`, `abonos(fecha)`.
+Aplicados en Pruebas y Producción.
 
 ## 3. Llaves foráneas que faltan  ·  integridad
 
@@ -53,7 +48,23 @@ huérfanos** y decidir el `on delete` (probablemente `set null`).
 julio. No molestan, pero ensucian la base y aparecen en cualquier
 revisión. Borrarlas (con un respaldo antes, por las dudas).
 
-## 5. Menores
+## 5. Carga inicial `cargarTodo()` — windowed load  ·  NO urge todavía
+
+Análisis (ago 2026): lo peor ya está resuelto — la `auditoria` ya no se
+baja entera al entrar (sólo el último registro) y los PDF/XML de las
+facturas se traen a pedido. Y **el volumen es chico**: ~1.900 documentos,
+~1.600 abonos. El login ya es liviano.
+
+Ya se hizo una limpieza: `costo_historico` dejó de traerse en una segunda
+recorrida completa de `documentos` (ahora viene en la carga principal).
+
+Pendiente **sólo cuando el volumen crezca**: bajar al entrar únicamente lo
+reciente (ej. últimos 12 meses) de `documentos`/`abonos` y traer lo viejo
+a pedido. Es riesgoso (muchos reportes asumen todo en memoria), así que
+**no vale la pena hasta** que un cliente pase de ~**20.000 documentos**.
+Ahí sí, hacerlo por módulo y probando cada reporte en Pruebas.
+
+## 6. Menores
 
 - **Montos:** mezcla de `numeric(12,2)` y `numeric` sin escala
   (`monto` en `creditos_cliente`/`movimientos_banco`, `precio_caja`,
