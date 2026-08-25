@@ -6,8 +6,10 @@ async function exportarExcel(){
   let XLSX,_styled=false;
   try{const _m=await import('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/+esm');XLSX=_m.default||_m;if(XLSX&&XLSX.utils)_styled=true;else throw 0;}
   catch(_e){XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',factabo:'FACTURAS Y ABONOS',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',factabo:'FACTURAS Y ABONOS',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO',invmov:'MOVIMIENTO DE INVENTARIO'};
   const _esInv=(repType==='invactual'||repType==='invcosto');
+  // Reportes cuyos números son CANTIDADES (unidades), nunca dinero: no llevan formato "Q".
+  const _soloCant=(repType==='invmov'||repType==='invactual');
   const meta=[['Reporte:',TIPO_NOMBRES[repType]||repType],[_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,repLastData,{origin:'A6'});
@@ -28,7 +30,7 @@ async function exportarExcel(){
   // Formato moneda (Q) en las columnas de importe del estado de cuenta.
   if(repType==='estcta'&&repLastData.length){const _k=Object.keys(repLastData[0]);const _cur=['Corriente','30 Días','60 Días','90 Días','+90 Días'];repLastData.forEach((r,i)=>{_k.forEach((kk,ci)=>{if(_cur.indexOf(kk)>=0&&typeof r[kk]==='number'){const ref=XLSX.utils.encode_cell({c:ci,r:6+i});if(ws[ref])ws[ref].z='"Q"#,##0.00';}});});}
   // Formato moneda (Q) en columnas de importe del resto de reportes (por nombre; excluye % y cantidades).
-  if(repType!=='estcta'&&repLastData.length){const _k=Object.keys(repLastData[0]);const _inc=/precio|costo|venta|valor|saldo|monto|margen\s*q|\biva\b|neto|entrada|salida|abono|ganancia|compra|d[eé]bito|cr[eé]dito|pendiente|total|corriente/i;const _mes=/^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/i;const _exc=/%|porcentaje|unidad|cantidad|existencia|recibos?|[oó]rdenes/i;const _money=_k.filter(k=>!_exc.test(k)&&(_inc.test(k)||_mes.test(k)||/^Δ/.test(k)));repLastData.forEach((r,i)=>{_k.forEach((kk,ci)=>{if(_money.indexOf(kk)>=0&&typeof r[kk]==='number'){const ref=XLSX.utils.encode_cell({c:ci,r:6+i});if(ws[ref])ws[ref].z='"Q"#,##0.00';}});});}
+  if(repType!=='estcta'&&!_soloCant&&repLastData.length){const _k=Object.keys(repLastData[0]);const _inc=/precio|costo|venta|valor|saldo|monto|margen\s*q|\biva\b|neto|entrada|salida|abono|ganancia|compra|d[eé]bito|cr[eé]dito|pendiente|total|corriente/i;const _mes=/^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/i;const _exc=/%|porcentaje|unidad|cantidad|existencia|recibos?|[oó]rdenes/i;const _money=_k.filter(k=>!_exc.test(k)&&(_inc.test(k)||_mes.test(k)||/^Δ/.test(k)));repLastData.forEach((r,i)=>{_k.forEach((kk,ci)=>{if(_money.indexOf(kk)>=0&&typeof r[kk]==='number'){const ref=XLSX.utils.encode_cell({c:ci,r:6+i});if(ws[ref])ws[ref].z='"Q"#,##0.00';}});});}
   // Fila de TOTALES al pie (suma de columnas numéricas), si el reporte no la trae ya.
   if(repLastData.length){
     const _k=Object.keys(repLastData[0]);
@@ -39,7 +41,7 @@ async function exportarExcel(){
       const _incM=/precio|costo|venta|valor|saldo|monto|margen\s*q|\biva\b|neto|entrada|salida|abono|ganancia|compra|d[eé]bito|cr[eé]dito|pendiente|total|corriente/i;
       const _excM=/%|porcentaje|unidad|cantidad|existencia|recibos?|[oó]rdenes/i;
       const _mesM=/^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/i;
-      const _esMoney=k=>!_excM.test(k)&&(_incM.test(k)||_mesM.test(k)||/^Δ/.test(k));
+      const _esMoney=k=>!_soloCant&&!_excM.test(k)&&(_incM.test(k)||_mesM.test(k)||/^Δ/.test(k));
       const _rt=6+repLastData.length; // fila (0-index) de los totales
       _k.forEach((kk,ci)=>{
         const val=ci===0?'TOTALES':(_sumCols.indexOf(kk)>=0?repLastData.reduce((s,r)=>s+(typeof r[kk]==='number'?r[kk]:0),0):null);
@@ -107,7 +109,7 @@ async function _abrirPDF(html){
 }
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
-  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',factabo:'FACTURAS Y ABONOS',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO'};
+  const TIPO_NOMBRES={resumen:'Resumen',costos:'Costos vs Ventas',vendedor:'VALOR FACTURACION VENTAS vs COSTOS',producto:'Ventas por Producto',cliprod:'VENTAS POR CLIENTE Y PRODUCTO',climes:'VENTAS POR CLIENTE Y MES',climescomp:'COMPARATIVA CLIENTE POR MES',comision:'COMISIONES POR PRODUCTO',dircli:'LISTADO DE CLIENTES',factem:'FACTURAS EMITIDAS',cardex:'CARDEX DE INVENTARIO',canalvend:'VENTAS POR CANAL (WHATICKET)',cprov:'Compras por Proveedor',cprod:'Compras por Producto',cxc:'Pendientes por Cliente',estcta:'ESTADO DE CUENTA GENERAL',factabo:'FACTURAS Y ABONOS',banco:'MOVIMIENTOS DE BANCO',recibos:'LISTADO DE RECIBOS',pagos:'LISTADO DE PAGOS',retenciones:'RETENCIONES IVA-ISR',invactual:'INVENTARIO ACTUAL',invcosto:'INVENTARIO VALORIZADO',invmov:'MOVIMIENTO DE INVENTARIO'};
   const cols=repLastData.length?Object.keys(repLastData[0]):[];
   const MESES_NUM=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const esNum=(c)=>['ValorAbono','Monto','Total','Ventas','Costo','Costos','Ganancia','Comisión','Margen','Margen Q','Ingresos','Total comprado','Cantidad','Precio Unit.','Venta Total','Costo Unit.','Costo Total','Unidades','Neto','IVA','Valor','Saldo','Entra','Sale','Facturas','Total','Existencias','Existencia','Cantidad','Costo unitario','Costo total',

@@ -365,6 +365,12 @@ function renderRepFilters(){
     const marcaOpts=marcas.map(m=>({v:m,l:m}));
     html=`<div class="rep-filter-bar">${sel('rf-marca-inv','Marca',marcaOpts,repFiltros.marca_prod,'marca_prod')}<div><label>Existencias al día</label><input type="date" style="margin-top:4px" value="${repFiltros.invFecha||fechaHoyGT()}" onchange="setRepFiltro('invFecha',this.value)"></div></div>`;
   }
+  else if(repType==='invmov'){
+    // Movimiento de inventario: usa la barra de período de arriba; acá sólo el filtro por marca.
+    const marcas=[...new Set(productos.filter(p=>p.activo!==false).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
+    const marcaOpts=marcas.map(m=>({v:m,l:m}));
+    html=`<div class="rep-filter-bar">${sel('rf-marca-invmov','Marca',marcaOpts,repFiltros.marca_prod,'marca_prod')}</div>`;
+  }
   f.innerHTML=html;
 }
 function bindRep(){

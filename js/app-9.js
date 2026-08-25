@@ -1212,6 +1212,52 @@ function renderReportes(){
       ${_filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:14px;font-weight:600;border-top:1.5px solid var(--line-strong)">Total existencias: ${totU.toLocaleString('es-GT')}</div>`:''}
       ${esHoy?'':'<div style="font-size:11px;color:var(--muted-2);padding:8px 4px 0">Existencias reconstruidas del historial de compras y ventas; pueden variar por ajustes manuales de stock.</div>'}</div>`;
   }
+  else if(repType==='invmov'){
+    // MOVIMIENTO DE INVENTARIO — por producto, en el período elegido: stock
+    // inicial, entradas, salidas y stock final, todo en unidades base. Se apoya
+    // en _movsInvDespuesDe (el mismo cálculo del Cardex / Inventario actual), así
+    // que Stock final = inicial + entradas − salidas = la existencia real a la
+    // fecha de corte. Período por la barra de arriba (Este mes / año / rango).
+    const _stk=p=>p.tipoEmpaque==='caja_unidad'?(Number(p.stock)||0)+(Number(p.stockCajas)||0)*(Number(p.unidadesPorCaja)||0):(Number(p.stock)||0);
+    const _fmt=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const r=repRange();
+    const desde=_fmt(r.start), hasta=_fmt(r.end);
+    const _dz=new Date(r.start.getTime());_dz.setDate(_dz.getDate()-1);const desdeMenos1=_fmt(_dz);
+    const movDesde=_movsInvDespuesDe(desdeMenos1); // movimientos del inicio del período en adelante
+    const movHasta=_movsInvDespuesDe(hasta);       // sólo lo POSTERIOR al período
+    let lista=productos.filter(p=>p.activo!==false);
+    if(repFiltros.marca_prod)lista=lista.filter(p=>(p.marca||'')===repFiltros.marca_prod);
+    lista=lista.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
+    const _rd=n=>Math.round(n*100)/100;
+    const _filas=[];
+    lista.forEach(p=>{
+      const md=movDesde[p.codigo]||{entra:0,sale:0}, mh=movHasta[p.codigo]||{entra:0,sale:0};
+      const ini=_rd(_stk(p)-md.entra+md.sale);
+      const ent=_rd(md.entra-mh.entra);
+      const sal=_rd(md.sale-mh.sale);
+      const fin=_rd(_stk(p)-mh.entra+mh.sale);
+      if(ini||ent||sal||fin)_filas.push({codigo:p.codigo||'',nombre:p.nombre||'',marca:p.marca||'',medida:medidaProducto(p),ini,ent,sal,fin});
+    });
+    exportData=_filas.map(f=>({'Código':f.codigo,Producto:f.nombre,Marca:f.marca,'Unidad de medida':f.medida,'Stock inicial':f.ini,Entradas:f.ent,Salidas:f.sal,'Stock final':f.fin}));
+    const T=_filas.reduce((a,f)=>({ini:a.ini+f.ini,ent:a.ent+f.ent,sal:a.sal+f.sal,fin:a.fin+f.fin}),{ini:0,ent:0,sal:0,fin:0});
+    const nf=n=>_rd(n).toLocaleString('es-GT');
+    const _hoy=fechaHoyGT();const finLbl=(hasta>=_hoy)?'hoy':fdate(hasta);
+    html+=`<div class="panel"><div class="panel-head"><h3>Movimiento de inventario</h3><span style="font-size:12px;color:var(--muted)">Del ${fdate(desde)} a ${finLbl} · ${_filas.length} producto(s)${repFiltros.marca_prod?' · '+repFiltros.marca_prod:''} · en unidades</span></div>
+      <div style="overflow-x:auto"><table style="min-width:760px"><thead><tr><th>Código</th><th>Producto</th><th>Marca</th><th>Unidad</th><th class="num">Stock inicial</th><th class="num">Entradas</th><th class="num">Salidas</th><th class="num">Stock final</th></tr></thead><tbody>
+      ${_filas.length?_filas.map(f=>`<tr>
+        <td style="color:var(--muted)">${f.codigo||'—'}</td>
+        <td style="font-weight:600">${f.nombre||'—'}</td>
+        <td style="color:var(--muted)">${f.marca||'—'}</td>
+        <td style="color:var(--muted)">${f.medida}</td>
+        <td class="num">${nf(f.ini)}</td>
+        <td class="num" style="color:var(--ok)">${f.ent?nf(f.ent):'—'}</td>
+        <td class="num" style="color:var(--danger)">${f.sal?nf(f.sal):'—'}</td>
+        <td class="num" style="font-weight:700">${nf(f.fin)}</td>
+      </tr>`).join(''):'<tr><td colspan="8" class="empty">Sin movimientos ni existencias en el período</td></tr>'}
+      ${_filas.length?`<tr style="border-top:2px solid var(--line-strong);font-weight:700;background:#fafdf5"><td colspan="4">TOTALES</td><td class="num">${nf(T.ini)}</td><td class="num" style="color:var(--ok)">${nf(T.ent)}</td><td class="num" style="color:var(--danger)">${nf(T.sal)}</td><td class="num">${nf(T.fin)}</td></tr>`:''}
+      </tbody></table></div>
+      <div style="font-size:11px;color:var(--muted-2);padding:8px 4px 0">Cantidades en unidades base. Entradas = compras recibidas; Salidas = ventas facturadas (sin anulados). Stock final = inicial + entradas − salidas.</div></div>`;
+  }
   else if(repType==='invcosto'){
     const _stk=p=>p.tipoEmpaque==='caja_unidad'?(Number(p.stock)||0)+(Number(p.stockCajas)||0)*(Number(p.unidadesPorCaja)||0):(Number(p.stock)||0);
     const corte=repFiltros.invFecha||fechaHoyGT();const esHoy=corte>=fechaHoyGT();
