@@ -31,9 +31,8 @@ const SEFE_ENTORNOS = {
     funciones: {
       whatsapp: false,
       // Número de documento/cotización asignado por la base (secuencia),
-      // en vez de max+1 en el navegador. Se enciende acá cuando esté
-      // probado en Pruebas.
-      numeroPorBase: false
+      // en vez de max+1 en el navegador. Probado en Pruebas → encendido.
+      numeroPorBase: true
     }
   },
 
