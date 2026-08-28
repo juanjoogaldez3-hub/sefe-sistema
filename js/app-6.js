@@ -756,6 +756,8 @@ function openConciliacion(){
      <div id="conc-cont" style="margin-top:8px"></div>`, null);
   $('#m-save').style.display='none';
   $('#ov').classList.add('modal-wide');
+  // Esta pantalla lleva tabla ancha: le damos más aire que el modal normal.
+  const _m=document.querySelector('#ov .modal'); if(_m)_m.style.maxWidth='min(96vw,1140px)';
   _concRender();
 }
 window.openConciliacion=openConciliacion;
@@ -809,12 +811,18 @@ function _concRender(){
   const dif=(res.saldoFinalBanco!=null&&saldoSEFE!=null)?Math.round((res.saldoFinalBanco-saldoSEFE)*100)/100:null;
   const cuadra=dif!=null&&Math.abs(dif)<0.01;
   const pct=res.totalFilas?Math.round(r.conciliados.length/res.totalFilas*100):0;
-  let html=`<div class="kpis" style="margin:10px 0 4px">${kpiHTML([
-    {ic:'i-muted',svg:'<path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11"/>',lbl:'Saldo según el banco',val:M(res.saldoFinalBanco),sub:_concData.hasta?('al '+fdate(_concData.hasta)):''},
-    {ic:'i-blue',svg:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',lbl:'Saldo según SEFE',val:M(saldoSEFE),sub:cuenta?cuenta.nombre:''},
-    {ic:(cuadra?'i-green':'i-warn'),svg:'<path d="M12 2v20M2 12h20"/>',lbl:'Diferencia',val:dif==null?'—':M(dif),sub:cuadra?'¡cuadra!':'revisá lo que falta registrar'},
-    {ic:'i-green',svg:'<path d="M20 6 9 17l-5-5"/>',lbl:'Conciliado',val:r.conciliados.length+' / '+res.totalFilas,sub:pct+'%'}
-  ])}</div>`;
+  // Tarjetas propias con grilla que se reacomoda (evita que el contenido
+  // empuje el modal más ancho y corte los valores).
+  const kpiT=(lbl,val,sub,col)=>`<div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:11px 14px;min-width:0">
+    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)">${lbl}</div>
+    <div style="font-size:18px;font-weight:800;margin-top:3px;white-space:nowrap;color:${col||'var(--ink)'}">${val}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${sub||'&nbsp;'}</div></div>`;
+  let html=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin:12px 0 4px">
+    ${kpiT('Saldo según el banco',M(res.saldoFinalBanco),_concData.hasta?('al '+fdate(_concData.hasta)):'')}
+    ${kpiT('Saldo según SEFE',M(saldoSEFE),cuenta?cuenta.nombre:'')}
+    ${kpiT('Diferencia',dif==null?'—':M(dif),cuadra?'¡cuadra!':'falta registrar',cuadra?'var(--ok)':'var(--warn)')}
+    ${kpiT('Conciliado',r.conciliados.length+' / '+res.totalFilas,pct+'%')}
+  </div>`;
   const tab=(t,txt,n)=>`<button class="btn ${_concTab===t?'btn-primary':'btn-ghost'} btn-sm" onclick="_concIrTab('${t}')">${txt} (${n})</button>`;
   html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 2px">
     ${tab('conc','✅ Conciliados',r.conciliados.length)}
