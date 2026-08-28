@@ -411,9 +411,15 @@ async function guardarDocumento(d){
   };
   if (d._nuevo) {
     delete d._nuevo;
+    // El número lo asigna la base (secuencia) cuando el interruptor
+    // numeroPorBase está encendido: así dos personas creando a la vez no
+    // sacan el mismo. Se enciende por entorno (Pruebas primero). No mandamos
+    // el número en el insert y lo leemos del resultado.
+    const _numBase = (typeof SEFE_CONFIG!=='undefined' && SEFE_CONFIG.funciones && SEFE_CONFIG.funciones.numeroPorBase===true);
+    if(_numBase) delete row.numero;
     const {data,error} = await sb.from('documentos').insert(row).select().single();
     if(error){console.error('Error guardando documento:',error); d._nuevo=true;}
-    else d.id = data.id;
+    else { d.id = data.id; if(_numBase && data.numero!=null) d.numero = data.numero; }
   } else {
     const {error} = await sb.from('documentos').update(row).eq('id', d.id);
     if(error)console.error('Error actualizando documento:',error);
@@ -580,9 +586,11 @@ async function guardarCotizacion(cot){
   };
   if(cot._nuevo){
     delete cot._nuevo;
+    const _numBase = (typeof SEFE_CONFIG!=='undefined' && SEFE_CONFIG.funciones && SEFE_CONFIG.funciones.numeroPorBase===true);
+    if(_numBase) delete row.numero; // el número lo asigna la base (secuencia)
     const {data,error}=await sb.from('cotizaciones').insert(row).select().single();
     if(error){console.error('Error guardando cotización:',error); cot._nuevo=true; return false;}
-    cot.id=data.id; return true;
+    cot.id=data.id; if(_numBase && data.numero!=null) cot.numero=data.numero; return true;
   }else{
     const {error}=await sb.from('cotizaciones').update(row).eq('id',cot.id);
     if(error){console.error('Error actualizando cotización:',error); return false;}

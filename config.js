@@ -29,7 +29,11 @@ const SEFE_ENTORNOS = {
     // Funciones que se están probando: se publican apagadas y se
     // encienden acá cuando están listas. El código viaja igual.
     funciones: {
-      whatsapp: false
+      whatsapp: false,
+      // Número de documento/cotización asignado por la base (secuencia),
+      // en vez de max+1 en el navegador. Se enciende acá cuando esté
+      // probado en Pruebas.
+      numeroPorBase: false
     }
   },
 
@@ -43,7 +47,9 @@ const SEFE_ENTORNOS = {
     funciones: {
       // Bandeja de WhatsApp: encendida SÓLO en Pruebas. Las tablas de
       // conversaciones y mensajes existen únicamente en esta base.
-      whatsapp: true
+      whatsapp: true,
+      // Número por secuencia de la base: ENCENDIDO en Pruebas para probarlo.
+      numeroPorBase: true
     }
   }
 
