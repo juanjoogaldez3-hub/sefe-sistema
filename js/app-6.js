@@ -397,7 +397,9 @@ function asignarCuentaContado(compraId,idx){
 }
 window.asignarCuentaContado=asignarCuentaContado;
 // Registrar un movimiento manual (gasto, depósito, transferencia, ajuste)
-function openMovimientoBanco(){
+// pre: valores para dejar el formulario pre-llenado (desde la conciliación).
+// onDone: se llama después de guardar (para volver a la pantalla anterior).
+function openMovimientoBanco(pre,onDone){
   if(!cuentasActivasBanco().length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
   const hoy=fechaHoyGT();
   const cats=CAT_MOV_OPCIONES.map(k=>`<option value="${k}">${CAT_MOV_LBL[k]}</option>`).join('');
@@ -429,7 +431,15 @@ function openMovimientoBanco(){
         logAudit('Movimiento de banco',tipo+' · '+money(monto)+' · '+concepto);
       }
       closeMod();renderBancos();toast('✓ Movimiento registrado',concepto+' · '+money(monto));
+      if(typeof onDone==='function')onDone();
     });
+  // Pre-llenado (cuando se abre desde la conciliación): fija tipo, monto, etc.
+  if(pre){
+    const _s=(id,v)=>{const el=$(id);if(el&&v!=null&&v!=='')el.value=v;};
+    _s('#mv-tipo',pre.tipo);_s('#mv-monto',pre.monto);_s('#mv-cuenta',pre.cuentaId);
+    _s('#mv-fecha',pre.fecha);_s('#mv-concepto',pre.concepto);_s('#mv-ref',pre.referencia);
+    if(typeof onTipoMov==='function')onTipoMov();
+  }
 }
 window.openMovimientoBanco=openMovimientoBanco;
 // Muestra la cuenta destino solo en transferencias; ajusta etiquetas
@@ -726,6 +736,124 @@ function conciliarBanco(filasBanco, movsSEFE, opts){
   return {conciliados,soloBanco,soloSEFE,resumen};
 }
 window.conciliarBanco=conciliarBanco;
+
+// ── Conciliación: pantalla ──────────────────────────────────
+// Estado en memoria (persiste si se cierra el modal, así al registrar un
+// movimiento faltante se puede volver sin re-subir el archivo).
+let _concData=null, _concCuentaId=null, _concTab='conc', _concTildados=new Set(), _concRes=null;
+
+function openConciliacion(){
+  if(!cuentasActivasBanco().length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
+  if(!_concCuentaId){const c0=cuentasActivasBanco()[0];_concCuentaId=c0?c0.id:null;}
+  const ops=cuentasActivasBanco().map(c=>`<option value="${c.id}"${String(c.id)===String(_concCuentaId)?' selected':''}>${c.nombre}</option>`).join('');
+  openMod('Conciliación bancaria',
+    `<div class="row">
+       <div><label>1. Archivo del banco (CSV de Bi en Línea)</label>
+         <input id="conc-file" type="file" accept=".csv,text/csv" onchange="_concArchivo(event)"></div>
+       <div><label>2. Cuenta de SEFE</label>
+         <select id="conc-cuenta" onchange="_concSetCuenta(this.value)">${ops}</select></div>
+     </div>
+     <div id="conc-cont" style="margin-top:8px"></div>`, null);
+  $('#m-save').style.display='none';
+  $('#ov').classList.add('modal-wide');
+  _concRender();
+}
+window.openConciliacion=openConciliacion;
+
+// Lee el archivo como Latin-1 (así lo exporta el banco) y lo parsea.
+function _concArchivo(ev){
+  const f=ev.target.files&&ev.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const texto=new TextDecoder('windows-1252').decode(rd.result);
+      _concData=parseCSVBanco(texto);
+      _concTildados=new Set();
+      // Si el número de cuenta del archivo calza con una cuenta de SEFE, la elige sola.
+      const num=(_concData.cuenta.match(/\d{6,}/)||[])[0];
+      if(num){const m=cuentasActivasBanco().find(c=>String(c.numero||'').replace(/\D/g,'')===num);if(m){_concCuentaId=m.id;const sel=$('#conc-cuenta');if(sel)sel.value=m.id;}}
+      if(!_concData.filas.length)toast('Archivo sin movimientos','¿Es el CSV que exporta Bi en Línea?',true);
+      _concRender();
+    }catch(e){console.error('conciliación:',e);toast('No se pudo leer el archivo',e.message||String(e),true);}
+  };
+  rd.readAsArrayBuffer(f);
+}
+window._concArchivo=_concArchivo;
+window._concSetCuenta=function(id){_concCuentaId=id;_concRender();};
+window._concIrTab=function(t){_concTab=t;_concRender();};
+window._concTilde=function(k){if(_concTildados.has(k))_concTildados.delete(k);else _concTildados.add(k);};
+
+function _concKey(f){return f.fecha+'|'+f.tipo+'|'+f.monto+'|'+(f.noDoc||'');}
+
+// Filtra los movimientos de SEFE de la cuenta y el período, y cruza.
+function _concCalcular(){
+  if(!_concData||!_concCuentaId)return null;
+  const desde=_concData.desde||'0000-01-01', hasta=_concData.hasta||'9999-12-31';
+  const iso=d=>d.toISOString().slice(0,10);
+  const dz=new Date(desde);dz.setDate(dz.getDate()-7);
+  const hz=new Date(hasta);hz.setDate(hz.getDate()+7);
+  const dB=iso(dz), hB=iso(hz);
+  const movs=movimientosBanco.filter(m=>!m.anulado&&String(m.cuentaId)===String(_concCuentaId)&&(m.fecha||'').slice(0,10)>=dB&&(m.fecha||'').slice(0,10)<=hB);
+  return conciliarBanco(_concData.filas, movs, {toleranciaDias:5});
+}
+
+function _concRender(){
+  const cont=$('#conc-cont'); if(!cont)return;
+  if(!_concData){cont.innerHTML='<div class="empty" style="padding:24px 10px">Subí el archivo CSV que exporta Bi en Línea (Movimientos → Exportar) y el sistema lo cruza solo con los movimientos de la cuenta.</div>';return;}
+  const r=_concCalcular(); _concRes=r;
+  if(!r){cont.innerHTML='<div class="empty">Elegí la cuenta de SEFE.</div>';return;}
+  const res=r.resumen;
+  const cuenta=cuentasBanco.find(c=>String(c.id)===String(_concCuentaId));
+  const saldoSEFE=(typeof _estadoCuentaBancoData==='function')?((_estadoCuentaBancoData(Number(_concCuentaId),'',_concData.hasta)||{}).saldoFinal):null;
+  const M=x=>x==null?'—':money(x);
+  const dif=(res.saldoFinalBanco!=null&&saldoSEFE!=null)?Math.round((res.saldoFinalBanco-saldoSEFE)*100)/100:null;
+  const cuadra=dif!=null&&Math.abs(dif)<0.01;
+  const pct=res.totalFilas?Math.round(r.conciliados.length/res.totalFilas*100):0;
+  let html=`<div class="kpis" style="margin:10px 0 4px">${kpiHTML([
+    {ic:'i-muted',svg:'<path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11"/>',lbl:'Saldo según el banco',val:M(res.saldoFinalBanco),sub:_concData.hasta?('al '+fdate(_concData.hasta)):''},
+    {ic:'i-blue',svg:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',lbl:'Saldo según SEFE',val:M(saldoSEFE),sub:cuenta?cuenta.nombre:''},
+    {ic:(cuadra?'i-green':'i-warn'),svg:'<path d="M12 2v20M2 12h20"/>',lbl:'Diferencia',val:dif==null?'—':M(dif),sub:cuadra?'¡cuadra!':'revisá lo que falta registrar'},
+    {ic:'i-green',svg:'<path d="M20 6 9 17l-5-5"/>',lbl:'Conciliado',val:r.conciliados.length+' / '+res.totalFilas,sub:pct+'%'}
+  ])}</div>`;
+  const tab=(t,txt,n)=>`<button class="btn ${_concTab===t?'btn-primary':'btn-ghost'} btn-sm" onclick="_concIrTab('${t}')">${txt} (${n})</button>`;
+  html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 2px">
+    ${tab('conc','✅ Conciliados',r.conciliados.length)}
+    ${tab('banco','🟡 Sólo en el banco',r.soloBanco.length)}
+    ${tab('sefe','🔴 Sólo en SEFE',r.soloSEFE.length)}
+    <span style="flex:1"></span>
+    <span style="font-size:12px;color:var(--muted)">${escHtml(_concData.cuenta||'')}</span>
+  </div>
+  <div style="overflow-x:auto">${_concTabla(r)}</div>`;
+  cont.innerHTML=html;
+}
+
+function _concTabla(r){
+  const bdg=t=>t==='entrada'?'<span class="badge b-ok" style="font-size:10px">▲ Entrada</span>':'<span class="badge b-danger" style="font-size:10px">▼ Salida</span>';
+  const doc=d=>`<div style="color:var(--muted-2);font-size:11px">Doc ${d||'—'}</div>`;
+  const chk=f=>{const k=_concKey(f);return `<input type="checkbox" ${_concTildados.has(k)?'checked':''} onclick="_concTilde('${k}')">`;};
+  if(_concTab==='conc'){
+    if(!r.conciliados.length)return '<div class="empty">Nada conciliado todavía.</div>';
+    return `<table><thead><tr><th style="width:30px"></th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th>Coincide con SEFE</th></tr></thead><tbody>`+
+      r.conciliados.map(x=>`<tr><td>${chk(x.banco)}</td><td style="white-space:nowrap">${fdate(x.banco.fecha)}</td><td>${escHtml(x.banco.descripcion)}${doc(x.banco.noDoc)}</td><td>${bdg(x.banco.tipo)}</td><td class="num">${money(x.banco.monto)}</td><td style="color:var(--muted);font-size:12px">↔ ${escHtml(x.sefe.concepto||'movimiento')}</td></tr>`).join('')+'</tbody></table>';
+  }
+  if(_concTab==='banco'){
+    if(!r.soloBanco.length)return '<div class="empty">No falta registrar nada. 🎉</div>';
+    return `<table><thead><tr><th style="width:30px"></th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead><tbody>`+
+      r.soloBanco.map((f,i)=>`<tr><td>${chk(f)}</td><td style="white-space:nowrap">${fdate(f.fecha)}</td><td>${escHtml(f.descripcion)}${doc(f.noDoc)}</td><td>${bdg(f.tipo)}</td><td class="num">${money(f.monto)}</td><td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="_concRegistrar(${i})">Registrar en SEFE</button></td></tr>`).join('')+'</tbody></table>';
+  }
+  if(!r.soloSEFE.length)return '<div class="empty">Todo lo de SEFE aparece en el banco. 🎉</div>';
+  return `<table><thead><tr><th style="width:30px"></th><th>Fecha</th><th>Movimiento en SEFE</th><th>Tipo</th><th class="num">Monto</th></tr></thead><tbody>`+
+    r.soloSEFE.map(m=>`<tr><td></td><td style="white-space:nowrap">${fdate(m.fecha)}</td><td>${escHtml(m.concepto||'—')}${m.referencia?`<div style="color:var(--muted-2);font-size:11px">${escHtml(String(m.referencia))}</div>`:''}</td><td>${bdg(m.tipo)}</td><td class="num">${money(m.monto)}</td></tr>`).join('')+'</tbody></table>';
+}
+
+// Abre el formulario de movimiento pre-llenado con la fila del banco; al
+// guardar vuelve a la conciliación (que recalcula y lo pasa a "conciliado").
+window._concRegistrar=function(i){
+  const f=_concRes&&_concRes.soloBanco[i]; if(!f)return;
+  openMovimientoBanco(
+    {tipo:f.tipo,monto:f.monto,fecha:f.fecha,concepto:f.descripcion,cuentaId:_concCuentaId,referencia:f.noDoc},
+    ()=>openConciliacion());
+};
 
 // ── PÓLIZA DE CHEQUE (comprobante de egreso) ────────────────
 function polizaChequePDF(mov,beneficiario){

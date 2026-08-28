@@ -12,6 +12,7 @@
 //  carga las funciones reales y valida ambas.
 // ============================================================
 const vm = require('vm');
+const fs = require('fs');
 const src = require('./test-fuente');
 
 let fallos = 0, pruebas = 0;
@@ -87,6 +88,13 @@ const dos640 = parse([
 ].join('\n'));
 const c2 = conciliar(dos640.filas, [{ id: 7, fecha: '2026-08-15', tipo: 'entrada', monto: 640, anulado: false }]);
 ok('sólo 1 de las dos de Q640 concilia', c2.conciliados.length === 1 && c2.soloBanco.length === 1);
+
+console.log('\n═══ Cableado de la pantalla (que el botón exista y llame a la función) ═══');
+const html = fs.readFileSync(__dirname + '/index.html', 'utf8');
+ok('index.html tiene el botón de conciliación', /onclick="openConciliacion\(\)"/.test(html));
+ok('existe la función openConciliacion', /function openConciliacion\(/.test(src) && /window\.openConciliacion\s*=/.test(src));
+ok('existe el manejador para registrar faltantes (_concRegistrar)', /window\._concRegistrar\s*=/.test(src));
+ok('el formulario de movimiento acepta pre-llenado (openMovimientoBanco(pre,onDone))', /function openMovimientoBanco\(pre,onDone\)/.test(src));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

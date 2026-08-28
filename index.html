@@ -603,7 +603,7 @@
           <div class="empty" id="bancos-empty">Aún no hay cuentas. Creá la primera con "Nueva cuenta".</div>
         </div>
         <div class="panel">
-          <div class="panel-head"><h3>Movimientos recientes</h3><button class="btn btn-primary btn-sm" onclick="openMovimientoBanco()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Registrar movimiento / gasto</button></div>
+          <div class="panel-head"><h3>Movimientos recientes</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" onclick="openConciliacion()"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Conciliación bancaria</button><button class="btn btn-primary btn-sm" onclick="openMovimientoBanco()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Registrar movimiento / gasto</button></div></div>
           <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">
             <select id="mov-filtro-cuenta" onchange="renderBancos()" style="min-width:170px"><option value="">Todas las cuentas</option></select>
             <select id="mov-filtro-tipo" onchange="renderBancos()"><option value="">Entradas y salidas</option><option value="entrada">Solo entradas</option><option value="salida">Solo salidas</option></select>
