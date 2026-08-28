@@ -639,6 +639,94 @@ async function estadoCuentaBancoExcel(id){
 }
 window.estadoCuentaBancoExcel=estadoCuentaBancoExcel;
 
+// ============================================================
+//  CONCILIACIÓN BANCARIA (Banco Industrial · Bi en Línea)
+// ============================================================
+// Lee el CSV tal cual lo exporta Bi en Línea y lo cruza contra los
+// movimientos de la cuenta en SEFE. Dos mañas del archivo: viene en
+// Latin-1 (el navegador lo decodifica al subirlo) y la descripción puede
+// traer comas sin ir entre comillas. Por eso la fila se arma tomando las
+// ÚLTIMAS 4 columnas fijas (No.Doc, Debe, Haber, Saldo) — que nunca traen
+// coma — y todo lo que queda en medio es la descripción.
+
+// "DD-MM-YYYY" o "DD/MM/YYYY" → "YYYY-MM-DD"
+function _fechaBI(s){
+  const m=String(s||'').trim().match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+  return m?`${m[3]}-${m[2]}-${m[1]}`:'';
+}
+// Texto → número (tolera vacío, símbolos y espacios). El banco no usa
+// separador de miles, así que no hay comas dentro de los montos.
+function _numBI(s){const n=parseFloat(String(s==null?'':s).replace(/[^0-9.\-]/g,''));return isNaN(n)?0:n;}
+
+// Parsea el CSV de Bi en Línea. Devuelve {cuenta, saldoInicial, desde,
+// hasta, filas:[{fecha,tt,descripcion,noDoc,debe,haber,saldo,tipo,monto}]}.
+// tipo: 'salida' cuando hay Debe, 'entrada' cuando hay Haber.
+function parseCSVBanco(texto){
+  const lineas=String(texto||'').split(/\r?\n/);
+  let cuenta='',saldoInicial=0,desde='',hasta='',enDatos=false;
+  const filas=[];
+  for(const linea of lineas){
+    const l=linea.trim();
+    if(!l)continue;
+    if(!enDatos){
+      const mc=l.match(/^Cuenta:\s*(.+)$/i); if(mc){cuenta=mc[1].trim();continue;}
+      const ms=l.match(/Saldo inicial.*?:\s*([-0-9.,]+)/i); if(ms){saldoInicial=_numBI(ms[1]);continue;}
+      const md=l.match(/Del\s+(\d{2}\/\d{2}\/\d{4})\s+al\s+(\d{2}\/\d{2}\/\d{4})/i); if(md){desde=_fechaBI(md[1]);hasta=_fechaBI(md[2]);continue;}
+      if(/^Fecha\s*,\s*TT\s*,/i.test(l)){enDatos=true;}
+      continue;
+    }
+    if(!/^\d{2}[-/]\d{2}[-/]\d{4},/.test(l))continue; // fila válida: empieza con fecha
+    const p=l.split(','); const n=p.length; if(n<7)continue;
+    const debe=_numBI(p[n-3]), haber=_numBI(p[n-2]);
+    const esSalida=debe>0.0000001;
+    filas.push({
+      fecha:_fechaBI(p[0]), tt:(p[1]||'').trim(),
+      descripcion:p.slice(2,n-4).join(',').trim(),
+      noDoc:(p[n-4]||'').trim(),
+      debe, haber, saldo:_numBI(p[n-1]),
+      tipo:esSalida?'salida':'entrada', monto:esSalida?debe:haber
+    });
+  }
+  return {cuenta,saldoInicial,desde,hasta,filas};
+}
+window.parseCSVBanco=parseCSVBanco;
+
+// Cruza las filas del banco contra los movimientos de SEFE de UNA cuenta.
+// Empareja 1 a 1 por tipo (entrada/salida) + monto exacto + fecha cercana
+// (±toleranciaDias). Si la referencia de SEFE coincide con el No.Doc del
+// banco, ese emparejamiento gana. Devuelve los tres grupos + un resumen.
+function conciliarBanco(filasBanco, movsSEFE, opts){
+  const tol=(opts&&opts.toleranciaDias!=null)?opts.toleranciaDias:5;
+  const dias=(a,b)=>(!a||!b)?0:Math.abs((new Date(a)-new Date(b))/86400000);
+  const movs=(movsSEFE||[]).filter(m=>!m.anulado).map(m=>({m,usado:false}));
+  const conciliados=[], soloBanco=[];
+  filasBanco.forEach(f=>{
+    let mejor=null, mejorScore=Infinity;
+    movs.forEach(o=>{
+      if(o.usado||o.m.tipo!==f.tipo)return;
+      if(Math.abs(Number(o.m.monto)-f.monto)>=0.01)return;
+      const d=dias(f.fecha,o.m.fecha); if(d>tol)return;
+      const refIgual=o.m.referencia&&f.noDoc&&String(o.m.referencia)===String(f.noDoc);
+      const score=refIgual?-1:d; // referencia igual manda; si no, la fecha más cercana
+      if(score<mejorScore){mejorScore=score;mejor=o;}
+    });
+    if(mejor){mejor.usado=true;conciliados.push({banco:f,sefe:mejor.m});}
+    else soloBanco.push(f);
+  });
+  const soloSEFE=movs.filter(o=>!o.usado).map(o=>o.m);
+  const sumT=(arr,tipo)=>arr.filter(x=>(x.tipo||'')===tipo).reduce((s,x)=>s+Number(x.monto||0),0);
+  const resumen={
+    totalFilas:filasBanco.length,
+    conciliados:conciliados.length, soloBanco:soloBanco.length, soloSEFE:soloSEFE.length,
+    bancoEntradas:sumT(filasBanco,'entrada'), bancoSalidas:sumT(filasBanco,'salida'),
+    soloBancoEntradas:sumT(soloBanco,'entrada'), soloBancoSalidas:sumT(soloBanco,'salida'),
+    soloSEFEEntradas:sumT(soloSEFE,'entrada'), soloSEFESalidas:sumT(soloSEFE,'salida'),
+    saldoFinalBanco:filasBanco.length?filasBanco[filasBanco.length-1].saldo:null
+  };
+  return {conciliados,soloBanco,soloSEFE,resumen};
+}
+window.conciliarBanco=conciliarBanco;
+
 // ── PÓLIZA DE CHEQUE (comprobante de egreso) ────────────────
 function polizaChequePDF(mov,beneficiario){
   if(!mov)return;
