@@ -256,7 +256,7 @@ function _abrirEditorPlanilla(){
       <div class="kpi"><div class="k-body"><div class="k-lbl">Total del mes</div><div class="k-val num" id="pl-kpi-total" style="color:var(--green)">—</div></div></div>
     </div>
     <div style="overflow-x:auto"><div id="pl-tabla-wrap"></div></div>
-    <div class="note" style="margin-top:10px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El sueldo se paga en <b>2 quincenas</b> (cada una con su póliza). Las <b>comisiones van aparte</b>, con su propio pago y su propia póliza. IGSS al ${(IGSS_LABORAL_PCT*100).toFixed(2)}% sobre el sueldo base y comisiones automáticas de las ventas del mes (5% sin IVA) — todo editable. El ISR lo escribís vos. Al pagar se abre la boleta.</span></div>`;
+    <div class="note" style="margin-top:10px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El sueldo se paga en <b>2 quincenas</b> y las <b>comisiones van aparte</b> — cada pago genera su <b>boleta</b>. IGSS al ${(IGSS_LABORAL_PCT*100).toFixed(2)}% sobre el sueldo base y comisiones automáticas de las ventas del mes (5% sin IVA) — todo editable. El ISR lo escribís vos. Al pagar se registra la salida en <b>Bancos</b> (con su póliza de cheque, que se reimprime desde ahí) y se abre la boleta.</span></div>`;
   openMod('Planilla mensual',body,_planGuardar);
   $('#m-save').textContent='Guardar planilla';
   $('#ov').classList.add('modal-wide');
@@ -279,12 +279,13 @@ window._planCambiarMes=_planCambiarMes;
 // Renglón de una parte a pagar: sin pagar → [Pagar]; pagada → [Boleta][Póliza].
 // Cada pago (1ª quincena, 2ª quincena, comisiones) tiene SU boleta y SU póliza.
 function _pagoLinea(i,parte,lbl,pagado){
-  if(pagado)return `<div style="display:flex;gap:3px;align-items:center;justify-content:flex-end">
-      <span style="font-size:10px;color:var(--green);font-weight:700;min-width:40px;text-align:right">✓ ${lbl}</span>
-      <button class="btn btn-ghost btn-sm" style="padding:2px 7px" onclick="boletaPlanillaUI(${i},'${parte}')">Boleta</button>
-      <button class="btn btn-ghost btn-sm" style="padding:2px 7px" onclick="_planPolizaParte(${i},'${parte}')">Póliza</button></div>`;
+  // En la planilla solo se generan BOLETAS. La póliza de cheque se crea con
+  // el movimiento de banco y se reimprime desde Bancos.
+  if(pagado)return `<div style="display:flex;gap:5px;align-items:center;justify-content:flex-end">
+      <span style="font-size:10px;color:var(--green);font-weight:700;min-width:42px;text-align:right">✓ ${lbl}</span>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 9px" onclick="boletaPlanillaUI(${i},'${parte}')">Boleta</button></div>`;
   return `<div style="display:flex;gap:5px;align-items:center;justify-content:flex-end">
-      <span style="font-size:10px;color:var(--muted-2);min-width:40px;text-align:right">${lbl}</span>
+      <span style="font-size:10px;color:var(--muted-2);min-width:42px;text-align:right">${lbl}</span>
       <button class="btn btn-primary btn-sm" style="padding:2px 12px" onclick="_planPagarParte(${i},'${parte}')">Pagar</button></div>`;
 }
 // Dibuja la tabla de líneas + totales dentro del editor.
@@ -297,7 +298,7 @@ function _planPintar(){
     const bloqSueldo=(l.q1Pagado||l.q2Pagado)&&!desbloq;  // sueldo pagado → bloqueado (salvo desbloqueo)
     const bloqCom=l.comPagado&&!desbloq;
     const inp=(campo,val,bloq)=>`<input type="number" step="0.01" value="${val}" ${bloq?'disabled':''} oninput="_planSet(${i},'${campo}',this.value)" style="width:82px" class="num">`;
-    const pagos=`<div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:210px">
+    const pagos=`<div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:150px">
         ${_pagoLinea(i,'q1','1ª Q',l.q1Pagado)}
         ${_pagoLinea(i,'q2','2ª Q',l.q2Pagado)}
         ${_comLinea(l)>0?_pagoLinea(i,'com','Comis.',l.comPagado):''}
@@ -320,7 +321,7 @@ function _planPintar(){
     </tr>`;
   }).join('');
   const tc=id=>`<td class="num" style="font-weight:700" id="pl-t-${id}"></td>`;
-  wrap.innerHTML=`<table style="min-width:1220px"><thead><tr>
+  wrap.innerHTML=`<table style="min-width:1080px"><thead><tr>
       <th>Empleado</th><th class="num">Sueldo</th><th class="num">Bonif.</th><th class="num">Otros ing.</th>
       <th class="num">IGSS</th><th class="num">ISR</th><th class="num">Otros desc.</th>
       <th class="num">Neto sueldo</th><th class="num">Comisiones</th><th style="text-align:center">Pagos</th></tr></thead>
@@ -418,19 +419,7 @@ async function _planPagarParte(i,parte){
   boletaPagoPDF(pl,l,parte);
   toast('✓ Pago registrado',l.nombre+' · '+etq);
 }
-// Reabrir la póliza de cheque de una parte pagada.
-function _planPolizaParte(i,parte){
-  const pl=_planActual; if(!pl)return;
-  const l=pl.lineas[i]; if(!l)return;
-  const num={q1:l.q1Poliza,q2:l.q2Poliza,com:l.comPoliza}[parte];
-  if(!num)return;
-  const mov=(typeof movimientosBanco!=='undefined'?movimientosBanco:[])
-    .find(m=>m.poliza===num&&m.origen==='planilla');
-  if(mov&&typeof polizaChequePDF==='function')polizaChequePDF(mov,l.nombre);
-  else toast('Póliza no encontrada','El movimiento no está cargado',true);
-}
 window._planPagarParte=_planPagarParte;
-window._planPolizaParte=_planPolizaParte;
 
 // Eliminar una planilla: anula sus movimientos de banco (devuelve el saldo)
 // y borra el registro. Solo admin (toda la sección lo es).
