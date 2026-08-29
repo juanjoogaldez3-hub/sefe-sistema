@@ -460,12 +460,47 @@ const FISCAL={cambiaria:1};
 
 // Módulos desactivados temporalmente (no pulidos para producción). Reactivar = quitar de esta lista.
 const MODULOS_DESACTIVADOS=['despachos','misentregas'];
+
+// ============================================================
+//  MÓDULOS (paquete base + opcionales por cliente)
+// ============================================================
+// El sistema BASE está siempre encendido: pedidos, facturación,
+// clientes, inventario, reportes y administración (usuarios/auditoría).
+// Los módulos OPCIONALES se activan por cliente desde `modulos` en
+// config.js. Si un cliente no trae bloque `modulos`, o no menciona un
+// módulo, ese módulo queda ENCENDIDO — así SEFE y lo ya instalado no
+// cambian en nada. Un módulo sólo se apaga con `false` explícito.
+//
+// Cada vista pertenece a un módulo; las que no figuran acá son base.
+const MODULO_DE_VISTA = {
+  cotizaciones:'cotizaciones',
+  cobros:'cobros', recordatorios:'cobros',
+  compras:'compras', nuevacompra:'compras', porpagar:'compras', proveedores:'compras',
+  bancos:'bancos', talonarios:'bancos'
+};
+// Módulos opcionales que hoy se pueden vender/activar.
+const MODULOS_OPCIONALES = ['cotizaciones','cobros','compras','bancos'];
+function moduloActivo(mod){
+  if(!mod) return true;                 // base: siempre encendido
+  try{
+    const m = (typeof SEFE_CONFIG!=='undefined') && SEFE_CONFIG.modulos;
+    if(!m) return true;                 // sin bloque `modulos` → todo encendido
+    return m[mod] !== false;            // sólo se apaga con false explícito
+  }catch(e){ return true; }
+}
+// ¿La vista está disponible para este cliente? (según su módulo)
+function vistaDisponible(v){ return moduloActivo(MODULO_DE_VISTA[v]); }
+window.moduloActivo=moduloActivo; window.vistaDisponible=vistaDisponible;
+
 function tienePermiso(v){
   if(MODULOS_DESACTIVADOS.includes(v))return false;
+  if(!vistaDisponible(v))return false;   // módulo apagado para este cliente
   const r=ROLES[currentRole];if(!r)return true;
   return r.views==='ALL'||r.views.includes(v);
 }
 function go(v,desdeHash){
+  // Vista de un módulo apagado (o inexistente): al panel, sin ruido.
+  if(v!=='panel' && !vistaDisponible(v)){ v='panel'; desdeHash=false; }
   if(!tienePermiso(v)){toast('No tenés permiso para esta sección','Tu rol es '+(ROLES[currentRole]?.label||currentRole),true);return;}
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
