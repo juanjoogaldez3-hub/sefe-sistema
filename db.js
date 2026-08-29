@@ -76,7 +76,7 @@ async function cargarTodo() {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
-      rCuentasBanco, rMovBanco
+      rCuentasBanco, rMovBanco, rConc
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -96,6 +96,8 @@ async function cargarTodo() {
       sb.from('recibos_anulados').select('*'),
       sb.from('cuentas_banco').select('*').order('id'),
       fetchAll('movimientos_banco','id'),
+      // Historial de conciliaciones (si la tabla aún no existe, devuelve vacío).
+      sb.from('conciliaciones').select('*').order('id',{ascending:false}),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -164,6 +166,10 @@ async function cargarTodo() {
     // Movimientos de banco
     if (typeof movimientosBanco !== 'undefined') {
       movimientosBanco = (rMovBanco.data||[]).map(mapMovimientoBancoFromDB);
+    }
+    // Historial de conciliaciones bancarias (tolera tabla ausente → vacío)
+    if (typeof conciliaciones !== 'undefined') {
+      conciliaciones = ((rConc&&rConc.data)||[]).map(mapConciliacionFromDB);
     }
 
     // Categorías (umbrales de stock por categoría). Tolera que la tabla no exista todavía.
@@ -794,6 +800,31 @@ async function marcarConciliadoBanco(idOrIds, val){
   return true;
 }
 if(typeof window!=='undefined'){window.guardarCuentaBanco=guardarCuentaBanco;window.eliminarCuentaBanco=eliminarCuentaBanco;window.guardarMovimientoBanco=guardarMovimientoBanco;window.marcarConciliadoBanco=marcarConciliadoBanco;}
+
+// ── Historial de conciliaciones bancarias ──────────────────
+function mapConciliacionFromDB(c){
+  return {
+    id:c.id, cuentaId:c.cuenta_id, desde:c.periodo_desde, hasta:c.periodo_hasta,
+    saldoBanco:Number(c.saldo_banco)||0, saldoSefe:Number(c.saldo_sefe)||0, diferencia:Number(c.diferencia)||0,
+    nConciliados:c.n_conciliados||0, nSoloBanco:c.n_solo_banco||0, nSoloSefe:c.n_solo_sefe||0,
+    archivo:c.archivo||'', notas:c.notas||'', guardadoPor:c.guardado_por||'', guardadoEl:c.guardado_el
+  };
+}
+// Guarda una conciliación (el resumen del cierre). Devuelve el registro
+// mapeado, o null si falló (p.ej. la tabla todavía no existe).
+async function guardarConciliacion(rec){
+  const row={
+    cuenta_id:rec.cuentaId||null, periodo_desde:rec.desde||null, periodo_hasta:rec.hasta||null,
+    saldo_banco:rec.saldoBanco||0, saldo_sefe:rec.saldoSefe||0, diferencia:rec.diferencia||0,
+    n_conciliados:rec.nConciliados||0, n_solo_banco:rec.nSoloBanco||0, n_solo_sefe:rec.nSoloSefe||0,
+    archivo:rec.archivo||null, notas:rec.notas||null,
+    guardado_por:rec.guardadoPor||null, guardado_el:new Date().toISOString()
+  };
+  const {data,error}=await sb.from('conciliaciones').insert(row).select().single();
+  if(error){console.error('Error guardando conciliación:',error);return null;}
+  return mapConciliacionFromDB(data);
+}
+if(typeof window!=='undefined'){window.guardarConciliacion=guardarConciliacion;}
 
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).
