@@ -906,6 +906,14 @@ async function guardarPlanilla(pl){
 }
 if(typeof window!=='undefined'){window.guardarPlanilla=guardarPlanilla;}
 
+// Borra una planilla (sus movimientos de banco se anulan aparte, en la UI).
+async function borrarPlanilla(id){
+  const {error}=await sb.from('planillas').delete().eq('id',id);
+  if(error){console.error('Error borrando planilla:',error);return false;}
+  return true;
+}
+if(typeof window!=='undefined'){window.borrarPlanilla=borrarPlanilla;}
+
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).
 // views se guarda como JSON: 'ALL' tal cual, o el array de secciones.
