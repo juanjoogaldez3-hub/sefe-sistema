@@ -50,12 +50,46 @@ completar. Queda así (con los datos del cliente):
     url: 'https://XXXXXXXXXXXX.supabase.co',
     key: 'ANON_KEY_PUBLICA_DEL_CLIENTE',
     dominios: ['ferreteria-lopez.se-fe.com'],
-    funciones: { whatsapp: false }
+    funciones: { whatsapp: false },
+    marca: {
+      nombre: 'Ferretería López',
+      nombreLargo: 'Ferretería López, S.A.',
+      monograma: 'FL',
+      logo: 'data:image/png;base64,....',   // el logo del cliente
+      razonSocial: 'Ferretería López, S.A.',
+      membrete: 'Ferretería López, S.A.',
+      nombreDoc: 'Ferretería López',
+      nit: '1234567-8',
+      prefijoArchivo: 'FLOPEZ',
+      colorPrimario: '#0B5CAB',              // color principal
+      colorAcento: '#F2A900'                 // color de acento
+    }
   }
 ```
 
 El selector detecta al cliente por su **dominio**, así que apenas entre
 por su dirección, la app apunta sola a su base.
+
+### El bloque `marca` (branding del cliente)
+
+Es **opcional**: lo que no pongas se hereda de SEFE. Con él, la
+instalación se ve con la identidad del cliente **sin tocar código**:
+
+- **En la interfaz**: nombre y monograma en la barra, título de la
+  pestaña, ícono/nombre de la app instalada (PWA), pantalla de carga,
+  logo del login y los **colores** (`colorPrimario` / `colorAcento`).
+- **En los documentos**: el **logo**, la **razón social**, el **NIT** y
+  el **membrete** de facturas, notas, órdenes de compra y Excel; y el
+  prefijo de los archivos Excel descargados (`prefijoArchivo`).
+
+Para el **logo** hay que pegar la imagen como *data URL* (base64). Lo
+más fácil: abrir el PNG en https://www.base64-encode.org/ (o similar) y
+copiar el texto `data:image/png;base64,...` completo dentro de `logo`.
+
+> Pendiente conocido: los **colores** del cliente se aplican a la
+> interfaz. Dentro de los **PDF/Excel impresos**, los acentos verdes/lima
+> todavía son los de SEFE (queda para una segunda pasada de branding). El
+> logo y los nombres en los documentos **sí** son ya los del cliente.
 
 ## Paso 4 · Apuntar el dominio
 1. En el DNS del cliente (o subdominio de `se-fe.com`), apuntar a GitHub

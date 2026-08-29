@@ -257,7 +257,7 @@ async function exportarAuditoria(){
   const {XLSX,styled:_styled}=await _cargarXLSX();
   const data=auditLog.map(e=>({'Fecha/Hora':fdatehora(e.fecha),Usuario:e.usuario,Rol:e.rol,Acción:e.accion,Detalle:e.detalle}));
   const meta=[
-    ['SEFE, S.A.'],
+    [SEFE_MARCA.membrete],
     ['BITÁCORA DE AUDITORÍA'],
     ['Registros:',data.length],
     ['Generado el:',fdatehora(new Date())],
