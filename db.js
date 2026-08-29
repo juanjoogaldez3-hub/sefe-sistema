@@ -345,7 +345,10 @@ function mapMovimientoBancoFromDB(m){
     id:m.id, cuentaId:m.cuenta_id, fecha:m.fecha, tipo:m.tipo, monto:Number(m.monto)||0,
     concepto:m.concepto, categoria:m.categoria, origen:m.origen, origenId:m.origen_id,
     cuentaDestinoId:m.cuenta_destino_id, referencia:m.referencia, poliza:m.poliza, registradoPor:m.registrado_por,
-    registradoEl:m.registrado_el, anulado:m.anulado===true
+    registradoEl:m.registrado_el, anulado:m.anulado===true,
+    // Marca de conciliación (columna nueva). Si la base todavía no la tiene,
+    // llega 'undefined' y queda como false — no rompe nada.
+    conciliado:m.conciliado===true, conciliadoEl:m.conciliado_el||null
   };
 }
 function mapCategoriaFromDB(c){
@@ -781,7 +784,16 @@ async function guardarMovimientoBanco(m){
     if(error)console.error('Error actualizando movimiento:',error);
   }
 }
-if(typeof window!=='undefined'){window.guardarCuentaBanco=guardarCuentaBanco;window.eliminarCuentaBanco=eliminarCuentaBanco;window.guardarMovimientoBanco=guardarMovimientoBanco;}
+// Marca (o desmarca) uno o varios movimientos como conciliados con el banco.
+// Sólo toca las columnas de conciliación — no roza el resto del movimiento.
+async function marcarConciliadoBanco(idOrIds, val){
+  const cambios={conciliado:val===true, conciliado_el: val===true ? new Date().toISOString() : null};
+  const q=sb.from('movimientos_banco').update(cambios);
+  const {error}= Array.isArray(idOrIds) ? await q.in('id', idOrIds) : await q.eq('id', idOrIds);
+  if(error){console.error('Error marcando conciliado:',error);return false;}
+  return true;
+}
+if(typeof window!=='undefined'){window.guardarCuentaBanco=guardarCuentaBanco;window.eliminarCuentaBanco=eliminarCuentaBanco;window.guardarMovimientoBanco=guardarMovimientoBanco;window.marcarConciliadoBanco=marcarConciliadoBanco;}
 
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).
