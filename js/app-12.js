@@ -276,16 +276,17 @@ function _planCambiarMes(v){
 window._planSetCuenta=_planSetCuenta;
 window._planCambiarMes=_planCambiarMes;
 
-// Renglón de una parte a pagar: sin pagar → [Pagar]; pagada → [Boleta][Póliza].
-// Cada pago (1ª quincena, 2ª quincena, comisiones) tiene SU boleta y SU póliza.
+// Renglón de una parte a pagar: sin pagar → [Pagar]; pagada → [Boleta][✕ anular].
+// Cada pago (1ª quincena, 2ª quincena, comisiones) es independiente.
 function _pagoLinea(i,parte,lbl,pagado){
   // En la planilla solo se generan BOLETAS. La póliza de cheque se crea con
   // el movimiento de banco y se reimprime desde Bancos.
-  if(pagado)return `<div style="display:flex;gap:5px;align-items:center;justify-content:flex-end">
-      <span style="font-size:10px;color:var(--green);font-weight:700;min-width:42px;text-align:right">✓ ${lbl}</span>
-      <button class="btn btn-ghost btn-sm" style="padding:2px 9px" onclick="boletaPlanillaUI(${i},'${parte}')">Boleta</button></div>`;
+  if(pagado)return `<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end">
+      <span style="font-size:10px;color:var(--green);font-weight:700;min-width:38px;text-align:right">✓ ${lbl}</span>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 9px" onclick="boletaPlanillaUI(${i},'${parte}')">Boleta</button>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 7px;color:var(--danger)" title="Anular solo este pago (devuelve el saldo)" onclick="_planAnularParte(${i},'${parte}')">✕</button></div>`;
   return `<div style="display:flex;gap:5px;align-items:center;justify-content:flex-end">
-      <span style="font-size:10px;color:var(--muted-2);min-width:42px;text-align:right">${lbl}</span>
+      <span style="font-size:10px;color:var(--muted-2);min-width:38px;text-align:right">${lbl}</span>
       <button class="btn btn-primary btn-sm" style="padding:2px 12px" onclick="_planPagarParte(${i},'${parte}')">Pagar</button></div>`;
 }
 // Dibuja la tabla de líneas + totales dentro del editor.
@@ -429,6 +430,40 @@ async function _planPagarParte(i,parte){
   toast('✓ Pago registrado',l.nombre+' · '+etq);
 }
 window._planPagarParte=_planPagarParte;
+
+// Anular UN pago (una quincena o las comisiones): revierte su movimiento de
+// banco (devuelve el saldo) y deja esa parte como no pagada, para corregir y
+// volver a pagar — sin tocar los otros pagos ni el resto de la planilla.
+function _planAnularParte(i,parte){
+  const pl=_planActual; if(!pl)return;
+  const l=pl.lineas[i]; if(!l)return;
+  const pagado={q1:l.q1Pagado,q2:l.q2Pagado,com:l.comPagado}[parte];
+  if(!pagado)return;
+  const num={q1:l.q1Poliza,q2:l.q2Poliza,com:l.comPoliza}[parte];
+  const etq={q1:'1ª quincena',q2:'2ª quincena',com:'comisiones'}[parte];
+  const _do=async()=>{
+    // Anular el movimiento de banco ligado (por póliza + origen planilla)
+    if(num){
+      const mov=(typeof movimientosBanco!=='undefined'?movimientosBanco:[])
+        .find(m=>m.poliza===num&&m.origen==='planilla'&&!m.anulado);
+      if(mov){mov.anulado=true;if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mov);}
+    }
+    if(parte==='q1'){l.q1Pagado=false;l.q1Poliza=null;l.q1El=null;}
+    else if(parte==='q2'){l.q2Pagado=false;l.q2Poliza=null;l.q2El=null;}
+    else{l.comPagado=false;l.comPoliza=null;l.comEl=null;}
+    _planSyncTotales();
+    await (typeof guardarPlanilla==='function'?guardarPlanilla(pl):Promise.resolve());
+    const idx=planillas.findIndex(p=>String(p.id)===String(pl.id));
+    if(idx>=0){const c=JSON.parse(JSON.stringify(pl));delete c._nuevo;planillas[idx]=c;}
+    if(typeof logAudit==='function')logAudit('Pago de planilla anulado',l.nombre+' · '+etq+' · '+pl.etiqueta);
+    _planPintar(); renderPlanilla();
+    if(typeof renderBancos==='function'){try{renderBancos();}catch(e){}}
+    toast('✓ Pago anulado',l.nombre+' · '+etq+' — se devolvió el saldo. Corregí y volvé a pagar.');
+  };
+  if(typeof confirmar==='function')confirmar('¿Anular este pago?','Se revierte el movimiento de banco de la '+etq+' de '+l.nombre+' (devuelve el saldo). Vas a poder corregir y volver a pagar. Los demás pagos no se tocan.','Anular',_do);
+  else if(confirm('¿Anular el pago de '+etq+'?'))_do();
+}
+window._planAnularParte=_planAnularParte;
 
 // Eliminar una planilla: anula sus movimientos de banco (devuelve el saldo)
 // y borra el registro. Solo admin (toda la sección lo es).
