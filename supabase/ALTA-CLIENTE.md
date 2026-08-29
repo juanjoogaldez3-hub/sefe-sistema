@@ -51,6 +51,12 @@ completar. Queda así (con los datos del cliente):
     key: 'ANON_KEY_PUBLICA_DEL_CLIENTE',
     dominios: ['ferreteria-lopez.se-fe.com'],
     funciones: { whatsapp: false },
+    modulos: {                 // opcional; lo que no se ponga queda encendido
+      cotizaciones: true,
+      cobros: true,
+      compras: false,          // este cliente NO compró el módulo de compras
+      bancos: true
+    },
     marca: {
       nombre: 'Ferretería López',
       nombreLargo: 'Ferretería López, S.A.',
@@ -69,6 +75,28 @@ completar. Queda así (con los datos del cliente):
 
 El selector detecta al cliente por su **dominio**, así que apenas entre
 por su dirección, la app apunta sola a su base.
+
+### El bloque `modulos` (qué compró el cliente)
+
+Es **opcional**: lo que no pongas queda **encendido**. Sirve para vender
+un sistema base y activar módulos según lo que el cliente quiera.
+
+- **Base (siempre encendido)**: pedidos, facturación, clientes,
+  inventario, reportes y administración (usuarios/auditoría).
+- **Opcionales** (poné `false` para apagar; se pueden encender después
+  sin tocar nada más que este bloque):
+  - `cotizaciones` — cotizaciones a clientes.
+  - `cobros` — cuentas por cobrar + recordatorios.
+  - `compras` — compras, proveedores y cuentas por pagar.
+  - `bancos` — bancos, conciliación y talonarios.
+
+Cuando un módulo está apagado, su botón desaparece del menú y su pantalla
+queda bloqueada. Los **roles** siguen mandando por encima (el módulo dice
+qué existe para el cliente; el rol, qué ve cada empleado).
+
+> **Vender más después**: si el cliente quiere un módulo que tenía
+> apagado, se cambia su `false` por `true` en este bloque, se publica, y
+> en 1–2 minutos le aparece. Sin migraciones ni nada más.
 
 ### El bloque `marca` (branding del cliente)
 
