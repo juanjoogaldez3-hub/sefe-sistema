@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Emblema de dos hojas de SEFE, sin fondo (transparente) -->
+  <!-- Hoja lima (atrás) -->
+  <g transform="translate(206 264) rotate(-26)">
+    <path d="M0 -150 C 60 -108 60 42 0 118 C -60 42 -60 -108 0 -150 Z" fill="#95C13E"/>
+    <path d="M0 -130 C 6 -50 4 40 0 102" stroke="#C6DF89" stroke-width="9" stroke-linecap="round"/>
+  </g>
+  <!-- Hoja verde (frente) -->
+  <g transform="translate(300 250) rotate(22)">
+    <path d="M0 -162 C 66 -116 66 46 0 130 C -66 46 -66 -116 0 -162 Z" fill="#2E7D33"/>
+    <path d="M0 -142 C 7 -55 5 44 0 112" stroke="#6FAF62" stroke-width="10" stroke-linecap="round"/>
+  </g>
+</svg>
