@@ -308,6 +308,7 @@ let recibosAnulados=[];
 let cuentasBanco=[];
 let movimientosBanco=[];
 let creditosCliente=[]; // saldo a favor de clientes (sobrepagos / anticipos)
+let conciliaciones=[]; // conciliaciones bancarias guardadas (historial)
 let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====
