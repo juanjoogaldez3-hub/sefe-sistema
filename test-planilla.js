@@ -47,11 +47,13 @@ ok('la comisión usa la misma regla que el reporte (5% sin IVA)', /PL_COMISION_P
 ok('IGSS laboral automático (4.83%)', /IGSS_LABORAL_PCT\s*=\s*0\.0483/.test(src));
 ok('el sueldo se paga en 2 quincenas (_montoQ1 / _montoQ2)', /function _montoQ1\(/.test(src) && /function _montoQ2\(/.test(src));
 ok('el pago por parte genera movimiento de banco de planilla (_planPagarParte)', /function _planPagarParte\(/.test(src) && /_planRegistrarPago/.test(src) && /categoria:'planilla'/.test(src));
-ok('el pago NO abre la póliza sola: al pagar se muestra la boleta', /boletaPagoPDF\(pl,l\);/.test(src) && !/registrarMovimientoBanco/.test(src.slice(src.indexOf('async function _planPagarParte'), src.indexOf('async function _planPagarParte')+1800)));
+ok('el pago NO abre la póliza sola: al pagar se muestra la boleta de ese pago', /boletaPagoPDF\(pl,l,parte\);/.test(src) && !/registrarMovimientoBanco/.test(src.slice(src.indexOf('async function _planPagarParte'), src.indexOf('async function _planPagarParte')+1800)));
 ok('las comisiones se pagan aparte (parte "com" con su póliza)', /comPagado/.test(src) && /comPoliza/.test(src));
 ok('existe la boleta de pago (boletaPagoPDF, en window)', /function boletaPagoPDF\(/.test(src) && /window\.boletaPagoPDF\s*=/.test(src));
 ok('la boleta usa el marco de la póliza (_pdfShell) y es media carta (compacto)', /_pdfShell\(\{titulo:'BOLETA DE PAGO'[^}]*compacto:true/.test(src));
-ok('la boleta referencia las pólizas de las quincenas y comisiones', /1ª quincena/.test(src) && /Pago de comisiones/.test(src) && /_polRef\(/.test(src));
+ok('la boleta es POR PAGO (recibe la parte: quincena o comisiones)', /function boletaPagoPDF\(pl,l,parte\)/.test(src) && /function boletaPlanillaUI\(i,parte\)/.test(src));
+ok('la boleta quincenal muestra el neto de la quincena y su póliza', /Neto de la quincena/.test(src) && /Póliza de cheque/.test(src) && /_polRef\(/.test(src));
+ok('hay boleta de comisiones aparte', /Pago de comisiones/.test(src));
 ok('la boleta NO trae acumulado del año', !/acumulado/i.test(src.slice(src.indexOf('function boletaPagoPDF'), src.indexOf('function boletaPagoPDF')+4000)));
 ok('se puede eliminar una planilla (eliminarPlanilla + borrarPlanilla)', /function eliminarPlanilla\(/.test(src) && /window\.eliminarPlanilla\s*=/.test(src) && /async function borrarPlanilla\(/.test(dbjs));
 ok('al eliminar se anulan los movimientos de banco (devuelve el saldo)', /m\.anulado=true/.test(src.slice(src.indexOf('function eliminarPlanilla'), src.indexOf('function eliminarPlanilla')+1600)));
