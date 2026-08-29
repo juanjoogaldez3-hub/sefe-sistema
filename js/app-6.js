@@ -280,7 +280,7 @@ function renderBancos(){
   if(tb)tb.innerHTML=movs.map(m=>`<tr>
       <td style="color:var(--muted)">${m.fecha?fdate(String(m.fecha).slice(0,10)):'—'}</td>
       <td>${nombreCuenta(m.cuentaId)}</td>
-      <td>${m.concepto||'—'}</td>
+      <td>${m.concepto||'—'}${m.conciliado?' <span title="Conciliado con el banco" style="color:var(--ok);font-weight:700">✔</span>':''}</td>
       <td><span class="badge b-muted" style="font-size:10px">${CAT_MOV_LBL[m.categoria]||m.categoria||'otro'}</span></td>
       <td class="num" style="color:var(--ok);font-weight:${m.tipo==='entrada'?'700':'400'}">${m.tipo==='entrada'?moneyC(m.monto,monedaCuenta(m.cuentaId)):'—'}</td>
       <td class="num" style="color:var(--danger);font-weight:${m.tipo==='salida'?'700':'400'}">${m.tipo==='salida'?moneyC(m.monto,monedaCuenta(m.cuentaId)):'—'}</td>
@@ -740,7 +740,7 @@ window.conciliarBanco=conciliarBanco;
 // ── Conciliación: pantalla ──────────────────────────────────
 // Estado en memoria (persiste si se cierra el modal, así al registrar un
 // movimiento faltante se puede volver sin re-subir el archivo).
-let _concData=null, _concCuentaId=null, _concTab='conc', _concTildados=new Set(), _concRes=null;
+let _concData=null, _concCuentaId=null, _concTab='conc', _concRes=null;
 
 function openConciliacion(){
   if(!cuentasActivasBanco().length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
@@ -783,9 +783,26 @@ function _concArchivo(ev){
 window._concArchivo=_concArchivo;
 window._concSetCuenta=function(id){_concCuentaId=id;_concRender();};
 window._concIrTab=function(t){_concTab=t;_concRender();};
-window._concTilde=function(k){if(_concTildados.has(k))_concTildados.delete(k);else _concTildados.add(k);};
 
-function _concKey(f){return f.fecha+'|'+f.tipo+'|'+f.monto+'|'+(f.noDoc||'');}
+// Marca/desmarca un movimiento como conciliado (persiste en la base).
+window._concMarcar=function(id,val){
+  const m=movimientosBanco.find(x=>String(x.id)===String(id)); if(!m)return;
+  const antes=m.conciliado; m.conciliado=(val===true); m.conciliadoEl=m.conciliado?new Date().toISOString():null;
+  Promise.resolve(typeof marcarConciliadoBanco==='function'?marcarConciliadoBanco(id,m.conciliado):false).then(okr=>{
+    if(okr===false){m.conciliado=antes;toast('No se pudo guardar la marca','¿Ya corriste el SQL de conciliación (paso 1)?',true);_concRender();}
+  });
+};
+// Marca de una vez todos los que ya conciliaron solos.
+window._concMarcarTodos=function(){
+  if(!_concRes||!_concRes.conciliados.length)return;
+  const ids=_concRes.conciliados.map(x=>x.sefe.id);
+  ids.forEach(id=>{const m=movimientosBanco.find(x=>String(x.id)===String(id));if(m){m.conciliado=true;m.conciliadoEl=new Date().toISOString();}});
+  _concRender();
+  Promise.resolve(typeof marcarConciliadoBanco==='function'?marcarConciliadoBanco(ids,true):false).then(okr=>{
+    if(okr===false)toast('No se pudieron guardar','¿Ya corriste el SQL de conciliación (paso 1)?',true);
+    else toast('✓ Marcados como conciliados',ids.length+' movimientos');
+  });
+};
 
 // Filtra los movimientos de SEFE de la cuenta y el período, y cruza.
 function _concCalcular(){
@@ -838,20 +855,24 @@ function _concRender(){
 function _concTabla(r){
   const bdg=t=>t==='entrada'?'<span class="badge b-ok" style="font-size:10px">▲ Entrada</span>':'<span class="badge b-danger" style="font-size:10px">▼ Salida</span>';
   const doc=d=>`<div style="color:var(--muted-2);font-size:11px">Doc ${d||'—'}</div>`;
-  const chk=f=>{const k=_concKey(f);return `<input type="checkbox" ${_concTildados.has(k)?'checked':''} onclick="_concTilde('${k}')">`;};
   if(_concTab==='conc'){
     if(!r.conciliados.length)return '<div class="empty">Nada conciliado todavía.</div>';
-    return `<table><thead><tr><th style="width:30px"></th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th>Coincide con SEFE</th></tr></thead><tbody>`+
-      r.conciliados.map(x=>`<tr><td>${chk(x.banco)}</td><td style="white-space:nowrap">${fdate(x.banco.fecha)}</td><td>${escHtml(x.banco.descripcion)}${doc(x.banco.noDoc)}</td><td>${bdg(x.banco.tipo)}</td><td class="num">${money(x.banco.monto)}</td><td style="color:var(--muted);font-size:12px">↔ ${escHtml(x.sefe.concepto||'movimiento')}</td></tr>`).join('')+'</tbody></table>';
+    const marcados=r.conciliados.filter(x=>x.sefe.conciliado).length;
+    const head=`<div style="display:flex;align-items:center;gap:10px;margin:6px 0 8px;flex-wrap:wrap">
+      <span style="font-size:12.5px;color:var(--muted)">Marcados como conciliados: <b style="color:var(--ink)">${marcados}</b> de ${r.conciliados.length}</span>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost btn-sm" onclick="_concMarcarTodos()">✔ Marcar todos</button></div>`;
+    return head+`<table><thead><tr><th style="width:34px;text-align:center" title="Conciliado">✔</th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th>Coincide con SEFE</th></tr></thead><tbody>`+
+      r.conciliados.map(x=>`<tr><td style="text-align:center"><input type="checkbox" ${x.sefe.conciliado?'checked':''} onclick="_concMarcar(${x.sefe.id},this.checked)"></td><td style="white-space:nowrap">${fdate(x.banco.fecha)}</td><td>${escHtml(x.banco.descripcion)}${doc(x.banco.noDoc)}</td><td>${bdg(x.banco.tipo)}</td><td class="num">${money(x.banco.monto)}</td><td style="color:var(--muted);font-size:12px">↔ ${escHtml(x.sefe.concepto||'movimiento')}</td></tr>`).join('')+'</tbody></table>';
   }
   if(_concTab==='banco'){
     if(!r.soloBanco.length)return '<div class="empty">No falta registrar nada. 🎉</div>';
-    return `<table><thead><tr><th style="width:30px"></th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead><tbody>`+
-      r.soloBanco.map((f,i)=>`<tr><td>${chk(f)}</td><td style="white-space:nowrap">${fdate(f.fecha)}</td><td>${escHtml(f.descripcion)}${doc(f.noDoc)}</td><td>${bdg(f.tipo)}</td><td class="num">${money(f.monto)}</td><td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="_concRegistrar(${i})">Registrar en SEFE</button></td></tr>`).join('')+'</tbody></table>';
+    return `<table><thead><tr><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead><tbody>`+
+      r.soloBanco.map((f,i)=>`<tr><td style="white-space:nowrap">${fdate(f.fecha)}</td><td>${escHtml(f.descripcion)}${doc(f.noDoc)}</td><td>${bdg(f.tipo)}</td><td class="num">${money(f.monto)}</td><td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="_concRegistrar(${i})">Registrar en SEFE</button></td></tr>`).join('')+'</tbody></table>';
   }
   if(!r.soloSEFE.length)return '<div class="empty">Todo lo de SEFE aparece en el banco. 🎉</div>';
-  return `<table><thead><tr><th style="width:30px"></th><th>Fecha</th><th>Movimiento en SEFE</th><th>Tipo</th><th class="num">Monto</th></tr></thead><tbody>`+
-    r.soloSEFE.map(m=>`<tr><td></td><td style="white-space:nowrap">${fdate(m.fecha)}</td><td>${escHtml(m.concepto||'—')}${m.referencia?`<div style="color:var(--muted-2);font-size:11px">${escHtml(String(m.referencia))}</div>`:''}</td><td>${bdg(m.tipo)}</td><td class="num">${money(m.monto)}</td></tr>`).join('')+'</tbody></table>';
+  return `<table><thead><tr><th>Fecha</th><th>Movimiento en SEFE</th><th>Tipo</th><th class="num">Monto</th></tr></thead><tbody>`+
+    r.soloSEFE.map(m=>`<tr><td style="white-space:nowrap">${fdate(m.fecha)}</td><td>${escHtml(m.concepto||'—')}${m.referencia?`<div style="color:var(--muted-2);font-size:11px">${escHtml(String(m.referencia))}</div>`:''}</td><td>${bdg(m.tipo)}</td><td class="num">${money(m.monto)}</td></tr>`).join('')+'</tbody></table>';
 }
 
 // Abre el formulario de movimiento pre-llenado con la fila del banco; al
