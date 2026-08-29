@@ -823,7 +823,9 @@ function _concRender(){
   if(!r){cont.innerHTML='<div class="empty">Elegí la cuenta de SEFE.</div>';return;}
   const res=r.resumen;
   const cuenta=cuentasBanco.find(c=>String(c.id)===String(_concCuentaId));
-  const saldoSEFE=(typeof _estadoCuentaBancoData==='function')?((_estadoCuentaBancoData(Number(_concCuentaId),'',_concData.hasta)||{}).saldoFinal):null;
+  const _sd=(typeof _estadoCuentaBancoData==='function')?_estadoCuentaBancoData(Number(_concCuentaId),_concData.desde,_concData.hasta):null;
+  const saldoSEFE=_sd?_sd.saldoFinal:null;
+  const sefeOpen=_sd?_sd.saldoAntes:null;   // saldo de SEFE al inicio del período
   const M=x=>x==null?'—':money(x);
   const dif=(res.saldoFinalBanco!=null&&saldoSEFE!=null)?Math.round((res.saldoFinalBanco-saldoSEFE)*100)/100:null;
   const cuadra=dif!=null&&Math.abs(dif)<0.01;
@@ -840,6 +842,30 @@ function _concRender(){
     ${kpiT('Diferencia',dif==null?'—':M(dif),cuadra?'¡cuadra!':'falta registrar',cuadra?'var(--ok)':'var(--warn)')}
     ${kpiT('Conciliado',r.conciliados.length+' / '+res.totalFilas,pct+'%')}
   </div>`;
+  // #1 — Explicación de la diferencia (el cuadre): de qué está hecha y a
+  // cuánto bajaría si se registra lo que falta.
+  const bankOpen=_concData.saldoInicial||0;
+  const openGap=(sefeOpen!=null)?Math.round((sefeOpen-bankOpen)*100)/100:0;
+  const soloSEFEnet=Math.round((res.soloSEFEEntradas-res.soloSEFESalidas)*100)/100;
+  const soloBancoNet=Math.round((res.soloBancoEntradas-res.soloBancoSalidas)*100)/100;
+  const difRestante=Math.round((openGap+soloSEFEnet)*100)/100; // lo que quedaría tras registrar lo del banco
+  if(dif!=null&&cuadra){
+    html+=`<div style="background:var(--ok-bg,#e8f3e4);border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin:6px 0 2px;font-size:13px"><b style="color:var(--ok)">✔ La cuenta cuadra con el banco.</b> El saldo de SEFE coincide con el del estado de cuenta.</div>`;
+  }else if(dif!=null){
+    const parte=(emoji,txt,val,nota)=>(Math.abs(val)>=0.01)?`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:6px 0">
+      <span>${emoji} ${txt}${nota?`<div style="color:var(--muted-2);font-size:11px;margin-top:1px">${nota}</div>`:''}</span>
+      <span class="num" style="font-weight:700;white-space:nowrap">${money(Math.abs(val))}</span></div>`:'';
+    const p1=parte('🔴','Saldo inicial distinto — SEFE arranca en '+money(sefeOpen)+' y el banco en '+money(bankOpen),openGap,'Casi siempre es el saldo inicial de la cuenta mal puesto. Se corrige una sola vez.');
+    const p2=parte('🟡','Falta registrar del banco ('+res.soloBanco+' mov.)',soloBancoNet,'Registralos en la pestaña “Sólo en el banco”.');
+    const p3=parte('🔵','En SEFE y el banco aún no lo muestra ('+res.soloSEFE+' mov.)',soloSEFEnet,'Normal si son de fin de mes; caen en el próximo estado de cuenta.');
+    html+=`<div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:6px 0 2px">
+      <div style="font-weight:700;margin-bottom:2px">¿De qué está hecha la diferencia de ${money(Math.abs(dif))}?</div>
+      ${p1}${p2}${p3}
+      <div style="border-top:1px solid var(--line);margin-top:9px;padding-top:9px;font-size:12.5px">
+        👉 Registrando lo que falta del banco, la diferencia quedaría en <b>${money(difRestante)}</b>${(Math.abs(openGap)>=0.01)?` — y en <b>${money(soloSEFEnet)}</b> si además corregís el saldo inicial de la cuenta`:''}.
+      </div>
+    </div>`;
+  }
   const tab=(t,txt,n)=>`<button class="btn ${_concTab===t?'btn-primary':'btn-ghost'} btn-sm" onclick="_concIrTab('${t}')">${txt} (${n})</button>`;
   html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 2px">
     ${tab('conc','✅ Conciliados',r.conciliados.length)}
