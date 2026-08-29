@@ -697,7 +697,11 @@ function parseCSVBanco(texto){
       tipo:esSalida?'salida':'entrada', monto:esSalida?debe:haber
     });
   }
-  return {cuenta,saldoInicial,desde,hasta,filas};
+  // 'corte' = última fecha con movimientos del archivo. Es hasta ahí donde el
+  // estado de cuenta tiene datos; comparar contra SEFE más allá de esa fecha
+  // sería injusto (SEFE puede tener movimientos que el banco aún no muestra).
+  const corte=filas.reduce((mx,f)=>(f.fecha&&f.fecha>mx)?f.fecha:mx,'');
+  return {cuenta,saldoInicial,desde,hasta,corte,filas};
 }
 window.parseCSVBanco=parseCSVBanco;
 
@@ -804,16 +808,23 @@ window._concMarcarTodos=function(){
   });
 };
 
-// Filtra los movimientos de SEFE de la cuenta y el período, y cruza.
+// Filtra los movimientos de SEFE de la cuenta y cruza. Se ancla al CORTE del
+// estado de cuenta (su última fecha): los movimientos de SEFE posteriores a
+// esa fecha no cuentan (son de después del estado de cuenta) — se muestran
+// aparte para que no inflen la diferencia.
 function _concCalcular(){
   if(!_concData||!_concCuentaId)return null;
-  const desde=_concData.desde||'0000-01-01', hasta=_concData.hasta||'9999-12-31';
+  const desde=_concData.desde||'0000-01-01';
+  const corte=_concData.corte||_concData.hasta||'9999-12-31';
   const iso=d=>d.toISOString().slice(0,10);
   const dz=new Date(desde);dz.setDate(dz.getDate()-7);
-  const hz=new Date(hasta);hz.setDate(hz.getDate()+7);
-  const dB=iso(dz), hB=iso(hz);
-  const movs=movimientosBanco.filter(m=>!m.anulado&&String(m.cuentaId)===String(_concCuentaId)&&(m.fecha||'').slice(0,10)>=dB&&(m.fecha||'').slice(0,10)<=hB);
-  return conciliarBanco(_concData.filas, movs, {toleranciaDias:5});
+  const dB=iso(dz);
+  const dela=m=>!m.anulado&&String(m.cuentaId)===String(_concCuentaId)&&(m.fecha||'').slice(0,10)>=dB;
+  const enRango=movimientosBanco.filter(m=>dela(m)&&(m.fecha||'').slice(0,10)<=corte);
+  const posteriores=movimientosBanco.filter(m=>dela(m)&&(m.fecha||'').slice(0,10)>corte).length;
+  const r=conciliarBanco(_concData.filas, enRango, {toleranciaDias:5});
+  r._posteriores=posteriores; r._corte=corte;
+  return r;
 }
 
 function _concRender(){
@@ -823,8 +834,9 @@ function _concRender(){
   if(!r){cont.innerHTML='<div class="empty">Elegí la cuenta de SEFE.</div>';return;}
   const res=r.resumen;
   const cuenta=cuentasBanco.find(c=>String(c.id)===String(_concCuentaId));
-  const _sd=(typeof _estadoCuentaBancoData==='function')?_estadoCuentaBancoData(Number(_concCuentaId),_concData.desde,_concData.hasta):null;
-  const saldoSEFE=_sd?_sd.saldoFinal:null;
+  const corte=r._corte||_concData.hasta;   // hasta la última fecha del estado de cuenta
+  const _sd=(typeof _estadoCuentaBancoData==='function')?_estadoCuentaBancoData(Number(_concCuentaId),_concData.desde,corte):null;
+  const saldoSEFE=_sd?_sd.saldoFinal:null;  // saldo de SEFE al corte (no a hoy)
   const sefeOpen=_sd?_sd.saldoAntes:null;   // saldo de SEFE al inicio del período
   const M=x=>x==null?'—':money(x);
   const dif=(res.saldoFinalBanco!=null&&saldoSEFE!=null)?Math.round((res.saldoFinalBanco-saldoSEFE)*100)/100:null;
@@ -837,8 +849,8 @@ function _concRender(){
     <div style="font-size:18px;font-weight:800;margin-top:3px;white-space:nowrap;color:${col||'var(--ink)'}">${val}</div>
     <div style="font-size:11px;color:var(--muted);margin-top:2px">${sub||'&nbsp;'}</div></div>`;
   let html=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin:12px 0 4px">
-    ${kpiT('Saldo según el banco',M(res.saldoFinalBanco),_concData.hasta?('al '+fdate(_concData.hasta)):'')}
-    ${kpiT('Saldo según SEFE',M(saldoSEFE),cuenta?cuenta.nombre:'')}
+    ${kpiT('Saldo según el banco',M(res.saldoFinalBanco),corte?('al '+fdate(corte)):'')}
+    ${kpiT('Saldo según SEFE',M(saldoSEFE),(cuenta?cuenta.nombre:'')+(corte?(' · al '+fdate(corte)):''))}
     ${kpiT('Diferencia',dif==null?'—':M(dif),cuadra?'¡cuadra!':'falta registrar',cuadra?'var(--ok)':'var(--warn)')}
     ${kpiT('Conciliado',r.conciliados.length+' / '+res.totalFilas,pct+'%')}
   </div>`;
@@ -865,6 +877,9 @@ function _concRender(){
         👉 Registrando lo que falta del banco, la diferencia quedaría en <b>${money(difRestante)}</b>${(Math.abs(openGap)>=0.01)?` — y en <b>${money(soloSEFEnet)}</b> si además corregís el saldo inicial de la cuenta`:''}.
       </div>
     </div>`;
+  }
+  if(r._posteriores>0){
+    html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._posteriores} movimiento(s) de SEFE posteriores al ${fdate(corte)} no se cuentan acá — son de después de este estado de cuenta y aparecerán en el próximo.</div>`;
   }
   const tab=(t,txt,n)=>`<button class="btn ${_concTab===t?'btn-primary':'btn-ghost'} btn-sm" onclick="_concIrTab('${t}')">${txt} (${n})</button>`;
   html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 2px">

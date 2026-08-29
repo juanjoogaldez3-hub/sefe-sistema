@@ -52,6 +52,7 @@ ok('lee la cuenta (con la coma del nombre)', r.cuenta === '2880062118 - SEFE, SO
 ok('lee el saldo inicial', r.saldoInicial === 51380.06, r.saldoInicial);
 ok('lee el período (fechas a YYYY-MM-DD)', r.desde === '2026-08-01' && r.hasta === '2026-08-31', r.desde + '/' + r.hasta);
 ok('parsea 5 filas (ignora cabecera y líneas en blanco)', r.filas.length === 5, 'dio ' + r.filas.length);
+ok('detecta el corte = última fecha del archivo (2026-08-05)', r.corte === '2026-08-05', r.corte);
 
 const f0 = r.filas[0], f2 = r.filas[2];
 ok('Debe → salida (préstamo Q7308.18)', f0.tipo === 'salida' && f0.monto === 7308.18, JSON.stringify(f0));
