@@ -122,6 +122,7 @@ const _MESES_PL=['enero','febrero','marzo','abril','mayo','junio','julio','agost
 const _cap=s=>s?s.charAt(0).toUpperCase()+s.slice(1):s;
 
 let _planActual=null;   // planilla en edición (en memoria)
+let _planEdit=new Set(); // filas desbloqueadas a mano para corregir valores ya pagados
 
 function _ultimoDiaMes(anio,mes){return new Date(anio,mes,0).getDate();} // mes 1-12
 // Rango del MES completo.
@@ -237,6 +238,7 @@ function _cuentaPlanillaDefault(){
 
 function _abrirEditorPlanilla(){
   const pl=_planActual;
+  _planEdit=new Set();   // arrancar con todo en su estado normal (bloqueado si está pagado)
   const cuentas=(typeof cuentasActivasBanco==='function'?cuentasActivasBanco():[]);
   const optCta=cuentas.map(c=>`<option value="${c.id}"${String(pl.cuentaPagoId)===String(c.id)?' selected':''}>${escHtml(c.nombre)}</option>`).join('');
   const valMesActual=`${(+pl.desde.slice(0,4))}-${(+pl.desde.slice(5,7))}`;
@@ -290,16 +292,22 @@ function _planPintar(){
   const wrap=document.getElementById('pl-tabla-wrap'); if(!wrap||!_planActual)return;
   const pl=_planActual;
   const filas=pl.lineas.map((l,i)=>{
-    const bloqSueldo=l.q1Pagado||l.q2Pagado;   // sueldo tocado por un pago → bloquear campos fijos
-    const bloqCom=l.comPagado;
+    const tienePago=l.q1Pagado||l.q2Pagado||l.comPagado;
+    const desbloq=_planEdit.has(i);   // desbloqueada a mano para corregir
+    const bloqSueldo=(l.q1Pagado||l.q2Pagado)&&!desbloq;  // sueldo pagado → bloqueado (salvo desbloqueo)
+    const bloqCom=l.comPagado&&!desbloq;
     const inp=(campo,val,bloq)=>`<input type="number" step="0.01" value="${val}" ${bloq?'disabled':''} oninput="_planSet(${i},'${campo}',this.value)" style="width:82px" class="num">`;
     const pagos=`<div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:210px">
         ${_pagoLinea(i,'q1','1ª Q',l.q1Pagado)}
         ${_pagoLinea(i,'q2','2ª Q',l.q2Pagado)}
         ${_comLinea(l)>0?_pagoLinea(i,'com','Comis.',l.comPagado):''}
       </div>`;
+    // Botón para corregir una fila ya pagada (desbloquea sin tocar el dinero/póliza)
+    const btnEdit=tienePago?(desbloq
+      ? `<div style="font-size:9.5px;color:#B45309;margin-top:3px;font-weight:600">✎ editando (el pago no cambia)</div>`
+      : `<button class="btn btn-ghost btn-sm" style="padding:1px 7px;font-size:10px;margin-top:3px" onclick="_planDesbloquear(${i})" title="Corregir valores (no cambia el pago ya hecho)">🔓 Editar</button>`):'';
     return `<tr>
-      <td style="font-weight:600;min-width:140px">${escHtml(l.nombre)}${_lineaCompleta(l)?` <span class="badge b-ok" style="font-size:9px">Pagado</span>`:''}</td>
+      <td style="font-weight:600;min-width:140px">${escHtml(l.nombre)}${_lineaCompleta(l)?` <span class="badge b-ok" style="font-size:9px">Pagado</span>`:''}${btnEdit}</td>
       <td>${inp('sueldoBase',l.sueldoBase,bloqSueldo)}</td>
       <td>${inp('bonif',l.bonif,bloqSueldo)}</td>
       <td>${inp('otrosIng',l.otrosIng,bloqSueldo)}</td>
@@ -336,6 +344,17 @@ function _planPintarTotales(){
   set('pl-kpi-sueldo',s.netoSueldo);set('pl-kpi-com',s.comisiones);set('pl-kpi-total',s.totalMes);
 }
 window._planSet=_planSet;
+
+// Desbloquear una fila ya pagada para corregir sus valores. NO toca el
+// dinero ni la póliza ya emitidos: solo permite editar los datos de la
+// planilla (y de la boleta). Hay que Guardar para que quede.
+function _planDesbloquear(i){
+  if(!_planActual)return;
+  _planEdit.add(i);
+  _planPintar();
+  toast('Fila desbloqueada','Podés corregir los valores. El pago y la póliza ya hechos no cambian — acordate de Guardar.');
+}
+window._planDesbloquear=_planDesbloquear;
 
 // Guardar la planilla (borrador o con pagos). Devuelve true/false.
 async function _planGuardar(){
