@@ -13,44 +13,44 @@
 - Nunca decirle "está en el repo" o "mirá el archivo X" para algo que
   tiene que ejecutar. Si lo tiene que correr él, va pegado en el chat.
 
-## Migraciones: ahora las aplica GitHub
+## Migraciones de base
 
-Desde agosto 2026 los cambios de base **ya no se pegan a mano**. Viven
-en `supabase/migrations/` y GitHub Actions los aplica solo: primero en
-Pruebas, y en Producción sólo después de una aprobación.
+Cada cambio de base se deja como archivo en `supabase/migrations/`
+(nombrado `AAAAMMDDHHMMSS_descripcion.sql`) para que quede constancia.
 
-- Un cambio de base = un archivo nuevo en `supabase/migrations/`,
-  nombrado `AAAAMMDDHHMMSS_descripcion.sql`. Se publica y se aplica solo.
+**Pero el robot de GitHub Actions que las aplicaría solo todavía NO está
+activo** (faltan cargar las 3 claves — ver `supabase/LEEME.md`). Mientras
+tanto, el SQL de cada cambio va **pegado en el chat y Juanjo lo corre a
+mano, directo en Producción** (Pruebas está fuera de uso). Escribir las
+migraciones con `if not exists` para que sea seguro correrlas de más.
+
 - **Nunca editar una migración ya aplicada.** Si algo salió mal, va una
   migración nueva que lo corrija.
-- El detalle está en `supabase/LEEME.md`, incluida la preparación de una
-  sola vez (tres claves en GitHub y el ambiente de producción).
+- Lo mismo para cualquier cosa puntual de diagnóstico o emergencia
+  (`supabase/herramientas/`): va pegado en el chat.
 
-Lo que Juanjo sí corre a mano sigue siendo cualquier cosa puntual de
-diagnóstico o de emergencia (`supabase/herramientas/`), y eso va pegado
-en el chat como siempre.
-
-## Las dos bases
+## Las bases
 
 | Entorno | Proyecto Supabase | Dónde se ve |
 |---|---|---|
 | Producción | `krbyulpmfazntjwnpxnw` | `sistema.se-fe.com` |
-| Pruebas | `imvoyzxdvtoktckazzsv` | carpeta `/Pruebas/` |
+| Pruebas | `imvoyzxdvtoktckazzsv` | (fuera de uso) |
 
-Toda migración se corre **primero en Pruebas**. `/Pruebas/` es una copia
-completa del sistema apuntando a la otra base; hay que aplicarle los
-mismos cambios que a la raíz.
+**Pruebas ya no se usa** — quedó desactualizada. Los cambios de base se
+corren **directo en Producción**, pegados en el chat. Lo de "probar
+primero en Pruebas" y la carpeta `/Pruebas/` ya no aplica (esa carpeta
+hoy es sólo un redireccionamiento).
 
 ## Cómo se publica
 
 GitHub Pages sirve la rama `main` en `sistema.se-fe.com`. No hay build
 step: es HTML/CSS/JS puro. Lo que se mergea a `main` queda en vivo en
-1-2 minutos, para producción y para `/Pruebas/` a la vez.
+1-2 minutos.
 
-Truco útil: en cambios que dependen de una migración (como el tiempo
-real), **el SQL es el interruptor**. El código puede estar publicado y
-seguir dormido en la base donde no se corrió la migración. Eso permite
-publicar el código y probar sólo en Pruebas.
+Truco útil: **el SQL es el interruptor**. El código puede estar publicado
+y seguir dormido hasta que se corre la migración en la base. Por eso es
+seguro publicar el código primero (leer una columna o tabla que todavía
+no existe no rompe nada) y encender la función con el SQL después.
 
 ## Arquitectura, en corto
 
@@ -77,8 +77,6 @@ publicar el código y probar sólo en Pruebas.
   política mal puesta rompe la facturación en silencio.
 - **Carga inicial**: `cargarTodo()` baja todo en cada login, incluida
   `auditoria`, que crece para siempre.
-- **`/Pruebas/` duplicado**: 827 KB de copia manual que tarde o
-  temprano diverge.
 
 ## Idioma
 
