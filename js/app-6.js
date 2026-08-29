@@ -146,7 +146,7 @@ async function exportarPorPagarExcel(){
     ws['!ref']=XLSX.utils.encode_range({s:{c:0,r:0},e:{c:_keys.length-1,r:totalRow}});
     _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:_ppExport.length,moneyCols,totalRow,brandRow:0,titleRow:1,metaRows:[2,3,4,5,6]});
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Por pagar');
-    XLSX.writeFile(wb,'SEFE_por_pagar_'+fechaHoyGT()+'.xlsx');
+    descargarXlsx(XLSX,wb,'SEFE_por_pagar_'+fechaHoyGT()+'.xlsx');
     toast('✓ Excel descargado','SEFE_por_pagar_'+fechaHoyGT()+'.xlsx');
   }catch(e){console.error(e);toast('No se pudo generar el Excel',e.message||String(e),true);}
 }
@@ -643,7 +643,7 @@ async function estadoCuentaBancoExcel(id){
     XLSX.utils.book_append_sheet(wb,ws1,'Movimientos');
     XLSX.utils.book_append_sheet(wb,ws2,'Resumen');
     const fn=`SEFE_EstadoCuenta_${(c.nombre||'cuenta').replace(/[^a-zA-Z0-9]/g,'_')}_${fechaHoyGT()}.xlsx`;
-    XLSX.writeFile(wb,fn);
+    descargarXlsx(XLSX,wb,fn);
     toast('✓ Excel descargado',fn);
   }catch(e){console.error('Error Excel estado cuenta:',e);toast('Error al generar Excel',e.message,true);}
 }

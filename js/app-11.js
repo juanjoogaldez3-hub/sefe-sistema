@@ -270,7 +270,7 @@ async function exportarAuditoria(){
   _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:Object.keys(data[0]).length,dataRows:data.length,moneyCols:[],totalRow:null,brandRow:0,titleRow:1,metaRows:[2,3,4]});
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Auditoría');
-  XLSX.writeFile(wb,`SEFE_Auditoria_${fechaHoyGT()}.xlsx`);
+  descargarXlsx(XLSX,wb,`SEFE_Auditoria_${fechaHoyGT()}.xlsx`);
   toast('✓ Excel descargado');
 }
 window.exportarAuditoria=exportarAuditoria;

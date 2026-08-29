@@ -497,7 +497,7 @@ async function cotizacionExcel(id){
     // Formato estándar: membrete, encabezado verde, Q en precio/subtotal, totales, anchos.
     _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HDR,nCols:6,dataRows:filas.length,moneyCols:[3,5],totalRow,brandRow:0,titleRow:1,metaRows:[2,3,4,5,6,7,8,9,10,11]});
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'COT-'+padn(c.numero));
-    XLSX.writeFile(wb,`SEFE_cotizacion_COT-${padn(c.numero)}.xlsx`);
+    descargarXlsx(XLSX,wb,`SEFE_cotizacion_COT-${padn(c.numero)}.xlsx`);
     toast('✓ Excel descargado','SEFE_cotizacion_COT-'+padn(c.numero)+'.xlsx');
   }catch(e){console.error('Error exportando cotización a Excel:',e);toast('No se pudo generar el Excel',e.message||String(e),true);}
 }
