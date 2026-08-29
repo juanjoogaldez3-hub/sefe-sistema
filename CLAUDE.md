@@ -28,6 +28,15 @@ migraciones con `if not exists` para que sea seguro correrlas de más.
   migración nueva que lo corrija.
 - Lo mismo para cualquier cosa puntual de diagnóstico o emergencia
   (`supabase/herramientas/`): va pegado en el chat.
+- **Toda tabla nueva necesita sus políticas RLS.** Este proyecto tiene
+  RLS activo (ver `20260812030419_rls.sql`): una tabla sin políticas
+  queda *cerrada* y el navegador no puede leer ni escribir en ella —
+  aunque la tabla exista. Al crear una tabla operativa, agregarle en la
+  misma migración las políticas `sefe_leer` / `sefe_crear` / `sefe_editar`
+  / `sefe_borrar` (reusando las funciones `sefe_activo()`,
+  `sefe_puede_escribir()`, `sefe_es_admin()`) y el `grant` a
+  `authenticated`. Modelo listo para copiar:
+  `20260829170000_rls_tablas_nuevas.sql`.
 
 ## Las bases
 
