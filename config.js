@@ -33,9 +33,9 @@ const SEFE_ENTORNOS = {
       // Número de documento/cotización asignado por la base (secuencia),
       // en vez de max+1 en el navegador. Probado en Pruebas → encendido.
       numeroPorBase: true,
-      // Logo (imagen) embebido en los Excel exportados. Se enciende acá
-      // cuando esté probado en Pruebas (que abran sin "archivo dañado").
-      logoEnExcel: false
+      // Logo (imagen) embebido en los Excel exportados. Probado en
+      // Pruebas (abren sin "archivo dañado" y con el logo) → encendido.
+      logoEnExcel: true
     }
   },
 
