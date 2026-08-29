@@ -57,6 +57,7 @@ ok('la boleta muestra el chip con la póliza de cheque', /Ref\. Póliza de chequ
 ok('la boleta de comisiones muestra Comisiones (ventas)', /Comisiones \(ventas\)/.test(src));
 ok('la boleta NO trae acumulado del año', !/acumulado/i.test(src.slice(src.indexOf('function boletaPagoPDF'), src.indexOf('function boletaPagoPDF')+4000)));
 ok('se puede eliminar una planilla (eliminarPlanilla + borrarPlanilla)', /function eliminarPlanilla\(/.test(src) && /window\.eliminarPlanilla\s*=/.test(src) && /async function borrarPlanilla\(/.test(dbjs));
+ok('se puede desbloquear una fila pagada para corregir (_planDesbloquear)', /function _planDesbloquear\(/.test(src) && /window\._planDesbloquear\s*=/.test(src) && /_planEdit\.has\(i\)/.test(src));
 ok('al eliminar se anulan los movimientos de banco (devuelve el saldo)', /m\.anulado=true/.test(src.slice(src.indexOf('function eliminarPlanilla'), src.indexOf('function eliminarPlanilla')+1600)));
 ok('index.html tiene el botón Eliminar en la lista de planillas', /onclick="eliminarPlanilla\(/.test(src));
 ok('db.js mapea planillas (mapPlanillaFromDB)', /function mapPlanillaFromDB\(/.test(dbjs));
