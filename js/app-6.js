@@ -744,7 +744,8 @@ window.conciliarBanco=conciliarBanco;
 // ── Conciliación: pantalla ──────────────────────────────────
 // Estado en memoria (persiste si se cierra el modal, así al registrar un
 // movimiento faltante se puede volver sin re-subir el archivo).
-let _concData=null, _concCuentaId=null, _concTab='conc', _concRes=null;
+let _concData=null, _concCuentaId=null, _concTab='conc', _concRes=null,
+    _concRechazados=new Set(), _concManuales=[], _concEmparejando=null;
 
 function openConciliacion(){
   if(!cuentasActivasBanco().length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
@@ -774,7 +775,7 @@ function _concArchivo(ev){
     try{
       const texto=new TextDecoder('windows-1252').decode(rd.result);
       _concData=parseCSVBanco(texto);
-      _concTildados=new Set();
+      _concRechazados=new Set(); _concManuales=[]; _concEmparejando=null;
       // Si el número de cuenta del archivo calza con una cuenta de SEFE, la elige sola.
       const num=(_concData.cuenta.match(/\d{6,}/)||[])[0];
       if(num){const m=cuentasActivasBanco().find(c=>String(c.numero||'').replace(/\D/g,'')===num);if(m){_concCuentaId=m.id;const sel=$('#conc-cuenta');if(sel)sel.value=m.id;}}
@@ -808,6 +809,25 @@ window._concMarcarTodos=function(){
   });
 };
 
+// ── Ajustes manuales de esta sesión (separar / emparejar a mano) ──
+function _concBankKey(f){return f.fecha+'|'+f.tipo+'|'+f.monto+'|'+(f.noDoc||'');}
+// Separar un cruce (un falso positivo del automático o un emparejado a mano).
+window._concSeparar=function(bankKey,sefeId){
+  const i=_concManuales.findIndex(m=>m.bankKey===bankKey&&String(m.sefeId)===String(sefeId));
+  if(i>=0)_concManuales.splice(i,1); else _concRechazados.add(bankKey+'||'+sefeId);
+  _concRender();
+};
+// Empezar a emparejar a mano una fila del banco: pide elegir la de SEFE.
+window._concEmparejar=function(bankKey){_concEmparejando=bankKey;_concTab='sefe';_concRender();};
+window._concCancelarEmparejar=function(){_concEmparejando=null;_concRender();};
+// Confirmar el emparejamiento a mano con un movimiento de SEFE.
+window._concConfirmarManual=function(sefeId){
+  if(!_concEmparejando)return;
+  _concManuales.push({bankKey:_concEmparejando,sefeId:sefeId});
+  _concEmparejando=null;_concTab='conc';_concRender();
+  toast('✓ Emparejados a mano','Si el monto no es igual, revisá la diferencia en la fila');
+};
+
 // Filtra los movimientos de SEFE de la cuenta y cruza. Se ancla al CORTE del
 // estado de cuenta (su última fecha): los movimientos de SEFE posteriores a
 // esa fecha no cuentan (son de después del estado de cuenta) — se muestran
@@ -827,10 +847,35 @@ function _concCalcular(){
   return r;
 }
 
+// Aplica los ajustes manuales de la sesión sobre el resultado del cruce:
+// saca los cruces rechazados y arma los emparejados a mano. Recalcula el
+// resumen para que la diferencia refleje los ajustes.
+function _concAjustar(r){
+  if(!r)return r;
+  let conc=r.conciliados.slice(), sb=r.soloBanco.slice(), ss=r.soloSEFE.slice();
+  conc=conc.filter(x=>{
+    const k=_concBankKey(x.banco)+'||'+x.sefe.id;
+    if(_concRechazados.has(k)){sb.push(x.banco);ss.push(x.sefe);return false;}
+    return true;
+  });
+  _concManuales.forEach(mm=>{
+    const bi=sb.findIndex(f=>_concBankKey(f)===mm.bankKey);
+    const si=ss.findIndex(m=>String(m.id)===String(mm.sefeId));
+    if(bi>=0&&si>=0){const banco=sb.splice(bi,1)[0];const sefe=ss.splice(si,1)[0];conc.push({banco,sefe,manual:true});}
+  });
+  const sumT=(arr,tipo)=>arr.filter(x=>(x.tipo||'')===tipo).reduce((s,x)=>s+Number(x.monto||0),0);
+  const resumen=Object.assign({},r.resumen,{
+    conciliados:conc.length, soloBanco:sb.length, soloSEFE:ss.length,
+    soloBancoEntradas:sumT(sb,'entrada'), soloBancoSalidas:sumT(sb,'salida'),
+    soloSEFEEntradas:sumT(ss,'entrada'), soloSEFESalidas:sumT(ss,'salida')
+  });
+  return {conciliados:conc, soloBanco:sb, soloSEFE:ss, resumen, _corte:r._corte, _posteriores:r._posteriores};
+}
+
 function _concRender(){
   const cont=$('#conc-cont'); if(!cont)return;
   if(!_concData){cont.innerHTML='<div class="empty" style="padding:24px 10px">Subí el archivo CSV que exporta Bi en Línea (Movimientos → Exportar) y el sistema lo cruza solo con los movimientos de la cuenta.</div>';return;}
-  const r=_concCalcular(); _concRes=r;
+  const r=_concAjustar(_concCalcular()); _concRes=r;
   if(!r){cont.innerHTML='<div class="empty">Elegí la cuenta de SEFE.</div>';return;}
   const res=r.resumen;
   const cuenta=cuentasBanco.find(c=>String(c.id)===String(_concCuentaId));
@@ -881,6 +926,13 @@ function _concRender(){
   if(r._posteriores>0){
     html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._posteriores} movimiento(s) de SEFE posteriores al ${fdate(corte)} no se cuentan acá — son de después de este estado de cuenta y aparecerán en el próximo.</div>`;
   }
+  if(_concEmparejando){
+    const bf=(r.soloBanco||[]).find(f=>_concBankKey(f)===_concEmparejando);
+    html+=`<div style="background:var(--warn-bg,#fbf1d9);border:1px solid var(--warn);border-radius:10px;padding:9px 13px;margin:6px 0 2px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:#7A4A07">
+      <span>👉 Elegí abajo el movimiento de SEFE que corresponde a <b>${bf?money(bf.monto)+' · '+escHtml(bf.descripcion):'este movimiento del banco'}</b>, con el botón <b>"Emparejar con esta"</b>.</span>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost btn-sm" onclick="_concCancelarEmparejar()">Cancelar</button></div>`;
+  }
   const tab=(t,txt,n)=>`<button class="btn ${_concTab===t?'btn-primary':'btn-ghost'} btn-sm" onclick="_concIrTab('${t}')">${txt} (${n})</button>`;
   html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 2px">
     ${tab('conc','✅ Conciliados',r.conciliados.length)}
@@ -896,6 +948,8 @@ function _concRender(){
 function _concTabla(r){
   const bdg=t=>t==='entrada'?'<span class="badge b-ok" style="font-size:10px">▲ Entrada</span>':'<span class="badge b-danger" style="font-size:10px">▼ Salida</span>';
   const doc=d=>`<div style="color:var(--muted-2);font-size:11px">Doc ${d||'—'}</div>`;
+  // Etiqueta "a mano" / "dif Qxx" cuando el par es manual o los montos difieren.
+  const difBadge=x=>{const d=Math.round((Number(x.banco.monto)-Number(x.sefe.monto))*100)/100;const p=[];if(x.manual)p.push('a mano');if(Math.abs(d)>=0.01)p.push('dif '+money(Math.abs(d)));return p.length?` <span class="badge b-warn" style="font-size:10px">${p.join(' · ')}</span>`:'';};
   if(_concTab==='conc'){
     if(!r.conciliados.length)return '<div class="empty">Nada conciliado todavía.</div>';
     const marcados=r.conciliados.filter(x=>x.sefe.conciliado).length;
@@ -903,17 +957,17 @@ function _concTabla(r){
       <span style="font-size:12.5px;color:var(--muted)">Marcados como conciliados: <b style="color:var(--ink)">${marcados}</b> de ${r.conciliados.length}</span>
       <span style="flex:1"></span>
       <button class="btn btn-ghost btn-sm" onclick="_concMarcarTodos()">✔ Marcar todos</button></div>`;
-    return head+`<table><thead><tr><th style="width:34px;text-align:center" title="Conciliado">✔</th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th>Coincide con SEFE</th></tr></thead><tbody>`+
-      r.conciliados.map(x=>`<tr><td style="text-align:center"><input type="checkbox" ${x.sefe.conciliado?'checked':''} onclick="_concMarcar(${x.sefe.id},this.checked)"></td><td style="white-space:nowrap">${fdate(x.banco.fecha)}</td><td>${escHtml(x.banco.descripcion)}${doc(x.banco.noDoc)}</td><td>${bdg(x.banco.tipo)}</td><td class="num">${money(x.banco.monto)}</td><td style="color:var(--muted);font-size:12px">↔ ${escHtml(x.sefe.concepto||'movimiento')}</td></tr>`).join('')+'</tbody></table>';
+    return head+`<table><thead><tr><th style="width:34px;text-align:center" title="Conciliado">✔</th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th>Coincide con SEFE</th><th></th></tr></thead><tbody>`+
+      r.conciliados.map(x=>`<tr><td style="text-align:center"><input type="checkbox" ${x.sefe.conciliado?'checked':''} onclick="_concMarcar(${x.sefe.id},this.checked)"></td><td style="white-space:nowrap">${fdate(x.banco.fecha)}</td><td>${escHtml(x.banco.descripcion)}${doc(x.banco.noDoc)}</td><td>${bdg(x.banco.tipo)}</td><td class="num">${money(x.banco.monto)}</td><td style="color:var(--muted);font-size:12px">↔ ${escHtml(x.sefe.concepto||'movimiento')}${difBadge(x)}</td><td style="text-align:right"><button class="btn btn-ghost btn-sm" title="Separar — no es el mismo" onclick="_concSeparar('${_concBankKey(x.banco)}',${x.sefe.id})">✕</button></td></tr>`).join('')+'</tbody></table>';
   }
   if(_concTab==='banco'){
     if(!r.soloBanco.length)return '<div class="empty">No falta registrar nada. 🎉</div>';
     return `<table><thead><tr><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead><tbody>`+
-      r.soloBanco.map((f,i)=>`<tr><td style="white-space:nowrap">${fdate(f.fecha)}</td><td>${escHtml(f.descripcion)}${doc(f.noDoc)}</td><td>${bdg(f.tipo)}</td><td class="num">${money(f.monto)}</td><td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="_concRegistrar(${i})">Registrar en SEFE</button></td></tr>`).join('')+'</tbody></table>';
+      r.soloBanco.map((f,i)=>`<tr><td style="white-space:nowrap">${fdate(f.fecha)}</td><td>${escHtml(f.descripcion)}${doc(f.noDoc)}</td><td>${bdg(f.tipo)}</td><td class="num">${money(f.monto)}</td><td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="_concEmparejar('${_concBankKey(f)}')">Emparejar</button> <button class="btn btn-primary btn-sm" onclick="_concRegistrar(${i})">Registrar en SEFE</button></td></tr>`).join('')+'</tbody></table>';
   }
   if(!r.soloSEFE.length)return '<div class="empty">Todo lo de SEFE aparece en el banco. 🎉</div>';
-  return `<table><thead><tr><th>Fecha</th><th>Movimiento en SEFE</th><th>Tipo</th><th class="num">Monto</th></tr></thead><tbody>`+
-    r.soloSEFE.map(m=>`<tr><td style="white-space:nowrap">${fdate(m.fecha)}</td><td>${escHtml(m.concepto||'—')}${m.referencia?`<div style="color:var(--muted-2);font-size:11px">${escHtml(String(m.referencia))}</div>`:''}</td><td>${bdg(m.tipo)}</td><td class="num">${money(m.monto)}</td></tr>`).join('')+'</tbody></table>';
+  return `<table><thead><tr><th>Fecha</th><th>Movimiento en SEFE</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead><tbody>`+
+    r.soloSEFE.map(m=>`<tr><td style="white-space:nowrap">${fdate(m.fecha)}</td><td>${escHtml(m.concepto||'—')}${m.referencia?`<div style="color:var(--muted-2);font-size:11px">${escHtml(String(m.referencia))}</div>`:''}</td><td>${bdg(m.tipo)}</td><td class="num">${money(m.monto)}</td><td style="text-align:right">${_concEmparejando?`<button class="btn btn-primary btn-sm" onclick="_concConfirmarManual(${m.id})">Emparejar con esta</button>`:''}</td></tr>`).join('')+'</tbody></table>';
 }
 
 // Abre el formulario de movimiento pre-llenado con la fila del banco; al

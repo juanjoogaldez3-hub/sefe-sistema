@@ -97,6 +97,7 @@ ok('existe la función openConciliacion', /function openConciliacion\(/.test(src
 ok('existe el manejador para registrar faltantes (_concRegistrar)', /window\._concRegistrar\s*=/.test(src));
 ok('el formulario de movimiento acepta pre-llenado (openMovimientoBanco(pre,onDone))', /function openMovimientoBanco\(pre,onDone\)/.test(src));
 ok('existe el marcar conciliado (_concMarcar) y el marcar todos (_concMarcarTodos)', /window\._concMarcar\s*=/.test(src) && /window\._concMarcarTodos\s*=/.test(src));
+ok('existe emparejar a mano y separar (#2)', /window\._concEmparejar\s*=/.test(src) && /window\._concConfirmarManual\s*=/.test(src) && /window\._concSeparar\s*=/.test(src) && /function _concAjustar\(/.test(src));
 const dbjs = fs.readFileSync(__dirname + '/db.js', 'utf8');
 ok('db.js persiste el conciliado (marcarConciliadoBanco) y lo lee (conciliado)', /function marcarConciliadoBanco\(/.test(dbjs) && /conciliado:m\.conciliado===true/.test(dbjs));
 ok('existe la migración de la columna conciliado', fs.readdirSync(__dirname + '/supabase/migrations').some(n => /conciliado/.test(n)));
