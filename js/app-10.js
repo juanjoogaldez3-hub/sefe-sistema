@@ -22,6 +22,67 @@ async function _cargarXLSX(){
   const X=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
   return {XLSX:X,styled:false};
 }
+
+// ── Logo (imagen) en TODOS los Excel ────────────────────────
+// xlsx-js-style no embebe imágenes. Un .xlsx por dentro es un zip, así
+// que se inyecta el logo a mano: media + drawing + rels + content-types.
+// Va detrás del interruptor SEFE_CONFIG.funciones.logoEnExcel (Pruebas
+// primero). Si algo falla, baja el Excel SIN logo (nunca se rompe).
+function _b64ToU8(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
+function _bajarBlob(blob,filename){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);}
+async function _inyectarLogoXlsx(zip){
+  const uri=(typeof SEFE_LOGO!=='undefined')?SEFE_LOGO:'';
+  const b64=(uri.split(',')[1])||''; if(!b64)throw new Error('sin logo');
+  const bytes=_b64ToU8(b64);
+  // Dimensiones reales del PNG (IHDR) para respetar la proporción.
+  const w=((bytes[16]<<24)|(bytes[17]<<16)|(bytes[18]<<8)|bytes[19])>>>0;
+  const h=((bytes[20]<<24)|(bytes[21]<<16)|(bytes[22]<<8)|bytes[23])>>>0;
+  const EMU=9525, altoPx=48, anchoPx=Math.round(altoPx*(w/(h||1)));
+  const cx=anchoPx*EMU, cy=altoPx*EMU;
+  zip.file('xl/media/sefe-logo.png', bytes);
+  zip.file('xl/drawings/drawing1.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'+
+    '<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>19050</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>9525</xdr:rowOff></xdr:from>'+
+    '<xdr:ext cx="'+cx+'" cy="'+cy+'"/>'+
+    '<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Logo"/><xdr:cNvPicPr/></xdr:nvPicPr>'+
+    '<xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'+
+    '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+cx+'" cy="'+cy+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic>'+
+    '<xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>');
+  zip.file('xl/drawings/_rels/drawing1.xml.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/sefe-logo.png"/></Relationships>');
+  // Content types
+  let ct=await zip.file('[Content_Types].xml').async('string');
+  if(!/Extension="png"/.test(ct))ct=ct.replace('</Types>','<Default Extension="png" ContentType="image/png"/></Types>');
+  if(!/drawing1\.xml/.test(ct))ct=ct.replace('</Types>','<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>');
+  zip.file('[Content_Types].xml', ct);
+  // Rels de la primera hoja (crear o agregar)
+  const relsPath='xl/worksheets/_rels/sheet1.xml.rels', relFile=zip.file(relsPath);
+  const relDrawing='<Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>';
+  if(relFile){let r=await relFile.async('string');zip.file(relsPath, r.replace('</Relationships>', relDrawing+'</Relationships>'));}
+  else zip.file(relsPath,'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+relDrawing+'</Relationships>');
+  // Hoja: asegurar xmlns:r y agregar <drawing/>
+  const wsPath='xl/worksheets/sheet1.xml';let ws=await zip.file(wsPath).async('string');
+  if(!/xmlns:r=/.test(ws))ws=ws.replace(/<worksheet\s/,'<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+  if(!/<drawing\s/.test(ws))ws=ws.replace('</worksheet>','<drawing r:id="rIdLogo"/></worksheet>');
+  zip.file(wsPath, ws);
+}
+// Reemplaza a XLSX.writeFile en TODOS los export: baja el .xlsx con el logo.
+async function descargarXlsx(XLSX, wb, filename){
+  const conLogo=(typeof SEFE_CONFIG!=='undefined'&&SEFE_CONFIG.funciones&&SEFE_CONFIG.funciones.logoEnExcel===true);
+  if(!conLogo){XLSX.writeFile(wb, filename);return;}
+  try{
+    const arr=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+    const JSZip=(await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm')).default;
+    const zip=await JSZip.loadAsync(arr);
+    await _inyectarLogoXlsx(zip);
+    const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    _bajarBlob(blob, filename);
+  }catch(e){console.error('Excel sin logo (falló la inyección):',e);try{XLSX.writeFile(wb, filename);}catch(_e){}}
+}
+if(typeof window!=='undefined')window.descargarXlsx=descargarXlsx;
 window._cargarXLSX=_cargarXLSX;
 
 // Ancho de columna automático: mide el texto más largo de cada columna
@@ -175,7 +236,7 @@ async function exportarExcel(){
     repLastData.forEach((row,i)=>{const doc=(row&&row.Documento)||'';if(doc&&!_esDoc.test(doc)){const ref='A'+(HR+2+i);if(ws[ref])ws[ref].s=Object.assign({},ws[ref].s,{font:{bold:true}});}});
   }
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,String(TIPO_NOMBRES[repType]||'Reporte').replace(/[\\\/?*\[\]:]/g,' ').slice(0,31));
-  XLSX.writeFile(wb,`SEFE_${repType}_${fechaHoyGT()}.xlsx`);
+  descargarXlsx(XLSX,wb,`SEFE_${repType}_${fechaHoyGT()}.xlsx`);
   toast('✓ Excel descargado','SEFE_'+repType+'_'+fechaHoyGT()+'.xlsx');
   }catch(e){console.error('Error exportando Excel:',e);toast('No se pudo generar el Excel',e.message||String(e),true);}
 }
@@ -265,7 +326,7 @@ async function exportarInventarioExcel(){
   ws['!cols']=[{wch:14},{wch:48},{wch:16},{wch:30},{wch:18}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Inventario');
   const fn=`SEFE_Inventario_${fechaHoyGT()}.xlsx`;
-  XLSX.writeFile(wb,fn);
+  descargarXlsx(XLSX,wb,fn);
   toast('✓ Excel descargado',fn);
 }
 window.exportarInventarioExcel=exportarInventarioExcel;

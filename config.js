@@ -32,7 +32,10 @@ const SEFE_ENTORNOS = {
       whatsapp: false,
       // Número de documento/cotización asignado por la base (secuencia),
       // en vez de max+1 en el navegador. Probado en Pruebas → encendido.
-      numeroPorBase: true
+      numeroPorBase: true,
+      // Logo (imagen) embebido en los Excel exportados. Se enciende acá
+      // cuando esté probado en Pruebas (que abran sin "archivo dañado").
+      logoEnExcel: false
     }
   },
 
@@ -48,7 +51,9 @@ const SEFE_ENTORNOS = {
       // conversaciones y mensajes existen únicamente en esta base.
       whatsapp: true,
       // Número por secuencia de la base: ENCENDIDO en Pruebas para probarlo.
-      numeroPorBase: true
+      numeroPorBase: true,
+      // Logo en los Excel: ENCENDIDO en Pruebas para probarlo.
+      logoEnExcel: true
     }
   }
 
