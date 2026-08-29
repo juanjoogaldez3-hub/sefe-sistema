@@ -76,7 +76,7 @@ async function cargarTodo() {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
-      rCuentasBanco, rMovBanco, rConc, rEmpleados
+      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -100,6 +100,8 @@ async function cargarTodo() {
       sb.from('conciliaciones').select('*').order('id',{ascending:false}),
       // Empleados (módulo de planilla; tolera tabla ausente → vacío).
       sb.from('empleados').select('*').order('nombre'),
+      // Planillas quincenales guardadas (tolera tabla ausente → vacío).
+      sb.from('planillas').select('*').order('id',{ascending:false}),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -176,6 +178,10 @@ async function cargarTodo() {
     // Empleados (módulo de planilla; tolera tabla ausente → vacío)
     if (typeof empleados !== 'undefined') {
       empleados = ((rEmpleados&&rEmpleados.data)||[]).map(mapEmpleadoFromDB);
+    }
+    // Planillas quincenales guardadas (tolera tabla ausente → vacío)
+    if (typeof planillas !== 'undefined') {
+      planillas = ((rPlanillas&&rPlanillas.data)||[]).map(mapPlanillaFromDB);
     }
 
     // Categorías (umbrales de stock por categoría). Tolera que la tabla no exista todavía.
@@ -860,6 +866,45 @@ async function guardarEmpleado(emp){
   }
 }
 if(typeof window!=='undefined'){window.guardarEmpleado=guardarEmpleado;}
+
+// ── Planillas quincenales ──────────────────────────────────
+// El detalle (una fila por empleado) se guarda en la columna JSONB
+// 'lineas'; las columnas sueltas son el resumen para listar/reportar.
+function mapPlanillaFromDB(p){
+  let lineas=p.lineas;
+  if(typeof lineas==='string'){try{lineas=JSON.parse(lineas);}catch(e){lineas=[];}}
+  return {
+    id:p.id, desde:p.periodo_desde, hasta:p.periodo_hasta, etiqueta:p.etiqueta||'',
+    estado:p.estado||'borrador',
+    totalIngresos:Number(p.total_ingresos)||0, totalDescuentos:Number(p.total_descuentos)||0,
+    totalNeto:Number(p.total_neto)||0, nEmpleados:p.n_empleados||0,
+    notas:p.notas||'', lineas:Array.isArray(lineas)?lineas:[],
+    creadoPor:p.creado_por||'', creadoEl:p.creado_el, actualizadoEl:p.actualizado_el
+  };
+}
+// Inserta (si _nuevo) o actualiza una planilla. Devuelve true/false.
+async function guardarPlanilla(pl){
+  const row={
+    periodo_desde:pl.desde||null, periodo_hasta:pl.hasta||null, etiqueta:pl.etiqueta||null,
+    estado:pl.estado||'borrador',
+    total_ingresos:pl.totalIngresos||0, total_descuentos:pl.totalDescuentos||0,
+    total_neto:pl.totalNeto||0, n_empleados:pl.nEmpleados||0,
+    notas:pl.notas||null, lineas:pl.lineas||[],
+    actualizado_el:new Date().toISOString()
+  };
+  if(pl._nuevo){
+    delete pl._nuevo;
+    row.creado_por=pl.creadoPor||null;
+    const {data,error}=await sb.from('planillas').insert(row).select().single();
+    if(error){console.error('Error guardando planilla:',error);pl._nuevo=true;return false;}
+    pl.id=data.id; return true;
+  }else{
+    const {error}=await sb.from('planillas').update(row).eq('id',pl.id);
+    if(error){console.error('Error actualizando planilla:',error);return false;}
+    return true;
+  }
+}
+if(typeof window!=='undefined'){window.guardarPlanilla=guardarPlanilla;}
 
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).
