@@ -75,8 +75,11 @@ no existe no rompe nada) y encender la función con el SQL después.
   Falta la restricción por rol. Ojo: el Facturador tiene
   `editarInventario=false` pero al facturar descuenta stock — una
   política mal puesta rompe la facturación en silencio.
-- **Carga inicial**: `cargarTodo()` baja todo en cada login, incluida
-  `auditoria`, que crece para siempre.
+- **Carga inicial**: `cargarTodo()` baja las tablas operativas en cada
+  login. Ya está aliviado lo más pesado (la auditoría se trae sólo la
+  última fila, y los documentos sin los PDF/XML). Lo que queda para más
+  adelante es no bajar *todos* los documentos/abonos/movimientos cuando
+  el negocio crezca mucho (paginar o cargar bajo demanda). No urge.
 
 ## Idioma
 
