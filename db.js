@@ -76,7 +76,7 @@ async function cargarTodo() {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
-      rCuentasBanco, rMovBanco, rConc
+      rCuentasBanco, rMovBanco, rConc, rEmpleados
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -98,6 +98,8 @@ async function cargarTodo() {
       fetchAll('movimientos_banco','id'),
       // Historial de conciliaciones (si la tabla aún no existe, devuelve vacío).
       sb.from('conciliaciones').select('*').order('id',{ascending:false}),
+      // Empleados (módulo de planilla; tolera tabla ausente → vacío).
+      sb.from('empleados').select('*').order('nombre'),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -170,6 +172,10 @@ async function cargarTodo() {
     // Historial de conciliaciones bancarias (tolera tabla ausente → vacío)
     if (typeof conciliaciones !== 'undefined') {
       conciliaciones = ((rConc&&rConc.data)||[]).map(mapConciliacionFromDB);
+    }
+    // Empleados (módulo de planilla; tolera tabla ausente → vacío)
+    if (typeof empleados !== 'undefined') {
+      empleados = ((rEmpleados&&rEmpleados.data)||[]).map(mapEmpleadoFromDB);
     }
 
     // Categorías (umbrales de stock por categoría). Tolera que la tabla no exista todavía.
@@ -825,6 +831,35 @@ async function guardarConciliacion(rec){
   return mapConciliacionFromDB(data);
 }
 if(typeof window!=='undefined'){window.guardarConciliacion=guardarConciliacion;}
+
+// ── Empleados (módulo de planilla) ─────────────────────────
+function mapEmpleadoFromDB(e){
+  return {
+    id:e.id, nombre:e.nombre||'', puesto:e.puesto||'', dpi:e.dpi||'', nit:e.nit||'',
+    igss:e.igss_afiliacion||'', vendedorId:e.vendedor_id||null,
+    sueldoBase:Number(e.sueldo_base)||0, bonifIncentivo:Number(e.bonif_incentivo)||0,
+    cuentaBancoId:e.cuenta_banco_id||null, activo:e.activo!==false, fechaIngreso:e.fecha_ingreso||null
+  };
+}
+async function guardarEmpleado(emp){
+  const row={
+    nombre:emp.nombre, puesto:emp.puesto||null, dpi:emp.dpi||null, nit:emp.nit||null,
+    igss_afiliacion:emp.igss||null, vendedor_id:emp.vendedorId||null,
+    sueldo_base:emp.sueldoBase||0, bonif_incentivo:emp.bonifIncentivo||0,
+    cuenta_banco_id:emp.cuentaBancoId||null, activo:emp.activo!==false, fecha_ingreso:emp.fechaIngreso||null
+  };
+  if(emp._nuevo){
+    delete emp._nuevo;
+    const {data,error}=await sb.from('empleados').insert(row).select().single();
+    if(error){console.error('Error guardando empleado:',error);emp._nuevo=true;return false;}
+    emp.id=data.id; return true;
+  }else{
+    const {error}=await sb.from('empleados').update(row).eq('id',emp.id);
+    if(error){console.error('Error actualizando empleado:',error);return false;}
+    return true;
+  }
+}
+if(typeof window!=='undefined'){window.guardarEmpleado=guardarEmpleado;}
 
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).

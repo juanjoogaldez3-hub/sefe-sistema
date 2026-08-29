@@ -126,6 +126,7 @@
       <div class="lbl">Análisis</div>
       <button data-view="reportes"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg><span>Reportes</span></button>
       <div class="lbl" id="lbl-admin">Administración</div>
+      <button data-view="planilla"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 4v16"/></svg><span>Planilla</span></button>
       <button data-view="usuarios" id="nav-usuarios"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Usuarios</span></button>
       <button data-view="auditoria" id="nav-auditoria"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>Auditoría</span></button>
     </nav>
@@ -202,6 +203,14 @@
           <div id="aud-integridad" style="padding:14px 18px 0"></div>
           <table><thead><tr><th>#</th><th>Fecha / Hora</th><th>Usuario</th><th>Rol</th><th>Acción</th><th>Detalle</th></tr></thead><tbody id="t-aud"></tbody></table>
           <div class="empty" id="aud-empty">No hay registros de auditoría todavía.</div>
+        </div>
+      </section>
+
+      <section class="view" id="v-planilla">
+        <div class="panel">
+          <div class="panel-head"><h3>Empleados</h3><button class="btn btn-primary btn-sm" onclick="openEmpleado()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo empleado</button></div>
+          <table><thead><tr><th>Empleado</th><th>Puesto</th><th>Vendedor (comisiones)</th><th class="num">Sueldo base quincenal</th><th>Estado</th><th></th></tr></thead><tbody id="t-empleados"></tbody></table>
+          <div class="empty" id="empleados-empty" style="display:none">Aún no hay empleados. Agregá el primero con "Nuevo empleado".</div>
         </div>
       </section>
 
@@ -742,5 +751,6 @@
 <script src="js/app-9.js"></script>
 <script src="js/app-10.js"></script>
 <script src="js/app-11.js"></script>
+<script src="js/app-12.js"></script>
 </body>
 </html>

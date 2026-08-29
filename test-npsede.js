@@ -29,6 +29,7 @@ const ctx = {
   clientes: [{ id: 1, nombre: 'GRUPO GECKO', direccion: 'Ciudad' }],
   fdate: () => '19-08-2026', money: n => 'Q' + n,
   SEFE_LOGO: 'x', refPed: f => 'NP-' + (f.numero || 0),
+  SEFE_MARCA: { logo: 'x', razonSocial: 'SEFE, S.A.', nombre: 'SEFE' },
 };
 vm.createContext(ctx);
 vm.runInContext(fnSrc + '\n;globalThis.__np=notaPrestamoHTML;', ctx);
