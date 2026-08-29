@@ -410,6 +410,7 @@ let movimientosBanco=[];
 let creditosCliente=[]; // saldo a favor de clientes (sobrepagos / anticipos)
 let conciliaciones=[]; // conciliaciones bancarias guardadas (historial)
 let empleados=[]; // empleados para el módulo de planilla
+let planillas=[]; // planillas quincenales guardadas (historial)
 let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====
