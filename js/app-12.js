@@ -297,8 +297,8 @@ function _planPintar(){
     const desbloq=_planEdit.has(i);   // desbloqueada a mano para corregir
     const bloqSueldo=(l.q1Pagado||l.q2Pagado)&&!desbloq;  // sueldo pagado → bloqueado (salvo desbloqueo)
     const bloqCom=l.comPagado&&!desbloq;
-    const inp=(campo,val,bloq)=>`<input type="number" step="0.01" value="${val}" ${bloq?'disabled':''} oninput="_planSet(${i},'${campo}',this.value)" style="width:82px" class="num">`;
-    const pagos=`<div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:150px">
+    const inp=(campo,val,bloq)=>`<input type="number" step="0.01" value="${val}" ${bloq?'disabled':''} oninput="_planSet(${i},'${campo}',this.value)" class="num pl-in">`;
+    const pagos=`<div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:128px">
         ${_pagoLinea(i,'q1','1ª Q',l.q1Pagado)}
         ${_pagoLinea(i,'q2','2ª Q',l.q2Pagado)}
         ${_comLinea(l)>0?_pagoLinea(i,'com','Comis.',l.comPagado):''}
@@ -321,7 +321,16 @@ function _planPintar(){
     </tr>`;
   }).join('');
   const tc=id=>`<td class="num" style="font-weight:700" id="pl-t-${id}"></td>`;
-  wrap.innerHTML=`<table style="min-width:1080px"><thead><tr>
+  wrap.innerHTML=`<style>
+      #pl-tabla-wrap table{width:100%;font-size:12px}
+      #pl-tabla-wrap th,#pl-tabla-wrap td{padding:6px 6px;white-space:nowrap}
+      #pl-tabla-wrap input.pl-in{width:72px;text-align:right}
+      #pl-tabla-wrap input.pl-in::-webkit-outer-spin-button,
+      #pl-tabla-wrap input.pl-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+      #pl-tabla-wrap input.pl-in{-moz-appearance:textfield;appearance:textfield}
+      #pl-tabla-wrap .btn-sm{white-space:nowrap}
+    </style>
+    <table style="min-width:940px"><thead><tr>
       <th>Empleado</th><th class="num">Sueldo</th><th class="num">Bonif.</th><th class="num">Otros ing.</th>
       <th class="num">IGSS</th><th class="num">ISR</th><th class="num">Otros desc.</th>
       <th class="num">Neto sueldo</th><th class="num">Comisiones</th><th style="text-align:center">Pagos</th></tr></thead>
