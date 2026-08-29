@@ -31,7 +31,7 @@ async function _cargarXLSX(){
 function _b64ToU8(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
 function _bajarBlob(blob,filename){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);}
 async function _inyectarLogoXlsx(zip){
-  const uri=(typeof SEFE_LOGO!=='undefined')?SEFE_LOGO:'';
+  const uri=(typeof SEFE_MARCA!=='undefined'&&SEFE_MARCA.logo)?SEFE_MARCA.logo:((typeof SEFE_LOGO!=='undefined')?SEFE_LOGO:'');
   const b64=(uri.split(',')[1])||''; if(!b64)throw new Error('sin logo');
   const bytes=_b64ToU8(b64);
   // Dimensiones reales del PNG (IHDR) para respetar la proporción.
@@ -191,7 +191,7 @@ async function exportarExcel(){
   // Reportes cuyos números son CANTIDADES (unidades), nunca dinero: no llevan formato "Q".
   const _soloCant=(repType==='invmov'||repType==='invactual');
   const meta=[
-    ['SEFE, S.A.'],
+    [SEFE_MARCA.membrete],
     [TIPO_NOMBRES[repType]||repType],
     [_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],
     ['Generado el:',fdatehora(new Date())],
@@ -236,8 +236,9 @@ async function exportarExcel(){
     repLastData.forEach((row,i)=>{const doc=(row&&row.Documento)||'';if(doc&&!_esDoc.test(doc)){const ref='A'+(HR+2+i);if(ws[ref])ws[ref].s=Object.assign({},ws[ref].s,{font:{bold:true}});}});
   }
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,String(TIPO_NOMBRES[repType]||'Reporte').replace(/[\\\/?*\[\]:]/g,' ').slice(0,31));
-  descargarXlsx(XLSX,wb,`SEFE_${repType}_${fechaHoyGT()}.xlsx`);
-  toast('✓ Excel descargado','SEFE_'+repType+'_'+fechaHoyGT()+'.xlsx');
+  const _archivo=`${SEFE_MARCA.prefijoArchivo}_${repType}_${fechaHoyGT()}.xlsx`;
+  descargarXlsx(XLSX,wb,_archivo);
+  toast('✓ Excel descargado',_archivo);
   }catch(e){console.error('Error exportando Excel:',e);toast('No se pudo generar el Excel',e.message||String(e),true);}
 }
 window.exportarExcel=exportarExcel;
@@ -260,7 +261,7 @@ function _pdfShell(o){
   <div style="font-family:Inter,Arial,sans-serif;color:#1c1f17;-webkit-print-color-adjust:exact;print-color-adjust:exact">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
       <div>
-        <img src="${SEFE_LOGO}" alt="SEFE, S.A." style="width:${cmp?108:150}px;height:auto;display:block">
+        <img src="${SEFE_MARCA.logo}" alt="${SEFE_MARCA.membrete}" style="width:${cmp?108:150}px;height:auto;display:block">
       </div>
       ${o.sinTitulo?'':`<div style="text-align:right">
         <div style="display:inline-block;background:#173916;color:#fff;padding:${cmp?'5px 14px':'8px 18px'};border-radius:6px;font-weight:700;font-size:${cmp?13:14}px;letter-spacing:.5px">${o.titulo}</div>
@@ -272,8 +273,8 @@ function _pdfShell(o){
     <div style="height:2px;background:#A8C038;margin-top:2px;margin-bottom:${cmp?9:16}px"></div>
     ${o.body}
     ${o.sinPie?'':`<div style="position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #D6DCC9;padding-top:5px;display:flex;justify-content:space-between;font-size:9px;color:#909584">
-      <span>SEFE, S.A.</span>
-      <span>SEFE · Sistema de Pedidos y Facturación · ${fdate(hoy)}</span>
+      <span>${SEFE_MARCA.membrete}</span>
+      <span>${SEFE_MARCA.nombre} · Sistema de Pedidos y Facturación · ${fdate(hoy)}</span>
     </div>`}
   </div>`;
 }
@@ -320,7 +321,7 @@ async function exportarInventarioExcel(){
   const data=_filasInventario();
   if(!data.length){toast('Sin productos para exportar','El inventario está vacío',true);return;}
   const XLSX=await import('https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs');
-  const meta=[['Inventario · Soluciones Efectivas GT'],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],['Marca:',_filtroMarca||'Todas las marcas'],['Total productos:',data.length],[]];
+  const meta=[['Inventario · '+SEFE_MARCA.nombreDoc],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],['Marca:',_filtroMarca||'Todas las marcas'],['Total productos:',data.length],[]];
   const ws=XLSX.utils.aoa_to_sheet(meta);
   XLSX.utils.sheet_add_json(ws,data,{origin:'A7'});
   ws['!cols']=[{wch:14},{wch:48},{wch:16},{wch:30},{wch:18}];

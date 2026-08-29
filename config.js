@@ -58,14 +58,33 @@ const SEFE_ENTORNOS = {
   }
 
   // ── PLANTILLA CLIENTE NUEVO ──────────────────────────────────
-  // Copiar, descomentar, y completar url / key / dominio:
+  // Copiar, descomentar, y completar url / key / dominio. El bloque
+  // `marca` es OPCIONAL: lo que no se ponga se hereda de SEFE. Sirve
+  // para que cada instalación se vea con el nombre, logo y colores
+  // del cliente (en la interfaz y en los documentos).
   //
   // ,clienteEjemplo: {
   //   entorno: 'clienteEjemplo',
   //   url: 'https://XXXXXXXXXXXX.supabase.co',
   //   key: 'ANON_KEY_PUBLICA_DEL_CLIENTE',
   //   dominios: ['clienteejemplo.se-fe.com'],
-  //   funciones: { whatsapp: false }
+  //   funciones: { whatsapp: false },
+  //   marca: {
+  //     nombre: 'Cliente Ejemplo',                 // barra lateral, pestaña, ícono
+  //     tagline: 'PEDIDOS & FACTURACIÓN',
+  //     nombreLargo: 'Cliente Ejemplo, S.A.',      // pantalla de carga
+  //     monograma: 'CE',                            // el cuadrito de 2 letras
+  //     logo: 'data:image/png;base64,....',         // logo del cliente (imagen)
+  //     razonSocial: 'Cliente Ejemplo, S.A.',       // documentos (notas)
+  //     membrete: 'Cliente Ejemplo, S.A.',          // membrete de Excel / pie de PDF
+  //     nombreDoc: 'Cliente Ejemplo',               // encabezado de órdenes e inventario
+  //     nit: '1234567-8',
+  //     ciudadPais: 'Guatemala, C.A.',
+  //     ciudadDoc: 'Guatemala, Guatemala',
+  //     prefijoArchivo: 'CLIENTE',                  // prefijo de los Excel descargados
+  //     colorPrimario: '#173916',                   // color principal (interfaz)
+  //     colorAcento: '#A8C038'                      // color de acento (interfaz)
+  //   }
   // }
 
 };

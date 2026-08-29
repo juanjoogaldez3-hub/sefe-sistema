@@ -306,8 +306,8 @@ function notaPrestamoHTML(f){
   <div style="font-family:'Inter',sans-serif;color:#1c1f17;-webkit-print-color-adjust:exact;print-color-adjust:exact">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
       <div>
-        <img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:172px;height:auto;display:block">
-        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">Soluciones Efectivas, S.A.<br>NIT 10777860-2 · Guatemala, C.A.</div>
+        <img src="${SEFE_MARCA.logo}" alt="${SEFE_MARCA.razonSocial}" style="width:172px;height:auto;display:block">
+        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">${SEFE_MARCA.razonSocial}<br>NIT ${SEFE_MARCA.nit} · ${SEFE_MARCA.ciudadPais}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="display:inline-block;background:var(--green);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.3px;padding:8px 16px;border-radius:8px">NOTA DE PRÉSTAMO</div>
@@ -348,7 +348,7 @@ function notaPrestamoHTML(f){
     <p style="font-size:13px;color:#3a3f33;margin-top:18px">Atentamente,</p>
     <div style="margin-top:30px"><div style="width:240px;border-top:1.5px solid #1c1f17;padding-top:7px">
       <div style="font-family:var(--disp);font-size:14px;font-weight:700">${firmante}</div>
-      <div style="font-size:11.5px;color:#7a7f6e">Soluciones Efectivas, S.A.</div>
+      <div style="font-size:11.5px;color:#7a7f6e">${SEFE_MARCA.razonSocial}</div>
     </div></div>
     <div style="margin-top:46px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:26px">
       <div style="text-align:center"><div style="border-top:1.2px solid #aeb3a2;padding-top:7px;font-size:11px;color:#7a7f6e">Firma de quien recibe</div></div>
@@ -385,8 +385,8 @@ function notaEnvioHTML(f){
   <div style="font-family:'Inter',sans-serif;color:#1c1f17;-webkit-print-color-adjust:exact;print-color-adjust:exact">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
       <div>
-        <img src="${SEFE_LOGO}" alt="Soluciones Efectivas" style="width:172px;height:auto;display:block">
-        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">Soluciones Efectivas, S.A.<br>NIT 10777860-2 · Guatemala, C.A.</div>
+        <img src="${SEFE_MARCA.logo}" alt="${SEFE_MARCA.razonSocial}" style="width:172px;height:auto;display:block">
+        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">${SEFE_MARCA.razonSocial}<br>NIT ${SEFE_MARCA.nit} · ${SEFE_MARCA.ciudadPais}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="display:inline-block;background:var(--green);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.3px;padding:8px 16px;border-radius:8px">NOTA DE ENVÍO</div>
@@ -427,7 +427,7 @@ function notaEnvioHTML(f){
     <p style="font-size:12px;line-height:1.6;color:#7a7f6e;margin-top:22px">Documento no tributario para control de despacho y entrega de mercadería. No genera crédito fiscal. Verifique las cantidades al momento de recibir.</p>
     <div style="margin-top:24px"><div style="width:240px;border-top:1.5px solid #1c1f17;padding-top:7px">
       <div style="font-family:var(--disp);font-size:14px;font-weight:700">${firmante}</div>
-      <div style="font-size:11.5px;color:#7a7f6e">Entregado por · Soluciones Efectivas, S.A.</div>
+      <div style="font-size:11.5px;color:#7a7f6e">Entregado por · ${SEFE_MARCA.razonSocial}</div>
     </div></div>
     <div style="margin-top:52px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:26px">
       <div style="text-align:center"><div style="border-top:1.2px solid #aeb3a2;padding-top:7px;font-size:11px;color:#7a7f6e">Firma de quien recibe</div></div>
@@ -530,7 +530,7 @@ async function verDoc(id){
     :f.items.map(it=>`<tr><td><b>${it.nombre}</b><br><span style="font-size:10px;color:var(--muted)">${it.codigo}</span></td><td style="text-align:center" class="num">${it.cantidad}</td><td style="text-align:right" class="num">${money(it.precio)}</td><td style="text-align:right;font-weight:600" class="num">${money(it.cantidad*it.precio-it.descuento)}</td></tr>`).join('');
   $('#doc-sheet').innerHTML=`
     <div class="ds-head">
-      <div class="ds-emisor"><div class="ds-mk">SE</div><div><h4>Soluciones Efectivas GT</h4><p>NIT: 10777860-2<br>Guatemala, Guatemala</p></div></div>
+      <div class="ds-emisor"><div class="ds-mk">${SEFE_MARCA.monograma}</div><div><h4>${SEFE_MARCA.nombreDoc}</h4><p>NIT: ${SEFE_MARCA.nit}<br>${SEFE_MARCA.ciudadDoc}</p></div></div>
       <div class="ds-doctype"><div class="dt">${TIPO_TIT[f.tipoDoc]}</div><p>${docTypeRef}</p></div>
     </div>${stamp}
     <div class="ds-meta">
