@@ -271,8 +271,8 @@ function _planPintar(){
       <td>${inp('isr',l.isr)}</td>
       <td>${inp('otrosDesc',l.otrosDesc)}</td>
       <td class="num" style="font-weight:700" id="pl-neto-${i}">${money(_lineaNeto(l))}</td>
-      <td style="text-align:center">${l.pagado
-          ? `<button class="btn btn-ghost btn-sm" onclick="_planPoliza(${i})">Póliza</button>`
+      <td style="text-align:center;white-space:nowrap">${l.pagado
+          ? `<button class="btn btn-ghost btn-sm" onclick="boletaPlanillaUI(${i})">Boleta</button> <button class="btn btn-ghost btn-sm" onclick="_planPoliza(${i})">Póliza</button>`
           : `<button class="btn btn-primary btn-sm" onclick="_planPagar(${i})">Pagar</button>`}</td>
     </tr>`;
   }).join('');
@@ -358,3 +358,91 @@ function _planPoliza(i){
 }
 window._planPagar=_planPagar;
 window._planPoliza=_planPoliza;
+
+// ============================================================
+//  BOLETA DE PAGO  (parte 3) — media carta, igual a la póliza
+// ============================================================
+//  Una boleta por empleado con el desglose de la quincena. Toma como
+//  referencia la póliza de cheque que se generó al pagar. En español,
+//  sin acumulado del año.
+function _boletaFila(lbl,val,fuerte){
+  return `<tr>
+    <td style="padding:3px 0;font-size:12px;color:#333">${lbl}</td>
+    <td style="padding:3px 0;font-size:12px;text-align:right;${fuerte?'font-weight:700;color:#173916':'font-weight:600'}">${money(val)}</td></tr>`;
+}
+function boletaPagoPDF(pl,l){
+  if(!pl||!l)return;
+  const emp=(typeof empleados!=='undefined'?empleados:[]).find(e=>String(e.id)===String(l.empleadoId))||{};
+  const cuenta=(typeof cuentasBanco!=='undefined'?cuentasBanco:[]).find(c=>String(c.id)===String(l.cuentaBancoId||pl.cuentaPagoId))||{};
+  const ingresos=_lineaIngresos(l), desc=_lineaDesc(l), neto=_lineaNeto(l);
+  const numPol=l.poliza?('POL-'+String(l.poliza).padStart(6,'0')):null;
+  const fechaPago=l.pagadoEl?fdate(l.pagadoEl):(pl.hasta?fdate(pl.hasta):'—');
+  const sec=t=>`<div style="font-size:10px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.7px;margin:11px 0 3px;display:flex;align-items:center;gap:8px"><span>${t}</span><span style="flex:1;height:1px;background:#D6DCC9"></span></div>`;
+  const dato=(lbl,val)=>`<div style="min-width:0"><div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">${lbl}</div><div style="font-size:13px;font-weight:600;color:#173916;margin-top:1px">${val||'—'}</div></div>`;
+  const body=`
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px;align-items:flex-start">
+      <div style="flex:1;min-width:230px">
+        <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Empleado</div>
+        <div style="font-size:17px;font-weight:800;color:#173916;margin-top:1px">${escHtml(l.nombre)}</div>
+        <div style="font-size:12px;color:#666B5C;margin-top:1px">${escHtml(emp.puesto||'')}</div>
+      </div>
+      <div style="text-align:right;min-width:180px">
+        <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Período</div>
+        <div style="font-size:13.5px;font-weight:700;color:#173916;margin-top:1px">${escHtml(pl.etiqueta||'')}</div>
+        <div style="font-size:11px;color:#666B5C;margin-top:2px">Pago: ${fechaPago}</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:8px">
+      ${dato('DPI',emp.dpi)} ${dato('NIT',emp.nit)} ${dato('No. IGSS',emp.igss)}
+    </div>
+
+    <div style="display:flex;gap:22px;align-items:flex-start;margin-top:4px">
+      <div style="flex:1;min-width:0">
+        ${sec('Ingresos')}
+        <table style="width:100%;border-collapse:collapse">
+          ${_boletaFila('Sueldo base',l.sueldoBase)}
+          ${_boletaFila('Bonificación incentivo',l.bonif)}
+          ${(+l.comisiones)?_boletaFila('Comisiones',l.comisiones):''}
+          ${(+l.otrosIng)?_boletaFila('Otros ingresos',l.otrosIng):''}
+          <tr><td colspan="2" style="border-top:1px solid #D6DCC9"></td></tr>
+          ${_boletaFila('Total ingresos',ingresos,true)}
+        </table>
+      </div>
+      <div style="flex:1;min-width:0">
+        ${sec('Deducciones')}
+        <table style="width:100%;border-collapse:collapse">
+          ${_boletaFila('IGSS (laboral)',l.igss)}
+          ${(+l.isr)?_boletaFila('ISR',l.isr):''}
+          ${(+l.otrosDesc)?_boletaFila('Otras deducciones',l.otrosDesc):''}
+          ${!(+l.isr)&&!(+l.otrosDesc)?'<tr><td style="padding:3px 0;font-size:12px;color:#909584">—</td><td></td></tr>':''}
+          <tr><td colspan="2" style="border-top:1px solid #D6DCC9"></td></tr>
+          ${_boletaFila('Total deducciones',desc,true)}
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;border:1.5px solid #173916;border-radius:8px;display:flex;justify-content:space-between;align-items:center;padding:8px 16px">
+      <div style="font-size:12px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.6px">Neto a recibir</div>
+      <div style="font-size:22px;font-weight:800;color:#173916">${money(neto)}</div>
+    </div>
+
+    <div style="display:flex;gap:22px;align-items:flex-start;margin-top:6px">
+      <div style="flex:1;min-width:0">
+        ${sec('Forma de pago')}
+        <div style="font-size:12.5px;font-weight:700;color:#173916">${cuenta.banco?escHtml(cuenta.banco):escHtml(cuenta.nombre||'—')}</div>
+        ${cuenta.nombre&&cuenta.banco?`<div style="font-size:11px;color:#666B5C">${escHtml(cuenta.nombre)}</div>`:''}
+        ${numPol?`<div style="font-size:11px;color:#666B5C;margin-top:2px">Póliza de cheque: <b>${numPol}</b></div>`:'<div style="font-size:11px;color:#B45309;margin-top:2px">Pendiente de pago</div>'}
+      </div>
+      <div style="flex:1;min-width:0;text-align:center;align-self:flex-end">
+        <div style="border-top:1px solid #555;margin-top:26px;padding-top:5px;font-size:10px;color:#555">Recibí conforme</div>
+      </div>
+    </div>`;
+  _abrirPDF(_pdfShell({titulo:'BOLETA DE PAGO',subtitulo:'Planilla quincenal',sinEmitido:true,orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
+}
+window.boletaPagoPDF=boletaPagoPDF;
+function boletaPlanillaUI(i){
+  const pl=_planActual; if(!pl)return;
+  const l=pl.lineas[i]; if(l)boletaPagoPDF(pl,l);
+}
+window.boletaPlanillaUI=boletaPlanillaUI;

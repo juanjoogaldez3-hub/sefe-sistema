@@ -45,6 +45,10 @@ ok('calcula comisiones desde ventas (_comisionEmpleado)', /function _comisionEmp
 ok('la comisión usa la misma regla que el reporte (5% sin IVA)', /PL_COMISION_PCT\s*=\s*0\.05/.test(src) && /PL_IVA\s*=\s*1\.12/.test(src));
 ok('IGSS laboral automático (4.83%)', /IGSS_LABORAL_PCT\s*=\s*0\.0483/.test(src));
 ok('el pago genera movimiento de banco + póliza (_planPagar)', /function _planPagar\(/.test(src) && /registrarMovimientoBanco/.test(src) && /categoria:'planilla'/.test(src));
+ok('existe la boleta de pago (boletaPagoPDF, en window)', /function boletaPagoPDF\(/.test(src) && /window\.boletaPagoPDF\s*=/.test(src));
+ok('la boleta usa el marco de la póliza (_pdfShell) y es media carta (compacto)', /_pdfShell\(\{titulo:'BOLETA DE PAGO'[^}]*compacto:true/.test(src));
+ok('la boleta referencia la póliza de cheque', /Póliza de cheque/.test(src));
+ok('la boleta NO trae acumulado del año', !/acumulado/i.test(src.slice(src.indexOf('function boletaPagoPDF'), src.indexOf('function boletaPagoPDF')+3000)));
 ok('db.js mapea planillas (mapPlanillaFromDB)', /function mapPlanillaFromDB\(/.test(dbjs));
 ok('db.js guarda planillas (guardarPlanilla)', /async function guardarPlanilla\(/.test(dbjs));
 ok('db.js carga planillas en el arranque (rPlanillas)', /rPlanillas/.test(dbjs) && /from\('planillas'\)/.test(dbjs));
