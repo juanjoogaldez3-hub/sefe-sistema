@@ -328,6 +328,17 @@ function aplicarPermisosUI(){
   const badgeColors={admin:['var(--ok-bg)','var(--ok)'],gerencia:['#E6EEF6','var(--blue)'],ventas:['var(--ok-bg)','var(--ok)'],cobros:['#E6EEF6','var(--blue)'],bodega:['var(--warn-bg)','var(--warn)'],contabilidad:['#F0EBF7','#7A4A9E'],auditoria:['#EEF0E8','var(--muted)'],facturador:['var(--warn-bg)','var(--warn)'],piloto:['#E6EEF6','var(--blue)']};
   const [bg,col]=badgeColors[currentRole]||['#EEF0E8','var(--muted)'];
   $('#role-badge').style.background=bg;$('#role-badge').style.color=col;
+  // Ocultar los títulos de sección (Operaciones, Finanzas, Bodega, …) que
+  // quedaron sin ningún botón visible, sea por rol o por módulo apagado.
+  document.querySelectorAll('.nav .lbl').forEach(lbl=>{
+    let visible=false;
+    let el=lbl.nextElementSibling;
+    while(el && !el.classList.contains('lbl')){
+      if(el.matches('button[data-view]') && el.style.display!=='none'){ visible=true; break; }
+      el=el.nextElementSibling;
+    }
+    lbl.style.display=visible?'':'none';
+  });
 }
 
 // ================= PAGO GLOBAL DESDE FICHA DE CLIENTE =================

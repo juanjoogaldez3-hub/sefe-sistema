@@ -69,6 +69,15 @@ const SEFE_ENTORNOS = {
   //   key: 'ANON_KEY_PUBLICA_DEL_CLIENTE',
   //   dominios: ['clienteejemplo.se-fe.com'],
   //   funciones: { whatsapp: false },
+  //   // Módulos opcionales. Lo que no se ponga queda ENCENDIDO.
+  //   // Base (siempre): pedidos, facturación, clientes, inventario,
+  //   // reportes y administración. Para apagar un módulo: false.
+  //   modulos: {
+  //     cotizaciones: true,   // cotizaciones a clientes
+  //     cobros: true,         // cuentas por cobrar + recordatorios
+  //     compras: true,        // compras, proveedores y cuentas por pagar
+  //     bancos: true          // bancos, conciliación y talonarios
+  //   },
   //   marca: {
   //     nombre: 'Cliente Ejemplo',                 // barra lateral, pestaña, ícono
   //     tagline: 'PEDIDOS & FACTURACIÓN',
