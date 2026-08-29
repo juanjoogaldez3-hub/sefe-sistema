@@ -745,7 +745,8 @@ window.conciliarBanco=conciliarBanco;
 // Estado en memoria (persiste si se cierra el modal, así al registrar un
 // movimiento faltante se puede volver sin re-subir el archivo).
 let _concData=null, _concCuentaId=null, _concTab='conc', _concRes=null,
-    _concRechazados=new Set(), _concManuales=[], _concEmparejando=null;
+    _concRechazados=new Set(), _concManuales=[], _concEmparejando=null,
+    _concArchivoNombre='', _concUltimo=null;
 
 function openConciliacion(){
   if(!cuentasActivasBanco().length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
@@ -770,6 +771,7 @@ window.openConciliacion=openConciliacion;
 // Lee el archivo como Latin-1 (así lo exporta el banco) y lo parsea.
 function _concArchivo(ev){
   const f=ev.target.files&&ev.target.files[0]; if(!f)return;
+  _concArchivoNombre=f.name||'';
   const rd=new FileReader();
   rd.onload=()=>{
     try{
@@ -826,6 +828,59 @@ window._concConfirmarManual=function(sefeId){
   _concManuales.push({bankKey:_concEmparejando,sefeId:sefeId});
   _concEmparejando=null;_concTab='conc';_concRender();
   toast('✓ Emparejados a mano','Si el monto no es igual, revisá la diferencia en la fila');
+};
+
+// ── Guardar la conciliación y ver el historial ──────────────
+window._concGuardar=function(){
+  if(!_concUltimo||_concUltimo.saldoBanco==null){toast('Nada que guardar','Subí un estado de cuenta primero',true);return;}
+  const rec=Object.assign({},_concUltimo,{archivo:_concArchivoNombre||'',guardadoPor:(typeof currentUser!=='undefined'?currentUser:'')});
+  Promise.resolve(typeof guardarConciliacion==='function'?guardarConciliacion(rec):null).then(saved=>{
+    if(!saved){toast('No se pudo guardar','¿Ya corriste el SQL de conciliaciones?',true);return;}
+    if(typeof conciliaciones!=='undefined')conciliaciones.unshift(saved);
+    if(typeof logAudit==='function')logAudit('Conciliación guardada',((cuentasBanco.find(c=>String(c.id)===String(rec.cuentaId))||{}).nombre||'')+' · '+rec.desde+'→'+rec.hasta+' · dif '+money(rec.diferencia));
+    toast('✓ Conciliación guardada','Quedó en el historial');
+  });
+};
+window._concHistorial=function(){
+  const lista=(typeof conciliaciones!=='undefined'?conciliaciones:[]).slice();
+  const nom=id=>(cuentasBanco.find(c=>String(c.id)===String(id))||{}).nombre||'—';
+  const filas=lista.length?lista.map(c=>`<tr>
+      <td style="white-space:nowrap">${c.guardadoEl?fdatehora(new Date(c.guardadoEl)):'—'}</td>
+      <td>${escHtml(nom(c.cuentaId))}</td>
+      <td style="white-space:nowrap">${c.desde?fdate(c.desde):'—'} → ${c.hasta?fdate(c.hasta):'—'}</td>
+      <td class="num">${money(c.saldoBanco)}</td>
+      <td class="num">${money(c.saldoSefe)}</td>
+      <td class="num" style="font-weight:700;color:${Math.abs(c.diferencia)<0.01?'var(--ok)':'var(--warn)'}">${money(c.diferencia)}</td>
+      <td class="num">${c.nConciliados}</td>
+      <td class="num">${c.nSoloBanco+c.nSoloSefe}</td>
+      <td>${escHtml(c.guardadoPor||'')}</td>
+    </tr>`).join(''):'<tr><td colspan="9" class="empty">Todavía no hay conciliaciones guardadas.</td></tr>';
+  openMod('Historial de conciliaciones',
+    `<div style="display:flex;justify-content:flex-end;margin-bottom:8px">${lista.length?'<button class="btn btn-primary btn-sm" onclick="_concHistorialExcel()">Descargar Excel</button>':''}</div>
+     <div style="overflow-x:auto"><table><thead><tr><th>Guardada</th><th>Cuenta</th><th>Período</th><th class="num">Saldo banco</th><th class="num">Saldo SEFE</th><th class="num">Diferencia</th><th class="num">Concil.</th><th class="num">Faltan</th><th>Por</th></tr></thead><tbody>${filas}</tbody></table></div>`, null);
+  $('#m-save').style.display='none';
+  $('#ov').classList.add('modal-wide');
+  const _m=document.querySelector('#ov .modal'); if(_m)_m.style.maxWidth='min(96vw,1040px)';
+};
+window._concHistorialExcel=async function(){
+  const lista=(typeof conciliaciones!=='undefined'?conciliaciones:[]);
+  if(!lista.length){toast('Sin datos para exportar',null,true);return;}
+  try{
+    const {XLSX,styled:_styled}=await _cargarXLSX();
+    const nom=id=>(cuentasBanco.find(c=>String(c.id)===String(id))||{}).nombre||'';
+    const meta=[['SEFE, S.A.'],['HISTORIAL DE CONCILIACIONES'],['Generado el:',fdatehora(new Date())],['Generado por:',(typeof currentUser!=='undefined'?currentUser:'')],[]];
+    const HR=5;
+    const ws=XLSX.utils.aoa_to_sheet(meta);
+    const data=lista.map(c=>({'Guardada':c.guardadoEl?fdatehora(new Date(c.guardadoEl)):'',Cuenta:nom(c.cuentaId),Desde:c.desde?fdate(c.desde):'',Hasta:c.hasta?fdate(c.hasta):'','Saldo banco':c.saldoBanco,'Saldo SEFE':c.saldoSefe,'Diferencia':c.diferencia,'Conciliados':c.nConciliados,'Sólo banco':c.nSoloBanco,'Sólo SEFE':c.nSoloSefe,'Por':c.guardadoPor||''}));
+    XLSX.utils.sheet_add_json(ws,data,{origin:'A'+(HR+1)});
+    const _keys=Object.keys(data[0]);
+    const moneyCols=_keys.map((k,i)=>/saldo|diferencia/i.test(k)?i:-1).filter(i=>i>=0);
+    _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:data.length,moneyCols,totalRow:null,brandRow:0,titleRow:1,metaRows:[2,3]});
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Conciliaciones');
+    const fn='SEFE_conciliaciones_'+fechaHoyGT()+'.xlsx';
+    if(typeof descargarXlsx==='function')descargarXlsx(XLSX,wb,fn); else XLSX.writeFile(wb,fn);
+    toast('✓ Excel descargado',fn);
+  }catch(e){console.error('Historial Excel:',e);toast('No se pudo generar el Excel',e.message||String(e),true);}
 };
 
 // Filtra los movimientos de SEFE de la cuenta y cruza. Se ancla al CORTE del
@@ -887,6 +942,10 @@ function _concRender(){
   const dif=(res.saldoFinalBanco!=null&&saldoSEFE!=null)?Math.round((res.saldoFinalBanco-saldoSEFE)*100)/100:null;
   const cuadra=dif!=null&&Math.abs(dif)<0.01;
   const pct=res.totalFilas?Math.round(r.conciliados.length/res.totalFilas*100):0;
+  // Resumen listo para guardar en el historial.
+  _concUltimo={cuentaId:_concCuentaId, desde:_concData.desde, hasta:corte,
+    saldoBanco:res.saldoFinalBanco, saldoSefe:saldoSEFE, diferencia:dif,
+    nConciliados:r.conciliados.length, nSoloBanco:r.soloBanco.length, nSoloSefe:r.soloSEFE.length};
   // Tarjetas propias con grilla que se reacomoda (evita que el contenido
   // empuje el modal más ancho y corte los valores).
   const kpiT=(lbl,val,sub,col)=>`<div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:11px 14px;min-width:0">
@@ -939,7 +998,8 @@ function _concRender(){
     ${tab('banco','🟡 Sólo en el banco',r.soloBanco.length)}
     ${tab('sefe','🔴 Sólo en SEFE',r.soloSEFE.length)}
     <span style="flex:1"></span>
-    <span style="font-size:12px;color:var(--muted)">${escHtml(_concData.cuenta||'')}</span>
+    <button class="btn btn-ghost btn-sm" onclick="_concHistorial()">📋 Historial</button>
+    <button class="btn btn-primary btn-sm" onclick="_concGuardar()">💾 Guardar conciliación</button>
   </div>
   <div style="overflow-x:auto">${_concTabla(r)}</div>`;
   cont.innerHTML=html;
