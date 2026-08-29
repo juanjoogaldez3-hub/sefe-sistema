@@ -52,8 +52,9 @@ ok('las comisiones se pagan aparte (parte "com" con su póliza)', /comPagado/.te
 ok('existe la boleta de pago (boletaPagoPDF, en window)', /function boletaPagoPDF\(/.test(src) && /window\.boletaPagoPDF\s*=/.test(src));
 ok('la boleta usa el marco de la póliza (_pdfShell) y es media carta (compacto)', /_pdfShell\(\{titulo:'BOLETA DE PAGO'[^}]*compacto:true/.test(src));
 ok('la boleta es POR PAGO (recibe la parte: quincena o comisiones)', /function boletaPagoPDF\(pl,l,parte\)/.test(src) && /function boletaPlanillaUI\(i,parte\)/.test(src));
-ok('la boleta quincenal muestra el neto de la quincena y su póliza', /Neto de la quincena/.test(src) && /Póliza de cheque/.test(src) && /_polRef\(/.test(src));
-ok('hay boleta de comisiones aparte', /Pago de comisiones/.test(src));
+ok('la boleta tiene el diseño de 2 columnas (Ingresos / Descuentos) y líquido a recibir', /colHead\('Ingresos'\)/.test(src) && /colHead\('Descuentos'\)/.test(src) && /Líquido a recibir/.test(src));
+ok('la boleta muestra el chip con la póliza de cheque', /Ref\. Póliza de cheque/.test(src) && /_polRef\(/.test(src));
+ok('la boleta de comisiones muestra Comisiones (ventas)', /Comisiones \(ventas\)/.test(src));
 ok('la boleta NO trae acumulado del año', !/acumulado/i.test(src.slice(src.indexOf('function boletaPagoPDF'), src.indexOf('function boletaPagoPDF')+4000)));
 ok('se puede eliminar una planilla (eliminarPlanilla + borrarPlanilla)', /function eliminarPlanilla\(/.test(src) && /window\.eliminarPlanilla\s*=/.test(src) && /async function borrarPlanilla\(/.test(dbjs));
 ok('al eliminar se anulan los movimientos de banco (devuelve el saldo)', /m\.anulado=true/.test(src.slice(src.indexOf('function eliminarPlanilla'), src.indexOf('function eliminarPlanilla')+1600)));
