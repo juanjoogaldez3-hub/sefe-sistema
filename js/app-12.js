@@ -173,8 +173,15 @@ function _construirLineas(desde,hasta){
 function _lineaIngFijos(l){return (+l.sueldoBase||0)+(+l.bonif||0)+(+l.otrosIng||0);}
 function _lineaDesc(l){return (+l.igss||0)+(+l.isr||0)+(+l.otrosDesc||0);}
 function _netoSueldo(l){return _lineaIngFijos(l)-_lineaDesc(l);}         // neto del sueldo (mensual)
-function _montoQ1(l){return Math.round(_netoSueldo(l)/2*100)/100;}        // 1ª quincena
-function _montoQ2(l){return Math.round((_netoSueldo(l)-_montoQ1(l))*100)/100;} // 2ª quincena (el resto)
+// Partición por quincena a nivel de cada concepto: 1ª = mitad redondeada,
+// 2ª = el resto (así las dos quincenas suman EXACTO el total mensual y la
+// boleta cuadra con el pago).
+function _mitad(x,q){const h=Math.round((+x||0)/2*100)/100;return q===1?h:((+x||0)-h);}
+function _quincenaIng(l,q){return _mitad(l.sueldoBase,q)+_mitad(l.bonif,q)+_mitad(l.otrosIng,q);}
+function _quincenaDesc(l,q){return _mitad(l.igss,q)+_mitad(l.isr,q)+_mitad(l.otrosDesc,q);}
+function _quincenaNeto(l,q){return Math.round((_quincenaIng(l,q)-_quincenaDesc(l,q))*100)/100;}
+function _montoQ1(l){return _quincenaNeto(l,1);}  // 1ª quincena
+function _montoQ2(l){return _quincenaNeto(l,2);}  // 2ª quincena
 function _comLinea(l){return +l.comisiones||0;}
 function _lineaCompleta(l){return l.q1Pagado&&l.q2Pagado&&(_comLinea(l)<=0||l.comPagado);}
 
@@ -267,10 +274,16 @@ function _planCambiarMes(v){
 window._planSetCuenta=_planSetCuenta;
 window._planCambiarMes=_planCambiarMes;
 
-// Botón de pago de una parte (mini).
-function _btnPago(i,parte,lbl,pagado,poliza){
-  if(pagado)return `<button class="btn btn-ghost btn-sm" style="color:var(--green);padding:2px 8px" onclick="_planPolizaParte(${i},'${parte}')" title="Póliza ${poliza?('POL-'+String(poliza).padStart(6,'0')):''}">✓ ${lbl}</button>`;
-  return `<button class="btn btn-primary btn-sm" style="padding:2px 8px" onclick="_planPagarParte(${i},'${parte}')">${lbl}</button>`;
+// Renglón de una parte a pagar: sin pagar → [Pagar]; pagada → [Boleta][Póliza].
+// Cada pago (1ª quincena, 2ª quincena, comisiones) tiene SU boleta y SU póliza.
+function _pagoLinea(i,parte,lbl,pagado){
+  if(pagado)return `<div style="display:flex;gap:3px;align-items:center;justify-content:flex-end">
+      <span style="font-size:10px;color:var(--green);font-weight:700;min-width:40px;text-align:right">✓ ${lbl}</span>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 7px" onclick="boletaPlanillaUI(${i},'${parte}')">Boleta</button>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 7px" onclick="_planPolizaParte(${i},'${parte}')">Póliza</button></div>`;
+  return `<div style="display:flex;gap:5px;align-items:center;justify-content:flex-end">
+      <span style="font-size:10px;color:var(--muted-2);min-width:40px;text-align:right">${lbl}</span>
+      <button class="btn btn-primary btn-sm" style="padding:2px 12px" onclick="_planPagarParte(${i},'${parte}')">Pagar</button></div>`;
 }
 // Dibuja la tabla de líneas + totales dentro del editor.
 function _planPintar(){
@@ -280,10 +293,10 @@ function _planPintar(){
     const bloqSueldo=l.q1Pagado||l.q2Pagado;   // sueldo tocado por un pago → bloquear campos fijos
     const bloqCom=l.comPagado;
     const inp=(campo,val,bloq)=>`<input type="number" step="0.01" value="${val}" ${bloq?'disabled':''} oninput="_planSet(${i},'${campo}',this.value)" style="width:82px" class="num">`;
-    const pagos=`<div style="display:flex;flex-direction:column;gap:3px;align-items:stretch;min-width:118px">
-        <div style="display:flex;gap:3px">${_btnPago(i,'q1','1ª Q',l.q1Pagado,l.q1Poliza)}${_btnPago(i,'q2','2ª Q',l.q2Pagado,l.q2Poliza)}</div>
-        ${_comLinea(l)>0?`<div>${_btnPago(i,'com','Comisiones',l.comPagado,l.comPoliza)}</div>`:''}
-        <button class="btn btn-ghost btn-sm" style="padding:2px 8px" onclick="boletaPlanillaUI(${i})">Boleta</button>
+    const pagos=`<div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:210px">
+        ${_pagoLinea(i,'q1','1ª Q',l.q1Pagado)}
+        ${_pagoLinea(i,'q2','2ª Q',l.q2Pagado)}
+        ${_comLinea(l)>0?_pagoLinea(i,'com','Comis.',l.comPagado):''}
       </div>`;
     return `<tr>
       <td style="font-weight:600;min-width:140px">${escHtml(l.nombre)}${_lineaCompleta(l)?` <span class="badge b-ok" style="font-size:9px">Pagado</span>`:''}</td>
@@ -299,7 +312,7 @@ function _planPintar(){
     </tr>`;
   }).join('');
   const tc=id=>`<td class="num" style="font-weight:700" id="pl-t-${id}"></td>`;
-  wrap.innerHTML=`<table style="min-width:1120px"><thead><tr>
+  wrap.innerHTML=`<table style="min-width:1220px"><thead><tr>
       <th>Empleado</th><th class="num">Sueldo</th><th class="num">Bonif.</th><th class="num">Otros ing.</th>
       <th class="num">IGSS</th><th class="num">ISR</th><th class="num">Otros desc.</th>
       <th class="num">Neto sueldo</th><th class="num">Comisiones</th><th style="text-align:center">Pagos</th></tr></thead>
@@ -382,8 +395,8 @@ async function _planPagarParte(i,parte){
   if(idx>=0){const c=JSON.parse(JSON.stringify(pl));delete c._nuevo;planillas[idx]=c;}
   if(typeof logAudit==='function')logAudit('Pago de planilla',l.nombre+' · '+etq+' · '+money(monto)+' · '+pl.etiqueta);
   _planPintar(); renderPlanilla();
-  // Mostrar la BOLETA (lo del empleado); la póliza queda en su botón ✓.
-  boletaPagoPDF(pl,l);
+  // Mostrar la BOLETA de ESTE pago (lo del empleado); la póliza queda en su botón.
+  boletaPagoPDF(pl,l,parte);
   toast('✓ Pago registrado',l.nombre+' · '+etq);
 }
 // Reabrir la póliza de cheque de una parte pagada.
@@ -435,24 +448,57 @@ window.eliminarPlanilla=eliminarPlanilla;
 // ============================================================
 //  BOLETA DE PAGO  (parte 3) — media carta, igual a la póliza
 // ============================================================
-//  Una boleta por empleado con el desglose del MES. El sueldo se paga
-//  en 2 quincenas (con sus pólizas) y las comisiones aparte (con la
-//  suya). En español, sin acumulado del año.
+//  Una boleta POR PAGO: la de la 1ª quincena, la de la 2ª quincena y la
+//  de comisiones son boletas distintas, cada una con SU póliza. La
+//  planilla se ve mensual, pero la boleta va por quincena (que es lo que
+//  el empleado recibe cada 15). En español, sin acumulado del año.
 function _boletaFila(lbl,val,fuerte){
   return `<tr>
     <td style="padding:3px 0;font-size:12px;color:#333">${lbl}</td>
     <td style="padding:3px 0;font-size:12px;text-align:right;${fuerte?'font-weight:700;color:#173916':'font-weight:600'}">${money(val)}</td></tr>`;
 }
 function _polRef(num){return num?('POL-'+String(num).padStart(6,'0')):null;}
-function boletaPagoPDF(pl,l){
+// parte: 'q1' (1ª quincena) · 'q2' (2ª quincena) · 'com' (comisiones)
+function boletaPagoPDF(pl,l,parte){
   if(!pl||!l)return;
+  parte=parte||'q1';
+  const esCom=(parte==='com'), q=(parte==='q2')?2:1;
   const emp=(typeof empleados!=='undefined'?empleados:[]).find(e=>String(e.id)===String(l.empleadoId))||{};
   const cuenta=(typeof cuentasBanco!=='undefined'?cuentasBanco:[]).find(c=>String(c.id)===String(l.cuentaBancoId||pl.cuentaPagoId))||{};
-  const ingFijos=_lineaIngFijos(l), desc=_lineaDesc(l), netoSueldo=_netoSueldo(l), com=_comLinea(l);
-  const totalMes=netoSueldo+com;
+  const pagado=esCom?l.comPagado:(q===1?l.q1Pagado:l.q2Pagado);
+  const poliza=esCom?l.comPoliza:(q===1?l.q1Poliza:l.q2Poliza);
+  const fechaEl=esCom?l.comEl:(q===1?l.q1El:l.q2El);
+  const fechaPago=fechaEl?fdate(fechaEl):(pl.hasta?fdate(pl.hasta):'—');
+  const subt=esCom?('Comisiones · '+(pl.etiqueta||'')):((q===1?'1ª':'2ª')+' quincena · '+(pl.etiqueta||''));
   const sec=t=>`<div style="font-size:10px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.7px;margin:11px 0 3px;display:flex;align-items:center;gap:8px"><span>${t}</span><span style="flex:1;height:1px;background:#D6DCC9"></span></div>`;
   const dato=(lbl,val)=>`<div style="min-width:0"><div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">${lbl}</div><div style="font-size:13px;font-weight:600;color:#173916;margin-top:1px">${val||'—'}</div></div>`;
-  const refPol=(lbl,pagado,num)=>`<span style="font-size:10.5px;color:#666B5C">${lbl}: ${pagado?('<b>'+_polRef(num)+'</b>'):'<span style="color:#B45309">pendiente</span>'}</span>`;
+  let neto, seccion;
+  if(esCom){
+    neto=_comLinea(l);
+    seccion=`${sec('Comisiones')}
+      <table style="width:100%;border-collapse:collapse">
+        ${_boletaFila('Comisiones sobre ventas del mes',neto)}
+        <tr><td colspan="2" style="border-top:1px solid #D6DCC9"></td></tr>
+        ${_boletaFila('Neto a recibir',neto,true)}
+      </table>
+      <div style="font-size:10.5px;color:#909584;margin-top:5px">Pago de comisiones, aparte del sueldo.</div>`;
+  }else{
+    const sB=_mitad(l.sueldoBase,q),bo=_mitad(l.bonif,q),oi=_mitad(l.otrosIng,q);
+    const ig=_mitad(l.igss,q),is=_mitad(l.isr,q),od=_mitad(l.otrosDesc,q);
+    neto=_quincenaNeto(l,q);
+    seccion=`${sec('Ingresos de la quincena')}
+      <table style="width:100%;border-collapse:collapse">
+        ${_boletaFila('Sueldo base',sB)}
+        ${_boletaFila('Bonificación incentivo',bo)}
+        ${oi?_boletaFila('Otros ingresos',oi):''}
+        ${_boletaFila('(–) IGSS laboral',ig)}
+        ${is?_boletaFila('(–) ISR',is):''}
+        ${od?_boletaFila('(–) Otras deducciones',od):''}
+        <tr><td colspan="2" style="border-top:1px solid #D6DCC9"></td></tr>
+        ${_boletaFila('Neto de la quincena',neto,true)}
+      </table>
+      <div style="font-size:10.5px;color:#909584;margin-top:5px">Corresponde a la ${q===1?'1ª':'2ª'} quincena de ${escHtml(pl.etiqueta||'')}. El sueldo del mes se paga en 2 quincenas.</div>`;
+  }
   const body=`
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px;align-items:flex-start">
       <div style="flex:1;min-width:230px">
@@ -460,9 +506,10 @@ function boletaPagoPDF(pl,l){
         <div style="font-size:17px;font-weight:800;color:#173916;margin-top:1px">${escHtml(l.nombre)}</div>
         <div style="font-size:12px;color:#666B5C;margin-top:1px">${escHtml(emp.puesto||'')}</div>
       </div>
-      <div style="text-align:right;min-width:170px">
-        <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Período</div>
-        <div style="font-size:14px;font-weight:700;color:#173916;margin-top:1px">${escHtml(pl.etiqueta||'')}</div>
+      <div style="text-align:right;min-width:190px">
+        <div style="font-size:9.5px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.6px">Pago</div>
+        <div style="font-size:14px;font-weight:700;color:#173916;margin-top:1px">${escHtml(subt)}</div>
+        <div style="font-size:11px;color:#666B5C;margin-top:2px">Fecha: ${fechaPago}</div>
       </div>
     </div>
 
@@ -470,38 +517,11 @@ function boletaPagoPDF(pl,l){
       ${dato('DPI',emp.dpi)} ${dato('NIT',emp.nit)} ${dato('No. IGSS',emp.igss)}
     </div>
 
-    <div style="display:flex;gap:22px;align-items:flex-start;margin-top:4px">
-      <div style="flex:1;min-width:0">
-        ${sec('Sueldo del mes')}
-        <table style="width:100%;border-collapse:collapse">
-          ${_boletaFila('Sueldo base',l.sueldoBase)}
-          ${_boletaFila('Bonificación incentivo',l.bonif)}
-          ${(+l.otrosIng)?_boletaFila('Otros ingresos',l.otrosIng):''}
-          ${_boletaFila('(–) IGSS laboral',l.igss)}
-          ${(+l.isr)?_boletaFila('(–) ISR',l.isr):''}
-          ${(+l.otrosDesc)?_boletaFila('(–) Otras deducciones',l.otrosDesc):''}
-          <tr><td colspan="2" style="border-top:1px solid #D6DCC9"></td></tr>
-          ${_boletaFila('Neto del sueldo',netoSueldo,true)}
-        </table>
-        <div style="margin-top:5px;display:flex;flex-direction:column;gap:2px">
-          <span style="font-size:10.5px;color:#666B5C">Se paga en 2 quincenas de ${money(_montoQ1(l))} y ${money(_montoQ2(l))}:</span>
-          <div style="display:flex;gap:14px">${refPol('1ª quincena',l.q1Pagado,l.q1Poliza)} ${refPol('2ª quincena',l.q2Pagado,l.q2Poliza)}</div>
-        </div>
-      </div>
-      <div style="flex:1;min-width:0">
-        ${sec('Comisiones del mes')}
-        ${com>0?`<table style="width:100%;border-collapse:collapse">
-          ${_boletaFila('Comisiones sobre ventas',com,true)}
-        </table>
-        <div style="margin-top:5px">${refPol('Pago de comisiones',l.comPagado,l.comPoliza)}</div>
-        <div style="font-size:10.5px;color:#909584;margin-top:2px">Se pagan aparte del sueldo.</div>`
-        :`<div style="font-size:12px;color:#909584;padding:4px 0">Sin comisiones este mes.</div>`}
-      </div>
-    </div>
+    ${seccion}
 
     <div style="margin-top:12px;border:1.5px solid #173916;border-radius:8px;display:flex;justify-content:space-between;align-items:center;padding:8px 16px">
-      <div style="font-size:12px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.6px">Total del mes${com>0?' (sueldo + comisiones)':''}</div>
-      <div style="font-size:22px;font-weight:800;color:#173916">${money(totalMes)}</div>
+      <div style="font-size:12px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.6px">Neto a recibir</div>
+      <div style="font-size:22px;font-weight:800;color:#173916">${money(neto)}</div>
     </div>
 
     <div style="display:flex;gap:22px;align-items:flex-start;margin-top:6px">
@@ -509,16 +529,17 @@ function boletaPagoPDF(pl,l){
         ${sec('Forma de pago')}
         <div style="font-size:12.5px;font-weight:700;color:#173916">${cuenta.banco?escHtml(cuenta.banco):escHtml(cuenta.nombre||'—')}</div>
         ${cuenta.nombre&&cuenta.banco?`<div style="font-size:11px;color:#666B5C">${escHtml(cuenta.nombre)}</div>`:''}
+        <div style="font-size:11px;color:#666B5C;margin-top:2px">${pagado?('Póliza de cheque: <b>'+_polRef(poliza)+'</b>'):'<span style="color:#B45309">Pendiente de pago</span>'}</div>
       </div>
       <div style="flex:1;min-width:0;text-align:center;align-self:flex-end">
         <div style="border-top:1px solid #555;margin-top:26px;padding-top:5px;font-size:10px;color:#555">Recibí conforme</div>
       </div>
     </div>`;
-  _abrirPDF(_pdfShell({titulo:'BOLETA DE PAGO',subtitulo:'Planilla mensual',sinEmitido:true,orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
+  _abrirPDF(_pdfShell({titulo:'BOLETA DE PAGO',subtitulo:subt,sinEmitido:true,orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
 }
 window.boletaPagoPDF=boletaPagoPDF;
-function boletaPlanillaUI(i){
+function boletaPlanillaUI(i,parte){
   const pl=_planActual; if(!pl)return;
-  const l=pl.lineas[i]; if(l)boletaPagoPDF(pl,l);
+  const l=pl.lineas[i]; if(l)boletaPagoPDF(pl,l,parte);
 }
 window.boletaPlanillaUI=boletaPlanillaUI;
