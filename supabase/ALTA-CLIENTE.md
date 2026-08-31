@@ -143,6 +143,12 @@ copiar el texto `data:image/png;base64,...` completo dentro de `logo`.
 2. Cargar sus productos, vendedores y roles.
 3. Listo — vendido.
 
+## Paso 6 · Respaldo (no saltear)
+Confirmar que el proyecto del cliente tenga **respaldo diario automático**
+— nunca dejar un cliente productivo en el plan gratis. Verificar en
+**Database → Backups** que la lista de respaldos aparece. Detalle y cómo
+restaurar: ver `RESPALDOS.md`.
+
 ---
 
 ## Plantilla del job de migraciones (para el Paso 2)
