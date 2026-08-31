@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 17 migraciones una por una.
+-- secuencias. Reemplaza correr las 18 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 17 migraciones, en este orden:
+-- Incluye 18 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -32,8 +32,9 @@
 --   13. 20260829170000_rls_tablas_nuevas.sql
 --   14. 20260829180000_planillas.sql
 --   15. 20260830100000_ctrl_ambientales.sql
---   16. 20260831120000_rls_capa2.sql
---   17. 20260831140000_purga_auditoria.sql
+--   16. 20260830140000_ctrl_baterias.sql
+--   17. 20260831120000_rls_capa2.sql
+--   18. 20260831140000_purga_auditoria.sql
 -- ============================================================
 
 
@@ -1493,6 +1494,72 @@ create policy sefe_borrar on public.ctrl_ambientales for delete to authenticated
 
 grant select, insert, update, delete on public.ctrl_ambientales to authenticated;
 grant usage, select on sequence public.ctrl_ambientales_id_seq to authenticated;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260830140000_ctrl_baterias.sql                        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Controles — Baterías (parte 2)
+-- ============================================================
+-- Dos tablas:
+--   · ctrl_bat_tipos: tipos de batería y su existencia (stock).
+--   · ctrl_bat_cambios: cambios de batería por cliente/equipo (son las
+--     salidas: descuentan del stock del tipo).
+--
+-- Incluyen SUS políticas RLS desde el inicio (el proyecto tiene RLS
+-- activo). Seguro de correr de más: 'if not exists' / 'drop policy if exists'.
+-- ============================================================
+
+create table if not exists public.ctrl_bat_tipos (
+  id      bigserial primary key,
+  nombre  text not null,
+  stock   numeric not null default 0,
+  creado  timestamptz not null default now()
+);
+
+create table if not exists public.ctrl_bat_cambios (
+  id          bigserial primary key,
+  cliente_id  bigint,
+  equipo      text,
+  tipo_id     bigint,
+  cantidad    numeric not null default 1,
+  fecha       date,
+  proximo     date,
+  nota        text,
+  creado      timestamptz not null default now(),
+  creado_por  text
+);
+
+-- ── RLS: mismas políticas que las demás tablas operativas ──
+do $$
+declare t text;
+begin
+  foreach t in array array['ctrl_bat_tipos','ctrl_bat_cambios'] loop
+    execute format('alter table public.%I enable row level security', t);
+
+    execute format('drop policy if exists sefe_leer on public.%I', t);
+    execute format($f$create policy sefe_leer on public.%I for select to authenticated
+                      using ((select public.sefe_activo()))$f$, t);
+
+    execute format('drop policy if exists sefe_crear on public.%I', t);
+    execute format($f$create policy sefe_crear on public.%I for insert to authenticated
+                      with check ((select public.sefe_puede_escribir()))$f$, t);
+
+    execute format('drop policy if exists sefe_editar on public.%I', t);
+    execute format($f$create policy sefe_editar on public.%I for update to authenticated
+                      using ((select public.sefe_puede_escribir()))
+                      with check ((select public.sefe_puede_escribir()))$f$, t);
+
+    execute format('drop policy if exists sefe_borrar on public.%I', t);
+    execute format($f$create policy sefe_borrar on public.%I for delete to authenticated
+                      using ((select public.sefe_es_admin()))$f$, t);
+
+    execute format('grant select, insert, update, delete on public.%I to authenticated', t);
+  end loop;
+  grant usage, select on all sequences in schema public to authenticated;
+end $$;
 
 
 -- ╔══════════════════════════════════════════════════════════╗
