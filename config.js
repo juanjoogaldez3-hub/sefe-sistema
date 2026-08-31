@@ -26,6 +26,26 @@ const SEFE_ENTORNOS = {
     url: 'https://krbyulpmfazntjwnpxnw.supabase.co',
     key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyYnl1bHBtZmF6bnRqd25weG53Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMzY1MjQsImV4cCI6MjA5NzcxMjUyNH0.72uJxSRXGl8JviVtmhylYW7_Cr-zW767jEOYD4JOYFI',
     dominios: ['sistema.se-fe.com'],
+    // SEFE es un CLIENTE de Pulso 360: acá va su identidad propia
+    // (el producto por defecto es Pulso 360; esto la pisa toda con la
+    // de SEFE, para que su sistema se vea igual que siempre). El `logo`
+    // no se pone acá: se hereda del logo por defecto (el de SEFE).
+    marca: {
+      nombre: 'SEFE',
+      tagline: 'PEDIDOS & FACTURACIÓN',
+      tituloPestana: 'Pedidos y Facturación',
+      nombreLargo: 'Soluciones Efectivas',
+      monograma: 'SE',
+      razonSocial: 'Soluciones Efectivas, S.A.',
+      membrete: 'SEFE, S.A.',
+      nombreDoc: 'Soluciones Efectivas GT',
+      nit: '10777860-2',
+      ciudadPais: 'Guatemala, C.A.',
+      ciudadDoc: 'Guatemala, Guatemala',
+      prefijoArchivo: 'SEFE',
+      colorPrimario: '#173916', colorPrimario700: '#234d20', colorPrimario600: '#2c5e28',
+      colorAcento: '#A8C038', colorAcentoOsc: '#7f9a26'
+    },
     // Funciones que se están probando: se publican apagadas y se
     // encienden acá cuando están listas. El código viaja igual.
     funciones: {
@@ -59,7 +79,8 @@ const SEFE_ENTORNOS = {
 
   // ── PLANTILLA CLIENTE NUEVO ──────────────────────────────────
   // Copiar, descomentar, y completar url / key / dominio. El bloque
-  // `marca` es OPCIONAL: lo que no se ponga se hereda de SEFE. Sirve
+  // `marca` es OPCIONAL: lo que no se ponga se hereda del producto
+  // (Pulso 360). Sirve
   // para que cada instalación se vea con el nombre, logo y colores
   // del cliente (en la interfaz y en los documentos).
   //
