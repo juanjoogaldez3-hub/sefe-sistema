@@ -76,7 +76,7 @@ async function cargarTodo() {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
-      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios, rBatEntregas, rGas
+      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios, rBatEntregas, rGas, rRecEsp
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -110,6 +110,8 @@ async function cargarTodo() {
       sb.from('ctrl_bat_entregas').select('*').order('id',{ascending:false}),
       // Controles · Gasolina (tolera tabla ausente).
       sb.from('ctrl_gasolina').select('*').order('id',{ascending:false}),
+      // Planilla · Recibos especiales (prestaciones; tolera tabla ausente).
+      sb.from('recibos_especiales').select('*').order('id',{ascending:false}),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -207,6 +209,9 @@ async function cargarTodo() {
     }
     if (typeof gasolina !== 'undefined') {
       gasolina = ((rGas&&rGas.data)||[]).map(mapGasolinaFromDB);
+    }
+    if (typeof recibosEspeciales !== 'undefined') {
+      recibosEspeciales = ((rRecEsp&&rRecEsp.data)||[]).map(mapReciboEspecialFromDB);
     }
 
     // Categorías (umbrales de stock por categoría). Tolera que la tabla no exista todavía.
@@ -1095,6 +1100,42 @@ async function borrarGasolina(id){
   return true;
 }
 if(typeof window!=='undefined'){window.guardarGasolina=guardarGasolina;window.borrarGasolina=borrarGasolina;}
+
+// ── Planilla · Recibos especiales (prestaciones) ───────────
+function mapReciboEspecialFromDB(r){
+  let lineas=r.lineas;
+  if(typeof lineas==='string'){try{lineas=JSON.parse(lineas);}catch(e){lineas=[];}}
+  return {
+    id:r.id, tipo:r.tipo||'otro', concepto:r.concepto||'', fecha:r.fecha||null,
+    estado:r.estado||'borrador', totalNeto:Number(r.total_neto)||0, nEmpleados:r.n_empleados||0,
+    notas:r.notas||'', lineas:Array.isArray(lineas)?lineas:[],
+    creadoPor:r.creado_por||'', creado:r.creado, actualizadoEl:r.actualizado_el
+  };
+}
+async function guardarReciboEspecial(rec){
+  const row={
+    tipo:rec.tipo||'otro', concepto:rec.concepto||null, fecha:rec.fecha||null,
+    estado:rec.estado||'borrador', total_neto:rec.totalNeto||0, n_empleados:rec.nEmpleados||0,
+    notas:rec.notas||null, lineas:rec.lineas||[], actualizado_el:new Date().toISOString()
+  };
+  if(rec._nuevo){
+    delete rec._nuevo;
+    row.creado_por=rec.creadoPor||null;
+    const {data,error}=await sb.from('recibos_especiales').insert(row).select().single();
+    if(error){console.error('Error guardando recibo especial:',error);rec._nuevo=true;return false;}
+    rec.id=data.id; return true;
+  }else{
+    const {error}=await sb.from('recibos_especiales').update(row).eq('id',rec.id);
+    if(error){console.error('Error actualizando recibo especial:',error);return false;}
+    return true;
+  }
+}
+async function borrarReciboEspecial(id){
+  const {error}=await sb.from('recibos_especiales').delete().eq('id',id);
+  if(error){console.error('Error borrando recibo especial:',error);return false;}
+  return true;
+}
+if(typeof window!=='undefined'){window.guardarReciboEspecial=guardarReciboEspecial;window.borrarReciboEspecial=borrarReciboEspecial;}
 
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).

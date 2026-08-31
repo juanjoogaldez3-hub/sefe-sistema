@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/estilos.css?v=20260830f">
+<link rel="stylesheet" href="css/estilos.css?v=20260830g">
 <!-- PWA: instalable como app (ícono propio, pantalla completa) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#173916">
@@ -30,11 +30,11 @@
 <!-- Librería de Supabase (conexión a la base de datos) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tus credenciales (editás este archivo una sola vez) -->
-<script src="config.js?v=20260830f"></script>
+<script src="config.js?v=20260830g"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
-<script src="db.js?v=20260830f"></script>
+<script src="db.js?v=20260830g"></script>
 <!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
-<script src="realtime.js?v=20260830f"></script>
+<script src="realtime.js?v=20260830g"></script>
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
@@ -212,6 +212,11 @@
           <div class="panel-head"><h3>Planillas mensuales</h3><button class="btn btn-primary btn-sm" onclick="nuevaPlanilla()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva planilla</button></div>
           <table><thead><tr><th>Período</th><th class="num">Empleados</th><th class="num">Total del mes</th><th>Estado</th><th></th></tr></thead><tbody id="t-planillas"></tbody></table>
           <div class="empty" id="planillas-empty" style="display:none">Aún no hay planillas. Armá la primera con "Nueva planilla".</div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Recibos especiales <span style="font-size:12px;color:var(--muted);font-weight:400">(aguinaldo, bono 14, indemnización)</span></h3><button class="btn btn-primary btn-sm" onclick="nuevoReciboEspecial()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo recibo especial</button></div>
+          <table><thead><tr><th>Concepto</th><th>Tipo</th><th>Fecha</th><th class="num">Empleados</th><th class="num">Neto</th><th>Estado</th><th></th></tr></thead><tbody id="t-recesp"></tbody></table>
+          <div class="empty" id="recesp-empty" style="display:none">Aún no hay recibos especiales. Armá el primero con "Nuevo recibo especial".</div>
         </div>
         <div class="panel">
           <div class="panel-head"><h3>Empleados</h3><button class="btn btn-primary btn-sm" onclick="openEmpleado()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo empleado</button></div>
@@ -817,18 +822,18 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app-1.js?v=20260830f"></script>
-<script src="js/app-2.js?v=20260830f"></script>
-<script src="js/app-3.js?v=20260830f"></script>
-<script src="js/app-4.js?v=20260830f"></script>
-<script src="js/app-5.js?v=20260830f"></script>
-<script src="js/app-6.js?v=20260830f"></script>
-<script src="js/app-7.js?v=20260830f"></script>
-<script src="js/app-8.js?v=20260830f"></script>
-<script src="js/app-9.js?v=20260830f"></script>
-<script src="js/app-10.js?v=20260830f"></script>
-<script src="js/app-11.js?v=20260830f"></script>
-<script src="js/app-12.js?v=20260830f"></script>
-<script src="js/app-13.js?v=20260830f"></script>
+<script src="js/app-1.js?v=20260830g"></script>
+<script src="js/app-2.js?v=20260830g"></script>
+<script src="js/app-3.js?v=20260830g"></script>
+<script src="js/app-4.js?v=20260830g"></script>
+<script src="js/app-5.js?v=20260830g"></script>
+<script src="js/app-6.js?v=20260830g"></script>
+<script src="js/app-7.js?v=20260830g"></script>
+<script src="js/app-8.js?v=20260830g"></script>
+<script src="js/app-9.js?v=20260830g"></script>
+<script src="js/app-10.js?v=20260830g"></script>
+<script src="js/app-11.js?v=20260830g"></script>
+<script src="js/app-12.js?v=20260830g"></script>
+<script src="js/app-13.js?v=20260830g"></script>
 </body>
 </html>

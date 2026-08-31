@@ -421,6 +421,7 @@ let batTipos=[]; // Controles · Baterías (tipos y stock)
 let batCambios=[]; // Controles · Baterías (cambios/colocaciones por cliente)
 let batEntregas=[]; // Controles · Baterías (entregas de bodega a pilotos)
 let gasolina=[]; // Controles · Gasolina (consumo por vehículo/piloto)
+let recibosEspeciales=[]; // Planilla · Recibos especiales (prestaciones)
 let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====

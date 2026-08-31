@@ -22,6 +22,7 @@ function _nombreVendedor(id){
 // Render de la sección Planilla — las planillas guardadas + la lista de empleados.
 function renderPlanilla(){
   _renderPlanillasTabla();
+  if(typeof renderRecibosEspeciales==='function')renderRecibosEspeciales();
   _renderEmpleadosTabla();
 }
 window.renderPlanilla=renderPlanilla;
@@ -599,3 +600,305 @@ function boletaPlanillaUI(i,parte){
   const l=pl.lineas[i]; if(l)boletaPagoPDF(pl,l,parte);
 }
 window.boletaPlanillaUI=boletaPlanillaUI;
+
+// ============================================================
+//  RECIBOS ESPECIALES (prestaciones) — parte 4
+// ============================================================
+//  Pagos aparte de la planilla quincenal: aguinaldo, bono 14,
+//  indemnización u otro. Sugiere el monto (proporcional al tiempo
+//  trabajado), editable. Se paga por empleado con su boleta; la póliza
+//  queda en Bancos.
+const _RE_TIPOS={aguinaldo:'Aguinaldo',bono14:'Bono 14',indemnizacion:'Indemnización',otro:'Otro'};
+let _reActual=null;      // recibo en edición
+let _reEdit=new Set();   // filas desbloqueadas para corregir
+
+function renderRecibosEspeciales(){
+  const tb=$('#t-recesp'); if(!tb)return;
+  const lista=(typeof recibosEspeciales!=='undefined'?recibosEspeciales:[]).slice();
+  const empty=$('#recesp-empty'); if(empty)empty.style.display=lista.length?'none':'block';
+  tb.innerHTML=lista.map(r=>`<tr>
+      <td style="font-weight:600">${escHtml(r.concepto||_RE_TIPOS[r.tipo]||'Recibo')}</td>
+      <td>${escHtml(_RE_TIPOS[r.tipo]||r.tipo)}</td>
+      <td>${r.fecha?fdate(r.fecha):'—'}</td>
+      <td class="num">${r.nEmpleados||(r.lineas?r.lineas.length:0)}</td>
+      <td class="num" style="font-weight:700">${money(r.totalNeto)}</td>
+      <td>${_planEstadoBadge(r.estado)}</td>
+      <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="verReciboEspecial(${r.id})">Ver / pagar</button> <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="eliminarReciboEspecial(${r.id})" title="Eliminar">✕</button></td>
+    </tr>`).join('');
+  if(typeof enhanceTable==='function')enhanceTable('t-recesp');
+}
+window.renderRecibosEspeciales=renderRecibosEspeciales;
+
+// Monto sugerido de la prestación (editable). Aguinaldo/Bono 14 =
+// proporcional al año trabajado; indemnización ≈ 1 sueldo por año.
+function _prestacionSugerida(tipo,emp,fechaRef){
+  const sueldo=Number(emp.sueldoBase)||0;
+  if(tipo==='otro')return 0;
+  if(!emp.fechaIngreso)return tipo==='indemnizacion'?0:sueldo;
+  const ing=new Date(String(emp.fechaIngreso).slice(0,10)+'T00:00:00Z');
+  const ref=new Date(String(fechaRef||'').slice(0,10)+'T00:00:00Z');
+  if(isNaN(ing)||isNaN(ref)||ref<=ing)return tipo==='indemnizacion'?0:sueldo;
+  const anios=((ref-ing)/86400000)/365;
+  if(tipo==='indemnizacion')return Math.round(sueldo*anios*100)/100;
+  return Math.round(sueldo*Math.min(1,anios)*100)/100;
+}
+function _reConcepto(tipo,fecha){
+  const anio=String(fecha||'').slice(0,4)||'';
+  if(tipo==='aguinaldo')return 'Aguinaldo '+anio;
+  if(tipo==='bono14')return 'Bono 14 '+anio;
+  if(tipo==='indemnizacion')return 'Indemnización';
+  return '';
+}
+function _reConstruirLineas(tipo,fecha){
+  return (typeof empleados!=='undefined'?empleados:[]).filter(e=>e.activo!==false)
+    .sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
+    .map(e=>({empleadoId:e.id,nombre:e.nombre,cuentaBancoId:e.cuentaBancoId||null,
+      monto:_prestacionSugerida(tipo,e,fecha),isr:0,otrosDesc:0,
+      pagado:false,poliza:null,pagadoEl:null}));
+}
+function _reNeto(l){return (Number(l.monto)||0)-(Number(l.isr)||0)-(Number(l.otrosDesc)||0);}
+function _reSumas(){
+  const L=_reActual?_reActual.lineas:[]; const s={monto:0,isr:0,otrosDesc:0,neto:0};
+  L.forEach(l=>{s.monto+=+l.monto||0;s.isr+=+l.isr||0;s.otrosDesc+=+l.otrosDesc||0;s.neto+=_reNeto(l);});
+  return s;
+}
+function _reSync(){
+  const s=_reSumas(), r=_reActual; if(!r)return;
+  r.totalNeto=s.neto; r.nEmpleados=r.lineas.filter(l=>(Number(l.monto)||0)>0).length;
+  const conMonto=r.lineas.filter(l=>(Number(l.monto)||0)>0);
+  const pag=conMonto.filter(l=>l.pagado).length;
+  r.estado=pag===0?'borrador':(pag===conMonto.length?'pagada':'parcial');
+}
+
+function nuevoReciboEspecial(){
+  if(!(typeof empleados!=='undefined'&&empleados.filter(e=>e.activo!==false).length)){
+    toast('Sin empleados activos','Agregá empleados antes de armar el recibo',true);return;
+  }
+  const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():new Date().toISOString().slice(0,10);
+  _reActual={_nuevo:true,id:null,tipo:'aguinaldo',concepto:_reConcepto('aguinaldo',hoy),fecha:hoy,
+    estado:'borrador',notas:'',cuentaPagoId:_cuentaPlanillaDefault(),
+    lineas:_reConstruirLineas('aguinaldo',hoy),creadoPor:(typeof currentUser!=='undefined'?currentUser:'')};
+  _reAbrirEditor();
+}
+window.nuevoReciboEspecial=nuevoReciboEspecial;
+function verReciboEspecial(id){
+  const r=(typeof recibosEspeciales!=='undefined'?recibosEspeciales:[]).find(x=>String(x.id)===String(id));
+  if(!r){toast('No encontrado','Ese recibo ya no está',true);return;}
+  _reActual=JSON.parse(JSON.stringify(r)); _reActual._nuevo=false;
+  if(!_reActual.cuentaPagoId)_reActual.cuentaPagoId=_cuentaPlanillaDefault();
+  _reAbrirEditor();
+}
+window.verReciboEspecial=verReciboEspecial;
+
+function _reAbrirEditor(){
+  const r=_reActual; _reEdit=new Set();
+  const cuentas=(typeof cuentasActivasBanco==='function'?cuentasActivasBanco():[]);
+  const optCta=cuentas.map(c=>`<option value="${c.id}"${String(r.cuentaPagoId)===String(c.id)?' selected':''}>${escHtml(c.nombre)}</option>`).join('');
+  const selTipo=r._nuevo
+    ? `<select id="re-tipo" onchange="_reCambiarTipo(this.value)">${Object.keys(_RE_TIPOS).map(k=>`<option value="${k}"${r.tipo===k?' selected':''}>${_RE_TIPOS[k]}</option>`).join('')}</select>`
+    : `<div style="font-weight:700;font-size:15px;color:var(--ink)">${escHtml(_RE_TIPOS[r.tipo]||r.tipo)}</div>`;
+  const body=`
+    <div class="row" style="align-items:end;margin-bottom:4px">
+      <div><label>Tipo</label>${selTipo}</div>
+      <div><label>Concepto</label><input id="re-concepto" value="${escHtml(r.concepto||'')}" oninput="if(_reActual)_reActual.concepto=this.value"></div>
+    </div>
+    <div class="row" style="align-items:end;margin-bottom:4px">
+      <div><label>Fecha</label><input id="re-fecha" type="date" value="${r.fecha?String(r.fecha).slice(0,10):''}" onchange="_reSetFecha(this.value)"></div>
+      <div><label>Pagar desde</label><select id="re-cuenta" onchange="if(_reActual)_reActual.cuentaPagoId=this.value?Number(this.value):null">${optCta||'<option value="">— Sin cuentas —</option>'}</select></div>
+    </div>
+    <div class="kpis" style="margin:6px 0 10px">
+      <div class="kpi"><div class="k-body"><div class="k-lbl">Monto</div><div class="k-val num" id="re-kpi-monto">—</div></div></div>
+      <div class="kpi"><div class="k-body"><div class="k-lbl">Descuentos</div><div class="k-val num" id="re-kpi-desc">—</div></div></div>
+      <div class="kpi"><div class="k-body"><div class="k-lbl">Neto a pagar</div><div class="k-val num" id="re-kpi-neto" style="color:var(--green)">—</div></div></div>
+    </div>
+    <div style="overflow-x:auto"><div id="re-tabla-wrap"></div></div>
+    <div class="note" style="margin-top:10px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El monto se sugiere según el tiempo trabajado (aguinaldo y bono 14 son proporcionales; la indemnización ≈ 1 sueldo por año) — <b>todo editable</b>. El ISR lo escribís vos. Poné el monto en 0 para dejar a alguien fuera. Al pagar se abre la boleta; la póliza queda en Bancos.</span></div>`;
+  openMod('Recibo especial',body,_reGuardar);
+  $('#m-save').textContent='Guardar recibo';
+  $('#ov').classList.add('modal-wide');
+  const _m=document.querySelector('#ov .modal'); if(_m)_m.style.maxWidth='min(96vw,1040px)';
+  _rePintar();
+}
+function _reSetFecha(v){ if(!_reActual)return; _reActual.fecha=v||null;
+  if(_reActual._nuevo){_reActual.concepto=_reConcepto(_reActual.tipo,v); const ci=$('#re-concepto'); if(ci)ci.value=_reActual.concepto;
+    _reActual.lineas=_reConstruirLineas(_reActual.tipo,v); _rePintar();} }
+function _reCambiarTipo(t){ if(!_reActual||!_reActual._nuevo)return;
+  _reActual.tipo=t; _reActual.concepto=_reConcepto(t,_reActual.fecha);
+  const ci=$('#re-concepto'); if(ci)ci.value=_reActual.concepto;
+  _reActual.lineas=_reConstruirLineas(t,_reActual.fecha); _rePintar(); }
+window._reSetFecha=_reSetFecha; window._reCambiarTipo=_reCambiarTipo;
+
+function _rePintar(){
+  const wrap=document.getElementById('re-tabla-wrap'); if(!wrap||!_reActual)return;
+  const r=_reActual;
+  const filas=r.lineas.map((l,i)=>{
+    const desbloq=_reEdit.has(i), bloq=l.pagado&&!desbloq;
+    const inp=(campo,val)=>`<input type="number" step="0.01" value="${val}" ${bloq?'disabled':''} oninput="_reSet(${i},'${campo}',this.value)" class="num pl-in">`;
+    const btnEdit=l.pagado?(desbloq?'<div style="font-size:9.5px;color:#B45309;margin-top:3px;font-weight:600">✎ editando</div>':`<button class="btn btn-ghost btn-sm" style="padding:1px 7px;font-size:10px;margin-top:3px" onclick="_reDesbloquear(${i})">🔓 Editar</button>`):'';
+    const pago=l.pagado
+      ? `<div style="display:flex;gap:4px;justify-content:flex-end"><button class="btn btn-ghost btn-sm" style="padding:2px 9px" onclick="_reBoleta(${i})">Boleta</button><button class="btn btn-ghost btn-sm" style="padding:2px 7px;color:var(--danger)" title="Anular este pago" onclick="_reAnular(${i})">✕</button></div>`
+      : ((Number(l.monto)||0)>0?`<button class="btn btn-primary btn-sm" style="padding:2px 12px" onclick="_rePagar(${i})">Pagar</button>`:'<span style="font-size:10px;color:var(--muted-2)">—</span>');
+    return `<tr>
+      <td style="font-weight:600;min-width:140px">${escHtml(l.nombre)}${l.pagado?' <span class="badge b-ok" style="font-size:9px">Pagado</span>':''}${btnEdit}</td>
+      <td>${inp('monto',l.monto)}</td>
+      <td>${inp('isr',l.isr)}</td>
+      <td>${inp('otrosDesc',l.otrosDesc)}</td>
+      <td class="num" style="font-weight:700" id="re-neto-${i}">${money(_reNeto(l))}</td>
+      <td style="text-align:right">${pago}</td>
+    </tr>`;
+  }).join('');
+  const tc=id=>`<td class="num" style="font-weight:700" id="re-t-${id}"></td>`;
+  wrap.innerHTML=`<style>
+      #re-tabla-wrap table{width:100%;font-size:12px}
+      #re-tabla-wrap th,#re-tabla-wrap td{padding:6px 7px;white-space:nowrap}
+      #re-tabla-wrap input.pl-in{width:92px;text-align:right}
+      #re-tabla-wrap input.pl-in::-webkit-outer-spin-button,#re-tabla-wrap input.pl-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+      #re-tabla-wrap input.pl-in{-moz-appearance:textfield;appearance:textfield}
+    </style>
+    <table><thead><tr><th>Empleado</th><th class="num">Monto</th><th class="num">ISR</th><th class="num">Otros desc.</th><th class="num">Neto</th><th style="text-align:right">Pago</th></tr></thead>
+    <tbody>${filas||'<tr><td colspan="6" style="color:var(--muted-2);padding:14px">Sin empleados activos.</td></tr>'}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--line-strong);font-weight:700"><td>Total</td>${tc('monto')}${tc('isr')}${tc('otrosDesc')}${tc('neto')}<td></td></tr></tfoot></table>`;
+  _rePintarTotales();
+}
+function _reSet(i,campo,val){ if(!_reActual)return;
+  _reActual.lineas[i][campo]=Number(val)||0;
+  const nc=document.getElementById('re-neto-'+i); if(nc)nc.textContent=money(_reNeto(_reActual.lineas[i]));
+  _rePintarTotales(); }
+function _rePintarTotales(){
+  const s=_reSumas(); const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=money(v);};
+  set('re-t-monto',s.monto);set('re-t-isr',s.isr);set('re-t-otrosDesc',s.otrosDesc);set('re-t-neto',s.neto);
+  set('re-kpi-monto',s.monto);set('re-kpi-desc',s.isr+s.otrosDesc);set('re-kpi-neto',s.neto);
+}
+window._reSet=_reSet;
+function _reDesbloquear(i){ if(!_reActual)return; _reEdit.add(i); _rePintar(); toast('Fila desbloqueada','Corregí y acordate de Guardar. El pago ya hecho no cambia.'); }
+window._reDesbloquear=_reDesbloquear;
+
+async function _reGuardar(){
+  const r=_reActual; if(!r)return false;
+  if(!r.concepto){r.concepto=_reConcepto(r.tipo,r.fecha)||_RE_TIPOS[r.tipo];}
+  _reSync();
+  const btn=$('#m-save'); if(btn){btn.disabled=true;btn.textContent='Guardando…';}
+  const ok=await (typeof guardarReciboEspecial==='function'?guardarReciboEspecial(r):Promise.resolve(false));
+  if(btn){btn.disabled=false;btn.textContent='Guardar recibo';}
+  if(!ok){toast('No se pudo guardar','¿Ya corriste el SQL de recibos especiales?',true);return false;}
+  const idx=recibosEspeciales.findIndex(x=>String(x.id)===String(r.id));
+  const copia=JSON.parse(JSON.stringify(r)); delete copia._nuevo;
+  if(idx>=0)recibosEspeciales[idx]=copia; else recibosEspeciales.unshift(copia);
+  if(typeof logAudit==='function')logAudit('Recibo especial guardado',(r.concepto||'')+' · neto '+money(r.totalNeto));
+  toast('✓ Recibo guardado',r.concepto||''); renderPlanilla(); return true;
+}
+
+// Registra la salida de banco del recibo (no abre póliza).
+function _reRegistrarPago(o){
+  if(!o.cuentaId||!(o.monto>0))return null;
+  const fecha=(typeof fechaHoyGT==='function')?fechaHoyGT():new Date().toISOString().slice(0,10);
+  const mov={cuentaId:Number(o.cuentaId),fecha,tipo:'salida',monto:Number(o.monto),
+    concepto:o.concepto||'',categoria:'planilla',origen:'recibo_especial',origenId:o.origenId||null,
+    referencia:null,registradoPor:(typeof currentUser!=='undefined'?currentUser:''),
+    registradoEl:new Date().toISOString(),anulado:false,_nuevo:true};
+  const maxPol=(movimientosBanco.reduce((m,x)=>Math.max(m,x.poliza||0),0)||0);
+  mov.poliza=maxPol+1; if(o.beneficiario)mov.beneficiario=o.beneficiario;
+  movimientosBanco.push(mov); if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mov);
+  return mov;
+}
+async function _rePagar(i){
+  const r=_reActual; if(!r)return; const l=r.lineas[i]; if(!l||l.pagado)return;
+  const neto=_reNeto(l);
+  if(neto<=0){toast('Neto en cero','No hay monto que pagar para '+l.nombre,true);return;}
+  const cuentaId=l.cuentaBancoId||r.cuentaPagoId;
+  if(!cuentaId){toast('Elegí la cuenta','Seleccioná desde qué cuenta se paga',true);return;}
+  if(r._nuevo){const ok=await _reGuardar(); if(!ok)return;}
+  const mov=_reRegistrarPago({cuentaId,monto:neto,origenId:r.id,beneficiario:l.nombre,
+    concepto:(r.concepto||'Recibo especial')+' · '+l.nombre});
+  if(!mov){toast('No se registró el pago','Revisá la cuenta',true);return;}
+  l.pagado=true; l.poliza=mov.poliza||null; l.pagadoEl=new Date().toISOString(); l.cuentaBancoId=cuentaId;
+  _reSync(); await (typeof guardarReciboEspecial==='function'?guardarReciboEspecial(r):Promise.resolve());
+  const idx=recibosEspeciales.findIndex(x=>String(x.id)===String(r.id));
+  if(idx>=0){const c=JSON.parse(JSON.stringify(r));delete c._nuevo;recibosEspeciales[idx]=c;}
+  if(typeof logAudit==='function')logAudit('Recibo especial · pago',l.nombre+' · '+money(neto)+' · '+(r.concepto||''));
+  _rePintar(); renderPlanilla(); boletaEspecialPDF(r,l);
+  toast('✓ Pago registrado',l.nombre);
+}
+window._rePagar=_rePagar;
+async function _reAnular(i){
+  const r=_reActual; if(!r)return; const l=r.lineas[i]; if(!l||!l.pagado)return;
+  const _do=async()=>{
+    if(l.poliza){const mov=(typeof movimientosBanco!=='undefined'?movimientosBanco:[]).find(m=>m.poliza===l.poliza&&m.origen==='recibo_especial'&&!m.anulado);
+      if(mov){mov.anulado=true;if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mov);}}
+    l.pagado=false; l.poliza=null; l.pagadoEl=null;
+    _reSync(); await (typeof guardarReciboEspecial==='function'?guardarReciboEspecial(r):Promise.resolve());
+    const idx=recibosEspeciales.findIndex(x=>String(x.id)===String(r.id));
+    if(idx>=0){const c=JSON.parse(JSON.stringify(r));delete c._nuevo;recibosEspeciales[idx]=c;}
+    if(typeof logAudit==='function')logAudit('Recibo especial · pago anulado',l.nombre+' · '+(r.concepto||''));
+    _rePintar(); renderPlanilla(); if(typeof renderBancos==='function'){try{renderBancos();}catch(e){}}
+    toast('✓ Pago anulado',l.nombre+' — se devolvió el saldo');
+  };
+  if(typeof confirmar==='function')confirmar('¿Anular este pago?','Se revierte el movimiento de banco de '+l.nombre+' (devuelve el saldo). Podés corregir y volver a pagar.','Anular',_do);
+  else if(confirm('¿Anular el pago de '+l.nombre+'?'))_do();
+}
+window._reAnular=_reAnular;
+function _reBoleta(i){ const r=_reActual; if(!r)return; const l=r.lineas[i]; if(l)boletaEspecialPDF(r,l); }
+window._reBoleta=_reBoleta;
+
+function eliminarReciboEspecial(id){
+  const r=(typeof recibosEspeciales!=='undefined'?recibosEspeciales:[]).find(x=>String(x.id)===String(id)); if(!r)return;
+  const pols=(r.lineas||[]).filter(l=>l.poliza).map(l=>l.poliza);
+  const _do=async()=>{
+    pols.forEach(n=>{const m=(typeof movimientosBanco!=='undefined'?movimientosBanco:[]).find(x=>x.poliza===n&&x.origen==='recibo_especial'&&!x.anulado);
+      if(m){m.anulado=true;if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(m);}});
+    const ok=await (typeof borrarReciboEspecial==='function'?borrarReciboEspecial(id):Promise.resolve(false));
+    if(!ok){toast('No se pudo borrar','Intentá de nuevo',true);return;}
+    const idx=recibosEspeciales.findIndex(x=>String(x.id)===String(id)); if(idx>=0)recibosEspeciales.splice(idx,1);
+    if(typeof logAudit==='function')logAudit('Recibo especial eliminado',r.concepto||'');
+    if(typeof closeMod==='function')closeMod(); renderPlanilla();
+    if(typeof renderBancos==='function'){try{renderBancos();}catch(e){}}
+    toast('✓ Recibo eliminado',r.concepto||'');
+  };
+  const msg=pols.length?('Se anulan '+pols.length+' pago(s) en Bancos (devuelve el saldo) y se borra el recibo.'):'Se borra el recibo.';
+  if(typeof confirmar==='function')confirmar('¿Eliminar el recibo?',msg,'Eliminar',_do);
+  else if(confirm(msg))_do();
+}
+window.eliminarReciboEspecial=eliminarReciboEspecial;
+
+// Boleta del recibo especial (media carta, mismo estilo que la de planilla).
+function boletaEspecialPDF(r,l){
+  if(!r||!l)return;
+  const emp=(typeof empleados!=='undefined'?empleados:[]).find(e=>String(e.id)===String(l.empleadoId))||{};
+  const cuenta=(typeof cuentasBanco!=='undefined'?cuentasBanco:[]).find(c=>String(c.id)===String(l.cuentaBancoId||r.cuentaPagoId))||{};
+  const neto=_reNeto(l);
+  const fechaPago=l.pagadoEl?fdate(l.pagadoEl):(r.fecha?fdate(r.fecha):'—');
+  const n2=v=>Number(v||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fila=(lbl,val,o)=>{o=o||{};return `<tr><td style="padding:2.5px 0;font-size:11.5px;color:${o.fuerte?'#173916':'#3a3f31'};${o.fuerte?'font-weight:700':''}">${lbl}</td><td style="padding:2.5px 0;font-size:11.5px;text-align:right;color:${o.color||(o.fuerte?'#173916':'#222')};font-weight:${o.fuerte?'800':'600'}">${n2(val)}</td></tr>`;};
+  const totalFila=(lbl,val,color)=>`<tr><td colspan="2" style="border-top:1px solid #C9D2B6;padding:3px 0 0"></td></tr>`+fila(lbl,val,{fuerte:true,color});
+  const infoRow=(lbl,val,big)=>`<div style="display:flex;gap:10px;align-items:baseline;margin-top:${big?0:3}px"><span style="font-size:9px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.5px;min-width:118px">${lbl}</span><span style="font-size:${big?15:12.5}px;font-weight:700;color:#173916">${val||'—'}</span></div>`;
+  const colHead=t=>`<div style="font-size:10px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.7px;padding-bottom:3px;border-bottom:1px solid #D6DCC9;margin-bottom:4px">${t}</div>`;
+  const chip=l.poliza
+    ? `<span style="display:inline-flex;align-items:center;gap:6px;background:#EDF3DD;border:1px solid #C9D2B6;border-radius:20px;padding:5px 13px;font-size:11px;color:#3a4a1e">📄 Ref. Póliza de cheque <b style="color:#173916">POL-${String(l.poliza).padStart(6,'0')}</b>${(cuenta.nombre||cuenta.banco)?' · '+escHtml(cuenta.nombre||cuenta.banco):''}</span>`
+    : `<span style="font-size:11px;color:#B45309;font-weight:600">Pendiente de pago</span>`;
+  const body=`
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:18px;align-items:flex-start">
+      <div style="flex:1;min-width:250px">
+        ${infoRow('Empleado',escHtml(l.nombre),true)}${infoRow('Puesto',escHtml(emp.puesto||''))}${infoRow('DPI',escHtml(emp.dpi||''))}${infoRow('No. afiliación IGSS',escHtml(emp.igss||''))}
+      </div>
+      <div style="text-align:right;min-width:200px">
+        <div style="font-size:9px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.5px">Concepto</div>
+        <div style="font-size:13px;font-weight:700;color:#173916;margin-top:1px">${escHtml(r.concepto||_RE_TIPOS[r.tipo]||'')}</div>
+        <div style="font-size:9px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.5px;margin-top:7px">Fecha de pago</div>
+        <div style="font-size:12.5px;font-weight:700;color:#173916;margin-top:1px">${fechaPago}</div>
+        <div style="font-size:9px;font-weight:700;color:#909584;text-transform:uppercase;letter-spacing:.5px;margin-top:9px">Líquido a recibir</div>
+        <div style="font-size:23px;font-weight:800;color:#2e7d32;margin-top:1px">${money(neto)}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:26px;margin-top:14px">
+      <div style="flex:1;min-width:0">${colHead('Ingreso')}
+        <table style="width:100%;border-collapse:collapse">${fila(escHtml(r.concepto||_RE_TIPOS[r.tipo]||'Prestación'),l.monto)}${totalFila('Total ingreso',Number(l.monto)||0)}</table></div>
+      <div style="flex:1;min-width:0">${colHead('Descuentos')}
+        <table style="width:100%;border-collapse:collapse">${fila('ISR',l.isr)}${fila('Otros',l.otrosDesc)}${totalFila('Total descuentos',(Number(l.isr)||0)+(Number(l.otrosDesc)||0),'#b03535')}</table></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-top:22px">
+      <div>${chip}</div>
+      <div style="flex:1;max-width:230px;text-align:center"><div style="border-top:1px solid #555;padding-top:5px;font-size:10px;color:#555">Recibí conforme</div></div>
+    </div>`;
+  _abrirPDF(_pdfShell({titulo:'RECIBO DE PAGO',subtitulo:escHtml(r.concepto||_RE_TIPOS[r.tipo]||''),sinEmitido:true,orientacion:'portrait',margen:'6mm 12mm',sinPie:true,compacto:true,body}));
+}
+window.boletaEspecialPDF=boletaEspecialPDF;
