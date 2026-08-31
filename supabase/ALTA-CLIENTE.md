@@ -41,7 +41,13 @@ proyecto nuevo.
 1. En el proyecto nuevo → **SQL Editor → New query**.
 2. Pegar TODO el archivo `supabase/INSTALAR-CLIENTE.sql` y **Run**.
 3. Al final quedan creadas todas las tablas, la seguridad (RLS capa 1 y
-   2), los índices y las secuencias. Sin errores = base lista.
+   2), los índices, las secuencias y la limpieza mensual de auditoría.
+   Sin errores = base lista.
+
+> Si el instalador avisa que **pg_cron** no está disponible, activá la
+> extensión (Database → Extensions → pg_cron) y volvé a correr el bloque
+> de `20260831140000_purga_auditoria.sql`. Es lo que programa la limpieza
+> automática de la auditoría.
 
 > `INSTALAR-CLIENTE.sql` se genera solo juntando todas las migraciones
 > (`node scripts/build-instalador.js`). No se edita a mano; la prueba
