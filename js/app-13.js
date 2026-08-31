@@ -26,7 +26,7 @@ function ctrlTab(t){
   });
   if(t==='amb')_ambRender();
   else if(t==='bat')renderBaterias();
-  // 'gas' llega en la parte 3.
+  else if(t==='gas')renderGasolina();
 }
 window.ctrlTab=ctrlTab;
 
@@ -561,3 +561,181 @@ async function reporteBateriasExcel(){
   }catch(e){console.error('Excel baterías',e);toast('No se pudo exportar','Revisá la conexión',true);}
 }
 window.reporteBateriasExcel=reporteBateriasExcel;
+
+// ============================================================
+//  GASOLINA  (parte 3) — consumo por vehículo/piloto + Bancos
+// ============================================================
+function _gasQuien(g){
+  const pil=g.pilotoId?_batNombrePiloto(g.pilotoId):'';
+  if(pil&&g.vehiculo)return pil+' · '+g.vehiculo;
+  return pil||g.vehiculo||'—';
+}
+// Rendimiento km/gal: km recorridos desde la carga anterior del mismo
+// piloto ÷ galones de esta carga.
+function _gasRendimiento(g){
+  if(g.kilometraje==null||!(Number(g.galones)>0))return null;
+  const prev=(typeof gasolina!=='undefined'?gasolina:[])
+    .filter(x=>String(x.id)!==String(g.id)&&String(x.pilotoId)===String(g.pilotoId)&&x.kilometraje!=null&&Number(x.kilometraje)<Number(g.kilometraje))
+    .sort((a,b)=>Number(b.kilometraje)-Number(a.kilometraje))[0];
+  if(!prev)return null;
+  const km=Number(g.kilometraje)-Number(prev.kilometraje);
+  if(km<=0)return null;
+  return Math.round(km/Number(g.galones)*10)/10;
+}
+function renderGasolina(){
+  const tb=$('#t-gas'); if(!tb)return;
+  const lista=(typeof gasolina!=='undefined'?gasolina:[]).slice().sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+  const empty=$('#gas-empty'); if(empty)empty.style.display=lista.length?'none':'block';
+  // KPIs del mes
+  const mes=((typeof fechaHoyGT==='function')?fechaHoyGT():new Date().toISOString().slice(0,10)).slice(0,7);
+  const delMes=lista.filter(g=>String(g.fecha||'').slice(0,7)===mes);
+  const galMes=delMes.reduce((s,g)=>s+(Number(g.galones)||0),0);
+  const qMes=delMes.reduce((s,g)=>s+(Number(g.monto)||0),0);
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  set('gas-kpi-gal',(Math.round(galMes*10)/10)+' gal');
+  set('gas-kpi-monto',money(qMes));
+  set('gas-kpi-n',delMes.length);
+  tb.innerHTML=lista.map(g=>{
+    const rend=_gasRendimiento(g);
+    return `<tr>
+      <td>${g.fecha?fdate(g.fecha):'—'}</td>
+      <td style="font-weight:600">${escHtml(_gasQuien(g))}</td>
+      <td class="num">${(Math.round((Number(g.galones)||0)*10)/10)}</td>
+      <td class="num" style="font-weight:700">${money(g.monto)}</td>
+      <td class="num">${g.kilometraje!=null?Number(g.kilometraje).toLocaleString('es-GT'):'—'}</td>
+      <td class="num">${rend!=null?rend+' km/gal':'<span style="color:var(--muted-2)">—</span>'}</td>
+      <td>${g.movPoliza?('POL-'+String(g.movPoliza).padStart(6,'0')):'<span style="color:var(--muted-2)">—</span>'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openGasolina(${g.id})">Editar</button></td>
+    </tr>`;
+  }).join('');
+  if(typeof enhanceTable==='function')enhanceTable('t-gas');
+}
+window.renderGasolina=renderGasolina;
+
+// Registra la salida de banco de una carga (categoría combustible). No abre póliza.
+function _gasRegistrarMov(o){
+  if(!o.cuentaId||!(o.monto>0))return null;
+  const fecha=o.fecha||((typeof fechaHoyGT==='function')?fechaHoyGT():new Date().toISOString().slice(0,10));
+  const mov={cuentaId:Number(o.cuentaId),fecha,tipo:'salida',monto:Number(o.monto),
+    concepto:o.concepto||'',categoria:'combustible',origen:'gasolina',origenId:o.origenId||null,
+    referencia:null,registradoPor:(typeof currentUser!=='undefined'?currentUser:''),
+    registradoEl:new Date().toISOString(),anulado:false,_nuevo:true};
+  const maxPol=(movimientosBanco.reduce((m,x)=>Math.max(m,x.poliza||0),0)||0);
+  mov.poliza=maxPol+1;
+  if(o.beneficiario)mov.beneficiario=o.beneficiario;
+  movimientosBanco.push(mov);
+  if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mov);
+  return mov;
+}
+function _gasAnularMov(poliza){
+  if(!poliza)return;
+  const mov=(typeof movimientosBanco!=='undefined'?movimientosBanco:[]).find(m=>m.poliza===poliza&&m.origen==='gasolina'&&!m.anulado);
+  if(mov){mov.anulado=true;if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mov);}
+}
+
+function openGasolina(id){
+  const g=id?gasolina.find(x=>String(x.id)===String(id)):null;
+  const optCta=`<option value="">— Sin cuenta (no registra en Bancos) —</option>`+
+    (typeof cuentasActivasBanco==='function'?cuentasActivasBanco():[])
+      .map(c=>`<option value="${c.id}"${g&&String(g.cuentaId)===String(c.id)?' selected':''}>${escHtml(c.nombre)}</option>`).join('');
+  const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():'';
+  openMod(g?'Editar carga de combustible':'Nueva carga de combustible',
+    `<div class="row"><div><label>Piloto</label><select id="gas-pil">${_optPilotos(g&&g.pilotoId)}</select></div><div><label>Vehículo <span style="font-weight:400;color:var(--muted-2)">(placa / opcional)</span></label><input id="gas-veh" value="${g?escHtml(g.vehiculo||''):''}" placeholder="Ej. P-123ABC"></div></div>
+     <div class="row"><div><label>Fecha</label><input id="gas-fecha" type="date" value="${g&&g.fecha?String(g.fecha).slice(0,10):hoy}"></div><div><label>Kilometraje <span style="font-weight:400;color:var(--muted-2)">(para el rendimiento)</span></label><input id="gas-km" type="number" step="1" value="${g&&g.kilometraje!=null?g.kilometraje:''}" placeholder="Ej. 84200"></div></div>
+     <div class="row"><div><label>Galones</label><input id="gas-gal" type="number" step="0.01" value="${g?(Number(g.galones)||''):''}" placeholder="0.00"></div><div><label>Monto (Q)</label><input id="gas-monto" type="number" step="0.01" value="${g?(Number(g.monto)||''):''}" placeholder="0.00"></div></div>
+     <div class="row"><div><label>Cuenta de pago <span style="font-weight:400;color:var(--muted-2)">(registra el gasto en Bancos)</span></label><select id="gas-cta">${optCta}</select></div><div><label>Nota</label><input id="gas-nota" value="${g?escHtml(g.nota||''):''}"></div></div>
+     ${g?`<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_gasBorrar(${g.id})">Eliminar carga</button></div>`:''}
+     <div class="note n-danger" id="gas-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
+    async ()=>{
+      const err=m=>{$('#gas-err').style.display='flex';$('#gas-err').querySelector('span').textContent=m;};
+      const pilotoId=$('#gas-pil').value?Number($('#gas-pil').value):null;
+      const vehiculo=$('#gas-veh').value.trim();
+      if(!pilotoId&&!vehiculo){err('Elegí el piloto o escribí el vehículo');return;}
+      const monto=Number($('#gas-monto').value)||0;
+      const galones=Number($('#gas-gal').value)||0;
+      if(monto<=0&&galones<=0){err('Poné al menos los galones o el monto');return;}
+      const cuentaId=$('#gas-cta').value?Number($('#gas-cta').value):null;
+      const g0=g||{_nuevo:true};
+      const oldPoliza=g?g.movPoliza:null;
+      g0.pilotoId=pilotoId; g0.vehiculo=vehiculo; g0.fecha=$('#gas-fecha').value||null;
+      g0.galones=galones; g0.monto=monto;
+      g0.kilometraje=$('#gas-km').value!==''?Number($('#gas-km').value):null;
+      g0.cuentaId=cuentaId; g0.nota=$('#gas-nota').value.trim();
+      if(!g0.creadoPor&&typeof currentUser!=='undefined')g0.creadoPor=currentUser;
+      const ok=await (typeof guardarGasolina==='function'?guardarGasolina(g0):Promise.resolve(false));
+      if(!ok){err('No se pudo guardar. ¿Ya corriste el SQL de Gasolina?');if(!g)g0._nuevo=true;return;}
+      if(!g)gasolina.push(g0);
+      // Banco: si había un movimiento anterior, se anula; si hay cuenta, se registra uno nuevo.
+      if(oldPoliza)_gasAnularMov(oldPoliza);
+      if(cuentaId&&monto>0){
+        const mov=_gasRegistrarMov({cuentaId,monto,origenId:g0.id,beneficiario:_gasQuien(g0),
+          concepto:'Combustible · '+_gasQuien(g0)+(galones?(' · '+galones+' gal'):'')});
+        g0.movPoliza=mov?mov.poliza:null;
+      }else{ g0.movPoliza=null; }
+      await (typeof guardarGasolina==='function'?guardarGasolina(g0):Promise.resolve());
+      if(typeof logAudit==='function')logAudit(g?'Gasolina · carga editada':'Gasolina · carga registrada',_gasQuien(g0)+' · '+money(monto));
+      closeMod();renderGasolina();if(typeof renderBancos==='function'){try{renderBancos();}catch(e){}}toast('✓ Carga guardada',_gasQuien(g0));
+    });
+}
+window.openGasolina=openGasolina;
+
+function _gasBorrar(id){
+  const g=(typeof gasolina!=='undefined'?gasolina:[]).find(x=>String(x.id)===String(id)); if(!g)return;
+  const _do=async()=>{
+    const ok=await (typeof borrarGasolina==='function'?borrarGasolina(id):Promise.resolve(false));
+    if(!ok){toast('No se pudo borrar','Intentá de nuevo',true);return;}
+    const idx=gasolina.findIndex(x=>String(x.id)===String(id)); if(idx>=0)gasolina.splice(idx,1);
+    if(g.movPoliza)_gasAnularMov(g.movPoliza); // devuelve el saldo si tenía gasto en Bancos
+    if(typeof logAudit==='function')logAudit('Gasolina · carga eliminada',_gasQuien(g));
+    if(typeof closeMod==='function')closeMod(); renderGasolina();
+    if(typeof renderBancos==='function'){try{renderBancos();}catch(e){}}
+    toast('✓ Carga eliminada');
+  };
+  const msg=g.movPoliza?'Se quita la carga y se anula su gasto en Bancos (devuelve el saldo).':'Se quita la carga del control.';
+  if(typeof confirmar==='function')confirmar('¿Eliminar la carga?',msg,'Eliminar',_do);
+  else if(confirm('¿Eliminar la carga?'))_do();
+}
+window._gasBorrar=_gasBorrar;
+
+// ── Reporte de gasolina ────────────────────────────────────
+function reporteGasolinaExcel(){ return _reporteGasolina(true); }
+function reporteGasolinaPDF(){ return _reporteGasolina(false); }
+window.reporteGasolinaExcel=reporteGasolinaExcel; window.reporteGasolinaPDF=reporteGasolinaPDF;
+async function _reporteGasolina(excel){
+  const lista=(typeof gasolina!=='undefined'?gasolina:[]).slice()
+    .sort((a,b)=>_gasQuien(a).localeCompare(_gasQuien(b))||String(a.fecha||'').localeCompare(String(b.fecha||'')));
+  if(!lista.length){toast('Sin datos','No hay cargas registradas',true);return;}
+  const totGal=lista.reduce((s,g)=>s+(Number(g.galones)||0),0);
+  const totQ=lista.reduce((s,g)=>s+(Number(g.monto)||0),0);
+  if(excel){
+    try{
+      const {XLSX,styled}=await _cargarXLSX();
+      const marca=(typeof SEFE_MARCA!=='undefined'&&SEFE_MARCA.membrete)||'SEFE, S.A.';
+      const aoa=[[marca],['CONSUMO DE COMBUSTIBLE'],['Generado el '+fdate(new Date())],[],
+        ['Fecha','Piloto / vehículo','Galones','Monto','Kilometraje','Rendimiento (km/gal)','Póliza']];
+      lista.forEach(g=>{const r=_gasRendimiento(g);aoa.push([g.fecha?fdate(g.fecha):'',_gasQuien(g),Number(g.galones)||0,Number(g.monto)||0,g.kilometraje!=null?Number(g.kilometraje):'',r!=null?r:'',g.movPoliza?('POL-'+String(g.movPoliza).padStart(6,'0')):'']);});
+      aoa.push(['Total','',totGal,totQ,'','','']);
+      const ws=XLSX.utils.aoa_to_sheet(aoa);
+      _estiloExcelHoja(XLSX,ws,{styled,nCols:7,headerRow:4,dataRows:lista.length,moneyCols:[3],totalRow:5+lista.length,brandRow:0,titleRow:1,metaRows:[2]});
+      const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Combustible');
+      await descargarXlsx(XLSX,wb,'SEFE-Consumo-combustible.xlsx');
+    }catch(e){console.error('Excel gasolina',e);toast('No se pudo exportar','Revisá la conexión',true);}
+    return;
+  }
+  const filas=lista.map(g=>{const r=_gasRendimiento(g);return `<tr>
+      <td style="padding:4px 6px;font-size:11px;border-bottom:1px solid #ECEFE3">${g.fecha?fdate(g.fecha):'—'}</td>
+      <td style="padding:4px 6px;font-size:11px;border-bottom:1px solid #ECEFE3">${escHtml(_gasQuien(g))}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right;border-bottom:1px solid #ECEFE3">${Math.round((Number(g.galones)||0)*10)/10}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right;border-bottom:1px solid #ECEFE3">${money(g.monto)}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right;border-bottom:1px solid #ECEFE3">${g.kilometraje!=null?Number(g.kilometraje).toLocaleString('es-GT'):'—'}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right;border-bottom:1px solid #ECEFE3">${r!=null?r+' km/gal':'—'}</td>
+    </tr>`;}).join('');
+  const kpi=(l,v)=>`<div style="flex:1;border:1px solid #D6DCC9;border-radius:8px;padding:7px 12px"><div style="font-size:9.5px;color:#909584;text-transform:uppercase;letter-spacing:.5px;font-weight:700">${l}</div><div style="font-size:19px;font-weight:800;color:#173916">${v}</div></div>`;
+  const body=`<div style="display:flex;gap:10px;margin-bottom:8px">${kpi('Cargas',lista.length)}${kpi('Galones',Math.round(totGal*10)/10)}${kpi('Total',money(totQ))}</div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>${['Fecha','Piloto / vehículo','Galones','Monto','Kilometraje','Rend. km/gal'].map((h,i)=>`<th style="padding:4px 6px;font-size:9.5px;text-align:${i>=2?'right':'left'};color:#909584;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid #D6DCC9">${h}</th>`).join('')}</tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr style="font-weight:700;color:#173916"><td style="padding:5px 6px;border-top:2px solid #173916">Total</td><td style="border-top:2px solid #173916"></td><td style="padding:5px 6px;text-align:right;border-top:2px solid #173916">${Math.round(totGal*10)/10}</td><td style="padding:5px 6px;text-align:right;border-top:2px solid #173916">${money(totQ)}</td><td style="border-top:2px solid #173916"></td><td style="border-top:2px solid #173916"></td></tr></tfoot>
+    </table>`;
+  _abrirPDF(_pdfShell({titulo:'CONSUMO DE COMBUSTIBLE',subtitulo:'Cargas por piloto / vehículo',orientacion:'portrait',body}));
+}

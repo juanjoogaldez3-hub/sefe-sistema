@@ -132,5 +132,20 @@ ok('existe la migración de ctrl_baterias', migs.some(n => /ctrl_baterias/.test(
 const migB = migs.filter(n => /ctrl_baterias/.test(n)).map(n => fs.readFileSync(__dirname + '/supabase/migrations/' + n, 'utf8')).join('\n');
 ok('crea las dos tablas con RLS', /ctrl_bat_tipos/.test(migB) && /ctrl_bat_cambios/.test(migB) && /enable row level security/.test(migB) && /sefe_leer/.test(migB));
 
+console.log('\n═══ Gasolina (parte 3) ═══');
+ok('index.html tiene la tabla de gasolina (#t-gas)', /id="t-gas"/.test(html));
+ok('el switch de pestañas despacha renderGasolina', /t==='gas'\)renderGasolina/.test(src));
+ok('existe renderGasolina + openGasolina (y en window)', /function renderGasolina\(/.test(src) && /function openGasolina\(/.test(src) && /window\.openGasolina\s*=/.test(src));
+ok('calcula el rendimiento km/gal (_gasRendimiento)', /function _gasRendimiento\(/.test(src));
+ok('registra el gasto en Bancos (categoría combustible, origen gasolina)', /categoria:'combustible'/.test(src) && /origen:'gasolina'/.test(src));
+ok('al borrar una carga se anula su gasto en Bancos', /_gasAnularMov\(g\.movPoliza\)/.test(src));
+ok('tiene reporte de gasolina (PDF + Excel)', /function reporteGasolinaPDF\(/.test(src) && /function reporteGasolinaExcel\(/.test(src) && /CONSUMO DE COMBUSTIBLE/.test(src));
+ok('index.html tiene los botones de reporte de gasolina', /onclick="reporteGasolinaPDF\(\)"/.test(html) && /onclick="reporteGasolinaExcel\(\)"/.test(html));
+
+console.log('\n═══ Capa de datos · Gasolina (db.js) ═══');
+ok('db.js mapea/guarda gasolina (mapGasolinaFromDB / guardarGasolina)', /function mapGasolinaFromDB\(/.test(dbjs) && /async function guardarGasolina\(/.test(dbjs));
+ok('db.js carga gasolina en el arranque (rGas / ctrl_gasolina)', /rGas/.test(dbjs) && /from\('ctrl_gasolina'\)/.test(dbjs));
+ok('existe la migración de ctrl_gasolina con RLS', migs.some(n=>/ctrl_gasolina/.test(n)) && (() => { const m = migs.filter(n=>/ctrl_gasolina/.test(n)).map(n=>fs.readFileSync(__dirname+'/supabase/migrations/'+n,'utf8')).join(''); return /enable row level security/.test(m) && /sefe_leer/.test(m); })());
+
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
