@@ -412,6 +412,8 @@ let conciliaciones=[]; // conciliaciones bancarias guardadas (historial)
 let empleados=[]; // empleados para el módulo de planilla
 let planillas=[]; // planillas quincenales guardadas (historial)
 let ambServicios=[]; // Controles · Ambientales (servicios de recarga)
+let batTipos=[]; // Controles · Baterías (tipos y stock)
+let batCambios=[]; // Controles · Baterías (cambios por cliente/equipo)
 let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====

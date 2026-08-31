@@ -76,7 +76,7 @@ async function cargarTodo() {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
-      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb
+      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -104,6 +104,9 @@ async function cargarTodo() {
       sb.from('planillas').select('*').order('id',{ascending:false}),
       // Controles · Ambientales (tolera tabla ausente → vacío).
       sb.from('ctrl_ambientales').select('*').order('id',{ascending:false}),
+      // Controles · Baterías (tipos/stock + cambios; tolera tabla ausente).
+      sb.from('ctrl_bat_tipos').select('*').order('nombre'),
+      sb.from('ctrl_bat_cambios').select('*').order('id',{ascending:false}),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -188,6 +191,13 @@ async function cargarTodo() {
     // Controles · Ambientales (tolera tabla ausente → vacío)
     if (typeof ambServicios !== 'undefined') {
       ambServicios = ((rAmb&&rAmb.data)||[]).map(mapAmbServicioFromDB);
+    }
+    // Controles · Baterías (tipos/stock + cambios; tolera tabla ausente)
+    if (typeof batTipos !== 'undefined') {
+      batTipos = ((rBatTipos&&rBatTipos.data)||[]).map(mapBatTipoFromDB);
+    }
+    if (typeof batCambios !== 'undefined') {
+      batCambios = ((rBatCambios&&rBatCambios.data)||[]).map(mapBatCambioFromDB);
     }
 
     // Categorías (umbrales de stock por categoría). Tolera que la tabla no exista todavía.
@@ -951,6 +961,64 @@ async function borrarAmbServicio(id){
   return true;
 }
 if(typeof window!=='undefined'){window.guardarAmbServicio=guardarAmbServicio;window.borrarAmbServicio=borrarAmbServicio;}
+
+// ── Controles · Baterías (tipos/stock) ─────────────────────
+function mapBatTipoFromDB(t){
+  return { id:t.id, nombre:t.nombre||'', stock:Number(t.stock)||0, creado:t.creado };
+}
+async function guardarBatTipo(t){
+  const row={ nombre:t.nombre, stock:Number(t.stock)||0 };
+  if(t._nuevo){
+    delete t._nuevo;
+    const {data,error}=await sb.from('ctrl_bat_tipos').insert(row).select().single();
+    if(error){console.error('Error guardando tipo de batería:',error);t._nuevo=true;return false;}
+    t.id=data.id; return true;
+  }else{
+    const {error}=await sb.from('ctrl_bat_tipos').update(row).eq('id',t.id);
+    if(error){console.error('Error actualizando tipo de batería:',error);return false;}
+    return true;
+  }
+}
+async function borrarBatTipo(id){
+  const {error}=await sb.from('ctrl_bat_tipos').delete().eq('id',id);
+  if(error){console.error('Error borrando tipo de batería:',error);return false;}
+  return true;
+}
+
+// ── Controles · Baterías (cambios por cliente/equipo) ──────
+function mapBatCambioFromDB(c){
+  return {
+    id:c.id, clienteId:c.cliente_id, equipo:c.equipo||'', tipoId:c.tipo_id,
+    cantidad:Number(c.cantidad)||0, fecha:c.fecha||null, proximo:c.proximo||null,
+    nota:c.nota||'', creadoPor:c.creado_por||'', creado:c.creado
+  };
+}
+async function guardarBatCambio(c){
+  const row={
+    cliente_id:c.clienteId||null, equipo:c.equipo||null, tipo_id:c.tipoId||null,
+    cantidad:Number(c.cantidad)||0, fecha:c.fecha||null, proximo:c.proximo||null, nota:c.nota||null
+  };
+  if(c._nuevo){
+    delete c._nuevo;
+    row.creado_por=c.creadoPor||null;
+    const {data,error}=await sb.from('ctrl_bat_cambios').insert(row).select().single();
+    if(error){console.error('Error guardando cambio de batería:',error);c._nuevo=true;return false;}
+    c.id=data.id; return true;
+  }else{
+    const {error}=await sb.from('ctrl_bat_cambios').update(row).eq('id',c.id);
+    if(error){console.error('Error actualizando cambio de batería:',error);return false;}
+    return true;
+  }
+}
+async function borrarBatCambio(id){
+  const {error}=await sb.from('ctrl_bat_cambios').delete().eq('id',id);
+  if(error){console.error('Error borrando cambio de batería:',error);return false;}
+  return true;
+}
+if(typeof window!=='undefined'){
+  window.guardarBatTipo=guardarBatTipo; window.borrarBatTipo=borrarBatTipo;
+  window.guardarBatCambio=guardarBatCambio; window.borrarBatCambio=borrarBatCambio;
+}
 
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).

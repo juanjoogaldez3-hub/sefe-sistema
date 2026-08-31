@@ -25,7 +25,8 @@ function ctrlTab(t){
     if(btn)btn.className='btn btn-sm ctrl-tab '+(x===t?'btn-primary':'btn-ghost');
   });
   if(t==='amb')_ambRender();
-  // 'bat' y 'gas' llegan en las partes 2 y 3.
+  else if(t==='bat')renderBaterias();
+  // 'gas' llega en la parte 3.
 }
 window.ctrlTab=ctrlTab;
 
@@ -200,3 +201,179 @@ function ambCalMover(delta){
 }
 function ambCalHoy(){ _ambCalRef=null; renderAmbCalendario(); }
 window.ambCalMover=ambCalMover; window.ambCalHoy=ambCalHoy;
+
+// ============================================================
+//  BATERÍAS  (parte 2) — existencias (stock) + cambios por cliente
+// ============================================================
+function _batNombreTipo(id){
+  const t=(typeof batTipos!=='undefined'?batTipos:[]).find(x=>String(x.id)===String(id));
+  return t?t.nombre:'—';
+}
+function _batStockBadge(stock){
+  if(stock<=0)return ' <span class="badge b-danger" style="font-size:10px">Sin stock</span>';
+  if(stock<=5)return ' <span class="badge b-warn" style="font-size:10px">Bajo</span>';
+  return '';
+}
+function renderBaterias(){
+  // Existencias
+  const ts=$('#t-bat-stock');
+  if(ts){
+    const lista=(typeof batTipos!=='undefined'?batTipos:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)));
+    const e=$('#bat-stock-empty'); if(e)e.style.display=lista.length?'none':'block';
+    ts.innerHTML=lista.map(t=>`<tr>
+        <td style="font-weight:600">${escHtml(t.nombre)}</td>
+        <td class="num" style="font-weight:700">${(Number(t.stock)||0)}${_batStockBadge(Number(t.stock)||0)}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-ghost btn-sm" onclick="_batEntrada(${t.id})" title="Sumar existencias">＋ Entrada</button>
+          <button class="btn btn-ghost btn-sm" onclick="openBatTipo(${t.id})">Editar</button></td>
+      </tr>`).join('');
+    if(typeof enhanceTable==='function')enhanceTable('t-bat-stock');
+  }
+  // Cambios
+  const tc=$('#t-bat-cambios');
+  if(tc){
+    const lista=(typeof batCambios!=='undefined'?batCambios:[]).slice()
+      .sort((a,b)=>String(b.proximo||b.fecha||'').localeCompare(String(a.proximo||a.fecha||'')));
+    const e=$('#bat-cambios-empty'); if(e)e.style.display=lista.length?'none':'block';
+    tc.innerHTML=lista.map(c=>`<tr>
+        <td style="font-weight:600">${escHtml(_ctrlNombreCliente(c.clienteId))}${c.equipo?`<div style="font-size:11px;color:var(--muted-2)">${escHtml(c.equipo)}</div>`:''}</td>
+        <td>${escHtml(_batNombreTipo(c.tipoId))}</td>
+        <td class="num">${Number(c.cantidad)||0}</td>
+        <td>${c.fecha?fdate(c.fecha):'—'}</td>
+        <td>${c.proximo?fdate(c.proximo)+_ctrlVenceBadge(c.proximo):'<span style="color:var(--muted-2)">—</span>'}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="openBatCambio(${c.id})">Editar</button></td>
+      </tr>`).join('');
+    if(typeof enhanceTable==='function')enhanceTable('t-bat-cambios');
+  }
+}
+window.renderBaterias=renderBaterias;
+
+// Ajusta el stock de un tipo (delta + o −) y lo guarda.
+async function _batAjustarStock(tipoId,delta){
+  if(!tipoId||!delta)return;
+  const t=(typeof batTipos!=='undefined'?batTipos:[]).find(x=>String(x.id)===String(tipoId));
+  if(!t)return;
+  t.stock=(Number(t.stock)||0)+delta;
+  await (typeof guardarBatTipo==='function'?guardarBatTipo(t):Promise.resolve());
+}
+
+// ── Tipos / existencias ──
+function openBatTipo(id){
+  const t=id?batTipos.find(x=>String(x.id)===String(id)):null;
+  openMod(t?'Editar tipo de batería':'Nuevo tipo de batería',
+    `<div class="row"><div><label>Nombre / modelo</label><input id="bat-nom" value="${t?escHtml(t.nombre):''}" placeholder="Ej. AA, D, 9V"></div><div><label>Existencia (stock)</label><input id="bat-stock" type="number" step="1" value="${t?(Number(t.stock)||0):0}"></div></div>
+     ${t?`<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_batTipoBorrar(${t.id})">Eliminar tipo</button></div>`:''}
+     <div class="note n-danger" id="bat-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
+    async ()=>{
+      const err=m=>{$('#bat-err').style.display='flex';$('#bat-err').querySelector('span').textContent=m;};
+      const nombre=$('#bat-nom').value.trim();
+      if(!nombre){err('Escribí el nombre del tipo');return;}
+      const rec=t||{_nuevo:true};
+      rec.nombre=nombre; rec.stock=Number($('#bat-stock').value)||0;
+      const ok=await (typeof guardarBatTipo==='function'?guardarBatTipo(rec):Promise.resolve(false));
+      if(!ok){err('No se pudo guardar. ¿Ya corriste el SQL de Baterías?');if(!t)rec._nuevo=true;return;}
+      if(!t)batTipos.push(rec);
+      if(typeof logAudit==='function')logAudit(t?'Batería · tipo editado':'Batería · tipo creado',nombre);
+      closeMod();renderBaterias();toast('✓ Tipo guardado',nombre);
+    });
+}
+window.openBatTipo=openBatTipo;
+
+function _batEntrada(id){
+  const t=batTipos.find(x=>String(x.id)===String(id)); if(!t)return;
+  openMod('Entrada de baterías · '+escHtml(t.nombre),
+    `<div class="row"><div><label>Cantidad que ingresa</label><input id="bat-ent" type="number" step="1" value="1"></div><div><label>Nota</label><input id="bat-ent-nota" placeholder="Ej. Compra"></div></div>
+     <div style="font-size:12px;color:var(--muted)">Existencia actual: <b>${Number(t.stock)||0}</b></div>`,
+    async ()=>{
+      const cant=Number($('#bat-ent').value)||0;
+      if(cant<=0){toast('Cantidad inválida','Poné un número mayor a 0',true);return;}
+      await _batAjustarStock(t.id,cant);
+      if(typeof logAudit==='function')logAudit('Batería · entrada',t.nombre+' +'+cant+($('#bat-ent-nota').value?(' · '+$('#bat-ent-nota').value.trim()):''));
+      closeMod();renderBaterias();toast('✓ Entrada registrada',t.nombre+' +'+cant);
+    });
+}
+window._batEntrada=_batEntrada;
+
+function _batTipoBorrar(id){
+  const t=batTipos.find(x=>String(x.id)===String(id)); if(!t)return;
+  const usado=(typeof batCambios!=='undefined'?batCambios:[]).some(c=>String(c.tipoId)===String(id));
+  const _do=async()=>{
+    const ok=await (typeof borrarBatTipo==='function'?borrarBatTipo(id):Promise.resolve(false));
+    if(!ok){toast('No se pudo borrar','Intentá de nuevo',true);return;}
+    const idx=batTipos.findIndex(x=>String(x.id)===String(id)); if(idx>=0)batTipos.splice(idx,1);
+    if(typeof logAudit==='function')logAudit('Batería · tipo eliminado',t.nombre);
+    if(typeof closeMod==='function')closeMod(); renderBaterias(); toast('✓ Tipo eliminado');
+  };
+  const msg=usado?'Ojo: hay cambios registrados con este tipo. Se van a quedar sin tipo.':'Se quita de las existencias.';
+  if(typeof confirmar==='function')confirmar('¿Eliminar el tipo?',msg,'Eliminar',_do);
+  else if(confirm('¿Eliminar el tipo?'))_do();
+}
+window._batTipoBorrar=_batTipoBorrar;
+
+// ── Cambios por cliente/equipo (descuentan del stock) ──
+function openBatCambio(id){
+  const c=id?batCambios.find(x=>String(x.id)===String(id)):null;
+  const old=c?{tipoId:c.tipoId,cantidad:Number(c.cantidad)||0}:null; // para ajustar el stock
+  const optCli=`<option value="">— Elegí cliente —</option>`+
+    (typeof clientes!=='undefined'?clientes:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
+      .map(x=>`<option value="${x.id}"${c&&String(c.clienteId)===String(x.id)?' selected':''}>${escHtml(x.nombre)}</option>`).join('');
+  const optTipo=`<option value="">— Elegí tipo —</option>`+
+    (typeof batTipos!=='undefined'?batTipos:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
+      .map(t=>`<option value="${t.id}"${c&&String(c.tipoId)===String(t.id)?' selected':''}>${escHtml(t.nombre)} (stock ${Number(t.stock)||0})</option>`).join('');
+  const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():'';
+  openMod(c?'Editar cambio de batería':'Nuevo cambio de batería',
+    `<div class="row"><div><label>Cliente</label><select id="bc-cli">${optCli}</select></div><div><label>Equipo / ubicación</label><input id="bc-eq" value="${c?escHtml(c.equipo||''):''}" placeholder="Ej. Dispensador baño 1"></div></div>
+     <div class="row"><div><label>Tipo de batería</label><select id="bc-tipo">${optTipo}</select></div><div><label>Cantidad</label><input id="bc-cant" type="number" step="1" value="${c?(Number(c.cantidad)||1):1}"></div></div>
+     <div class="row"><div><label>Fecha del cambio</label><input id="bc-fecha" type="date" value="${c&&c.fecha?String(c.fecha).slice(0,10):hoy}"></div><div><label>Próximo cambio <span style="font-weight:400;color:var(--muted-2)">(si cae fin de semana pasa al lunes)</span></label><input id="bc-prox" type="date" onchange="this.value=_siguienteHabil(this.value)" value="${c&&c.proximo?String(c.proximo).slice(0,10):''}"></div></div>
+     <div class="row"><div style="grid-column:1/-1"><label>Nota</label><input id="bc-nota" value="${c?escHtml(c.nota||''):''}"></div></div>
+     ${c?`<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_batCambioBorrar(${c.id})">Eliminar cambio</button></div>`:''}
+     <div class="note" id="bc-info" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span></span></div>
+     <div class="note n-danger" id="bc-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
+    async ()=>{
+      const err=m=>{$('#bc-err').style.display='flex';$('#bc-err').querySelector('span').textContent=m;};
+      const clienteId=$('#bc-cli').value?Number($('#bc-cli').value):null;
+      if(!clienteId){err('Elegí el cliente');return;}
+      const tipoId=$('#bc-tipo').value?Number($('#bc-tipo').value):null;
+      if(!tipoId){err('Elegí el tipo de batería');return;}
+      const cantidad=Number($('#bc-cant').value)||0;
+      if(cantidad<=0){err('La cantidad debe ser mayor a 0');return;}
+      const rec=c||{_nuevo:true};
+      rec.clienteId=clienteId; rec.equipo=$('#bc-eq').value.trim(); rec.tipoId=tipoId; rec.cantidad=cantidad;
+      rec.fecha=$('#bc-fecha').value||null;
+      rec.proximo=$('#bc-prox').value||null;
+      if(rec.proximo){const hab=_siguienteHabil(rec.proximo);if(hab!==rec.proximo){rec.proximo=hab;toast('Próximo cambio movido','Caía en fin de semana → '+fdate(hab));}}
+      rec.nota=$('#bc-nota').value.trim();
+      if(!rec.creadoPor&&typeof currentUser!=='undefined')rec.creadoPor=currentUser;
+      const ok=await (typeof guardarBatCambio==='function'?guardarBatCambio(rec):Promise.resolve(false));
+      if(!ok){err('No se pudo guardar. ¿Ya corriste el SQL de Baterías?');if(!c)rec._nuevo=true;return;}
+      if(!c)batCambios.push(rec);
+      // Ajuste de stock: la salida descuenta; en edición se corrige el delta.
+      if(!old){ await _batAjustarStock(tipoId,-cantidad); }
+      else if(String(old.tipoId)===String(tipoId)){ await _batAjustarStock(tipoId, old.cantidad-cantidad); }
+      else { await _batAjustarStock(old.tipoId, old.cantidad); await _batAjustarStock(tipoId, -cantidad); }
+      if(typeof logAudit==='function')logAudit(c?'Batería · cambio editado':'Batería · cambio creado',_ctrlNombreCliente(clienteId)+' · '+_batNombreTipo(tipoId)+' x'+cantidad);
+      closeMod();renderBaterias();toast('✓ Cambio guardado',_ctrlNombreCliente(clienteId));
+    });
+  // Aviso de stock insuficiente (informativo, no bloquea)
+  setTimeout(()=>{ const sel=$('#bc-tipo'); if(sel)sel.onchange=()=>{
+      const t=batTipos.find(x=>String(x.id)===String(sel.value)); const info=$('#bc-info');
+      if(t&&info){const falta=(Number(t.stock)||0);info.style.display=falta<=5?'flex':'none';if(falta<=5)info.querySelector('span').textContent='Stock de '+t.nombre+': '+falta+(falta<=0?' (vas a quedar en negativo)':'');}
+    }; },50);
+}
+window.openBatCambio=openBatCambio;
+
+function _batCambioBorrar(id){
+  const c=(typeof batCambios!=='undefined'?batCambios:[]).find(x=>String(x.id)===String(id)); if(!c)return;
+  const _do=async()=>{
+    const ok=await (typeof borrarBatCambio==='function'?borrarBatCambio(id):Promise.resolve(false));
+    if(!ok){toast('No se pudo borrar','Intentá de nuevo',true);return;}
+    const idx=batCambios.findIndex(x=>String(x.id)===String(id)); if(idx>=0)batCambios.splice(idx,1);
+    // Devolver al stock lo que había descontado ese cambio
+    await _batAjustarStock(c.tipoId, Number(c.cantidad)||0);
+    if(typeof logAudit==='function')logAudit('Batería · cambio eliminado',_ctrlNombreCliente(c.clienteId));
+    if(typeof closeMod==='function')closeMod(); renderBaterias(); toast('✓ Cambio eliminado (stock devuelto)');
+  };
+  if(typeof confirmar==='function')confirmar('¿Eliminar el cambio?','Se quita del control y se devuelve la cantidad al stock.','Eliminar',_do);
+  else if(confirm('¿Eliminar el cambio?'))_do();
+}
+window._batCambioBorrar=_batCambioBorrar;
