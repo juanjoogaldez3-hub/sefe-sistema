@@ -58,22 +58,36 @@ function correr(marca){
   return {marca:ctx.__marca,mezcla:ctx.__mezcla,dom:{document,metaApp,metaTheme,mk,h2,span,loader,loaderBar,loaderNom,loginImg,rootStyle}};
 }
 
-// ── 1) SEFE: todo idéntico ─────────────────────────────────
-console.log('\n═══ SEFE sin bloque `marca` → idéntico a hoy ═══');
-const S=correr(null);
+// Bloque `marca` de SEFE tal cual va en config.js (produccion).
+const MARCA_SEFE={
+  nombre:'SEFE', tagline:'PEDIDOS & FACTURACIÓN', tituloPestana:'Pedidos y Facturación',
+  nombreLargo:'Soluciones Efectivas', monograma:'SE',
+  razonSocial:'Soluciones Efectivas, S.A.', membrete:'SEFE, S.A.',
+  nombreDoc:'Soluciones Efectivas GT', nit:'10777860-2',
+  ciudadPais:'Guatemala, C.A.', ciudadDoc:'Guatemala, Guatemala', prefijoArchivo:'SEFE',
+  colorPrimario:'#173916', colorPrimario700:'#234d20', colorPrimario600:'#2c5e28',
+  colorAcento:'#A8C038', colorAcentoOsc:'#7f9a26'
+};
+
+// ── 1) El PRODUCTO por defecto es Pulso 360 ────────────────
+console.log('\n═══ Sin bloque `marca` → el producto: Pulso 360 ═══');
+const P=correr(null);
+ok('nombre = Pulso 360', P.marca.nombre==='Pulso 360', P.marca.nombre);
+ok('nombreLargo = Pulso 360', P.marca.nombreLargo==='Pulso 360', P.marca.nombreLargo);
+ok('monograma = P3', P.marca.monograma==='P3', P.marca.monograma);
+ok('prefijoArchivo = PULSO', P.marca.prefijoArchivo==='PULSO', P.marca.prefijoArchivo);
+ok('pestaña = "Pulso 360 · Sistema de gestión"', P.dom.document.title==='Pulso 360 · Sistema de gestión', P.dom.document.title);
+ok('barra: nombre = Pulso 360', P.dom.h2.textContent==='Pulso 360', P.dom.h2.textContent);
+
+// ── 2) SEFE es un CLIENTE: queda idéntico a como estaba ────
+console.log('\n═══ SEFE (cliente) → idéntico a hoy ═══');
+const S=correr(MARCA_SEFE);
 ok('nombre = SEFE', S.marca.nombre==='SEFE', S.marca.nombre);
-ok('nombreLargo = Soluciones Efectivas', S.marca.nombreLargo==='Soluciones Efectivas', S.marca.nombreLargo);
 ok('razonSocial = Soluciones Efectivas, S.A.', S.marca.razonSocial==='Soluciones Efectivas, S.A.', S.marca.razonSocial);
 ok('membrete = SEFE, S.A.', S.marca.membrete==='SEFE, S.A.', S.marca.membrete);
 ok('nombreDoc = Soluciones Efectivas GT', S.marca.nombreDoc==='Soluciones Efectivas GT', S.marca.nombreDoc);
 ok('nit = 10777860-2', S.marca.nit==='10777860-2', S.marca.nit);
-ok('monograma = SE', S.marca.monograma==='SE', S.marca.monograma);
-ok('prefijoArchivo = SEFE', S.marca.prefijoArchivo==='SEFE', S.marca.prefijoArchivo);
-ok('logo = el SEFE_LOGO', S.marca.logo===LOGO_SEFE, S.marca.logo);
-ok('colorPrimario = #173916', S.marca.colorPrimario==='#173916', S.marca.colorPrimario);
-ok('colorAcento = #A8C038', S.marca.colorAcento==='#A8C038', S.marca.colorAcento);
-
-console.log('\n═══ SEFE: aplicarMarca() escribe lo mismo de siempre ═══');
+ok('logo = el SEFE_LOGO (heredado del default)', S.marca.logo===LOGO_SEFE, S.marca.logo);
 ok('pestaña = "SEFE · Pedidos y Facturación"', S.dom.document.title==='SEFE · Pedidos y Facturación', S.dom.document.title);
 ok('barra: monograma = SE', S.dom.mk.textContent==='SE', S.dom.mk.textContent);
 ok('barra: nombre = SEFE', S.dom.h2.textContent==='SEFE', S.dom.h2.textContent);
@@ -86,18 +100,18 @@ ok('--green-700 = #234d20 (tono exacto de SEFE)', S.dom.rootStyle._p['--green-70
 ok('--lime = #A8C038', S.dom.rootStyle._p['--lime']==='#A8C038', S.dom.rootStyle._p['--lime']);
 ok('--lime-dk = #7f9a26 (tono exacto de SEFE)', S.dom.rootStyle._p['--lime-dk']==='#7f9a26', S.dom.rootStyle._p['--lime-dk']);
 
-// ── 2) Cliente nuevo: pisa e hereda ────────────────────────
+// ── 3) Cliente nuevo: pisa e hereda ────────────────────────
 console.log('\n═══ Cliente nuevo: pisa lo suyo, hereda el resto ═══');
 const C=correr({nombre:'ACME',monograma:'AC',membrete:'ACME, S.A.',logo:'data:image/png;base64,ACMEXYZ',colorPrimario:'#0055aa',colorAcento:'#ffaa00'});
 ok('nombre pisado = ACME', C.marca.nombre==='ACME', C.marca.nombre);
 ok('monograma pisado = AC', C.marca.monograma==='AC', C.marca.monograma);
 ok('membrete pisado = ACME, S.A.', C.marca.membrete==='ACME, S.A.', C.marca.membrete);
 ok('logo pisado = el de ACME', C.marca.logo==='data:image/png;base64,ACMEXYZ', C.marca.logo);
-ok('razonSocial HEREDADA de SEFE', C.marca.razonSocial==='Soluciones Efectivas, S.A.', C.marca.razonSocial);
-ok('tagline HEREDADO de SEFE', C.marca.tagline==='PEDIDOS & FACTURACIÓN', C.marca.tagline);
+ok('razonSocial HEREDADA del default (Pulso 360)', C.marca.razonSocial==='Pulso 360', C.marca.razonSocial);
+ok('tagline HEREDADO del default (GESTIÓN 360°)', C.marca.tagline==='GESTIÓN 360°', C.marca.tagline);
 
 console.log('\n═══ Cliente: aplicarMarca() repinta la interfaz ═══');
-ok('pestaña = "ACME · Pedidos y Facturación"', C.dom.document.title==='ACME · Pedidos y Facturación', C.dom.document.title);
+ok('pestaña = "ACME · Sistema de gestión" (tituloPestana heredado)', C.dom.document.title==='ACME · Sistema de gestión', C.dom.document.title);
 ok('barra: nombre = ACME', C.dom.h2.textContent==='ACME', C.dom.h2.textContent);
 ok('theme-color = #0055aa', C.dom.metaTheme.getAttribute('content')==='#0055aa', C.dom.metaTheme._a);
 ok('--green = #0055aa (color del cliente)', C.dom.rootStyle._p['--green']==='#0055aa', C.dom.rootStyle._p['--green']);

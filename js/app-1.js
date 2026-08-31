@@ -240,26 +240,31 @@ const SEFE_LOGO='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAeAAAAC1CAYAAACH4
 // agrega su bloque `marca` en config.js y pisa lo que quiera; lo que
 // no ponga lo hereda de SEFE. Así una instalación se ve a medida sin
 // tocar el código.
+// La marca POR DEFECTO es la del PRODUCTO: Pulso 360. Es lo que se ve
+// cuando un entorno no trae su propio bloque `marca`. Cada cliente
+// (incluido SEFE) pisa lo que quiera desde config.js. SEFE dejó de ser
+// el default: ahora es un cliente más, con su marca en config.js.
 const _MARCA_DEFAULT = {
-  nombre:        'SEFE',                        // nombre corto (barra lateral, título, ícono)
-  tagline:       'PEDIDOS & FACTURACIÓN',       // bajada bajo el nombre en la barra
-  tituloPestana: 'Pedidos y Facturación',       // lo que va tras el nombre en la pestaña
-  nombreLargo:   'Soluciones Efectivas',        // pantalla de carga
-  monograma:     'SE',                          // el cuadrito de 2 letras
-  logo:          (typeof SEFE_LOGO!=='undefined')?SEFE_LOGO:'', // imagen (data URL) de los documentos
-  // ── Datos que aparecen en los documentos (facturas, notas, órdenes, Excel) ──
-  razonSocial:   'Soluciones Efectivas, S.A.',  // razón social en notas de préstamo/envío
-  membrete:      'SEFE, S.A.',                   // membrete de Excel y pie de PDF
-  nombreDoc:     'Soluciones Efectivas GT',      // encabezado de órdenes de compra y de Excel de inventario
-  nit:           '10777860-2',
-  ciudadPais:    'Guatemala, C.A.',              // "· Guatemala, C.A." bajo el logo
-  ciudadDoc:     'Guatemala, Guatemala',         // ciudad en el encabezado de facturas
-  prefijoArchivo:'SEFE',                         // prefijo de los archivos Excel descargados
-  // ── Colores de la marca (se aplican a la interfaz) ──
-  colorPrimario: '#173916',                      // verde principal
-  colorPrimario700:'#234d20', colorPrimario600:'#2c5e28', // tonos derivados (opcionales)
-  colorAcento:   '#A8C038',                      // lima de acento
-  colorAcentoOsc:'#7f9a26'                        // lima oscuro (opcional)
+  nombre:        'Pulso 360',                   // nombre corto (barra lateral, título, ícono)
+  tagline:       'GESTIÓN 360°',                // bajada bajo el nombre en la barra
+  tituloPestana: 'Sistema de gestión',          // lo que va tras el nombre en la pestaña
+  nombreLargo:   'Pulso 360',                   // pantalla de carga
+  monograma:     'P3',                          // el cuadrito de 2 letras
+  logo:          (typeof SEFE_LOGO!=='undefined')?SEFE_LOGO:'', // TODO: reemplazar por el logo de Pulso 360
+  // ── Datos que aparecen en los documentos: son un marcador de posición.
+  //    Cada cliente PONE los suyos (razón social, NIT) desde config.js. ──
+  razonSocial:   'Pulso 360',
+  membrete:      'Pulso 360',
+  nombreDoc:     'Pulso 360',
+  nit:           '0000000-0',
+  ciudadPais:    'Guatemala, C.A.',
+  ciudadDoc:     'Guatemala, Guatemala',
+  prefijoArchivo:'PULSO',                        // prefijo de los archivos Excel descargados
+  // ── Colores del producto (interim: se definen los de Pulso 360 luego) ──
+  colorPrimario: '#173916',
+  colorPrimario700:'#234d20', colorPrimario600:'#2c5e28',
+  colorAcento:   '#A8C038',
+  colorAcentoOsc:'#7f9a26'
 };
 const SEFE_MARCA = Object.assign({}, _MARCA_DEFAULT,
   (typeof SEFE_CONFIG!=='undefined' && SEFE_CONFIG.marca) || {});

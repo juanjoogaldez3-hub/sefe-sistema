@@ -119,7 +119,8 @@ qué existe para el cliente; el rol, qué ve cada empleado).
 
 ### El bloque `marca` (branding del cliente)
 
-Es **opcional**: lo que no pongas se hereda de SEFE. Con él, la
+Es **opcional**: lo que no pongas se hereda del producto (Pulso 360).
+Con él, la
 instalación se ve con la identidad del cliente **sin tocar código**:
 
 - **En la interfaz**: nombre y monograma en la barra, título de la
