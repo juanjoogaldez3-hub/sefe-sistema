@@ -74,5 +74,26 @@ const vm = require('vm');
   ok('vacío se queda vacío', !h('') && !h(null));
 })();
 
+console.log('\n═══ Baterías (parte 2) ═══');
+ok('index.html tiene la tabla de existencias (#t-bat-stock)', /id="t-bat-stock"/.test(html));
+ok('index.html tiene la tabla de cambios (#t-bat-cambios)', /id="t-bat-cambios"/.test(html));
+ok('el switch de pestañas despacha renderBaterias', /t==='bat'\)renderBaterias/.test(src));
+ok('existe renderBaterias (y en window)', /function renderBaterias\(/.test(src) && /window\.renderBaterias\s*=/.test(src));
+ok('existen tipos: openBatTipo + entrada de stock (_batEntrada)', /function openBatTipo\(/.test(src) && /function _batEntrada\(/.test(src));
+ok('existen cambios: openBatCambio (y en window)', /function openBatCambio\(/.test(src) && /window\.openBatCambio\s*=/.test(src));
+ok('el cambio DESCUENTA del stock (_batAjustarStock con negativo)', /_batAjustarStock\(tipoId,-cantidad\)/.test(src));
+ok('al borrar un cambio se DEVUELVE al stock', /_batAjustarStock\(c\.tipoId, ?Number\(c\.cantidad\)/.test(src));
+ok('el próximo cambio también se ajusta a día hábil', /id="bc-prox"[^>]*_siguienteHabil/.test(src));
+
+console.log('\n═══ Capa de datos · Baterías (db.js) ═══');
+ok('db.js mapea/guarda tipos (mapBatTipoFromDB / guardarBatTipo)', /function mapBatTipoFromDB\(/.test(dbjs) && /async function guardarBatTipo\(/.test(dbjs));
+ok('db.js mapea/guarda cambios (mapBatCambioFromDB / guardarBatCambio)', /function mapBatCambioFromDB\(/.test(dbjs) && /async function guardarBatCambio\(/.test(dbjs));
+ok('db.js carga baterías en el arranque (rBatTipos / rBatCambios)', /rBatTipos/.test(dbjs) && /from\('ctrl_bat_tipos'\)/.test(dbjs) && /from\('ctrl_bat_cambios'\)/.test(dbjs));
+
+console.log('\n═══ Migración · Baterías ═══');
+ok('existe la migración de ctrl_baterias', migs.some(n => /ctrl_baterias/.test(n)));
+const migB = migs.filter(n => /ctrl_baterias/.test(n)).map(n => fs.readFileSync(__dirname + '/supabase/migrations/' + n, 'utf8')).join('\n');
+ok('crea las dos tablas con RLS', /ctrl_bat_tipos/.test(migB) && /ctrl_bat_cambios/.test(migB) && /enable row level security/.test(migB) && /sefe_leer/.test(migB));
+
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
