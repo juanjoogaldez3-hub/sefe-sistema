@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 20 migraciones una por una.
+-- secuencias. Reemplaza correr las 21 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 20 migraciones, en este orden:
+-- Incluye 21 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -35,8 +35,9 @@
 --   16. 20260830140000_ctrl_baterias.sql
 --   17. 20260830160000_ctrl_bat_entregas.sql
 --   18. 20260830180000_ctrl_gasolina.sql
---   19. 20260831120000_rls_capa2.sql
---   20. 20260831140000_purga_auditoria.sql
+--   19. 20260830200000_recibos_especiales.sql
+--   20. 20260831120000_rls_capa2.sql
+--   21. 20260831140000_purga_auditoria.sql
 -- ============================================================
 
 
@@ -1672,6 +1673,59 @@ create policy sefe_borrar on public.ctrl_gasolina for delete to authenticated
 
 grant select, insert, update, delete on public.ctrl_gasolina to authenticated;
 grant usage, select on sequence public.ctrl_gasolina_id_seq to authenticated;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260830200000_recibos_especiales.sql                   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Planilla — Recibos especiales (prestaciones)
+-- ============================================================
+-- Pagos aparte de la planilla quincenal: aguinaldo, bono 14,
+-- indemnización u otro. Un recibo agrupa a varios empleados; el detalle
+-- (monto, ISR, otros descuentos, neto, estado de pago, póliza) va en la
+-- columna JSONB 'lineas'. Las columnas sueltas son el resumen.
+--
+-- Con RLS desde el inicio. Seguro de correr de más.
+-- ============================================================
+
+create table if not exists public.recibos_especiales (
+  id             bigserial primary key,
+  tipo           text not null default 'otro',   -- aguinaldo | bono14 | indemnizacion | otro
+  concepto       text,
+  fecha          date,
+  estado         text not null default 'borrador', -- borrador | parcial | pagada
+  total_neto     numeric not null default 0,
+  n_empleados    integer not null default 0,
+  notas          text,
+  lineas         jsonb not null default '[]'::jsonb,
+  creado_por     text,
+  creado         timestamptz not null default now(),
+  actualizado_el timestamptz
+);
+
+alter table public.recibos_especiales enable row level security;
+
+drop policy if exists sefe_leer   on public.recibos_especiales;
+create policy sefe_leer   on public.recibos_especiales for select to authenticated
+  using ((select public.sefe_activo()));
+
+drop policy if exists sefe_crear  on public.recibos_especiales;
+create policy sefe_crear  on public.recibos_especiales for insert to authenticated
+  with check ((select public.sefe_puede_escribir()));
+
+drop policy if exists sefe_editar on public.recibos_especiales;
+create policy sefe_editar on public.recibos_especiales for update to authenticated
+  using ((select public.sefe_puede_escribir()))
+  with check ((select public.sefe_puede_escribir()));
+
+drop policy if exists sefe_borrar on public.recibos_especiales;
+create policy sefe_borrar on public.recibos_especiales for delete to authenticated
+  using ((select public.sefe_es_admin()));
+
+grant select, insert, update, delete on public.recibos_especiales to authenticated;
+grant usage, select on sequence public.recibos_especiales_id_seq to authenticated;
 
 
 -- ╔══════════════════════════════════════════════════════════╗

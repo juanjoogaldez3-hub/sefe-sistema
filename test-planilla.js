@@ -66,6 +66,36 @@ ok('db.js guarda planillas (guardarPlanilla)', /async function guardarPlanilla\(
 ok('db.js carga planillas en el arranque (rPlanillas)', /rPlanillas/.test(dbjs) && /from\('planillas'\)/.test(dbjs));
 ok('la carga tolera tabla planillas ausente', /\(rPlanillas&&rPlanillas\.data\)/.test(dbjs));
 
+console.log('\n═══ Recibos especiales (prestaciones) ═══');
+ok('index.html tiene la tabla de recibos especiales (#t-recesp)', /id="t-recesp"/.test(html));
+ok('index.html tiene el botón Nuevo recibo especial', /onclick="nuevoReciboEspecial\(\)"/.test(html));
+ok('renderPlanilla también pinta los recibos especiales', /renderRecibosEspeciales/.test(src));
+ok('existen nuevoReciboEspecial / verReciboEspecial (en window)', /function nuevoReciboEspecial\(/.test(src) && /window\.verReciboEspecial\s*=/.test(src));
+ok('los tipos incluyen aguinaldo, bono 14 e indemnización', /aguinaldo:'Aguinaldo'/.test(src) && /bono14:'Bono 14'/.test(src) && /indemnizacion:'Indemnización'/.test(src));
+ok('sugiere el monto según el tiempo trabajado (_prestacionSugerida)', /function _prestacionSugerida\(/.test(src));
+ok('el pago genera salida de banco (origen recibo_especial) y boleta', /origen:'recibo_especial'/.test(src) && /function boletaEspecialPDF\(/.test(src));
+ok('se puede anular un pago y eliminar el recibo', /function _reAnular\(/.test(src) && /function eliminarReciboEspecial\(/.test(src));
+ok('db.js maneja recibos especiales (map/guardar)', /function mapReciboEspecialFromDB\(/.test(dbjs) && /async function guardarReciboEspecial\(/.test(dbjs));
+ok('db.js carga recibos especiales (rRecEsp / recibos_especiales)', /rRecEsp/.test(dbjs) && /from\('recibos_especiales'\)/.test(dbjs));
+
+// Verificación REAL del monto sugerido
+(() => {
+  const vm = require('vm');
+  const i = src.indexOf('function _prestacionSugerida(');
+  const j = src.indexOf('\n}', i);
+  const fn = src.slice(i, j + 2);
+  const ctx = { Date, Number, String, Math };
+  vm.createContext(ctx);
+  vm.runInContext(fn + '\n;globalThis.__p=_prestacionSugerida;', ctx);
+  const p = ctx.__p;
+  const emp = { sueldoBase: 4000, fechaIngreso: '2020-01-01' }; // >1 año
+  ok('aguinaldo con +1 año = sueldo completo (4000)', p('aguinaldo', emp, '2026-12-01') === 4000, p('aguinaldo', emp, '2026-12-01'));
+  const nuevo = { sueldoBase: 4000, fechaIngreso: '2026-06-01' }; // ~medio año a dic
+  const ag = p('aguinaldo', nuevo, '2026-12-01');
+  ok('aguinaldo proporcional para ingreso reciente (< sueldo)', ag > 0 && ag < 4000, ag);
+  ok('otro no sugiere monto (0)', p('otro', emp, '2026-12-01') === 0);
+})();
+
 console.log('\n═══ Migraciones ═══');
 const migs = fs.readdirSync(__dirname + '/supabase/migrations');
 ok('existe la migración de la tabla empleados', migs.some(n => /empleados/.test(n)));
