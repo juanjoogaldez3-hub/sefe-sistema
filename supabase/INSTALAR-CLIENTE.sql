@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 18 migraciones una por una.
+-- secuencias. Reemplaza correr las 20 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 18 migraciones, en este orden:
+-- Incluye 20 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -33,8 +33,10 @@
 --   14. 20260829180000_planillas.sql
 --   15. 20260830100000_ctrl_ambientales.sql
 --   16. 20260830140000_ctrl_baterias.sql
---   17. 20260831120000_rls_capa2.sql
---   18. 20260831140000_purga_auditoria.sql
+--   17. 20260830160000_ctrl_bat_entregas.sql
+--   18. 20260830180000_ctrl_gasolina.sql
+--   19. 20260831120000_rls_capa2.sql
+--   20. 20260831140000_purga_auditoria.sql
 -- ============================================================
 
 
@@ -1560,6 +1562,116 @@ begin
   end loop;
   grant usage, select on all sequences in schema public to authenticated;
 end $$;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260830160000_ctrl_bat_entregas.sql                    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Controles — Baterías: entregas a pilotos (parte 2.5)
+-- ============================================================
+-- Nivel intermedio: la batería sale de BODEGA a un PILOTO (entrega) y
+-- luego el piloto la COLOCA en un cliente (cambio). Así se cuadra a cada
+-- piloto: entregado − colocado = lo que le queda en mano.
+--   · ctrl_bat_entregas: entregas de bodega a un piloto (descuentan de
+--     la existencia en bodega).
+--   · ctrl_bat_cambios: se le agrega piloto_id (de quién salió la que se
+--     colocó). Ya NO descuenta de bodega (eso pasó en la entrega); baja
+--     del inventario del piloto (que se calcula: entregado − colocado).
+--
+-- Con RLS desde el inicio. Seguro de correr de más.
+-- ============================================================
+
+create table if not exists public.ctrl_bat_entregas (
+  id          bigserial primary key,
+  piloto_id   bigint,
+  tipo_id     bigint,
+  cantidad    numeric not null default 1,
+  fecha       date,
+  nota        text,
+  creado      timestamptz not null default now(),
+  creado_por  text
+);
+
+-- A los cambios (colocaciones) les agregamos de qué piloto salieron.
+alter table public.ctrl_bat_cambios add column if not exists piloto_id bigint;
+
+-- ── RLS para la tabla nueva ──
+alter table public.ctrl_bat_entregas enable row level security;
+
+drop policy if exists sefe_leer   on public.ctrl_bat_entregas;
+create policy sefe_leer   on public.ctrl_bat_entregas for select to authenticated
+  using ((select public.sefe_activo()));
+
+drop policy if exists sefe_crear  on public.ctrl_bat_entregas;
+create policy sefe_crear  on public.ctrl_bat_entregas for insert to authenticated
+  with check ((select public.sefe_puede_escribir()));
+
+drop policy if exists sefe_editar on public.ctrl_bat_entregas;
+create policy sefe_editar on public.ctrl_bat_entregas for update to authenticated
+  using ((select public.sefe_puede_escribir()))
+  with check ((select public.sefe_puede_escribir()));
+
+drop policy if exists sefe_borrar on public.ctrl_bat_entregas;
+create policy sefe_borrar on public.ctrl_bat_entregas for delete to authenticated
+  using ((select public.sefe_es_admin()));
+
+grant select, insert, update, delete on public.ctrl_bat_entregas to authenticated;
+grant usage, select on sequence public.ctrl_bat_entregas_id_seq to authenticated;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260830180000_ctrl_gasolina.sql                        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Controles — Gasolina (parte 3)
+-- ============================================================
+-- Consumo de combustible por vehículo/piloto: galones, monto,
+-- kilometraje (para el rendimiento km/gal). Si se elige una cuenta de
+-- banco, la carga registra su salida en Bancos (categoría combustible),
+-- y acá se guarda el número de póliza de ese movimiento.
+--
+-- Con RLS desde el inicio. Seguro de correr de más.
+-- ============================================================
+
+create table if not exists public.ctrl_gasolina (
+  id           bigserial primary key,
+  piloto_id    bigint,
+  vehiculo     text,
+  fecha        date,
+  galones      numeric not null default 0,
+  monto        numeric not null default 0,
+  kilometraje  numeric,
+  cuenta_id    bigint,
+  mov_poliza   integer,
+  nota         text,
+  creado       timestamptz not null default now(),
+  creado_por   text
+);
+
+alter table public.ctrl_gasolina enable row level security;
+
+drop policy if exists sefe_leer   on public.ctrl_gasolina;
+create policy sefe_leer   on public.ctrl_gasolina for select to authenticated
+  using ((select public.sefe_activo()));
+
+drop policy if exists sefe_crear  on public.ctrl_gasolina;
+create policy sefe_crear  on public.ctrl_gasolina for insert to authenticated
+  with check ((select public.sefe_puede_escribir()));
+
+drop policy if exists sefe_editar on public.ctrl_gasolina;
+create policy sefe_editar on public.ctrl_gasolina for update to authenticated
+  using ((select public.sefe_puede_escribir()))
+  with check ((select public.sefe_puede_escribir()));
+
+drop policy if exists sefe_borrar on public.ctrl_gasolina;
+create policy sefe_borrar on public.ctrl_gasolina for delete to authenticated
+  using ((select public.sefe_es_admin()));
+
+grant select, insert, update, delete on public.ctrl_gasolina to authenticated;
+grant usage, select on sequence public.ctrl_gasolina_id_seq to authenticated;
 
 
 -- ╔══════════════════════════════════════════════════════════╗

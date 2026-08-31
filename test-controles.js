@@ -81,9 +81,46 @@ ok('el switch de pestañas despacha renderBaterias', /t==='bat'\)renderBaterias/
 ok('existe renderBaterias (y en window)', /function renderBaterias\(/.test(src) && /window\.renderBaterias\s*=/.test(src));
 ok('existen tipos: openBatTipo + entrada de stock (_batEntrada)', /function openBatTipo\(/.test(src) && /function _batEntrada\(/.test(src));
 ok('existen cambios: openBatCambio (y en window)', /function openBatCambio\(/.test(src) && /window\.openBatCambio\s*=/.test(src));
-ok('el cambio DESCUENTA del stock (_batAjustarStock con negativo)', /_batAjustarStock\(tipoId,-cantidad\)/.test(src));
-ok('al borrar un cambio se DEVUELVE al stock', /_batAjustarStock\(c\.tipoId, ?Number\(c\.cantidad\)/.test(src));
 ok('el próximo cambio también se ajusta a día hábil', /id="bc-prox"[^>]*_siguienteHabil/.test(src));
+
+console.log('\n═══ Baterías · entregas a pilotos + cuadre ═══');
+ok('index.html tiene la tabla de entregas (#t-bat-entregas)', /id="t-bat-entregas"/.test(html));
+ok('index.html tiene la tabla "en mano por piloto" (#t-bat-enmano)', /id="t-bat-enmano"/.test(html));
+ok('la colocación (cambio) pide el PILOTO (bc-pil, requerido)', /id="bc-pil"/.test(src) && /Elegí de qué piloto sale/.test(src));
+ok('existe openBatEntrega (entrega de bodega a piloto)', /function openBatEntrega\(/.test(src) && /window\.openBatEntrega\s*=/.test(src));
+ok('la ENTREGA descuenta de bodega (_batAjustarStock negativo en openBatEntrega)', /function openBatEntrega\([\s\S]*?_batAjustarStock\(tipoId,-cantidad\)/.test(src));
+ok('borrar una entrega DEVUELVE a bodega', /_batAjustarStock\(e\.tipoId, ?Number\(e\.cantidad\)/.test(src));
+ok('la colocación YA NO toca bodega (sin _batAjustarStock en openBatCambio)', !/_batAjustarStock/.test(src.slice(src.indexOf('function openBatCambio('), src.indexOf('window.openBatCambio='))));
+ok('el "en mano" se calcula entregado − colocado (_batEnMano / _batEnManoDe)', /function _batEnMano\(/.test(src) && /function _batEnManoDe\(/.test(src));
+ok('db.js maneja entregas (mapBatEntregaFromDB / guardarBatEntrega)', /function mapBatEntregaFromDB\(/.test(dbjs) && /async function guardarBatEntrega\(/.test(dbjs));
+ok('db.js carga entregas (rBatEntregas / ctrl_bat_entregas)', /rBatEntregas/.test(dbjs) && /from\('ctrl_bat_entregas'\)/.test(dbjs));
+ok('el cambio guarda el piloto (piloto_id en guardarBatCambio)', /piloto_id:c\.pilotoId/.test(dbjs));
+ok('existe la migración de entregas con la columna piloto_id en cambios', migs.some(n=>/ctrl_bat_entregas/.test(n)));
+
+// Verificación REAL del cálculo "en mano"
+(() => {
+  const i = src.indexOf('function _batEnManoDe(');
+  const j = src.indexOf('\n}', i);
+  const fn = src.slice(i, j + 2);
+  const ctx = { String, Number,
+    batEntregas: [ {pilotoId:1,tipoId:9,cantidad:10}, {pilotoId:1,tipoId:9,cantidad:5} ],
+    batCambios:  [ {id:100,pilotoId:1,tipoId:9,cantidad:4}, {id:101,pilotoId:1,tipoId:9,cantidad:3} ],
+  };
+  vm.createContext(ctx);
+  vm.runInContext(fn + '\n;globalThis.__m=_batEnManoDe;', ctx);
+  const m = ctx.__m;
+  // entregado 15 − colocado 7 = 8
+  ok('en mano = entregado − colocado (15 − 7 = 8)', m(1, 9) === 8, m(1, 9));
+  // excluyendo el cambio 100 (cantidad 4): colocado 3 → 15 − 3 = 12
+  ok('excluye el cambio en edición (15 − 3 = 12)', m(1, 9, 100) === 12, m(1, 9, 100));
+})();
+
+console.log('\n═══ Reporte de baterías por cliente ═══');
+ok('existe el reporte PDF (reporteBateriasPDF)', /function reporteBateriasPDF\(/.test(src) && /window\.reporteBateriasPDF\s*=/.test(src));
+ok('existe el reporte Excel (reporteBateriasExcel)', /async function reporteBateriasExcel\(/.test(src) && /window\.reporteBateriasExcel\s*=/.test(src));
+ok('el reporte agrupa por cliente y muestra el próximo cambio', /BATERÍAS POR CLIENTE/.test(src) && /_batEstadoTxt\(/.test(src));
+ok('el Excel usa los ayudantes estándar (_cargarXLSX / descargarXlsx)', /_cargarXLSX\(\)/.test(src) && /descargarXlsx\(XLSX/.test(src));
+ok('index.html tiene los botones de reporte (PDF/Excel)', /onclick="reporteBateriasPDF\(\)"/.test(html) && /onclick="reporteBateriasExcel\(\)"/.test(html));
 
 console.log('\n═══ Capa de datos · Baterías (db.js) ═══');
 ok('db.js mapea/guarda tipos (mapBatTipoFromDB / guardarBatTipo)', /function mapBatTipoFromDB\(/.test(dbjs) && /async function guardarBatTipo\(/.test(dbjs));
@@ -94,6 +131,22 @@ console.log('\n═══ Migración · Baterías ═══');
 ok('existe la migración de ctrl_baterias', migs.some(n => /ctrl_baterias/.test(n)));
 const migB = migs.filter(n => /ctrl_baterias/.test(n)).map(n => fs.readFileSync(__dirname + '/supabase/migrations/' + n, 'utf8')).join('\n');
 ok('crea las dos tablas con RLS', /ctrl_bat_tipos/.test(migB) && /ctrl_bat_cambios/.test(migB) && /enable row level security/.test(migB) && /sefe_leer/.test(migB));
+
+console.log('\n═══ Gasolina (parte 3) ═══');
+ok('index.html tiene la tabla de gasolina (#t-gas)', /id="t-gas"/.test(html));
+ok('el switch de pestañas despacha renderGasolina', /t==='gas'\)renderGasolina/.test(src));
+ok('existe renderGasolina + openGasolina (y en window)', /function renderGasolina\(/.test(src) && /function openGasolina\(/.test(src) && /window\.openGasolina\s*=/.test(src));
+ok('calcula el rendimiento km/gal (_gasRendimiento)', /function _gasRendimiento\(/.test(src));
+ok('registra el gasto en Bancos (categoría combustible, origen gasolina)', /categoria:'combustible'/.test(src) && /origen:'gasolina'/.test(src));
+ok('al borrar una carga se anula su gasto en Bancos', /_gasAnularMov\(g\.movPoliza\)/.test(src));
+ok('tiene reporte de gasolina (detalle PDF + Excel)', /function reporteGasolinaPDF\(/.test(src) && /function reporteGasolinaExcel\(/.test(src) && /CONSUMO DE COMBUSTIBLE/.test(src));
+ok('tiene selector de reportes (reporteGasolinaUI)', /function reporteGasolinaUI\(/.test(src) && /onclick="reporteGasolinaUI\(\)"/.test(html));
+ok('tiene resumen por piloto y consumo por mes', /function _reporteGasPiloto\(/.test(src) && /function _reporteGasMes\(/.test(src) && /RESUMEN POR PILOTO/.test(src) && /CONSUMO POR MES/.test(src));
+
+console.log('\n═══ Capa de datos · Gasolina (db.js) ═══');
+ok('db.js mapea/guarda gasolina (mapGasolinaFromDB / guardarGasolina)', /function mapGasolinaFromDB\(/.test(dbjs) && /async function guardarGasolina\(/.test(dbjs));
+ok('db.js carga gasolina en el arranque (rGas / ctrl_gasolina)', /rGas/.test(dbjs) && /from\('ctrl_gasolina'\)/.test(dbjs));
+ok('existe la migración de ctrl_gasolina con RLS', migs.some(n=>/ctrl_gasolina/.test(n)) && (() => { const m = migs.filter(n=>/ctrl_gasolina/.test(n)).map(n=>fs.readFileSync(__dirname+'/supabase/migrations/'+n,'utf8')).join(''); return /enable row level security/.test(m) && /sefe_leer/.test(m); })());
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
