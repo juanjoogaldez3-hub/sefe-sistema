@@ -413,7 +413,8 @@ let empleados=[]; // empleados para el módulo de planilla
 let planillas=[]; // planillas quincenales guardadas (historial)
 let ambServicios=[]; // Controles · Ambientales (servicios de recarga)
 let batTipos=[]; // Controles · Baterías (tipos y stock)
-let batCambios=[]; // Controles · Baterías (cambios por cliente/equipo)
+let batCambios=[]; // Controles · Baterías (cambios/colocaciones por cliente)
+let batEntregas=[]; // Controles · Baterías (entregas de bodega a pilotos)
 let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====

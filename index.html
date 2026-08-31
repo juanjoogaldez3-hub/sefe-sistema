@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/estilos.css?v=20260830b">
+<link rel="stylesheet" href="css/estilos.css?v=20260830c">
 <!-- PWA: instalable como app (ícono propio, pantalla completa) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#173916">
@@ -30,11 +30,11 @@
 <!-- Librería de Supabase (conexión a la base de datos) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tus credenciales (editás este archivo una sola vez) -->
-<script src="config.js?v=20260830b"></script>
+<script src="config.js?v=20260830c"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
-<script src="db.js?v=20260830b"></script>
+<script src="db.js?v=20260830c"></script>
 <!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
-<script src="realtime.js?v=20260830b"></script>
+<script src="realtime.js?v=20260830c"></script>
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
@@ -246,14 +246,24 @@
         </div>
         <div id="ctrl-bat" class="ctrl-pane" hidden>
           <div class="panel">
-            <div class="panel-head"><h3>Baterías — existencias</h3><button class="btn btn-primary btn-sm" onclick="openBatTipo()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo tipo</button></div>
-            <table><thead><tr><th>Tipo / modelo</th><th class="num">Existencia</th><th></th></tr></thead><tbody id="t-bat-stock"></tbody></table>
+            <div class="panel-head"><h3>Existencias en bodega</h3><button class="btn btn-primary btn-sm" onclick="openBatTipo()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo tipo</button></div>
+            <table><thead><tr><th>Tipo / modelo</th><th class="num">En bodega</th><th></th></tr></thead><tbody id="t-bat-stock"></tbody></table>
             <div class="empty" id="bat-stock-empty" style="display:none">Aún no hay tipos de batería. Agregá el primero con "Nuevo tipo".</div>
           </div>
           <div class="panel">
-            <div class="panel-head"><h3>Baterías — cambios por cliente</h3><button class="btn btn-primary btn-sm" onclick="openBatCambio()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo cambio</button></div>
-            <table><thead><tr><th>Cliente / equipo</th><th>Tipo</th><th class="num">Cant.</th><th>Fecha</th><th>Próximo cambio</th><th></th></tr></thead><tbody id="t-bat-cambios"></tbody></table>
-            <div class="empty" id="bat-cambios-empty" style="display:none">Aún no hay cambios registrados. Agregá el primero con "Nuevo cambio".</div>
+            <div class="panel-head"><h3>Entregas a pilotos</h3><button class="btn btn-primary btn-sm" onclick="openBatEntrega()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva entrega</button></div>
+            <table><thead><tr><th>Piloto</th><th>Tipo</th><th class="num">Cant.</th><th>Fecha</th><th></th></tr></thead><tbody id="t-bat-entregas"></tbody></table>
+            <div class="empty" id="bat-entregas-empty" style="display:none">Sin entregas todavía. Entregá baterías a un piloto con "Nueva entrega".</div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3>En mano por piloto <span style="font-size:12px;color:var(--muted);font-weight:400">(entregado − colocado)</span></h3></div>
+            <table><thead><tr><th>Piloto</th><th>Tipo</th><th class="num">Entregado</th><th class="num">Colocado</th><th class="num">En mano</th></tr></thead><tbody id="t-bat-enmano"></tbody></table>
+            <div class="empty" id="bat-enmano-empty" style="display:none">Todavía no hay movimientos por piloto.</div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3>Colocaciones en clientes</h3><button class="btn btn-primary btn-sm" onclick="openBatCambio()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva colocación</button></div>
+            <table><thead><tr><th>Cliente / equipo</th><th>Piloto</th><th>Tipo</th><th class="num">Cant.</th><th>Fecha</th><th>Próximo cambio</th><th></th></tr></thead><tbody id="t-bat-cambios"></tbody></table>
+            <div class="empty" id="bat-cambios-empty" style="display:none">Aún no hay colocaciones. Agregá la primera con "Nueva colocación".</div>
           </div>
         </div>
         <div id="ctrl-gas" class="ctrl-pane" hidden>
@@ -787,18 +797,18 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app-1.js?v=20260830b"></script>
-<script src="js/app-2.js?v=20260830b"></script>
-<script src="js/app-3.js?v=20260830b"></script>
-<script src="js/app-4.js?v=20260830b"></script>
-<script src="js/app-5.js?v=20260830b"></script>
-<script src="js/app-6.js?v=20260830b"></script>
-<script src="js/app-7.js?v=20260830b"></script>
-<script src="js/app-8.js?v=20260830b"></script>
-<script src="js/app-9.js?v=20260830b"></script>
-<script src="js/app-10.js?v=20260830b"></script>
-<script src="js/app-11.js?v=20260830b"></script>
-<script src="js/app-12.js?v=20260830b"></script>
-<script src="js/app-13.js?v=20260830b"></script>
+<script src="js/app-1.js?v=20260830c"></script>
+<script src="js/app-2.js?v=20260830c"></script>
+<script src="js/app-3.js?v=20260830c"></script>
+<script src="js/app-4.js?v=20260830c"></script>
+<script src="js/app-5.js?v=20260830c"></script>
+<script src="js/app-6.js?v=20260830c"></script>
+<script src="js/app-7.js?v=20260830c"></script>
+<script src="js/app-8.js?v=20260830c"></script>
+<script src="js/app-9.js?v=20260830c"></script>
+<script src="js/app-10.js?v=20260830c"></script>
+<script src="js/app-11.js?v=20260830c"></script>
+<script src="js/app-12.js?v=20260830c"></script>
+<script src="js/app-13.js?v=20260830c"></script>
 </body>
 </html>

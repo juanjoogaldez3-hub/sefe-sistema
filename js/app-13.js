@@ -214,8 +214,21 @@ function _batStockBadge(stock){
   if(stock<=5)return ' <span class="badge b-warn" style="font-size:10px">Bajo</span>';
   return '';
 }
+function _batNombrePiloto(id){
+  const p=(typeof pilotos!=='undefined'?pilotos:[]).find(x=>String(x.id)===String(id));
+  return p?p.nombre:'—';
+}
+// Inventario EN MANO por piloto y tipo: entregado − colocado.
+function _batEnMano(){
+  const m={}; // clave `${pilotoId}|${tipoId}` → {pilotoId,tipoId,entregado,colocado}
+  const k=(p,t)=>String(p)+'|'+String(t);
+  const get=(p,t)=>{const key=k(p,t);return m[key]||(m[key]={pilotoId:p,tipoId:t,entregado:0,colocado:0});};
+  (typeof batEntregas!=='undefined'?batEntregas:[]).forEach(e=>{if(e.pilotoId&&e.tipoId)get(e.pilotoId,e.tipoId).entregado+=Number(e.cantidad)||0;});
+  (typeof batCambios!=='undefined'?batCambios:[]).forEach(c=>{if(c.pilotoId&&c.tipoId)get(c.pilotoId,c.tipoId).colocado+=Number(c.cantidad)||0;});
+  return Object.values(m);
+}
 function renderBaterias(){
-  // Existencias
+  // 1) Existencias en bodega
   const ts=$('#t-bat-stock');
   if(ts){
     const lista=(typeof batTipos!=='undefined'?batTipos:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)));
@@ -224,12 +237,41 @@ function renderBaterias(){
         <td style="font-weight:600">${escHtml(t.nombre)}</td>
         <td class="num" style="font-weight:700">${(Number(t.stock)||0)}${_batStockBadge(Number(t.stock)||0)}</td>
         <td style="text-align:right;white-space:nowrap">
-          <button class="btn btn-ghost btn-sm" onclick="_batEntrada(${t.id})" title="Sumar existencias">＋ Entrada</button>
+          <button class="btn btn-ghost btn-sm" onclick="_batEntrada(${t.id})" title="Sumar existencias a bodega">＋ Entrada</button>
           <button class="btn btn-ghost btn-sm" onclick="openBatTipo(${t.id})">Editar</button></td>
       </tr>`).join('');
     if(typeof enhanceTable==='function')enhanceTable('t-bat-stock');
   }
-  // Cambios
+  // 2) Entregas a pilotos
+  const te=$('#t-bat-entregas');
+  if(te){
+    const lista=(typeof batEntregas!=='undefined'?batEntregas:[]).slice().sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+    const e=$('#bat-entregas-empty'); if(e)e.style.display=lista.length?'none':'block';
+    te.innerHTML=lista.map(x=>`<tr>
+        <td style="font-weight:600">${escHtml(_batNombrePiloto(x.pilotoId))}</td>
+        <td>${escHtml(_batNombreTipo(x.tipoId))}</td>
+        <td class="num">${Number(x.cantidad)||0}</td>
+        <td>${x.fecha?fdate(x.fecha):'—'}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="openBatEntrega(${x.id})">Editar</button></td>
+      </tr>`).join('');
+    if(typeof enhanceTable==='function')enhanceTable('t-bat-entregas');
+  }
+  // 3) En mano por piloto (cuadre): entregado − colocado
+  const tm=$('#t-bat-enmano');
+  if(tm){
+    const lista=_batEnMano().filter(r=>r.entregado||r.colocado)
+      .sort((a,b)=>_batNombrePiloto(a.pilotoId).localeCompare(_batNombrePiloto(b.pilotoId))||_batNombreTipo(a.tipoId).localeCompare(_batNombreTipo(b.tipoId)));
+    const e=$('#bat-enmano-empty'); if(e)e.style.display=lista.length?'none':'block';
+    tm.innerHTML=lista.map(r=>{const mano=r.entregado-r.colocado;return `<tr>
+        <td style="font-weight:600">${escHtml(_batNombrePiloto(r.pilotoId))}</td>
+        <td>${escHtml(_batNombreTipo(r.tipoId))}</td>
+        <td class="num">${r.entregado}</td>
+        <td class="num">${r.colocado}</td>
+        <td class="num" style="font-weight:700;${mano<0?'color:var(--danger)':''}">${mano}${mano<0?' <span class="badge b-danger" style="font-size:10px">Revisar</span>':''}</td>
+      </tr>`;}).join('');
+    if(typeof enhanceTable==='function')enhanceTable('t-bat-enmano');
+  }
+  // 4) Colocaciones (cambios) por cliente
   const tc=$('#t-bat-cambios');
   if(tc){
     const lista=(typeof batCambios!=='undefined'?batCambios:[]).slice()
@@ -237,6 +279,7 @@ function renderBaterias(){
     const e=$('#bat-cambios-empty'); if(e)e.style.display=lista.length?'none':'block';
     tc.innerHTML=lista.map(c=>`<tr>
         <td style="font-weight:600">${escHtml(_ctrlNombreCliente(c.clienteId))}${c.equipo?`<div style="font-size:11px;color:var(--muted-2)">${escHtml(c.equipo)}</div>`:''}</td>
+        <td>${escHtml(_batNombrePiloto(c.pilotoId))}</td>
         <td>${escHtml(_batNombreTipo(c.tipoId))}</td>
         <td class="num">${Number(c.cantidad)||0}</td>
         <td>${c.fecha?fdate(c.fecha):'—'}</td>
@@ -310,35 +353,52 @@ function _batTipoBorrar(id){
 }
 window._batTipoBorrar=_batTipoBorrar;
 
-// ── Cambios por cliente/equipo (descuentan del stock) ──
+// En mano de un piloto para un tipo (entregado − colocado), pudiendo
+// excluir un cambio (el que se está editando).
+function _batEnManoDe(pilotoId,tipoId,excludeId){
+  if(!pilotoId||!tipoId)return 0;
+  let ent=0,col=0;
+  (typeof batEntregas!=='undefined'?batEntregas:[]).forEach(e=>{if(String(e.pilotoId)===String(pilotoId)&&String(e.tipoId)===String(tipoId))ent+=Number(e.cantidad)||0;});
+  (typeof batCambios!=='undefined'?batCambios:[]).forEach(x=>{if(String(x.id)!==String(excludeId)&&String(x.pilotoId)===String(pilotoId)&&String(x.tipoId)===String(tipoId))col+=Number(x.cantidad)||0;});
+  return ent-col;
+}
+
+// ── Colocaciones (cambios): salen del inventario del PILOTO ──
+function _optClientes(sel){return `<option value="">— Elegí cliente —</option>`+
+  (typeof clientes!=='undefined'?clientes:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
+    .map(x=>`<option value="${x.id}"${String(sel)===String(x.id)?' selected':''}>${escHtml(x.nombre)}</option>`).join('');}
+function _optTipos(sel){return `<option value="">— Elegí tipo —</option>`+
+  (typeof batTipos!=='undefined'?batTipos:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
+    .map(t=>`<option value="${t.id}"${String(sel)===String(t.id)?' selected':''}>${escHtml(t.nombre)}</option>`).join('');}
+function _optPilotos(sel){return `<option value="">— Elegí piloto —</option>`+
+  (typeof pilotos!=='undefined'?pilotos:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
+    .map(p=>`<option value="${p.id}"${String(sel)===String(p.id)?' selected':''}>${escHtml(p.nombre)}</option>`).join('');}
+
 function openBatCambio(id){
   const c=id?batCambios.find(x=>String(x.id)===String(id)):null;
-  const old=c?{tipoId:c.tipoId,cantidad:Number(c.cantidad)||0}:null; // para ajustar el stock
-  const optCli=`<option value="">— Elegí cliente —</option>`+
-    (typeof clientes!=='undefined'?clientes:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
-      .map(x=>`<option value="${x.id}"${c&&String(c.clienteId)===String(x.id)?' selected':''}>${escHtml(x.nombre)}</option>`).join('');
-  const optTipo=`<option value="">— Elegí tipo —</option>`+
-    (typeof batTipos!=='undefined'?batTipos:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
-      .map(t=>`<option value="${t.id}"${c&&String(c.tipoId)===String(t.id)?' selected':''}>${escHtml(t.nombre)} (stock ${Number(t.stock)||0})</option>`).join('');
+  window._bcEditId=c?c.id:null;   // para excluir este cambio del "en mano"
   const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():'';
-  openMod(c?'Editar cambio de batería':'Nuevo cambio de batería',
-    `<div class="row"><div><label>Cliente</label><select id="bc-cli">${optCli}</select></div><div><label>Equipo / ubicación</label><input id="bc-eq" value="${c?escHtml(c.equipo||''):''}" placeholder="Ej. Dispensador baño 1"></div></div>
-     <div class="row"><div><label>Tipo de batería</label><select id="bc-tipo">${optTipo}</select></div><div><label>Cantidad</label><input id="bc-cant" type="number" step="1" value="${c?(Number(c.cantidad)||1):1}"></div></div>
+  openMod(c?'Editar colocación de batería':'Nueva colocación de batería',
+    `<div class="row"><div><label>Cliente</label><select id="bc-cli">${_optClientes(c&&c.clienteId)}</select></div><div><label>Equipo / ubicación</label><input id="bc-eq" value="${c?escHtml(c.equipo||''):''}" placeholder="Ej. Dispensador baño 1"></div></div>
+     <div class="row"><div><label>Piloto <span style="font-weight:400;color:var(--muted-2)">(de quién sale)</span></label><select id="bc-pil" onchange="_bcActualizarEnMano()">${_optPilotos(c&&c.pilotoId)}</select></div><div><label>Tipo de batería</label><select id="bc-tipo" onchange="_bcActualizarEnMano()">${_optTipos(c&&c.tipoId)}</select></div></div>
+     <div class="row"><div><label>Cantidad</label><input id="bc-cant" type="number" step="1" value="${c?(Number(c.cantidad)||1):1}"></div><div></div></div>
      <div class="row"><div><label>Fecha del cambio</label><input id="bc-fecha" type="date" value="${c&&c.fecha?String(c.fecha).slice(0,10):hoy}"></div><div><label>Próximo cambio <span style="font-weight:400;color:var(--muted-2)">(si cae fin de semana pasa al lunes)</span></label><input id="bc-prox" type="date" onchange="this.value=_siguienteHabil(this.value)" value="${c&&c.proximo?String(c.proximo).slice(0,10):''}"></div></div>
      <div class="row"><div style="grid-column:1/-1"><label>Nota</label><input id="bc-nota" value="${c?escHtml(c.nota||''):''}"></div></div>
-     ${c?`<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_batCambioBorrar(${c.id})">Eliminar cambio</button></div>`:''}
+     ${c?`<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_batCambioBorrar(${c.id})">Eliminar colocación</button></div>`:''}
      <div class="note" id="bc-info" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span></span></div>
      <div class="note n-danger" id="bc-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     async ()=>{
       const err=m=>{$('#bc-err').style.display='flex';$('#bc-err').querySelector('span').textContent=m;};
       const clienteId=$('#bc-cli').value?Number($('#bc-cli').value):null;
       if(!clienteId){err('Elegí el cliente');return;}
+      const pilotoId=$('#bc-pil').value?Number($('#bc-pil').value):null;
+      if(!pilotoId){err('Elegí de qué piloto sale la batería');return;}
       const tipoId=$('#bc-tipo').value?Number($('#bc-tipo').value):null;
       if(!tipoId){err('Elegí el tipo de batería');return;}
       const cantidad=Number($('#bc-cant').value)||0;
       if(cantidad<=0){err('La cantidad debe ser mayor a 0');return;}
       const rec=c||{_nuevo:true};
-      rec.clienteId=clienteId; rec.equipo=$('#bc-eq').value.trim(); rec.tipoId=tipoId; rec.cantidad=cantidad;
+      rec.clienteId=clienteId; rec.equipo=$('#bc-eq').value.trim(); rec.pilotoId=pilotoId; rec.tipoId=tipoId; rec.cantidad=cantidad;
       rec.fecha=$('#bc-fecha').value||null;
       rec.proximo=$('#bc-prox').value||null;
       if(rec.proximo){const hab=_siguienteHabil(rec.proximo);if(hab!==rec.proximo){rec.proximo=hab;toast('Próximo cambio movido','Caía en fin de semana → '+fdate(hab));}}
@@ -347,20 +407,22 @@ function openBatCambio(id){
       const ok=await (typeof guardarBatCambio==='function'?guardarBatCambio(rec):Promise.resolve(false));
       if(!ok){err('No se pudo guardar. ¿Ya corriste el SQL de Baterías?');if(!c)rec._nuevo=true;return;}
       if(!c)batCambios.push(rec);
-      // Ajuste de stock: la salida descuenta; en edición se corrige el delta.
-      if(!old){ await _batAjustarStock(tipoId,-cantidad); }
-      else if(String(old.tipoId)===String(tipoId)){ await _batAjustarStock(tipoId, old.cantidad-cantidad); }
-      else { await _batAjustarStock(old.tipoId, old.cantidad); await _batAjustarStock(tipoId, -cantidad); }
-      if(typeof logAudit==='function')logAudit(c?'Batería · cambio editado':'Batería · cambio creado',_ctrlNombreCliente(clienteId)+' · '+_batNombreTipo(tipoId)+' x'+cantidad);
-      closeMod();renderBaterias();toast('✓ Cambio guardado',_ctrlNombreCliente(clienteId));
+      // No toca bodega: el inventario del piloto (entregado − colocado) lo refleja solo.
+      if(typeof logAudit==='function')logAudit(c?'Batería · colocación editada':'Batería · colocación creada',_batNombrePiloto(pilotoId)+' → '+_ctrlNombreCliente(clienteId)+' · '+_batNombreTipo(tipoId)+' x'+cantidad);
+      closeMod();renderBaterias();toast('✓ Colocación guardada',_ctrlNombreCliente(clienteId));
     });
-  // Aviso de stock insuficiente (informativo, no bloquea)
-  setTimeout(()=>{ const sel=$('#bc-tipo'); if(sel)sel.onchange=()=>{
-      const t=batTipos.find(x=>String(x.id)===String(sel.value)); const info=$('#bc-info');
-      if(t&&info){const falta=(Number(t.stock)||0);info.style.display=falta<=5?'flex':'none';if(falta<=5)info.querySelector('span').textContent='Stock de '+t.nombre+': '+falta+(falta<=0?' (vas a quedar en negativo)':'');}
-    }; },50);
+  setTimeout(_bcActualizarEnMano,50);
 }
 window.openBatCambio=openBatCambio;
+// Muestra cuánto tiene en mano el piloto de ese tipo (para no colocar de más).
+function _bcActualizarEnMano(){
+  const pil=$('#bc-pil'), tipo=$('#bc-tipo'), info=$('#bc-info'); if(!pil||!tipo||!info)return;
+  if(!pil.value||!tipo.value){info.style.display='none';return;}
+  const mano=_batEnManoDe(pil.value,tipo.value,(window._bcEditId||null));
+  info.style.display='flex';
+  info.querySelector('span').textContent='En mano de '+_batNombrePiloto(pil.value)+' ('+_batNombreTipo(tipo.value)+'): '+mano+(mano<=0?' — no le queda de este tipo':'');
+}
+window._bcActualizarEnMano=_bcActualizarEnMano;
 
 function _batCambioBorrar(id){
   const c=(typeof batCambios!=='undefined'?batCambios:[]).find(x=>String(x.id)===String(id)); if(!c)return;
@@ -368,12 +430,62 @@ function _batCambioBorrar(id){
     const ok=await (typeof borrarBatCambio==='function'?borrarBatCambio(id):Promise.resolve(false));
     if(!ok){toast('No se pudo borrar','Intentá de nuevo',true);return;}
     const idx=batCambios.findIndex(x=>String(x.id)===String(id)); if(idx>=0)batCambios.splice(idx,1);
-    // Devolver al stock lo que había descontado ese cambio
-    await _batAjustarStock(c.tipoId, Number(c.cantidad)||0);
-    if(typeof logAudit==='function')logAudit('Batería · cambio eliminado',_ctrlNombreCliente(c.clienteId));
-    if(typeof closeMod==='function')closeMod(); renderBaterias(); toast('✓ Cambio eliminado (stock devuelto)');
+    // No toca bodega; el en mano del piloto se recalcula solo.
+    if(typeof logAudit==='function')logAudit('Batería · colocación eliminada',_ctrlNombreCliente(c.clienteId));
+    if(typeof closeMod==='function')closeMod(); renderBaterias(); toast('✓ Colocación eliminada');
   };
-  if(typeof confirmar==='function')confirmar('¿Eliminar el cambio?','Se quita del control y se devuelve la cantidad al stock.','Eliminar',_do);
-  else if(confirm('¿Eliminar el cambio?'))_do();
+  if(typeof confirmar==='function')confirmar('¿Eliminar la colocación?','Se quita del control. Le vuelve a contar al piloto en su inventario.','Eliminar',_do);
+  else if(confirm('¿Eliminar la colocación?'))_do();
 }
+
+// ── Entregas de bodega a pilotos (descuentan de bodega) ──
+function openBatEntrega(id){
+  const e=id?batEntregas.find(x=>String(x.id)===String(id)):null;
+  const old=e?{tipoId:e.tipoId,cantidad:Number(e.cantidad)||0}:null;
+  const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():'';
+  openMod(e?'Editar entrega a piloto':'Nueva entrega a piloto',
+    `<div class="row"><div><label>Piloto</label><select id="be-pil">${_optPilotos(e&&e.pilotoId)}</select></div><div><label>Tipo de batería</label><select id="be-tipo">${_optTipos(e&&e.tipoId)}</select></div></div>
+     <div class="row"><div><label>Cantidad entregada</label><input id="be-cant" type="number" step="1" value="${e?(Number(e.cantidad)||1):1}"></div><div><label>Fecha</label><input id="be-fecha" type="date" value="${e&&e.fecha?String(e.fecha).slice(0,10):hoy}"></div></div>
+     <div class="row"><div style="grid-column:1/-1"><label>Nota</label><input id="be-nota" value="${e?escHtml(e.nota||''):''}"></div></div>
+     ${e?`<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_batEntregaBorrar(${e.id})">Eliminar entrega</button></div>`:''}
+     <div class="note n-danger" id="be-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
+    async ()=>{
+      const err=m=>{$('#be-err').style.display='flex';$('#be-err').querySelector('span').textContent=m;};
+      const pilotoId=$('#be-pil').value?Number($('#be-pil').value):null;
+      if(!pilotoId){err('Elegí el piloto');return;}
+      const tipoId=$('#be-tipo').value?Number($('#be-tipo').value):null;
+      if(!tipoId){err('Elegí el tipo de batería');return;}
+      const cantidad=Number($('#be-cant').value)||0;
+      if(cantidad<=0){err('La cantidad debe ser mayor a 0');return;}
+      const rec=e||{_nuevo:true};
+      rec.pilotoId=pilotoId; rec.tipoId=tipoId; rec.cantidad=cantidad; rec.fecha=$('#be-fecha').value||null; rec.nota=$('#be-nota').value.trim();
+      if(!rec.creadoPor&&typeof currentUser!=='undefined')rec.creadoPor=currentUser;
+      const ok=await (typeof guardarBatEntrega==='function'?guardarBatEntrega(rec):Promise.resolve(false));
+      if(!ok){err('No se pudo guardar. ¿Ya corriste el SQL de entregas?');if(!e)rec._nuevo=true;return;}
+      if(!e)batEntregas.push(rec);
+      // La entrega SALE de bodega: descuenta del stock del tipo (en edición, delta).
+      if(!old){ await _batAjustarStock(tipoId,-cantidad); }
+      else if(String(old.tipoId)===String(tipoId)){ await _batAjustarStock(tipoId, old.cantidad-cantidad); }
+      else { await _batAjustarStock(old.tipoId, old.cantidad); await _batAjustarStock(tipoId, -cantidad); }
+      if(typeof logAudit==='function')logAudit(e?'Batería · entrega editada':'Batería · entrega a piloto',_batNombrePiloto(pilotoId)+' · '+_batNombreTipo(tipoId)+' x'+cantidad);
+      closeMod();renderBaterias();toast('✓ Entrega guardada',_batNombrePiloto(pilotoId));
+    });
+}
+window.openBatEntrega=openBatEntrega;
+
+function _batEntregaBorrar(id){
+  const e=(typeof batEntregas!=='undefined'?batEntregas:[]).find(x=>String(x.id)===String(id)); if(!e)return;
+  const _do=async()=>{
+    const ok=await (typeof borrarBatEntrega==='function'?borrarBatEntrega(id):Promise.resolve(false));
+    if(!ok){toast('No se pudo borrar','Intentá de nuevo',true);return;}
+    const idx=batEntregas.findIndex(x=>String(x.id)===String(id)); if(idx>=0)batEntregas.splice(idx,1);
+    // Devolver a bodega lo entregado
+    await _batAjustarStock(e.tipoId, Number(e.cantidad)||0);
+    if(typeof logAudit==='function')logAudit('Batería · entrega eliminada',_batNombrePiloto(e.pilotoId));
+    if(typeof closeMod==='function')closeMod(); renderBaterias(); toast('✓ Entrega eliminada (devuelta a bodega)');
+  };
+  if(typeof confirmar==='function')confirmar('¿Eliminar la entrega?','Se devuelve la cantidad a bodega.','Eliminar',_do);
+  else if(confirm('¿Eliminar la entrega?'))_do();
+}
+window._batEntregaBorrar=_batEntregaBorrar;
 window._batCambioBorrar=_batCambioBorrar;
