@@ -48,5 +48,31 @@ ok('existe la migración de ctrl_ambientales', migs.some(n => /ctrl_ambientales/
 const mig = migs.filter(n => /ctrl_ambientales/.test(n)).map(n => fs.readFileSync(__dirname + '/supabase/migrations/' + n, 'utf8')).join('\n');
 ok('la migración trae RLS (enable row level security + sefe_leer)', /enable row level security/.test(mig) && /sefe_leer/.test(mig));
 
+console.log('\n═══ Vista calendario + día hábil ═══');
+ok('index.html tiene el toggle Lista/Calendario', /data-vista="lista"/.test(html) && /data-vista="cal"/.test(html));
+ok('index.html tiene el contenedor del calendario (#amb-cal)', /id="amb-cal"/.test(html));
+ok('existe ambVista y renderAmbCalendario', /function ambVista\(/.test(src) && /function renderAmbCalendario\(/.test(src));
+ok('existe la navegación del calendario (ambCalMover / ambCalHoy)', /function ambCalMover\(/.test(src) && /function ambCalHoy\(/.test(src));
+ok('existe _siguienteHabil (y en window)', /function _siguienteHabil\(/.test(src) && /window\._siguienteHabil\s*=/.test(src));
+ok('el próximo servicio se ajusta al guardar si cae fin de semana', /rec\.proximo=_?_?siguienteHabil|hab=_siguienteHabil\(rec\.proximo\)/.test(src));
+
+// Verificación REAL de la lógica de día hábil
+const vm = require('vm');
+(() => {
+  const i = src.indexOf('function _siguienteHabil(');
+  const j = src.indexOf('\n}', i);
+  const fn = src.slice(i, j + 2);
+  const ctx = { Date, String };
+  vm.createContext(ctx);
+  vm.runInContext(fn + '\n;globalThis.__h=_siguienteHabil;', ctx);
+  const h = ctx.__h;
+  // 2026-08-29 es sábado → lunes 31 ; 2026-08-30 domingo → lunes 31
+  ok('sábado (2026-08-29) → lunes 2026-08-31', h('2026-08-29') === '2026-08-31', h('2026-08-29'));
+  ok('domingo (2026-08-30) → lunes 2026-08-31', h('2026-08-30') === '2026-08-31', h('2026-08-30'));
+  ok('viernes (2026-08-28) NO se mueve', h('2026-08-28') === '2026-08-28', h('2026-08-28'));
+  ok('lunes (2026-08-31) NO se mueve', h('2026-08-31') === '2026-08-31', h('2026-08-31'));
+  ok('vacío se queda vacío', !h('') && !h(null));
+})();
+
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
