@@ -739,3 +739,122 @@ async function _reporteGasolina(excel){
     </table>`;
   _abrirPDF(_pdfShell({titulo:'CONSUMO DE COMBUSTIBLE',subtitulo:'Cargas por piloto / vehículo',orientacion:'portrait',body}));
 }
+
+// ── Reportes de gasolina: selector + cortes ────────────────
+function reporteGasolinaUI(){
+  const fila=(titulo,desc,fn)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)">
+      <div><div style="font-weight:600">${titulo}</div><div style="font-size:12px;color:var(--muted)">${desc}</div></div>
+      <div style="display:flex;gap:6px;white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" onclick="${fn}(false)">PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="${fn}(true)">Excel</button>
+      </div></div>`;
+  openMod('Reportes de gasolina',
+    fila('Detalle de cargas','Todas las cargas con galones, monto, kilometraje y rendimiento.','_reporteGasolina')+
+    fila('Resumen por piloto / vehículo','Total de galones, gasto, km recorridos y rendimiento promedio, por piloto.','_reporteGasPiloto')+
+    fila('Consumo por mes','Galones y gasto mes a mes (con gráfico), para ver la tendencia.','_reporteGasMes'),
+    null);
+  if($('#m-save'))$('#m-save').style.display='none';
+}
+window.reporteGasolinaUI=reporteGasolinaUI;
+
+// Agrega por piloto/vehículo: galones, monto, km recorridos y rendimiento.
+function _gasResumenPiloto(){
+  const por={};
+  (typeof gasolina!=='undefined'?gasolina:[]).forEach(g=>{
+    const k=g.pilotoId?('p'+g.pilotoId):('v'+(g.vehiculo||'—'));
+    const o=por[k]||(por[k]={nombre:_gasQuien(g),galones:0,monto:0,km:0,galRend:0,_lecturas:[]});
+    o.galones+=Number(g.galones)||0; o.monto+=Number(g.monto)||0;
+    if(g.kilometraje!=null)o._lecturas.push({km:Number(g.kilometraje),gal:Number(g.galones)||0});
+  });
+  Object.values(por).forEach(o=>{
+    o._lecturas.sort((a,b)=>a.km-b.km);
+    for(let i=1;i<o._lecturas.length;i++){const d=o._lecturas[i].km-o._lecturas[i-1].km;if(d>0){o.km+=d;o.galRend+=o._lecturas[i].gal;}}
+    o.rend=o.galRend>0?Math.round(o.km/o.galRend*10)/10:null;
+    delete o._lecturas;
+  });
+  return Object.values(por).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+}
+async function _reporteGasPiloto(excel){
+  const rows=_gasResumenPiloto();
+  if(!rows.length){toast('Sin datos','No hay cargas registradas',true);return;}
+  const totGal=rows.reduce((s,r)=>s+r.galones,0), totQ=rows.reduce((s,r)=>s+r.monto,0), totKm=rows.reduce((s,r)=>s+r.km,0);
+  if(excel){
+    try{
+      const {XLSX,styled}=await _cargarXLSX();
+      const marca=(typeof SEFE_MARCA!=='undefined'&&SEFE_MARCA.membrete)||'SEFE, S.A.';
+      const aoa=[[marca],['GASOLINA · RESUMEN POR PILOTO'],['Generado el '+fdate(new Date())],[],
+        ['Piloto / vehículo','Galones','Gasto','Km recorridos','Rendimiento (km/gal)']];
+      rows.forEach(r=>aoa.push([r.nombre,Math.round(r.galones*10)/10,r.monto,r.km,r.rend!=null?r.rend:'']));
+      aoa.push(['Total',Math.round(totGal*10)/10,totQ,totKm,'']);
+      const ws=XLSX.utils.aoa_to_sheet(aoa);
+      _estiloExcelHoja(XLSX,ws,{styled,nCols:5,headerRow:4,dataRows:rows.length,moneyCols:[2],totalRow:5+rows.length,brandRow:0,titleRow:1,metaRows:[2]});
+      const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Por piloto');
+      await descargarXlsx(XLSX,wb,'SEFE-Gasolina-por-piloto.xlsx');
+    }catch(e){console.error(e);toast('No se pudo exportar','',true);}
+    return;
+  }
+  const filas=rows.map(r=>`<tr>
+      <td style="padding:4px 6px;font-size:11px;border-bottom:1px solid #ECEFE3">${escHtml(r.nombre)}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right;border-bottom:1px solid #ECEFE3">${Math.round(r.galones*10)/10}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right;border-bottom:1px solid #ECEFE3">${money(r.monto)}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right;border-bottom:1px solid #ECEFE3">${r.km.toLocaleString('es-GT')}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right;font-weight:700;border-bottom:1px solid #ECEFE3">${r.rend!=null?r.rend+' km/gal':'—'}</td>
+    </tr>`).join('');
+  const body=`<table style="width:100%;border-collapse:collapse">
+      <thead><tr>${['Piloto / vehículo','Galones','Gasto','Km recorridos','Rendimiento'].map((h,i)=>`<th style="padding:4px 6px;font-size:9.5px;text-align:${i?'right':'left'};color:#909584;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid #D6DCC9">${h}</th>`).join('')}</tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr style="font-weight:700;color:#173916"><td style="padding:5px 6px;border-top:2px solid #173916">Total</td><td style="padding:5px 6px;text-align:right;border-top:2px solid #173916">${Math.round(totGal*10)/10}</td><td style="padding:5px 6px;text-align:right;border-top:2px solid #173916">${money(totQ)}</td><td style="padding:5px 6px;text-align:right;border-top:2px solid #173916">${totKm.toLocaleString('es-GT')}</td><td style="border-top:2px solid #173916"></td></tr></tfoot>
+    </table>`;
+  _abrirPDF(_pdfShell({titulo:'GASOLINA · RESUMEN POR PILOTO',subtitulo:'Galones, gasto y rendimiento por piloto',orientacion:'portrait',body}));
+}
+window._reporteGasPiloto=_reporteGasPiloto;
+
+// Agrega por mes: galones y gasto.
+function _gasPorMes(){
+  const por={};
+  (typeof gasolina!=='undefined'?gasolina:[]).forEach(g=>{
+    const m=String(g.fecha||'').slice(0,7); if(!m)return;
+    const o=por[m]||(por[m]={mes:m,galones:0,monto:0});
+    o.galones+=Number(g.galones)||0; o.monto+=Number(g.monto)||0;
+  });
+  const MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return Object.values(por).sort((a,b)=>a.mes.localeCompare(b.mes))
+    .map(o=>Object.assign(o,{label:MES[(+o.mes.slice(5,7))-1]+' '+o.mes.slice(0,4)}));
+}
+async function _reporteGasMes(excel){
+  const meses=_gasPorMes();
+  if(!meses.length){toast('Sin datos','No hay cargas registradas',true);return;}
+  const totGal=meses.reduce((s,m)=>s+m.galones,0), totQ=meses.reduce((s,m)=>s+m.monto,0);
+  if(excel){
+    try{
+      const {XLSX,styled}=await _cargarXLSX();
+      const marca=(typeof SEFE_MARCA!=='undefined'&&SEFE_MARCA.membrete)||'SEFE, S.A.';
+      const aoa=[[marca],['GASOLINA · CONSUMO POR MES'],['Generado el '+fdate(new Date())],[],['Mes','Galones','Gasto']];
+      meses.forEach(m=>aoa.push([m.label,Math.round(m.galones*10)/10,m.monto]));
+      aoa.push(['Total',Math.round(totGal*10)/10,totQ]);
+      const ws=XLSX.utils.aoa_to_sheet(aoa);
+      _estiloExcelHoja(XLSX,ws,{styled,nCols:3,headerRow:4,dataRows:meses.length,moneyCols:[2],totalRow:5+meses.length,brandRow:0,titleRow:1,metaRows:[2]});
+      const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Por mes');
+      await descargarXlsx(XLSX,wb,'SEFE-Gasolina-por-mes.xlsx');
+    }catch(e){console.error(e);toast('No se pudo exportar','',true);}
+    return;
+  }
+  const maxQ=Math.max(1,...meses.map(m=>m.monto));
+  const barras=meses.map(m=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:0">
+      <div style="font-size:9px;color:#666B5C;margin-bottom:2px">${money(m.monto)}</div>
+      <div style="width:60%;max-width:34px;background:#173916;border-radius:4px 4px 0 0;height:${Math.max(2,Math.round(m.monto/maxQ*120))}px"></div>
+      <div style="font-size:9px;color:#333;margin-top:3px;white-space:nowrap">${m.label}</div></div>`).join('');
+  const filas=meses.map(m=>`<tr>
+      <td style="padding:4px 6px;font-size:11px;border-bottom:1px solid #ECEFE3">${m.label}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right;border-bottom:1px solid #ECEFE3">${Math.round(m.galones*10)/10}</td>
+      <td style="padding:4px 6px;font-size:11px;text-align:right;border-bottom:1px solid #ECEFE3">${money(m.monto)}</td>
+    </tr>`).join('');
+  const body=`<div style="display:flex;align-items:flex-end;gap:8px;height:150px;padding:6px 0 0;border-bottom:1px solid #D6DCC9;margin-bottom:12px">${barras}</div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>${['Mes','Galones','Gasto'].map((h,i)=>`<th style="padding:4px 6px;font-size:9.5px;text-align:${i?'right':'left'};color:#909584;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid #D6DCC9">${h}</th>`).join('')}</tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr style="font-weight:700;color:#173916"><td style="padding:5px 6px;border-top:2px solid #173916">Total</td><td style="padding:5px 6px;text-align:right;border-top:2px solid #173916">${Math.round(totGal*10)/10}</td><td style="padding:5px 6px;text-align:right;border-top:2px solid #173916">${money(totQ)}</td></tr></tfoot>
+    </table>`;
+  _abrirPDF(_pdfShell({titulo:'GASOLINA · CONSUMO POR MES',subtitulo:'Galones y gasto mes a mes',orientacion:'portrait',body}));
+}
+window._reporteGasMes=_reporteGasMes;

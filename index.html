@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/estilos.css?v=20260830e">
+<link rel="stylesheet" href="css/estilos.css?v=20260830f">
 <!-- PWA: instalable como app (ícono propio, pantalla completa) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#173916">
@@ -30,11 +30,11 @@
 <!-- Librería de Supabase (conexión a la base de datos) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tus credenciales (editás este archivo una sola vez) -->
-<script src="config.js?v=20260830e"></script>
+<script src="config.js?v=20260830f"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
-<script src="db.js?v=20260830e"></script>
+<script src="db.js?v=20260830f"></script>
 <!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
-<script src="realtime.js?v=20260830e"></script>
+<script src="realtime.js?v=20260830f"></script>
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
@@ -281,8 +281,7 @@
           <div class="panel">
             <div class="panel-head"><h3>Consumo de combustible</h3>
               <div style="display:flex;gap:6px;align-items:center">
-                <button class="btn btn-ghost btn-sm" onclick="reporteGasolinaPDF()" title="Reporte de consumo (PDF)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15h6M9 11h2"/></svg>PDF</button>
-                <button class="btn btn-ghost btn-sm" onclick="reporteGasolinaExcel()" title="Reporte de consumo (Excel)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13l3 4M12 13l-3 4"/></svg>Excel</button>
+                <button class="btn btn-ghost btn-sm" onclick="reporteGasolinaUI()" title="Reportes de gasolina"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>Reportes</button>
                 <button class="btn btn-primary btn-sm" onclick="openGasolina()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva carga</button>
               </div>
             </div>
@@ -818,18 +817,18 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app-1.js?v=20260830e"></script>
-<script src="js/app-2.js?v=20260830e"></script>
-<script src="js/app-3.js?v=20260830e"></script>
-<script src="js/app-4.js?v=20260830e"></script>
-<script src="js/app-5.js?v=20260830e"></script>
-<script src="js/app-6.js?v=20260830e"></script>
-<script src="js/app-7.js?v=20260830e"></script>
-<script src="js/app-8.js?v=20260830e"></script>
-<script src="js/app-9.js?v=20260830e"></script>
-<script src="js/app-10.js?v=20260830e"></script>
-<script src="js/app-11.js?v=20260830e"></script>
-<script src="js/app-12.js?v=20260830e"></script>
-<script src="js/app-13.js?v=20260830e"></script>
+<script src="js/app-1.js?v=20260830f"></script>
+<script src="js/app-2.js?v=20260830f"></script>
+<script src="js/app-3.js?v=20260830f"></script>
+<script src="js/app-4.js?v=20260830f"></script>
+<script src="js/app-5.js?v=20260830f"></script>
+<script src="js/app-6.js?v=20260830f"></script>
+<script src="js/app-7.js?v=20260830f"></script>
+<script src="js/app-8.js?v=20260830f"></script>
+<script src="js/app-9.js?v=20260830f"></script>
+<script src="js/app-10.js?v=20260830f"></script>
+<script src="js/app-11.js?v=20260830f"></script>
+<script src="js/app-12.js?v=20260830f"></script>
+<script src="js/app-13.js?v=20260830f"></script>
 </body>
 </html>
