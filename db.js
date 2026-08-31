@@ -76,7 +76,7 @@ async function cargarTodo() {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
-      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios, rBatEntregas
+      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios, rBatEntregas, rGas
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -108,6 +108,8 @@ async function cargarTodo() {
       sb.from('ctrl_bat_tipos').select('*').order('nombre'),
       sb.from('ctrl_bat_cambios').select('*').order('id',{ascending:false}),
       sb.from('ctrl_bat_entregas').select('*').order('id',{ascending:false}),
+      // Controles · Gasolina (tolera tabla ausente).
+      sb.from('ctrl_gasolina').select('*').order('id',{ascending:false}),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -202,6 +204,9 @@ async function cargarTodo() {
     }
     if (typeof batEntregas !== 'undefined') {
       batEntregas = ((rBatEntregas&&rBatEntregas.data)||[]).map(mapBatEntregaFromDB);
+    }
+    if (typeof gasolina !== 'undefined') {
+      gasolina = ((rGas&&rGas.data)||[]).map(mapGasolinaFromDB);
     }
 
     // Categorías (umbrales de stock por categoría). Tolera que la tabla no exista todavía.
@@ -1054,6 +1059,42 @@ async function borrarBatEntrega(id){
   return true;
 }
 if(typeof window!=='undefined'){window.guardarBatEntrega=guardarBatEntrega;window.borrarBatEntrega=borrarBatEntrega;}
+
+// ── Controles · Gasolina (consumo por vehículo/piloto) ─────
+function mapGasolinaFromDB(g){
+  return {
+    id:g.id, pilotoId:g.piloto_id||null, vehiculo:g.vehiculo||'', fecha:g.fecha||null,
+    galones:Number(g.galones)||0, monto:Number(g.monto)||0,
+    kilometraje:(g.kilometraje==null?null:Number(g.kilometraje)),
+    cuentaId:g.cuenta_id||null, movPoliza:g.mov_poliza||null, nota:g.nota||'',
+    creadoPor:g.creado_por||'', creado:g.creado
+  };
+}
+async function guardarGasolina(g){
+  const row={
+    piloto_id:g.pilotoId||null, vehiculo:g.vehiculo||null, fecha:g.fecha||null,
+    galones:Number(g.galones)||0, monto:Number(g.monto)||0,
+    kilometraje:(g.kilometraje==null||g.kilometraje===''?null:Number(g.kilometraje)),
+    cuenta_id:g.cuentaId||null, mov_poliza:g.movPoliza||null, nota:g.nota||null
+  };
+  if(g._nuevo){
+    delete g._nuevo;
+    row.creado_por=g.creadoPor||null;
+    const {data,error}=await sb.from('ctrl_gasolina').insert(row).select().single();
+    if(error){console.error('Error guardando gasolina:',error);g._nuevo=true;return false;}
+    g.id=data.id; return true;
+  }else{
+    const {error}=await sb.from('ctrl_gasolina').update(row).eq('id',g.id);
+    if(error){console.error('Error actualizando gasolina:',error);return false;}
+    return true;
+  }
+}
+async function borrarGasolina(id){
+  const {error}=await sb.from('ctrl_gasolina').delete().eq('id',id);
+  if(error){console.error('Error borrando gasolina:',error);return false;}
+  return true;
+}
+if(typeof window!=='undefined'){window.guardarGasolina=guardarGasolina;window.borrarGasolina=borrarGasolina;}
 
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).
