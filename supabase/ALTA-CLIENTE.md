@@ -3,9 +3,14 @@
 Checklist para montar un cliente nuevo (un Supabase propio por cliente).
 Copiá esta sección, llená los datos, y seguí los pasos en orden.
 
+> **Atajo (recomendado): el Asistente de Alta.** En vez de llenar esto a
+> mano, usá el asistente visual: llenás nombre, dominio, módulos y
+> colores, y te arma solo el bloque de `config.js` y esta misma checklist.
+> El bloque se lo pasás a Claude y lo publica. (El asistente es un
+> artifact de Claude; pedíselo y te pasa el enlace.)
+
 > Todo el proceso es sin terminal. Lo único que se toca a mano son unos
-> pocos campos en Supabase y en GitHub; el resto lo aplican solas las
-> migraciones.
+> pocos campos en Supabase y en GitHub; el resto se arma solo.
 
 ---
 
@@ -28,17 +33,25 @@ Copiá esta sección, llená los datos, y seguí los pasos en orden.
    (Settings → API), y **resetear la Database password** (Settings →
    Database) — la vas a necesitar en el Paso 2.
 
-## Paso 2 · Migraciones (crea todas las tablas solas)
-1. En GitHub → Settings → Secrets and variables → Actions, agregar la
-   contraseña de la base del cliente como un secret nuevo:
-   `SUPABASE_DB_PASSWORD_<CLAVE_EN_MAYUSCULAS>`
-   (ej. `SUPABASE_DB_PASSWORD_FERRETERIA_LOPEZ`).
-2. Agregar un job para ese cliente en `.github/workflows/migraciones.yml`
-   (ver plantilla abajo).
-3. Publicar. Las migraciones se aplican **desde la primera**
-   (`baseline_esquema`, que crea las tablas) y la base queda con el
-   mismo esquema que SEFE. **No** se corre `baseline.sql`: es una base
-   nueva, así que todo se aplica de verdad.
+## Paso 2 · Instalar la base (una sola pegada)
+
+La forma simple: pegar el instalador completo en el SQL Editor del
+proyecto nuevo.
+
+1. En el proyecto nuevo → **SQL Editor → New query**.
+2. Pegar TODO el archivo `supabase/INSTALAR-CLIENTE.sql` y **Run**.
+3. Al final quedan creadas todas las tablas, la seguridad (RLS capa 1 y
+   2), los índices y las secuencias. Sin errores = base lista.
+
+> `INSTALAR-CLIENTE.sql` se genera solo juntando todas las migraciones
+> (`node scripts/build-instalador.js`). No se edita a mano; la prueba
+> `test-instalador.js` avisa si quedó viejo.
+
+**Alternativa (con el robot de migraciones):** si algún día se activa el
+robot de GitHub Actions, en vez del instalador se agrega la contraseña
+de la base como secret `SUPABASE_DB_PASSWORD_<CLAVE_EN_MAYUSCULAS>` y un
+job en `.github/workflows/migraciones.yml` (plantilla abajo), y las
+migraciones se aplican solas.
 
 ## Paso 3 · Encender el cliente en `config.js`
 Copiar el bloque plantilla del final de `config.js`, descomentarlo y
