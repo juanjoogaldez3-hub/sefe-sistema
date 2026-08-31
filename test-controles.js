@@ -81,9 +81,39 @@ ok('el switch de pestañas despacha renderBaterias', /t==='bat'\)renderBaterias/
 ok('existe renderBaterias (y en window)', /function renderBaterias\(/.test(src) && /window\.renderBaterias\s*=/.test(src));
 ok('existen tipos: openBatTipo + entrada de stock (_batEntrada)', /function openBatTipo\(/.test(src) && /function _batEntrada\(/.test(src));
 ok('existen cambios: openBatCambio (y en window)', /function openBatCambio\(/.test(src) && /window\.openBatCambio\s*=/.test(src));
-ok('el cambio DESCUENTA del stock (_batAjustarStock con negativo)', /_batAjustarStock\(tipoId,-cantidad\)/.test(src));
-ok('al borrar un cambio se DEVUELVE al stock', /_batAjustarStock\(c\.tipoId, ?Number\(c\.cantidad\)/.test(src));
 ok('el próximo cambio también se ajusta a día hábil', /id="bc-prox"[^>]*_siguienteHabil/.test(src));
+
+console.log('\n═══ Baterías · entregas a pilotos + cuadre ═══');
+ok('index.html tiene la tabla de entregas (#t-bat-entregas)', /id="t-bat-entregas"/.test(html));
+ok('index.html tiene la tabla "en mano por piloto" (#t-bat-enmano)', /id="t-bat-enmano"/.test(html));
+ok('la colocación (cambio) pide el PILOTO (bc-pil, requerido)', /id="bc-pil"/.test(src) && /Elegí de qué piloto sale/.test(src));
+ok('existe openBatEntrega (entrega de bodega a piloto)', /function openBatEntrega\(/.test(src) && /window\.openBatEntrega\s*=/.test(src));
+ok('la ENTREGA descuenta de bodega (_batAjustarStock negativo en openBatEntrega)', /function openBatEntrega\([\s\S]*?_batAjustarStock\(tipoId,-cantidad\)/.test(src));
+ok('borrar una entrega DEVUELVE a bodega', /_batAjustarStock\(e\.tipoId, ?Number\(e\.cantidad\)/.test(src));
+ok('la colocación YA NO toca bodega (sin _batAjustarStock en openBatCambio)', !/_batAjustarStock/.test(src.slice(src.indexOf('function openBatCambio('), src.indexOf('window.openBatCambio='))));
+ok('el "en mano" se calcula entregado − colocado (_batEnMano / _batEnManoDe)', /function _batEnMano\(/.test(src) && /function _batEnManoDe\(/.test(src));
+ok('db.js maneja entregas (mapBatEntregaFromDB / guardarBatEntrega)', /function mapBatEntregaFromDB\(/.test(dbjs) && /async function guardarBatEntrega\(/.test(dbjs));
+ok('db.js carga entregas (rBatEntregas / ctrl_bat_entregas)', /rBatEntregas/.test(dbjs) && /from\('ctrl_bat_entregas'\)/.test(dbjs));
+ok('el cambio guarda el piloto (piloto_id en guardarBatCambio)', /piloto_id:c\.pilotoId/.test(dbjs));
+ok('existe la migración de entregas con la columna piloto_id en cambios', migs.some(n=>/ctrl_bat_entregas/.test(n)));
+
+// Verificación REAL del cálculo "en mano"
+(() => {
+  const i = src.indexOf('function _batEnManoDe(');
+  const j = src.indexOf('\n}', i);
+  const fn = src.slice(i, j + 2);
+  const ctx = { String, Number,
+    batEntregas: [ {pilotoId:1,tipoId:9,cantidad:10}, {pilotoId:1,tipoId:9,cantidad:5} ],
+    batCambios:  [ {id:100,pilotoId:1,tipoId:9,cantidad:4}, {id:101,pilotoId:1,tipoId:9,cantidad:3} ],
+  };
+  vm.createContext(ctx);
+  vm.runInContext(fn + '\n;globalThis.__m=_batEnManoDe;', ctx);
+  const m = ctx.__m;
+  // entregado 15 − colocado 7 = 8
+  ok('en mano = entregado − colocado (15 − 7 = 8)', m(1, 9) === 8, m(1, 9));
+  // excluyendo el cambio 100 (cantidad 4): colocado 3 → 15 − 3 = 12
+  ok('excluye el cambio en edición (15 − 3 = 12)', m(1, 9, 100) === 12, m(1, 9, 100));
+})();
 
 console.log('\n═══ Capa de datos · Baterías (db.js) ═══');
 ok('db.js mapea/guarda tipos (mapBatTipoFromDB / guardarBatTipo)', /function mapBatTipoFromDB\(/.test(dbjs) && /async function guardarBatTipo\(/.test(dbjs));

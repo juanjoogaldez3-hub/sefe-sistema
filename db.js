@@ -76,7 +76,7 @@ async function cargarTodo() {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
-      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios
+      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios, rBatEntregas
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -107,6 +107,7 @@ async function cargarTodo() {
       // Controles · Baterías (tipos/stock + cambios; tolera tabla ausente).
       sb.from('ctrl_bat_tipos').select('*').order('nombre'),
       sb.from('ctrl_bat_cambios').select('*').order('id',{ascending:false}),
+      sb.from('ctrl_bat_entregas').select('*').order('id',{ascending:false}),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -198,6 +199,9 @@ async function cargarTodo() {
     }
     if (typeof batCambios !== 'undefined') {
       batCambios = ((rBatCambios&&rBatCambios.data)||[]).map(mapBatCambioFromDB);
+    }
+    if (typeof batEntregas !== 'undefined') {
+      batEntregas = ((rBatEntregas&&rBatEntregas.data)||[]).map(mapBatEntregaFromDB);
     }
 
     // Categorías (umbrales de stock por categoría). Tolera que la tabla no exista todavía.
@@ -988,14 +992,14 @@ async function borrarBatTipo(id){
 // ── Controles · Baterías (cambios por cliente/equipo) ──────
 function mapBatCambioFromDB(c){
   return {
-    id:c.id, clienteId:c.cliente_id, equipo:c.equipo||'', tipoId:c.tipo_id,
+    id:c.id, clienteId:c.cliente_id, equipo:c.equipo||'', tipoId:c.tipo_id, pilotoId:c.piloto_id||null,
     cantidad:Number(c.cantidad)||0, fecha:c.fecha||null, proximo:c.proximo||null,
     nota:c.nota||'', creadoPor:c.creado_por||'', creado:c.creado
   };
 }
 async function guardarBatCambio(c){
   const row={
-    cliente_id:c.clienteId||null, equipo:c.equipo||null, tipo_id:c.tipoId||null,
+    cliente_id:c.clienteId||null, equipo:c.equipo||null, tipo_id:c.tipoId||null, piloto_id:c.pilotoId||null,
     cantidad:Number(c.cantidad)||0, fecha:c.fecha||null, proximo:c.proximo||null, nota:c.nota||null
   };
   if(c._nuevo){
@@ -1019,6 +1023,37 @@ if(typeof window!=='undefined'){
   window.guardarBatTipo=guardarBatTipo; window.borrarBatTipo=borrarBatTipo;
   window.guardarBatCambio=guardarBatCambio; window.borrarBatCambio=borrarBatCambio;
 }
+
+// ── Controles · Baterías (entregas de bodega a pilotos) ────
+function mapBatEntregaFromDB(e){
+  return {
+    id:e.id, pilotoId:e.piloto_id||null, tipoId:e.tipo_id, cantidad:Number(e.cantidad)||0,
+    fecha:e.fecha||null, nota:e.nota||'', creadoPor:e.creado_por||'', creado:e.creado
+  };
+}
+async function guardarBatEntrega(e){
+  const row={
+    piloto_id:e.pilotoId||null, tipo_id:e.tipoId||null, cantidad:Number(e.cantidad)||0,
+    fecha:e.fecha||null, nota:e.nota||null
+  };
+  if(e._nuevo){
+    delete e._nuevo;
+    row.creado_por=e.creadoPor||null;
+    const {data,error}=await sb.from('ctrl_bat_entregas').insert(row).select().single();
+    if(error){console.error('Error guardando entrega de batería:',error);e._nuevo=true;return false;}
+    e.id=data.id; return true;
+  }else{
+    const {error}=await sb.from('ctrl_bat_entregas').update(row).eq('id',e.id);
+    if(error){console.error('Error actualizando entrega de batería:',error);return false;}
+    return true;
+  }
+}
+async function borrarBatEntrega(id){
+  const {error}=await sb.from('ctrl_bat_entregas').delete().eq('id',id);
+  if(error){console.error('Error borrando entrega de batería:',error);return false;}
+  return true;
+}
+if(typeof window!=='undefined'){window.guardarBatEntrega=guardarBatEntrega;window.borrarBatEntrega=borrarBatEntrega;}
 
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).
