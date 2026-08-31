@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/estilos.css?v=20260830c">
+<link rel="stylesheet" href="css/estilos.css?v=20260830d">
 <!-- PWA: instalable como app (ícono propio, pantalla completa) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#173916">
@@ -30,11 +30,11 @@
 <!-- Librería de Supabase (conexión a la base de datos) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tus credenciales (editás este archivo una sola vez) -->
-<script src="config.js?v=20260830c"></script>
+<script src="config.js?v=20260830d"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
-<script src="db.js?v=20260830c"></script>
+<script src="db.js?v=20260830d"></script>
 <!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
-<script src="realtime.js?v=20260830c"></script>
+<script src="realtime.js?v=20260830d"></script>
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
@@ -261,7 +261,13 @@
             <div class="empty" id="bat-enmano-empty" style="display:none">Todavía no hay movimientos por piloto.</div>
           </div>
           <div class="panel">
-            <div class="panel-head"><h3>Colocaciones en clientes</h3><button class="btn btn-primary btn-sm" onclick="openBatCambio()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva colocación</button></div>
+            <div class="panel-head"><h3>Colocaciones en clientes</h3>
+              <div style="display:flex;gap:6px;align-items:center">
+                <button class="btn btn-ghost btn-sm" onclick="reporteBateriasPDF()" title="Reporte de baterías por cliente (PDF)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15h6M9 11h2"/></svg>PDF</button>
+                <button class="btn btn-ghost btn-sm" onclick="reporteBateriasExcel()" title="Reporte de baterías por cliente (Excel)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13l3 4M12 13l-3 4"/></svg>Excel</button>
+                <button class="btn btn-primary btn-sm" onclick="openBatCambio()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva colocación</button>
+              </div>
+            </div>
             <table><thead><tr><th>Cliente / equipo</th><th>Piloto</th><th>Tipo</th><th class="num">Cant.</th><th>Fecha</th><th>Próximo cambio</th><th></th></tr></thead><tbody id="t-bat-cambios"></tbody></table>
             <div class="empty" id="bat-cambios-empty" style="display:none">Aún no hay colocaciones. Agregá la primera con "Nueva colocación".</div>
           </div>
@@ -797,18 +803,18 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app-1.js?v=20260830c"></script>
-<script src="js/app-2.js?v=20260830c"></script>
-<script src="js/app-3.js?v=20260830c"></script>
-<script src="js/app-4.js?v=20260830c"></script>
-<script src="js/app-5.js?v=20260830c"></script>
-<script src="js/app-6.js?v=20260830c"></script>
-<script src="js/app-7.js?v=20260830c"></script>
-<script src="js/app-8.js?v=20260830c"></script>
-<script src="js/app-9.js?v=20260830c"></script>
-<script src="js/app-10.js?v=20260830c"></script>
-<script src="js/app-11.js?v=20260830c"></script>
-<script src="js/app-12.js?v=20260830c"></script>
-<script src="js/app-13.js?v=20260830c"></script>
+<script src="js/app-1.js?v=20260830d"></script>
+<script src="js/app-2.js?v=20260830d"></script>
+<script src="js/app-3.js?v=20260830d"></script>
+<script src="js/app-4.js?v=20260830d"></script>
+<script src="js/app-5.js?v=20260830d"></script>
+<script src="js/app-6.js?v=20260830d"></script>
+<script src="js/app-7.js?v=20260830d"></script>
+<script src="js/app-8.js?v=20260830d"></script>
+<script src="js/app-9.js?v=20260830d"></script>
+<script src="js/app-10.js?v=20260830d"></script>
+<script src="js/app-11.js?v=20260830d"></script>
+<script src="js/app-12.js?v=20260830d"></script>
+<script src="js/app-13.js?v=20260830d"></script>
 </body>
 </html>

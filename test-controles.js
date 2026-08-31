@@ -115,6 +115,13 @@ ok('existe la migración de entregas con la columna piloto_id en cambios', migs.
   ok('excluye el cambio en edición (15 − 3 = 12)', m(1, 9, 100) === 12, m(1, 9, 100));
 })();
 
+console.log('\n═══ Reporte de baterías por cliente ═══');
+ok('existe el reporte PDF (reporteBateriasPDF)', /function reporteBateriasPDF\(/.test(src) && /window\.reporteBateriasPDF\s*=/.test(src));
+ok('existe el reporte Excel (reporteBateriasExcel)', /async function reporteBateriasExcel\(/.test(src) && /window\.reporteBateriasExcel\s*=/.test(src));
+ok('el reporte agrupa por cliente y muestra el próximo cambio', /BATERÍAS POR CLIENTE/.test(src) && /_batEstadoTxt\(/.test(src));
+ok('el Excel usa los ayudantes estándar (_cargarXLSX / descargarXlsx)', /_cargarXLSX\(\)/.test(src) && /descargarXlsx\(XLSX/.test(src));
+ok('index.html tiene los botones de reporte (PDF/Excel)', /onclick="reporteBateriasPDF\(\)"/.test(html) && /onclick="reporteBateriasExcel\(\)"/.test(html));
+
 console.log('\n═══ Capa de datos · Baterías (db.js) ═══');
 ok('db.js mapea/guarda tipos (mapBatTipoFromDB / guardarBatTipo)', /function mapBatTipoFromDB\(/.test(dbjs) && /async function guardarBatTipo\(/.test(dbjs));
 ok('db.js mapea/guarda cambios (mapBatCambioFromDB / guardarBatCambio)', /function mapBatCambioFromDB\(/.test(dbjs) && /async function guardarBatCambio\(/.test(dbjs));
