@@ -76,7 +76,7 @@ async function cargarTodo() {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
-      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas
+      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -102,6 +102,8 @@ async function cargarTodo() {
       sb.from('empleados').select('*').order('nombre'),
       // Planillas quincenales guardadas (tolera tabla ausente → vacío).
       sb.from('planillas').select('*').order('id',{ascending:false}),
+      // Controles · Ambientales (tolera tabla ausente → vacío).
+      sb.from('ctrl_ambientales').select('*').order('id',{ascending:false}),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -182,6 +184,10 @@ async function cargarTodo() {
     // Planillas quincenales guardadas (tolera tabla ausente → vacío)
     if (typeof planillas !== 'undefined') {
       planillas = ((rPlanillas&&rPlanillas.data)||[]).map(mapPlanillaFromDB);
+    }
+    // Controles · Ambientales (tolera tabla ausente → vacío)
+    if (typeof ambServicios !== 'undefined') {
+      ambServicios = ((rAmb&&rAmb.data)||[]).map(mapAmbServicioFromDB);
     }
 
     // Categorías (umbrales de stock por categoría). Tolera que la tabla no exista todavía.
@@ -913,6 +919,38 @@ async function borrarPlanilla(id){
   return true;
 }
 if(typeof window!=='undefined'){window.borrarPlanilla=borrarPlanilla;}
+
+// ── Controles · Ambientales (servicios de recarga) ─────────
+function mapAmbServicioFromDB(a){
+  return {
+    id:a.id, clienteId:a.cliente_id, ubicacion:a.ubicacion||'', aroma:a.aroma||'',
+    fecha:a.fecha||null, proximo:a.proximo||null, nota:a.nota||'',
+    creadoPor:a.creado_por||'', creado:a.creado
+  };
+}
+async function guardarAmbServicio(s){
+  const row={
+    cliente_id:s.clienteId||null, ubicacion:s.ubicacion||null, aroma:s.aroma||null,
+    fecha:s.fecha||null, proximo:s.proximo||null, nota:s.nota||null
+  };
+  if(s._nuevo){
+    delete s._nuevo;
+    row.creado_por=s.creadoPor||null;
+    const {data,error}=await sb.from('ctrl_ambientales').insert(row).select().single();
+    if(error){console.error('Error guardando ambiental:',error);s._nuevo=true;return false;}
+    s.id=data.id; return true;
+  }else{
+    const {error}=await sb.from('ctrl_ambientales').update(row).eq('id',s.id);
+    if(error){console.error('Error actualizando ambiental:',error);return false;}
+    return true;
+  }
+}
+async function borrarAmbServicio(id){
+  const {error}=await sb.from('ctrl_ambientales').delete().eq('id',id);
+  if(error){console.error('Error borrando ambiental:',error);return false;}
+  return true;
+}
+if(typeof window!=='undefined'){window.guardarAmbServicio=guardarAmbServicio;window.borrarAmbServicio=borrarAmbServicio;}
 
 // ── Guardar/actualizar un ROL (permisos y sub-permisos) ──────
 // Convierte el formato en memoria (camelCase) al de la base (snake_case).
