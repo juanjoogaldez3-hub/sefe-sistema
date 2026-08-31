@@ -139,8 +139,9 @@ ok('existe renderGasolina + openGasolina (y en window)', /function renderGasolin
 ok('calcula el rendimiento km/gal (_gasRendimiento)', /function _gasRendimiento\(/.test(src));
 ok('registra el gasto en Bancos (categoría combustible, origen gasolina)', /categoria:'combustible'/.test(src) && /origen:'gasolina'/.test(src));
 ok('al borrar una carga se anula su gasto en Bancos', /_gasAnularMov\(g\.movPoliza\)/.test(src));
-ok('tiene reporte de gasolina (PDF + Excel)', /function reporteGasolinaPDF\(/.test(src) && /function reporteGasolinaExcel\(/.test(src) && /CONSUMO DE COMBUSTIBLE/.test(src));
-ok('index.html tiene los botones de reporte de gasolina', /onclick="reporteGasolinaPDF\(\)"/.test(html) && /onclick="reporteGasolinaExcel\(\)"/.test(html));
+ok('tiene reporte de gasolina (detalle PDF + Excel)', /function reporteGasolinaPDF\(/.test(src) && /function reporteGasolinaExcel\(/.test(src) && /CONSUMO DE COMBUSTIBLE/.test(src));
+ok('tiene selector de reportes (reporteGasolinaUI)', /function reporteGasolinaUI\(/.test(src) && /onclick="reporteGasolinaUI\(\)"/.test(html));
+ok('tiene resumen por piloto y consumo por mes', /function _reporteGasPiloto\(/.test(src) && /function _reporteGasMes\(/.test(src) && /RESUMEN POR PILOTO/.test(src) && /CONSUMO POR MES/.test(src));
 
 console.log('\n═══ Capa de datos · Gasolina (db.js) ═══');
 ok('db.js mapea/guarda gasolina (mapGasolinaFromDB / guardarGasolina)', /function mapGasolinaFromDB\(/.test(dbjs) && /async function guardarGasolina\(/.test(dbjs));
