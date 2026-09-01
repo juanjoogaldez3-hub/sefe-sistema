@@ -368,14 +368,18 @@
     .panel-head{flex-wrap:wrap;gap:8px;padding:14px 16px}
     .panel-head h3{font-size:15px}
     .panel-body{padding:15px}
-    /* Formularios apilados */
-    .row{flex-direction:column;gap:11px}
-    /* Modales a pantalla casi completa */
-    .modal{max-width:100%;max-height:92vh;margin:0;border-radius:18px 18px 0 0}
-    /* Los cuadros con tabla también, si no quedarían más angostos que
-       el resto por la regla de escritorio (que tiene más peso). */
-    .modal:has(table),.overlay.modal-wide .modal{max-width:100%}
+    /* Formularios apilados — full width aunque la fila tenga align-items:end */
+    .row{flex-direction:column;gap:11px;align-items:stretch !important}
+    .row>*{width:100%}
+    .row input,.row select,.row textarea{width:100%}
+    /* Modales a pantalla casi completa. El !important gana sobre el
+       max-width en línea que ponen los editores anchos (planilla, etc.). */
+    .modal{max-width:100% !important;max-height:92vh;margin:0;border-radius:18px 18px 0 0}
     .overlay{align-items:flex-end;padding:0}
+    /* Calendario de ambientales: celdas más compactas en el teléfono */
+    #amb-cal .amb-cal-grid{gap:3px}
+    #amb-cal .amb-cal-cell{min-height:54px;padding:3px;border-radius:6px}
+    #amb-cal .amb-cal-ev{font-size:9px;padding:1px 3px}
     .modal-foot{flex-wrap:wrap}
     .modal-foot .btn{flex:1;min-width:120px;justify-content:center}
     /* Documentos / fichas */
