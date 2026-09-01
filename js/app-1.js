@@ -525,7 +525,7 @@ function go(v,desdeHash){
   // Si el cambio vino del propio hash, no lo reescribimos para evitar bucles.
   if(!desdeHash && ('#'+v)!==location.hash){ try{ location.hash=v; }catch(e){} }
   // Fijar resumen + filtros + buscador + encabezados (tras renderizar el contenido)
-  requestAnimationFrame(()=>setTimeout(aplicarStickyTop,60));
+  requestAnimationFrame(()=>setTimeout(()=>{aplicarStickyTop();_tarjetasMovil();},60));
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{go(b.dataset.view);toggleNav(false);});
 window.go=go;
@@ -538,6 +538,37 @@ function toggleNav(force){
   if(bd)bd.classList.toggle('open',abrir);
 }
 window.toggleNav=toggleNav;
+
+// ── Tablas como tarjetas en el teléfono ────────────────────
+// Pone data-label en cada celda (según su encabezado) para que el CSS
+// las muestre como "Etiqueta: valor". La última celda sin encabezado se
+// marca como acciones. Una tabla con clase .no-cards queda con scroll.
+function _tarjetasMovil(){
+  try{
+    if(window.innerWidth>600)return;
+    document.querySelectorAll('.content .panel table').forEach(tb=>{
+      const ths=Array.prototype.map.call(tb.querySelectorAll('thead th'),th=>th.textContent.trim());
+      // Sin encabezados o con campos editables (grillas) → se deja con scroll.
+      if(!ths.length||tb.querySelector('tbody input,tbody select,tbody textarea')){tb.classList.remove('cards');return;}
+      tb.querySelectorAll('tbody tr').forEach(tr=>{
+        Array.prototype.forEach.call(tr.children,(td,i)=>{
+          if(td.hasAttribute('colspan'))return;
+          const lbl=ths[i]!=null?ths[i]:'';
+          if(lbl){td.setAttribute('data-label',lbl);td.removeAttribute('data-acts');}
+          else td.setAttribute('data-acts','');
+        });
+      });
+      tb.classList.add('cards');
+    });
+  }catch(e){}
+}
+window._tarjetasMovil=_tarjetasMovil;
+(function(){
+  const cont=document.querySelector('.content'); if(!cont||typeof MutationObserver==='undefined')return;
+  let _t; const reap=()=>{clearTimeout(_t);_t=setTimeout(_tarjetasMovil,60);};
+  new MutationObserver(reap).observe(cont,{childList:true,subtree:true});
+  window.addEventListener('resize',reap);
+})();
 
 // ===== Fijar resumen (KPIs) + filtros + buscador + encabezados al hacer scroll =====
 function aplicarStickyTop(){
