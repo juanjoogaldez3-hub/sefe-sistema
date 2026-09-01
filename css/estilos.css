@@ -309,7 +309,9 @@
   /* ===== MÓVIL (celular) ===== */
   @media(max-width:600px){
     body{font-size:13.5px}
+    html,body{overflow-x:hidden}
     .layout{flex-direction:column}
+    .main{overflow-x:hidden}
     /* Sidebar = cajón deslizante (off-canvas) con el menú completo */
     .sidebar{position:fixed;top:0;left:0;bottom:0;right:auto;width:270px;max-width:82vw;height:100%;flex-direction:column;z-index:200;
       transform:translateX(-100%);transition:transform .25s ease;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 0}
@@ -338,9 +340,26 @@
     .kpi{padding:13px}
     .k-val{font-size:19px}
     .k-lbl{font-size:10.5px}
-    /* Tablas con scroll horizontal */
+    /* Por defecto las tablas hacen scroll horizontal (grillas editables). */
     .panel{overflow:visible}
     .panel table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    /* Listados de sólo lectura → TARJETAS (el JS agrega .cards). */
+    .panel table.cards{overflow-x:visible;white-space:normal}
+    .panel table.cards thead{display:none}
+    .panel table.cards tbody,.panel table.cards tr,.panel table.cards td{display:block}
+    .panel table.cards tbody tr{border:1px solid var(--line);border-radius:12px;
+      padding:6px 13px;margin-bottom:10px;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+    .panel table.cards tbody td{display:flex;justify-content:space-between;align-items:center;gap:14px;
+      padding:6px 0;border:none;border-bottom:1px solid var(--line);text-align:right;min-height:0;
+      min-width:0;overflow-wrap:anywhere}
+    .panel table.cards tbody td:last-child{border-bottom:none}
+    .panel table.cards tbody td::before{content:attr(data-label);flex:0 0 auto;text-align:left;
+      font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+    .panel table.cards tbody td:empty{display:none}
+    .panel table.cards tbody td[data-acts]{justify-content:flex-end;gap:8px;padding-top:9px}
+    .panel table.cards tbody td[data-acts]::before{display:none}
+    .panel table.cards tbody td[colspan]{display:block;text-align:center;border:none}
+    .panel table.cards tbody td[colspan]::before{display:none}
     /* Resumen fijo más compacto en celular para no tapar la pantalla */
     .kpis.sticky-top{padding-bottom:8px;gap:8px}
     .kpis.sticky-top .kpi{padding:9px 11px}
