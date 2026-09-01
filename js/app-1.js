@@ -527,8 +527,17 @@ function go(v,desdeHash){
   // Fijar resumen + filtros + buscador + encabezados (tras renderizar el contenido)
   requestAnimationFrame(()=>setTimeout(aplicarStickyTop,60));
 }
-document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.view));
+document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{go(b.dataset.view);toggleNav(false);});
 window.go=go;
+
+// Cajón de menú en móvil (☰). En escritorio no hace nada visible.
+function toggleNav(force){
+  const sb=document.querySelector('.sidebar'), bd=document.getElementById('nav-backdrop');
+  const abrir=(force!==undefined)?force:!(sb&&sb.classList.contains('open'));
+  if(sb)sb.classList.toggle('open',abrir);
+  if(bd)bd.classList.toggle('open',abrir);
+}
+window.toggleNav=toggleNav;
 
 // ===== Fijar resumen (KPIs) + filtros + buscador + encabezados al hacer scroll =====
 function aplicarStickyTop(){

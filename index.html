@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/estilos.css?v=20260830g">
+<link rel="stylesheet" href="css/estilos.css?v=20260830h">
 <!-- PWA: instalable como app (ícono propio, pantalla completa) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#173916">
@@ -30,11 +30,11 @@
 <!-- Librería de Supabase (conexión a la base de datos) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tus credenciales (editás este archivo una sola vez) -->
-<script src="config.js?v=20260830g"></script>
+<script src="config.js?v=20260830h"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
-<script src="db.js?v=20260830g"></script>
+<script src="db.js?v=20260830h"></script>
 <!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
-<script src="realtime.js?v=20260830g"></script>
+<script src="realtime.js?v=20260830h"></script>
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
@@ -102,6 +102,7 @@
   </div>
 </div>
 <div class="layout" id="app-layout" style="display:none">
+  <div class="nav-backdrop" id="nav-backdrop" onclick="toggleNav(false)"></div>
   <aside class="sidebar">
     <div class="brand"><div class="mk">SE</div><div><h2>SEFE</h2><span>PEDIDOS &amp; FACTURACIÓN</span></div></div>
     <nav class="nav">
@@ -138,7 +139,8 @@
 
   <div class="main">
     <header class="topbar">
-      <div><h1 id="ttl">Panel</h1><div class="sub" id="sub">Resumen de operación</div></div>
+      <button class="nav-toggle" id="nav-toggle" aria-label="Menú" onclick="toggleNav()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <div style="flex:1;min-width:0"><h1 id="ttl">Panel</h1><div class="sub" id="sub">Resumen de operación</div></div>
       <div style="display:flex;align-items:center;gap:12px"><span class="role-badge" id="role-badge" style="background:var(--ok-bg);color:var(--ok)">Administrador</span>
         <button class="btn btn-ghost btn-sm topbar-logout" title="Cerrar sesión" onclick="logout()" style="display:none;padding:6px 9px"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" style="width:15px;height:15px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg></button>
       </div>
@@ -822,18 +824,18 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app-1.js?v=20260830g"></script>
-<script src="js/app-2.js?v=20260830g"></script>
-<script src="js/app-3.js?v=20260830g"></script>
-<script src="js/app-4.js?v=20260830g"></script>
-<script src="js/app-5.js?v=20260830g"></script>
-<script src="js/app-6.js?v=20260830g"></script>
-<script src="js/app-7.js?v=20260830g"></script>
-<script src="js/app-8.js?v=20260830g"></script>
-<script src="js/app-9.js?v=20260830g"></script>
-<script src="js/app-10.js?v=20260830g"></script>
-<script src="js/app-11.js?v=20260830g"></script>
-<script src="js/app-12.js?v=20260830g"></script>
-<script src="js/app-13.js?v=20260830g"></script>
+<script src="js/app-1.js?v=20260830h"></script>
+<script src="js/app-2.js?v=20260830h"></script>
+<script src="js/app-3.js?v=20260830h"></script>
+<script src="js/app-4.js?v=20260830h"></script>
+<script src="js/app-5.js?v=20260830h"></script>
+<script src="js/app-6.js?v=20260830h"></script>
+<script src="js/app-7.js?v=20260830h"></script>
+<script src="js/app-8.js?v=20260830h"></script>
+<script src="js/app-9.js?v=20260830h"></script>
+<script src="js/app-10.js?v=20260830h"></script>
+<script src="js/app-11.js?v=20260830h"></script>
+<script src="js/app-12.js?v=20260830h"></script>
+<script src="js/app-13.js?v=20260830h"></script>
 </body>
 </html>
