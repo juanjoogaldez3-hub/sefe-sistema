@@ -46,6 +46,10 @@ ok('calcula comisiones desde ventas (_comisionEmpleado)', /function _comisionEmp
 ok('la comisión usa la misma regla que el reporte (5% sin IVA)', /PL_COMISION_PCT\s*=\s*0\.05/.test(src) && /PL_IVA\s*=\s*1\.12/.test(src));
 ok('IGSS laboral automático (4.83%)', /IGSS_LABORAL_PCT\s*=\s*0\.0483/.test(src));
 ok('el sueldo se paga en 2 quincenas (_montoQ1 / _montoQ2)', /function _montoQ1\(/.test(src) && /function _montoQ2\(/.test(src));
+ok('cada quincena es independiente y editable (q1/q2 + _planSetQ)', /q1:_qVacia|q1,q2\}/.test(src) && /function _planSetQ\(/.test(src) && /window\._planSetQ\s*=/.test(src));
+ok('la comisión se edita aparte (_planSetCom)', /function _planSetCom\(/.test(src) && /window\._planSetCom\s*=/.test(src));
+ok('el IGSS del mes arranca en la 2ª quincena', /q2\.igss=igss/.test(src));
+ok('las planillas viejas se convierten al abrir (_migrarLinea)', /function _migrarLinea\(/.test(src) && /_migrarLineas\(_planActual\.lineas\)/.test(src));
 ok('el pago por parte genera movimiento de banco de planilla (_planPagarParte)', /function _planPagarParte\(/.test(src) && /_planRegistrarPago/.test(src) && /categoria:'planilla'/.test(src));
 ok('el pago NO abre la póliza sola: al pagar se muestra la boleta de ese pago', /boletaPagoPDF\(pl,l,parte\);/.test(src) && !/registrarMovimientoBanco/.test(src.slice(src.indexOf('async function _planPagarParte'), src.indexOf('async function _planPagarParte')+1800)));
 ok('las comisiones se pagan aparte (parte "com" con su póliza)', /comPagado/.test(src) && /comPoliza/.test(src));
