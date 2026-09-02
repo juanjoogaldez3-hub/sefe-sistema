@@ -162,7 +162,9 @@ function _comisionEmpleado(emp,desde,hasta){
 function _qVacia(){return {sueldo:0,bonif:0,otrosIng:0,igss:0,isr:0,otrosDesc:0,pagado:false,poliza:null,el:null};}
 // Partición sugerida al armar: 1ª = mitad redondeada, 2ª = el resto (así las
 // dos suman EXACTO el mensual). Es sólo el valor de arranque; después editable.
-function _mitad(x,q){const h=Math.round((+x||0)/2*100)/100;return q===1?h:((+x||0)-h);}
+function _mitad(x,q){const h=Math.round((+x||0)/2*100)/100;return q===1?h:Math.round(((+x||0)-h)*100)/100;}
+// Redondeo a 2 decimales para mostrar en los campos (evita "96.6000000001").
+function _n2(v){return Math.round((+v||0)*100)/100;}
 
 // Compatibilidad: una planilla vieja guardó los montos MENSUALES sueltos en la
 // línea (l.sueldoBase, l.igss, …) y los partía 50/50 al mostrar. Al abrirla la
@@ -336,7 +338,7 @@ function _planPintar(){
     const tienePago=l.q1.pagado||l.q2.pagado||l.comPagado;
     const desbloq=_planEdit.has(i);   // desbloqueada a mano para corregir
     // Cada quincena se bloquea sola cuando ya se pagó (salvo desbloqueo).
-    const inpQ=(qk,campo,val,bloq)=>`<input type="number" step="0.01" value="${val}" ${bloq?'disabled':''} oninput="_planSetQ(${i},'${qk}','${campo}',this.value)" class="num pl-in">`;
+    const inpQ=(qk,campo,val,bloq)=>`<input type="number" step="0.01" value="${_n2(val)}" ${bloq?'disabled':''} oninput="_planSetQ(${i},'${qk}','${campo}',this.value)" class="num pl-in">`;
     // Renglón de una quincena: sus 6 inputs + neto + botón de pago.
     const filaQ=(qk,lbl)=>{
       const qo=l[qk], bloq=qo.pagado&&!desbloq;
@@ -363,7 +365,7 @@ function _planPintar(){
     const bloqCom=l.comPagado&&!desbloq;
     const comRow=_comLinea(l)>0?`<tr class="pl-com">
         <td class="pl-qlbl">Comis.</td>
-        <td colspan="6"><input type="number" step="0.01" value="${l.comisiones}" ${bloqCom?'disabled':''} oninput="_planSetCom(${i},this.value)" class="num pl-in" style="width:110px"></td>
+        <td colspan="6"><input type="number" step="0.01" value="${_n2(l.comisiones)}" ${bloqCom?'disabled':''} oninput="_planSetCom(${i},this.value)" class="num pl-in" style="width:120px"></td>
         <td class="num" style="font-weight:700" id="pl-com-${i}">${money(_comLinea(l))}</td>
         <td style="text-align:center">${_pagoLinea(i,'com','Comis.',l.comPagado)}</td>
       </tr>`:'';
@@ -377,7 +379,7 @@ function _planPintar(){
       #pl-tabla-wrap tr.pl-q td,#pl-tabla-wrap tr.pl-com td{background:var(--panel,#fff)}
       #pl-tabla-wrap td.pl-qlbl{font-weight:600;color:var(--muted);padding-left:16px;min-width:56px}
       #pl-tabla-wrap tr.pl-com td.pl-qlbl{color:#7a5c00}
-      #pl-tabla-wrap input.pl-in{width:78px;text-align:right}
+      #pl-tabla-wrap input.pl-in{width:96px;text-align:right;padding:6px 8px;font-size:12px}
       #pl-tabla-wrap input.pl-in::-webkit-outer-spin-button,
       #pl-tabla-wrap input.pl-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
       #pl-tabla-wrap input.pl-in{-moz-appearance:textfield;appearance:textfield}
