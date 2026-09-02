@@ -674,6 +674,11 @@ function _numBI(s){const n=parseFloat(String(s==null?'':s).replace(/[^0-9.\-]/g,
 function parseCSVBanco(texto){
   const lineas=String(texto||'').split(/\r?\n/);
   let cuenta='',saldoInicial=0,desde='',hasta='',enDatos=false;
+  // Columnas DESPUÉS de la descripción: No.Doc, Debe, Haber (y a veces Saldo).
+  // Se cuentan desde el encabezado para adaptarse al formato que exporte el
+  // banco (con o sin columna de Saldo). Contar desde la DERECHA aguanta las
+  // comas dentro de la descripción (ej. "ACH EL VIEJO CAFE, S.A.").
+  let kCols=4; // por defecto formato viejo con Saldo (noDoc,debe,haber,saldo)
   const filas=[];
   for(const linea of lineas){
     const l=linea.trim();
@@ -682,18 +687,23 @@ function parseCSVBanco(texto){
       const mc=l.match(/^Cuenta:\s*(.+)$/i); if(mc){cuenta=mc[1].trim();continue;}
       const ms=l.match(/Saldo inicial.*?:\s*([-0-9.,]+)/i); if(ms){saldoInicial=_numBI(ms[1]);continue;}
       const md=l.match(/Del\s+(\d{2}\/\d{2}\/\d{4})\s+al\s+(\d{2}\/\d{2}\/\d{4})/i); if(md){desde=_fechaBI(md[1]);hasta=_fechaBI(md[2]);continue;}
-      if(/^Fecha\s*,\s*TT\s*,/i.test(l)){enDatos=true;}
+      if(/^Fecha\s*,\s*TT\s*,/i.test(l)){
+        enDatos=true;
+        // total de columnas − (Fecha, TT, Descripción) = columnas de la derecha
+        kCols=Math.max(3, l.split(',').length-3);
+      }
       continue;
     }
     if(!/^\d{2}[-/]\d{2}[-/]\d{4},/.test(l))continue; // fila válida: empieza con fecha
-    const p=l.split(','); const n=p.length; if(n<7)continue;
-    const debe=_numBI(p[n-3]), haber=_numBI(p[n-2]);
+    const p=l.split(','); const n=p.length; if(n<kCols+2)continue;
+    const iNoDoc=n-kCols, iDebe=n-kCols+1, iHaber=n-kCols+2;
+    const debe=_numBI(p[iDebe]), haber=_numBI(p[iHaber]);
     const esSalida=debe>0.0000001;
     filas.push({
       fecha:_fechaBI(p[0]), tt:(p[1]||'').trim(),
-      descripcion:p.slice(2,n-4).join(',').trim(),
-      noDoc:(p[n-4]||'').trim(),
-      debe, haber, saldo:_numBI(p[n-1]),
+      descripcion:p.slice(2,iNoDoc).join(',').trim(),
+      noDoc:(p[iNoDoc]||'').trim(),
+      debe, haber, saldo:(kCols>=4?_numBI(p[n-1]):0),
       tipo:esSalida?'salida':'entrada', monto:esSalida?debe:haber
     });
   }
