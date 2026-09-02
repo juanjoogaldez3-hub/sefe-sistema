@@ -623,9 +623,12 @@ function renderCliDet(){
     const esAdmin=currentRole==="admin";
     const gananciaTd=f=>{
       if(!esAdmin)return '';
-      const g=(Number(f.totales?.total)||0)-costoDoc(f);
-      const col=g<0?'var(--danger)':'var(--ok)';
-      return `<td class="num" style="font-weight:600;color:${col}">${money(g)}</td>`;
+      const tot=Number(f.totales?.total)||0;
+      const g=tot-costoDoc(f);
+      // Margen % sobre el total de la factura (mismo criterio que el reporte de vendedores).
+      const pct=tot>0?(g/tot*100):0;
+      const col=pct<0?'var(--danger)':(pct<15?'var(--warn)':'var(--ok)');
+      return `<td class="num" style="font-weight:600;color:${col}">${pct.toFixed(1)}%</td>`;
     };
     body=`<div class="panel"><div class="panel-head"><h3>Facturas Cambiarias emitidas</h3></div>
       <table><thead><tr><th>No.</th><th>Tipo</th><th>Fecha</th><th>Total</th>${esAdmin?'<th>Ganancia</th>':''}<th>Estado</th><th></th></tr></thead><tbody>
