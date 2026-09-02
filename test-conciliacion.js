@@ -122,5 +122,12 @@ ok('#4: guardar conciliación e historial (pantalla)', /window\._concGuardar\s*=
 ok('#4: db.js guarda y mapea conciliaciones, y las carga', /function guardarConciliacion\(/.test(dbjs) && /function mapConciliacionFromDB\(/.test(dbjs) && /rConc/.test(dbjs));
 ok('#4: existe la migración de la tabla conciliaciones', fs.readdirSync(__dirname + '/supabase/migrations').some(n => /conciliaciones/.test(n)));
 
+console.log('\n═══ Memoria del emparejamiento a mano (#5) ═══');
+ok('el emparejar a mano se guarda (conciliadoRef + marcarConciliadoBanco con ref)', /conciliadoRef=bankKey/.test(src) && /marcarConciliadoBanco\(sefeId,true,bankKey\)/.test(src));
+ok('se restaura al volver a subir el estado de cuenta (_concSeedManuales)', /function _concSeedManuales\(/.test(src) && /_concSeedManuales\(\)/.test(src));
+ok('al separar un emparejamiento a mano se borra la memoria', /m\.conciliadoRef=null/.test(src) && /marcarConciliadoBanco\(sefeId,false\)/.test(src));
+ok('db.js lee y guarda la referencia (conciliado_ref)', /conciliadoRef:m\.conciliado_ref/.test(dbjs) && /cambios\.conciliado_ref/.test(dbjs));
+ok('existe la migración de la columna conciliado_ref', fs.readdirSync(__dirname + '/supabase/migrations').some(n => /conciliado_ref/.test(n)));
+
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
