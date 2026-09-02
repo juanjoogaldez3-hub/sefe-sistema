@@ -821,12 +821,35 @@ window._concMarcarTodos=function(){
   });
 };
 
-// ── Ajustes manuales de esta sesión (separar / emparejar a mano) ──
+// ── Ajustes manuales (separar / emparejar a mano, con memoria) ──
 function _concBankKey(f){return f.fecha+'|'+f.tipo+'|'+f.monto+'|'+(f.noDoc||'');}
+// Restaura los emparejamientos a mano guardados (conciliadoRef) cuyas líneas
+// del banco estén en el archivo cargado. Es idempotente (no duplica).
+function _concSeedManuales(){
+  if(!_concData||!_concData.filas||!_concCuentaId)return;
+  const keys=new Set(_concData.filas.map(f=>_concBankKey(f)));
+  (typeof movimientosBanco!=='undefined'?movimientosBanco:[]).forEach(m=>{
+    if(m.anulado||!m.conciliadoRef)return;
+    if(String(m.cuentaId)!==String(_concCuentaId))return;
+    if(!keys.has(m.conciliadoRef))return;
+    if(_concRechazados.has(m.conciliadoRef+'||'+m.id))return;
+    if(_concManuales.some(x=>String(x.sefeId)===String(m.id)&&x.bankKey===m.conciliadoRef))return;
+    _concManuales.push({bankKey:m.conciliadoRef, sefeId:m.id});
+  });
+}
 // Separar un cruce (un falso positivo del automático o un emparejado a mano).
 window._concSeparar=function(bankKey,sefeId){
   const i=_concManuales.findIndex(m=>m.bankKey===bankKey&&String(m.sefeId)===String(sefeId));
-  if(i>=0)_concManuales.splice(i,1); else _concRechazados.add(bankKey+'||'+sefeId);
+  if(i>=0){
+    _concManuales.splice(i,1);
+    // Si era un emparejamiento a mano guardado, se borra la memoria.
+    const m=movimientosBanco.find(x=>String(x.id)===String(sefeId));
+    if(m&&m.conciliadoRef===bankKey){
+      m.conciliado=false;m.conciliadoEl=null;m.conciliadoRef=null;
+      Promise.resolve(typeof marcarConciliadoBanco==='function'?marcarConciliadoBanco(sefeId,false):false);
+    }
+    _concRechazados.add(bankKey+'||'+sefeId); // que no lo re-agregue el seed en esta sesión
+  } else _concRechazados.add(bankKey+'||'+sefeId);
   _concRender();
 };
 // Empezar a emparejar a mano una fila del banco: pide elegir la de SEFE.
@@ -835,7 +858,16 @@ window._concCancelarEmparejar=function(){_concEmparejando=null;_concRender();};
 // Confirmar el emparejamiento a mano con un movimiento de SEFE.
 window._concConfirmarManual=function(sefeId){
   if(!_concEmparejando)return;
-  _concManuales.push({bankKey:_concEmparejando,sefeId:sefeId});
+  const bankKey=_concEmparejando;
+  _concManuales.push({bankKey,sefeId});
+  _concRechazados.delete(bankKey+'||'+sefeId);
+  // Guardar el emparejamiento a mano (memoria): marca el movimiento como
+  // conciliado y guarda la llave de la línea del banco.
+  const m=movimientosBanco.find(x=>String(x.id)===String(sefeId));
+  if(m){m.conciliado=true;m.conciliadoEl=new Date().toISOString();m.conciliadoRef=bankKey;}
+  Promise.resolve(typeof marcarConciliadoBanco==='function'?marcarConciliadoBanco(sefeId,true,bankKey):false).then(okr=>{
+    if(okr===false)toast('No se pudo guardar el emparejamiento','¿Ya corriste el SQL de conciliación?',true);
+  });
   _concEmparejando=null;_concTab='conc';_concRender();
   toast('✓ Emparejados a mano','Si el monto no es igual, revisá la diferencia en la fila');
 };
@@ -940,6 +972,7 @@ function _concAjustar(r){
 function _concRender(){
   const cont=$('#conc-cont'); if(!cont)return;
   if(!_concData){cont.innerHTML='<div class="empty" style="padding:24px 10px">Subí el archivo CSV que exporta Bi en Línea (Movimientos → Exportar) y el sistema lo cruza solo con los movimientos de la cuenta.</div>';return;}
+  _concSeedManuales(); // restaurar emparejamientos a mano guardados
   const r=_concAjustar(_concCalcular()); _concRes=r;
   if(!r){cont.innerHTML='<div class="empty">Elegí la cuenta de SEFE.</div>';return;}
   const res=r.resumen;
