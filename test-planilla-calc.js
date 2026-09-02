@@ -58,21 +58,27 @@ const L = A._construirLineas(r.desde, r.hasta);
 ok('sólo entran los empleados activos (2 de 3)', L.length === 2, 'dieron ' + L.length);
 const ana = L.find(x => x.nombre === 'ANA');
 ok('ANA trae su comisión automática (150)', ana && A._comLinea(ana) === 150);
-// IGSS = 4.83% del sueldo base 2000 = 96.6  (NO sobre comisiones)
-ok('IGSS 4.83% sobre el sueldo base (no sobre comisiones)', ana && ana.igss === 96.6, ana && ('dio ' + ana.igss));
+// Cada empleado tiene 2 quincenas independientes (q1, q2)
+ok('la línea trae las 2 quincenas (q1, q2)', ana && ana.q1 && ana.q2, JSON.stringify(ana && Object.keys(ana)));
+// IGSS = 4.83% del sueldo base 2000 = 96.6, y por defecto cae en la 2ª quincena
+ok('IGSS 4.83% del sueldo base, arranca en la 2ª quincena', ana && ana.q2.igss === 96.6 && ana.q1.igss === 0, ana && ('q1=' + ana.q1.igss + ' q2=' + ana.q2.igss));
 
 console.log('\n═══ Neto del sueldo y quincenas ═══');
-// Ingresos fijos: 2000+250 = 2250 ; deducc: 96.6 ; neto sueldo = 2153.4
-ok('neto del sueldo = ingresos fijos − deducciones (sin comisiones)', Math.round(A._netoSueldo(ana) * 100) / 100 === 2153.4, 'dio ' + A._netoSueldo(ana));
-// Las quincenas suman el neto del sueldo
-ok('las 2 quincenas suman el neto del sueldo', Math.round((A._montoQ1(ana) + A._montoQ2(ana)) * 100) / 100 === 2153.4, A._montoQ1(ana) + '+' + A._montoQ2(ana));
-ok('cada quincena es la mitad (1076.70)', A._montoQ1(ana) === 1076.70 && A._montoQ2(ana) === 1076.70, A._montoQ1(ana) + ' / ' + A._montoQ2(ana));
+// q1: sueldo 1000 + bonif 125 = 1125 (sin descuentos) ; q2: 1000+125−96.6 = 1028.4
+ok('1ª quincena = 1125 (sin descuentos)', A._montoQ1(ana) === 1125, 'dio ' + A._montoQ1(ana));
+ok('2ª quincena = 1028.40 (con el IGSS)', A._montoQ2(ana) === 1028.40, 'dio ' + A._montoQ2(ana));
+// Neto del sueldo del mes = las dos quincenas
+ok('neto del sueldo del mes = q1 + q2 = 2153.40', Math.round(A._netoSueldo(ana) * 100) / 100 === 2153.4, 'dio ' + A._netoSueldo(ana));
 
 console.log('\n═══ Comisiones aparte ═══');
 ok('la comisión NO está dentro del neto del sueldo', A._netoSueldo(ana) === 2153.4 && A._comLinea(ana) === 150);
-// El ISR editable resta al neto del sueldo
-ana.isr = 200;
-ok('el ISR resta al neto del sueldo', Math.round(A._netoSueldo(ana) * 100) / 100 === 1953.4, 'dio ' + A._netoSueldo(ana));
+// El ISR editable de una quincena resta sólo a esa quincena
+ana.q2.isr = 200;
+ok('el ISR de la 2ª quincena resta a esa quincena', A._montoQ2(ana) === 828.40, 'dio ' + A._montoQ2(ana));
+ok('el ISR baja el neto del mes a 1953.40', Math.round(A._netoSueldo(ana) * 100) / 100 === 1953.4, 'dio ' + A._netoSueldo(ana));
+// Las quincenas son independientes: mover un valor en q1 no toca q2
+ana.q1.otrosDesc = 100;
+ok('editar la 1ª quincena no cambia la 2ª', A._montoQ1(ana) === 1025 && A._montoQ2(ana) === 828.40, A._montoQ1(ana) + ' / ' + A._montoQ2(ana));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

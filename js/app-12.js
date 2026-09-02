@@ -154,44 +154,78 @@ function _comisionEmpleado(emp,desde,hasta){
     ).reduce((s,d)=>s+((d.totales&&d.totales.total)||0),0);
   return Math.round(total/PL_IVA*PL_COMISION_PCT*100)/100;
 }
-// Una línea por empleado activo (valores MENSUALES ya calculados).
+// ── Modelo de quincena ──
+// Cada línea de empleado tiene DOS quincenas INDEPENDIENTES (q1, q2), cada una
+// con sus propios ingresos y descuentos EDITABLES. Ya no se parte 50/50
+// automático: vos ponés cuánto va en cada quincena y en cuál caen el IGSS/ISR.
+// Las comisiones van APARTE (una sola vez al mes, no entran en las quincenas).
+function _qVacia(){return {sueldo:0,bonif:0,otrosIng:0,igss:0,isr:0,otrosDesc:0,pagado:false,poliza:null,el:null};}
+// Partición sugerida al armar: 1ª = mitad redondeada, 2ª = el resto (así las
+// dos suman EXACTO el mensual). Es sólo el valor de arranque; después editable.
+function _mitad(x,q){const h=Math.round((+x||0)/2*100)/100;return q===1?h:((+x||0)-h);}
+
+// Compatibilidad: una planilla vieja guardó los montos MENSUALES sueltos en la
+// línea (l.sueldoBase, l.igss, …) y los partía 50/50 al mostrar. Al abrirla la
+// convertimos al modelo nuevo replicando EXACTO esa partición vieja, para no
+// cambiar lo ya visto ni lo ya pagado.
+function _migrarLinea(l){
+  if(!l||(l.q1&&typeof l.q1==='object'&&l.q2&&typeof l.q2==='object'))return l; // ya es modelo nuevo
+  const q1=_qVacia(), q2=_qVacia();
+  const map={sueldo:'sueldoBase',bonif:'bonif',otrosIng:'otrosIng',igss:'igss',isr:'isr',otrosDesc:'otrosDesc'};
+  Object.keys(map).forEach(k=>{const v=l[map[k]];q1[k]=_mitad(v,1);q2[k]=_mitad(v,2);});
+  q1.pagado=!!l.q1Pagado; q1.poliza=l.q1Poliza||null; q1.el=l.q1El||null;
+  q2.pagado=!!l.q2Pagado; q2.poliza=l.q2Poliza||null; q2.el=l.q2El||null;
+  return {empleadoId:l.empleadoId,nombre:l.nombre,cuentaBancoId:l.cuentaBancoId||null,
+    comisiones:+l.comisiones||0,comPagado:!!l.comPagado,comPoliza:l.comPoliza||null,comEl:l.comEl||null,
+    q1,q2};
+}
+function _migrarLineas(arr){return (Array.isArray(arr)?arr:[]).map(_migrarLinea);}
+// Las pólizas de una línea (tolera modelo viejo y nuevo).
+function _polizasLinea(l){
+  if(l&&l.q1&&typeof l.q1==='object')return [l.q1.poliza,l.q2.poliza,l.comPoliza];
+  return [l.q1Poliza,l.q2Poliza,l.comPoliza];
+}
+
+// Una línea por empleado activo. Sueldo/bonificación se reparten mitad y mitad
+// entre las dos quincenas; los DESCUENTOS (IGSS) caen por defecto en la 2ª
+// quincena (cierre de mes) — todo editable después.
 function _construirLineas(desde,hasta){
   return (typeof empleados!=='undefined'?empleados:[]).filter(e=>e.activo!==false)
     .sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
     .map(e=>{
       const com=_comisionEmpleado(e,desde,hasta);
       const sueldo=Number(e.sueldoBase)||0;
+      const bonif=Number(e.bonifIncentivo)||0;
       const igss=Math.round(sueldo*IGSS_LABORAL_PCT*100)/100; // IGSS sobre el sueldo base
+      const q1=_qVacia(), q2=_qVacia();
+      q1.sueldo=_mitad(sueldo,1); q2.sueldo=_mitad(sueldo,2);
+      q1.bonif=_mitad(bonif,1);   q2.bonif=_mitad(bonif,2);
+      q2.igss=igss;               // el IGSS del mes cae en la 2ª quincena (editable)
       return {empleadoId:e.id,nombre:e.nombre,cuentaBancoId:e.cuentaBancoId||null,
-        sueldoBase:sueldo,bonif:Number(e.bonifIncentivo)||0,otrosIng:0,
-        igss:igss,isr:0,otrosDesc:0,comisiones:com,
-        q1Pagado:false,q1Poliza:null,q1El:null,
-        q2Pagado:false,q2Poliza:null,q2El:null,
-        comPagado:false,comPoliza:null,comEl:null};
+        comisiones:com,comPagado:false,comPoliza:null,comEl:null,q1,q2};
     });
 }
 
-// ── Cálculos de una línea ──
-function _lineaIngFijos(l){return (+l.sueldoBase||0)+(+l.bonif||0)+(+l.otrosIng||0);}
-function _lineaDesc(l){return (+l.igss||0)+(+l.isr||0)+(+l.otrosDesc||0);}
-function _netoSueldo(l){return _lineaIngFijos(l)-_lineaDesc(l);}         // neto del sueldo (mensual)
-// Partición por quincena a nivel de cada concepto: 1ª = mitad redondeada,
-// 2ª = el resto (así las dos quincenas suman EXACTO el total mensual y la
-// boleta cuadra con el pago).
-function _mitad(x,q){const h=Math.round((+x||0)/2*100)/100;return q===1?h:((+x||0)-h);}
-function _quincenaIng(l,q){return _mitad(l.sueldoBase,q)+_mitad(l.bonif,q)+_mitad(l.otrosIng,q);}
-function _quincenaDesc(l,q){return _mitad(l.igss,q)+_mitad(l.isr,q)+_mitad(l.otrosDesc,q);}
-function _quincenaNeto(l,q){return Math.round((_quincenaIng(l,q)-_quincenaDesc(l,q))*100)/100;}
-function _montoQ1(l){return _quincenaNeto(l,1);}  // 1ª quincena
-function _montoQ2(l){return _quincenaNeto(l,2);}  // 2ª quincena
+// ── Cálculos de una quincena y de la línea ──
+function _qIng(qo){return (+qo.sueldo||0)+(+qo.bonif||0)+(+qo.otrosIng||0);}
+function _qDesc(qo){return (+qo.igss||0)+(+qo.isr||0)+(+qo.otrosDesc||0);}
+function _qNeto(qo){return Math.round((_qIng(qo)-_qDesc(qo))*100)/100;}
+function _montoQ1(l){return _qNeto(l.q1);}  // líquido de la 1ª quincena
+function _montoQ2(l){return _qNeto(l.q2);}  // líquido de la 2ª quincena
+// Suma de un mismo concepto en las dos quincenas (para los totales del mes).
+function _mesConcepto(l,campo){return (+l.q1[campo]||0)+(+l.q2[campo]||0);}
+function _lineaIngFijos(l){return _qIng(l.q1)+_qIng(l.q2);}
+function _lineaDesc(l){return _qDesc(l.q1)+_qDesc(l.q2);}
+function _netoSueldo(l){return Math.round((_qNeto(l.q1)+_qNeto(l.q2))*100)/100;} // neto del sueldo (mes)
 function _comLinea(l){return +l.comisiones||0;}
-function _lineaCompleta(l){return l.q1Pagado&&l.q2Pagado&&(_comLinea(l)<=0||l.comPagado);}
+function _lineaCompleta(l){return l.q1.pagado&&l.q2.pagado&&(_comLinea(l)<=0||l.comPagado);}
 
 function _planSumas(){
   const L=_planActual?_planActual.lineas:[];
   const s={sueldoBase:0,bonif:0,otrosIng:0,igss:0,isr:0,otrosDesc:0,comisiones:0,netoSueldo:0};
-  L.forEach(l=>{s.sueldoBase+=+l.sueldoBase||0;s.bonif+=+l.bonif||0;s.otrosIng+=+l.otrosIng||0;
-    s.igss+=+l.igss||0;s.isr+=+l.isr||0;s.otrosDesc+=+l.otrosDesc||0;s.comisiones+=_comLinea(l);s.netoSueldo+=_netoSueldo(l);});
+  L.forEach(l=>{s.sueldoBase+=_mesConcepto(l,'sueldo');s.bonif+=_mesConcepto(l,'bonif');s.otrosIng+=_mesConcepto(l,'otrosIng');
+    s.igss+=_mesConcepto(l,'igss');s.isr+=_mesConcepto(l,'isr');s.otrosDesc+=_mesConcepto(l,'otrosDesc');
+    s.comisiones+=_comLinea(l);s.netoSueldo+=_netoSueldo(l);});
   s.totalMes=s.netoSueldo+s.comisiones;
   return s;
 }
@@ -201,7 +235,7 @@ function _planSyncTotales(){
   pl.totalDescuentos=s.igss+s.isr+s.otrosDesc;
   pl.totalNeto=s.totalMes;   // lo que efectivamente se paga en el mes
   pl.nEmpleados=pl.lineas.length;
-  const algunPago=pl.lineas.some(l=>l.q1Pagado||l.q2Pagado||l.comPagado);
+  const algunPago=pl.lineas.some(l=>l.q1.pagado||l.q2.pagado||l.comPagado);
   const todo=pl.lineas.length>0&&pl.lineas.every(_lineaCompleta);
   pl.estado=!algunPago?'borrador':(todo?'pagada':'parcial');
 }
@@ -225,6 +259,7 @@ function verPlanilla(id){
   if(!p){toast('No encontrada','Esa planilla ya no está',true);return;}
   _planActual=JSON.parse(JSON.stringify(p));
   _planActual._nuevo=false;
+  _planActual.lineas=_migrarLineas(_planActual.lineas);  // planillas viejas → modelo por quincena
   if(!_planActual.cuentaPagoId)_planActual.cuentaPagoId=_cuentaPlanillaDefault();
   _abrirEditorPlanilla();
 }
@@ -257,7 +292,7 @@ function _abrirEditorPlanilla(){
       <div class="kpi"><div class="k-body"><div class="k-lbl">Total del mes</div><div class="k-val num" id="pl-kpi-total" style="color:var(--green)">—</div></div></div>
     </div>
     <div style="overflow-x:auto"><div id="pl-tabla-wrap"></div></div>
-    <div class="note" style="margin-top:10px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El sueldo se paga en <b>2 quincenas</b> y las <b>comisiones van aparte</b> — cada pago genera su <b>boleta</b>. IGSS al ${(IGSS_LABORAL_PCT*100).toFixed(2)}% sobre el sueldo base y comisiones automáticas de las ventas del mes (5% sin IVA) — todo editable. El ISR lo escribís vos. Al pagar se registra la salida en <b>Bancos</b> (con su póliza de cheque, que se reimprime desde ahí) y se abre la boleta.</span></div>`;
+    <div class="note" style="margin-top:10px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El mes se paga en <b>2 quincenas independientes</b> — cada una con sus propios ingresos y descuentos, <b>editables por separado</b> (no se parte 50/50 automático). El IGSS del mes ${(IGSS_LABORAL_PCT*100).toFixed(2)}% arranca en la <b>2ª quincena</b> (movelo si querés). Las <b>comisiones van aparte</b> (5% sin IVA, automáticas). El ISR lo escribís vos. Cada pago genera su <b>boleta</b> y registra la salida en <b>Bancos</b> con su póliza de cheque.</span></div>`;
   openMod('Planilla mensual',body,_planGuardar);
   $('#m-save').textContent='Guardar planilla';
   $('#ov').classList.add('modal-wide');
@@ -290,63 +325,90 @@ function _pagoLinea(i,parte,lbl,pagado){
       <span style="font-size:10px;color:var(--muted-2);min-width:38px;text-align:right">${lbl}</span>
       <button class="btn btn-primary btn-sm" style="padding:2px 12px" onclick="_planPagarParte(${i},'${parte}')">Pagar</button></div>`;
 }
-// Dibuja la tabla de líneas + totales dentro del editor.
+// Dibuja la tabla de líneas + totales dentro del editor. Cada empleado es un
+// GRUPO: un renglón con su nombre, y debajo la 1ª quincena y la 2ª quincena
+// como renglones separados y editables; las comisiones van en su propio
+// renglón (aparte del sueldo).
 function _planPintar(){
   const wrap=document.getElementById('pl-tabla-wrap'); if(!wrap||!_planActual)return;
   const pl=_planActual;
   const filas=pl.lineas.map((l,i)=>{
-    const tienePago=l.q1Pagado||l.q2Pagado||l.comPagado;
+    const tienePago=l.q1.pagado||l.q2.pagado||l.comPagado;
     const desbloq=_planEdit.has(i);   // desbloqueada a mano para corregir
-    const bloqSueldo=(l.q1Pagado||l.q2Pagado)&&!desbloq;  // sueldo pagado → bloqueado (salvo desbloqueo)
-    const bloqCom=l.comPagado&&!desbloq;
-    const inp=(campo,val,bloq)=>`<input type="number" step="0.01" value="${val}" ${bloq?'disabled':''} oninput="_planSet(${i},'${campo}',this.value)" class="num pl-in">`;
-    const pagos=`<div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:128px">
-        ${_pagoLinea(i,'q1','1ª Q',l.q1Pagado)}
-        ${_pagoLinea(i,'q2','2ª Q',l.q2Pagado)}
-        ${_comLinea(l)>0?_pagoLinea(i,'com','Comis.',l.comPagado):''}
-      </div>`;
-    // Botón para corregir una fila ya pagada (desbloquea sin tocar el dinero/póliza)
+    // Cada quincena se bloquea sola cuando ya se pagó (salvo desbloqueo).
+    const inpQ=(qk,campo,val,bloq)=>`<input type="number" step="0.01" value="${val}" ${bloq?'disabled':''} oninput="_planSetQ(${i},'${qk}','${campo}',this.value)" class="num pl-in">`;
+    // Renglón de una quincena: sus 6 inputs + neto + botón de pago.
+    const filaQ=(qk,lbl)=>{
+      const qo=l[qk], bloq=qo.pagado&&!desbloq;
+      return `<tr class="pl-q">
+        <td class="pl-qlbl">${lbl}</td>
+        <td>${inpQ(qk,'sueldo',qo.sueldo,bloq)}</td>
+        <td>${inpQ(qk,'bonif',qo.bonif,bloq)}</td>
+        <td>${inpQ(qk,'otrosIng',qo.otrosIng,bloq)}</td>
+        <td>${inpQ(qk,'igss',qo.igss,bloq)}</td>
+        <td>${inpQ(qk,'isr',qo.isr,bloq)}</td>
+        <td>${inpQ(qk,'otrosDesc',qo.otrosDesc,bloq)}</td>
+        <td class="num" style="font-weight:700" id="pl-neto-${i}-${qk}">${money(_qNeto(qo))}</td>
+        <td style="text-align:center">${_pagoLinea(i,qk,lbl,qo.pagado)}</td>
+      </tr>`;
+    };
+    // Botón para corregir un grupo ya pagado (desbloquea sin tocar el dinero/póliza)
     const btnEdit=tienePago?(desbloq
-      ? `<div style="font-size:9.5px;color:#B45309;margin-top:3px;font-weight:600">✎ editando (el pago no cambia)</div>`
-      : `<button class="btn btn-ghost btn-sm" style="padding:1px 7px;font-size:10px;margin-top:3px" onclick="_planDesbloquear(${i})" title="Corregir valores (no cambia el pago ya hecho)">🔓 Editar</button>`):'';
-    return `<tr>
-      <td style="font-weight:600;min-width:140px">${escHtml(l.nombre)}${_lineaCompleta(l)?` <span class="badge b-ok" style="font-size:9px">Pagado</span>`:''}${btnEdit}</td>
-      <td>${inp('sueldoBase',l.sueldoBase,bloqSueldo)}</td>
-      <td>${inp('bonif',l.bonif,bloqSueldo)}</td>
-      <td>${inp('otrosIng',l.otrosIng,bloqSueldo)}</td>
-      <td>${inp('igss',l.igss,bloqSueldo)}</td>
-      <td>${inp('isr',l.isr,bloqSueldo)}</td>
-      <td>${inp('otrosDesc',l.otrosDesc,bloqSueldo)}</td>
-      <td class="num" style="font-weight:700" id="pl-neto-${i}">${money(_netoSueldo(l))}</td>
-      <td>${inp('comisiones',l.comisiones,bloqCom)}</td>
-      <td style="text-align:center">${pagos}</td>
-    </tr>`;
+      ? `<span style="font-size:9.5px;color:#B45309;margin-left:8px;font-weight:600">✎ editando (el pago no cambia)</span>`
+      : `<button class="btn btn-ghost btn-sm" style="padding:1px 7px;font-size:10px;margin-left:8px" onclick="_planDesbloquear(${i})" title="Corregir valores (no cambia el pago ya hecho)">🔓 Editar</button>`):'';
+    const nombreRow=`<tr class="pl-emp"><td colspan="9" style="padding-top:9px">
+        <span style="font-weight:700;font-size:12.5px">${escHtml(l.nombre)}</span>${_lineaCompleta(l)?` <span class="badge b-ok" style="font-size:9px">Pagado</span>`:''}${btnEdit}
+      </td></tr>`;
+    // Renglón de comisiones (aparte; sólo si tiene comisiones del mes).
+    const bloqCom=l.comPagado&&!desbloq;
+    const comRow=_comLinea(l)>0?`<tr class="pl-com">
+        <td class="pl-qlbl">Comis.</td>
+        <td colspan="6"><input type="number" step="0.01" value="${l.comisiones}" ${bloqCom?'disabled':''} oninput="_planSetCom(${i},this.value)" class="num pl-in" style="width:110px"></td>
+        <td class="num" style="font-weight:700" id="pl-com-${i}">${money(_comLinea(l))}</td>
+        <td style="text-align:center">${_pagoLinea(i,'com','Comis.',l.comPagado)}</td>
+      </tr>`:'';
+    return nombreRow+filaQ('q1','1ª Q')+filaQ('q2','2ª Q')+comRow;
   }).join('');
   const tc=id=>`<td class="num" style="font-weight:700" id="pl-t-${id}"></td>`;
   wrap.innerHTML=`<style>
       #pl-tabla-wrap table{width:100%;font-size:12px}
-      #pl-tabla-wrap th,#pl-tabla-wrap td{padding:6px 6px;white-space:nowrap}
-      #pl-tabla-wrap input.pl-in{width:72px;text-align:right}
+      #pl-tabla-wrap th,#pl-tabla-wrap td{padding:5px 6px;white-space:nowrap}
+      #pl-tabla-wrap tr.pl-emp td{border-top:2px solid var(--line-strong)}
+      #pl-tabla-wrap tr.pl-q td,#pl-tabla-wrap tr.pl-com td{background:var(--panel,#fff)}
+      #pl-tabla-wrap td.pl-qlbl{font-weight:600;color:var(--muted);padding-left:16px;min-width:56px}
+      #pl-tabla-wrap tr.pl-com td.pl-qlbl{color:#7a5c00}
+      #pl-tabla-wrap input.pl-in{width:78px;text-align:right}
       #pl-tabla-wrap input.pl-in::-webkit-outer-spin-button,
       #pl-tabla-wrap input.pl-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
       #pl-tabla-wrap input.pl-in{-moz-appearance:textfield;appearance:textfield}
       #pl-tabla-wrap .btn-sm{white-space:nowrap}
     </style>
-    <table style="min-width:940px"><thead><tr>
-      <th>Empleado</th><th class="num">Sueldo</th><th class="num">Bonif.</th><th class="num">Otros ing.</th>
+    <table style="min-width:900px"><thead><tr>
+      <th></th><th class="num">Sueldo</th><th class="num">Bonif.</th><th class="num">Otros ing.</th>
       <th class="num">IGSS</th><th class="num">ISR</th><th class="num">Otros desc.</th>
-      <th class="num">Neto sueldo</th><th class="num">Comisiones</th><th style="text-align:center">Pagos</th></tr></thead>
-    <tbody>${filas||`<tr><td colspan="10" style="color:var(--muted-2);padding:14px">Sin empleados activos.</td></tr>`}</tbody>
+      <th class="num">Neto</th><th style="text-align:center">Pago</th></tr></thead>
+    <tbody>${filas||`<tr><td colspan="9" style="color:var(--muted-2);padding:14px">Sin empleados activos.</td></tr>`}</tbody>
     <tfoot><tr style="border-top:2px solid var(--line-strong);font-weight:700">
-      <td>Total (${pl.lineas.length})</td>${tc('sueldoBase')}${tc('bonif')}${tc('otrosIng')}${tc('igss')}${tc('isr')}${tc('otrosDesc')}${tc('netoSueldo')}${tc('comisiones')}<td></td>
+      <td>Total mes (${pl.lineas.length})</td>${tc('sueldoBase')}${tc('bonif')}${tc('otrosIng')}${tc('igss')}${tc('isr')}${tc('otrosDesc')}${tc('netoSueldo')}<td></td>
     </tr></tfoot></table>`;
   _planPintarTotales();
 }
-function _planSet(i,campo,val){
+// Editar un valor de una quincena (sueldo, bonif, igss, isr, …).
+function _planSetQ(i,qk,campo,val){
   if(!_planActual)return;
-  _planActual.lineas[i][campo]=Number(val)||0;
-  const nc=document.getElementById('pl-neto-'+i);
-  if(nc)nc.textContent=money(_netoSueldo(_planActual.lineas[i]));
+  const l=_planActual.lineas[i]; if(!l||!l[qk])return;
+  l[qk][campo]=Number(val)||0;
+  const nc=document.getElementById('pl-neto-'+i+'-'+qk);
+  if(nc)nc.textContent=money(_qNeto(l[qk]));
+  _planPintarTotales();
+}
+// Editar la comisión del mes (aparte del sueldo).
+function _planSetCom(i,val){
+  if(!_planActual)return;
+  const l=_planActual.lineas[i]; if(!l)return;
+  l.comisiones=Number(val)||0;
+  const cc=document.getElementById('pl-com-'+i);
+  if(cc)cc.textContent=money(_comLinea(l));
   _planPintarTotales();
 }
 function _planPintarTotales(){
@@ -355,7 +417,8 @@ function _planPintarTotales(){
   ['sueldoBase','bonif','otrosIng','igss','isr','otrosDesc','netoSueldo','comisiones'].forEach(k=>set('pl-t-'+k,s[k]));
   set('pl-kpi-sueldo',s.netoSueldo);set('pl-kpi-com',s.comisiones);set('pl-kpi-total',s.totalMes);
 }
-window._planSet=_planSet;
+window._planSetQ=_planSetQ;
+window._planSetCom=_planSetCom;
 
 // Desbloquear una fila ya pagada para corregir sus valores. NO toca el
 // dinero ni la póliza ya emitidos: solo permite editar los datos de la
@@ -404,7 +467,7 @@ function _planRegistrarPago(o){
 async function _planPagarParte(i,parte){
   const pl=_planActual; if(!pl)return;
   const l=pl.lineas[i]; if(!l)return;
-  const yaPagado={q1:l.q1Pagado,q2:l.q2Pagado,com:l.comPagado}[parte];
+  const yaPagado={q1:l.q1.pagado,q2:l.q2.pagado,com:l.comPagado}[parte];
   if(yaPagado)return;
   const monto={q1:_montoQ1(l),q2:_montoQ2(l),com:_comLinea(l)}[parte];
   const etq={q1:'1ª quincena',q2:'2ª quincena',com:'comisiones'}[parte];
@@ -416,8 +479,8 @@ async function _planPagarParte(i,parte){
     concepto:'Planilla '+pl.etiqueta+' · '+l.nombre+' · '+etq});
   if(!mov){toast('No se registró el pago','Revisá la cuenta seleccionada',true);return;}
   const ahora=new Date().toISOString();
-  if(parte==='q1'){l.q1Pagado=true;l.q1Poliza=mov.poliza;l.q1El=ahora;}
-  else if(parte==='q2'){l.q2Pagado=true;l.q2Poliza=mov.poliza;l.q2El=ahora;}
+  if(parte==='q1'){l.q1.pagado=true;l.q1.poliza=mov.poliza;l.q1.el=ahora;}
+  else if(parte==='q2'){l.q2.pagado=true;l.q2.poliza=mov.poliza;l.q2.el=ahora;}
   else{l.comPagado=true;l.comPoliza=mov.poliza;l.comEl=ahora;}
   l.cuentaBancoId=cuentaId;
   _planSyncTotales();
@@ -438,9 +501,9 @@ window._planPagarParte=_planPagarParte;
 function _planAnularParte(i,parte){
   const pl=_planActual; if(!pl)return;
   const l=pl.lineas[i]; if(!l)return;
-  const pagado={q1:l.q1Pagado,q2:l.q2Pagado,com:l.comPagado}[parte];
+  const pagado={q1:l.q1.pagado,q2:l.q2.pagado,com:l.comPagado}[parte];
   if(!pagado)return;
-  const num={q1:l.q1Poliza,q2:l.q2Poliza,com:l.comPoliza}[parte];
+  const num={q1:l.q1.poliza,q2:l.q2.poliza,com:l.comPoliza}[parte];
   const etq={q1:'1ª quincena',q2:'2ª quincena',com:'comisiones'}[parte];
   const _do=async()=>{
     // Anular el movimiento de banco ligado (por póliza + origen planilla)
@@ -449,8 +512,8 @@ function _planAnularParte(i,parte){
         .find(m=>m.poliza===num&&m.origen==='planilla'&&!m.anulado);
       if(mov){mov.anulado=true;if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mov);}
     }
-    if(parte==='q1'){l.q1Pagado=false;l.q1Poliza=null;l.q1El=null;}
-    else if(parte==='q2'){l.q2Pagado=false;l.q2Poliza=null;l.q2El=null;}
+    if(parte==='q1'){l.q1.pagado=false;l.q1.poliza=null;l.q1.el=null;}
+    else if(parte==='q2'){l.q2.pagado=false;l.q2.poliza=null;l.q2.el=null;}
     else{l.comPagado=false;l.comPoliza=null;l.comEl=null;}
     _planSyncTotales();
     await (typeof guardarPlanilla==='function'?guardarPlanilla(pl):Promise.resolve());
@@ -472,7 +535,7 @@ function eliminarPlanilla(id){
   const p=(typeof planillas!=='undefined'?planillas:[]).find(x=>String(x.id)===String(id));
   if(!p)return;
   const pols=[];
-  (p.lineas||[]).forEach(l=>{[l.q1Poliza,l.q2Poliza,l.comPoliza].forEach(n=>{if(n)pols.push(n);});});
+  (p.lineas||[]).forEach(l=>{_polizasLinea(l).forEach(n=>{if(n)pols.push(n);});});
   const msg=pols.length
     ? `Se anularán ${pols.length} movimiento(s) de banco (devuelve el saldo) y se borrará la planilla.`
     : 'Se borrará la planilla (no tiene pagos registrados).';
@@ -518,9 +581,9 @@ function boletaPagoPDF(pl,l,parte){
   const esCom=(parte==='com'), q=(parte==='q2')?2:1;
   const emp=(typeof empleados!=='undefined'?empleados:[]).find(e=>String(e.id)===String(l.empleadoId))||{};
   const cuenta=(typeof cuentasBanco!=='undefined'?cuentasBanco:[]).find(c=>String(c.id)===String(l.cuentaBancoId||pl.cuentaPagoId))||{};
-  const pagado=esCom?l.comPagado:(q===1?l.q1Pagado:l.q2Pagado);
-  const poliza=esCom?l.comPoliza:(q===1?l.q1Poliza:l.q2Poliza);
-  const fechaEl=esCom?l.comEl:(q===1?l.q1El:l.q2El);
+  const pagado=esCom?l.comPagado:(q===1?l.q1.pagado:l.q2.pagado);
+  const poliza=esCom?l.comPoliza:(q===1?l.q1.poliza:l.q2.poliza);
+  const fechaEl=esCom?l.comEl:(q===1?l.q1.el:l.q2.el);
   const fechaPago=fechaEl?fdate(fechaEl):(pl.hasta?fdate(pl.hasta):'—');
   const subt=esCom?('Comisiones · '+(pl.etiqueta||'')):((q===1?'1ª':'2ª')+' quincena · '+(pl.etiqueta||''));
   // Etiqueta de período tipo "16 – 31 ago 2026 · quincena"
@@ -547,12 +610,13 @@ function boletaPagoPDF(pl,l,parte){
     descRows=fila(igssLbl,0)+fila('ISR',0)+fila('Anticipos',0);
     totDesc=0; neto=com;
   }else{
-    const sB=_mitad(l.sueldoBase,q),bo=_mitad(l.bonif,q),oi=_mitad(l.otrosIng,q);
-    const ig=_mitad(l.igss,q),is=_mitad(l.isr,q),od=_mitad(l.otrosDesc,q);
+    const qo=(q===1?l.q1:l.q2);
+    const sB=+qo.sueldo||0,bo=+qo.bonif||0,oi=+qo.otrosIng||0;
+    const ig=+qo.igss||0,is=+qo.isr||0,od=+qo.otrosDesc||0;
     ingRows=fila('Sueldo base',sB)+fila('Bonificación incentivo',bo)+(oi?fila('Otros ingresos',oi):'');
     totIng=sB+bo+oi;
     descRows=fila(igssLbl,ig)+fila('ISR',is)+fila('Anticipos',od);
-    totDesc=ig+is+od; neto=_quincenaNeto(l,q);
+    totDesc=ig+is+od; neto=_qNeto(qo);
   }
   const chip=pagado
     ? `<span style="display:inline-flex;align-items:center;gap:6px;background:#EDF3DD;border:1px solid #C9D2B6;border-radius:20px;padding:5px 13px;font-size:11px;color:#3a4a1e">📄 Ref. Póliza de cheque <b style="color:#173916">${_polRef(poliza)}</b>${(cuenta.nombre||cuenta.banco)?' · '+escHtml(cuenta.nombre||cuenta.banco):''}</span>`
