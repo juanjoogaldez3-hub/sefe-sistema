@@ -61,6 +61,23 @@ ok('descripción con coma queda entera', f2.descripcion === 'ACH EL VIEJO CAFE, 
 ok('esa fila es entrada de Q2180 con su No.Doc', f2.tipo === 'entrada' && f2.monto === 2180 && f2.noDoc === '97460');
 ok('fecha DD-MM-YYYY → YYYY-MM-DD', f0.fecha === '2026-08-01', f0.fecha);
 
+console.log('\n═══ Formato NUEVO sin columna Saldo (6 columnas) ═══');
+// El banco ahora exporta sin la columna Saldo. El parser debe adaptarse
+// al encabezado (antes descartaba todo con "if n<7").
+const CSV6 = [
+  'Cuenta: 2880062118 - SEFE, SOCIEDAD ANONIMA',
+  'Del 01/08/2026 al 31/08/2026',
+  'Fecha,TT,Descripcion,No. Doc,Debe (GTQ),Haber (GTQ)',
+  '01-08-2026,ND,PAGO DE PRESTAMO/11019633920010,86455677,7308.18,',
+  '03-08-2026,DE,AGENCIA ROOSEVELT,2123611,,525.00',
+  '04-08-2026,NC,ACH EL VIEJO CAFE, S.A. PAGO PROV.,97460,,2180.00',
+].join('\n');
+const r6 = parse(CSV6);
+ok('6 columnas: parsea las 3 filas (antes daba 0)', r6.filas.length === 3, 'dio ' + r6.filas.length);
+ok('6 columnas: préstamo es salida de Q7308.18', r6.filas[0].tipo === 'salida' && r6.filas[0].monto === 7308.18, JSON.stringify(r6.filas[0]));
+ok('6 columnas: depósito es entrada de Q525', r6.filas[1].tipo === 'entrada' && r6.filas[1].monto === 525, JSON.stringify(r6.filas[1]));
+ok('6 columnas: descripción con coma entera + No.Doc', r6.filas[2].descripcion === 'ACH EL VIEJO CAFE, S.A. PAGO PROV.' && r6.filas[2].noDoc === '97460', JSON.stringify(r6.filas[2]));
+
 console.log('\n═══ Cruce contra movimientos de SEFE ═══');
 // SEFE: depósito 525 (mismo día), El Viejo Cafe 2180 (1 día después → dentro de tolerancia),
 // y un cobro de 999 que el banco no tiene. NO tiene el préstamo, la planilla ni el depósito de 300.
