@@ -618,9 +618,18 @@ function renderCliDet(){
       <table><thead><tr><th>Producto</th><th>Precio base</th><th>Precio cliente</th><th>Descuento</th>${esAdmin?'<th>Margen</th>':''}<th></th></tr></thead><tbody>${rows}</tbody></table>
     </div>`;
   }else if(cliTab==='facturas'){
+    // La ganancia por factura es sólo para admin: Ganancia = Total − costo de lo
+    // vendido (mismo criterio que el reporte de vendedores en app-9.js).
+    const esAdmin=currentRole==="admin";
+    const gananciaTd=f=>{
+      if(!esAdmin)return '';
+      const g=(Number(f.totales?.total)||0)-costoDoc(f);
+      const col=g<0?'var(--danger)':'var(--ok)';
+      return `<td class="num" style="font-weight:600;color:${col}">${money(g)}</td>`;
+    };
     body=`<div class="panel"><div class="panel-head"><h3>Facturas Cambiarias emitidas</h3></div>
-      <table><thead><tr><th>No.</th><th>Tipo</th><th>Fecha</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>
-      ${facturas.length?facturas.slice().reverse().map(f=>`<tr><td style="font-weight:600">${f.serie}-${f.numeroDte}</td><td><span class="pill ${(TIPO_LBL[f.tipoDoc]||["","p-ped"])[1]}">${(TIPO_LBL[f.tipoDoc]||["Documento"])[0]}</span></td><td style="color:var(--muted)">${fdate(f.creada)}</td><td class="num" style="font-weight:600">${money(f.totales.total)}</td><td><span class="badge b-ok">${f.estado}</span></td><td><button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">Sin Facturas Cambiarias emitidas</td></tr>'}
+      <table><thead><tr><th>No.</th><th>Tipo</th><th>Fecha</th><th>Total</th>${esAdmin?'<th>Ganancia</th>':''}<th>Estado</th><th></th></tr></thead><tbody>
+      ${facturas.length?facturas.slice().reverse().map(f=>`<tr><td style="font-weight:600">${f.serie}-${f.numeroDte}</td><td><span class="pill ${(TIPO_LBL[f.tipoDoc]||["","p-ped"])[1]}">${(TIPO_LBL[f.tipoDoc]||["Documento"])[0]}</span></td><td style="color:var(--muted)">${fdate(f.creada)}</td><td class="num" style="font-weight:600">${money(f.totales.total)}</td>${gananciaTd(f)}<td><span class="badge b-ok">${f.estado}</span></td><td><button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button></td></tr>`).join(''):`<tr><td colspan="${esAdmin?7:6}" class="empty">Sin Facturas Cambiarias emitidas</td></tr>`}
       </tbody></table></div>`;
   }else if(cliTab==='factabonos'){
     // Estado de cuenta ordenado por EMISIÓN DE FACTURA: cada factura y,
