@@ -217,6 +217,23 @@ function repRange(){
   return {start,end:new Date('2999-01-01')};
 }
 function enRango(iso,r){const t=new Date(iso);return t>=r.start&&t<=r.end;}
+// Etiqueta legible del RANGO DE FECHAS seleccionado, para estampar en los
+// reportes generados (PDF y Excel). Si hay fechas manuales (desde/hasta) las
+// usa; si no, arma el rango real del período elegido (mes, mes anterior, etc.).
+function repRangoLabel(){
+  const d=$('#rep-desde')?.value, h=$('#rep-hasta')?.value;
+  if(d&&h)return 'Del '+fdate(d)+' al '+fdate(h);
+  if(d)return 'Desde '+fdate(d);
+  if(h)return 'Hasta '+fdate(h);
+  const r=repRange();
+  const sinIni=r.start.getFullYear()<=1970;
+  const sinFin=r.end.getFullYear()>=2999;
+  if(sinIni&&sinFin)return 'Todo el historial';
+  if(sinFin)return 'Desde '+fdate(r.start);
+  if(sinIni)return 'Hasta '+fdate(r.end);
+  return 'Del '+fdate(r.start)+' al '+fdate(r.end);
+}
+window.repRangoLabel=repRangoLabel;
 function setRepPeriod(p){repPeriod=p;$('#rep-desde').value='';$('#rep-hasta').value='';document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.classList.toggle('on',b.dataset.p===p));renderReportes();}
 window.toggleEstcta=function(i){const det=document.getElementById('estcta-det-'+i),arr=document.getElementById('estcta-arrow-'+i);if(!det)return;const abierto=det.style.display!=='none';det.style.display=abierto?'none':'table-row';if(arr)arr.textContent=abierto?'▸':'▾';};
 window.setRepPeriod=setRepPeriod;
