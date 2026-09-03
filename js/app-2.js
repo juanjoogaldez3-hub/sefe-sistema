@@ -458,6 +458,16 @@ function aplicarClienteSeleccionado(cliId){
 function initForm(){
   // Configurar autocompletados propios (reemplazan a los datalist nativos)
   setupAutocomplete();
+  // Autoguardar el borrador cuando cambia CUALQUIER campo del pedido (cliente,
+  // OC, observaciones, nota interna…), no solo cuando cambia el carrito. Antes,
+  // si escribías notas y se cerraba la pantalla sin tocar productos, se perdían.
+  // Se engancha una sola vez sobre el contenedor de la vista.
+  const cont=document.getElementById('v-pedido');
+  if(cont&&!cont.dataset.borrWired){
+    cont.dataset.borrWired='1';
+    const _g=()=>{if(typeof guardarBorrador==='function')guardarBorrador();};
+    cont.addEventListener('input',_g);cont.addEventListener('change',_g);
+  }
 }
 function clienteSel(){return clientes.find(c=>c.id===Number($('#f-cli').value));}
 function actualizarVendedorInfo(cli){
