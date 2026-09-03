@@ -258,6 +258,13 @@ function setRepFiltroBusca(k,id){
 window.setRepFiltroBusca=setRepFiltroBusca;
 function renderRepFilters(){
   const f=$('#rep-filters');if(!f)return;
+  // Reportes de FOTO a una fecha (inventario a un día de corte): no usan rango
+  // ni período — sólo el "Existencias al día". Se oculta la barra de rango para
+  // no confundir (antes salían las dos cosas y parecían pelearse).
+  const _esFoto=(repType==='invactual'||repType==='invcosto');
+  const _per=$('#rep-period'),_ran=$('#rep-rango');
+  if(_per)_per.style.display=_esFoto?'none':'flex';
+  if(_ran)_ran.style.display=_esFoto?'none':'flex';
   let html='';
   const sel=(id,lbl,opts,val,k)=>{
     _repSelOpts[k]=opts;

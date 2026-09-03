@@ -299,22 +299,32 @@ function renderReportes(){
     const MESES_ES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     const mesLbl=k=>{const [a,m]=k.split('-');return MESES_ES[Number(m)-1]+' '+a;};
     const mesAbbr=k=>{const [a,m]=k.split('-');return MESES_ES[Number(m)-1].slice(0,3)+' '+a.slice(2);};
-    // Esta es una COMPARATIVA: siempre tiene que incluir el mes en curso y el
-    // anterior para poder comparar. Sin importar el período elegido, forzamos
-    // que el rango llegue hasta hoy y empiece a más tardar en el mes pasado.
-    // (Ej.: filtro "Este mes" → sale este mes y el anterior, no uno solo.)
-    const _ahora=new Date();
-    const _finCurso=new Date(_ahora.getFullYear(),_ahora.getMonth()+1,0,23,59,59); // último día del mes actual
-    const _iniPrev=new Date(_ahora.getFullYear(),_ahora.getMonth()-1,1);           // 1° del mes anterior
-    const _rComp={start:(r.start<_iniPrev?r.start:_iniPrev),end:(r.end>_finCurso?r.end:_finCurso)};
-    let ventasC=documentos.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&enRango(d.creada,_rComp));
-    if(repFiltros.cliente)ventasC=ventasC.filter(d=>String(d.clienteId)===repFiltros.cliente);
-    if(repFiltros.vendedor_simple)ventasC=ventasC.filter(d=>d.vendedorNombre===repFiltros.vendedor_simple);
+    // COMPARATIVA que RESPETA el rango elegido: las columnas son los meses con
+    // ventas DENTRO del rango seleccionado (no se fuerza el mes en curso). Si el
+    // rango abarca un solo mes, se agrega el mes inmediatamente anterior —
+    // trayendo sus ventas— para que siempre haya con qué comparar mes vs mes.
     const _mkDate=dt=>dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
-    const mesesSet=new Set();
+    const _filtrarVentas=rr=>{
+      let v=documentos.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&enRango(d.creada,rr));
+      if(repFiltros.cliente)v=v.filter(d=>String(d.clienteId)===repFiltros.cliente);
+      if(repFiltros.vendedor_simple)v=v.filter(d=>d.vendedorNombre===repFiltros.vendedor_simple);
+      return v;
+    };
+    let ventasC=_filtrarVentas(r);
+    let mesesSet=new Set();
     ventasC.forEach(d=>mesesSet.add(mesKey(d)));
-    mesesSet.add(_mkDate(_ahora));   // el mes en curso SIEMPRE es columna
-    mesesSet.add(_mkDate(_iniPrev)); // y el anterior, para que siempre haya con qué comparar
+    if(ventasC.length&&mesesSet.size<2){
+      // Un solo mes en el rango → traer el mes anterior al más temprano.
+      const base=[...mesesSet].sort()[0];
+      const [ba,bm]=base.split('-').map(Number);
+      const prevDate=new Date(ba,bm-2,1);   // 1° del mes anterior al base
+      const rExt={start:(r.start<prevDate?r.start:prevDate),end:r.end};
+      ventasC=_filtrarVentas(rExt);
+      mesesSet=new Set();
+      ventasC.forEach(d=>mesesSet.add(mesKey(d)));
+      mesesSet.add(_mkDate(prevDate));  // columna del mes anterior aunque no tenga ventas
+      mesesSet.add(base);
+    }
     const meses=[...mesesSet].sort();
     const porCli={};
     ventasC.forEach(d=>{
