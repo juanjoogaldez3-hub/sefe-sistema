@@ -193,7 +193,7 @@ async function exportarExcel(){
   const meta=[
     [SEFE_MARCA.membrete],
     [TIPO_NOMBRES[repType]||repType],
-    [_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repPeriod],
+    [_esInv?'Existencias al:':'Período:',_esInv?(repFiltros.invFecha?fdate(repFiltros.invFecha):'Hoy'):repRangoLabel()],
     ['Generado el:',fdatehora(new Date())],
     ['Generado por:',currentUser],
     []
@@ -299,10 +299,13 @@ function exportarPDF(){
     'Total pagado','Recibos','Unidades compradas','Órdenes'].includes(c)||MESES_NUM.some(m=>c.startsWith(m+' '));
   const ths=cols.map(c=>`<th style="${_pdfTH(esNum(c)?'text-align:right':'')}">${c}</th>`).join('');
   const trs=repLastData.map(row=>`<tr>${cols.map(c=>`<td style="${_pdfTD(esNum(c)?'text-align:right;font-variant-numeric:tabular-nums':'')}">${esNum(c)&&typeof row[c]==='number'?row[c].toLocaleString('es-GT',{minimumFractionDigits:2}):row[c]}</td>`).join('')}</tr>`).join('');
-  const _invFch=(repType==='invactual'||repType==='invcosto')&&repFiltros.invFecha&&repFiltros.invFecha<fechaHoyGT()?' · al '+fdate(repFiltros.invFecha):'';
-  const body=`${_pdfSec((TIPO_NOMBRES[repType]||repType)+_invFch+' · '+repLastData.length+' registros')}
+  const _esInvCorte=(repType==='invactual'||repType==='invcosto');
+  const _invFch=_esInvCorte&&repFiltros.invFecha&&repFiltros.invFecha<fechaHoyGT()?' · al '+fdate(repFiltros.invFecha):'';
+  // Los reportes de existencias a una fecha de corte no llevan rango; el resto sí.
+  const _rangoLbl=_esInvCorte?'':repRangoLabel();
+  const body=`${_pdfSec((TIPO_NOMBRES[repType]||repType)+_invFch+(_rangoLbl?' · '+_rangoLbl:'')+' · '+repLastData.length+' registros')}
     <table style="width:100%;border-collapse:collapse"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
-  _abrirPDF(_pdfShell({titulo:'REPORTE',subtitulo:(TIPO_NOMBRES[repType]||repType)+_invFch,orientacion:cols.length>6?'landscape':'portrait',body}));
+  _abrirPDF(_pdfShell({titulo:'REPORTE',subtitulo:(TIPO_NOMBRES[repType]||repType)+_invFch+(_rangoLbl?' · '+_rangoLbl:''),orientacion:cols.length>6?'landscape':'portrait',body}));
 }
 window.exportarPDF=exportarPDF;
 
