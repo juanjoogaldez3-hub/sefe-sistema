@@ -210,6 +210,7 @@ window.setCotFiltro=setCotFiltro;
 function renderCotizaciones(){
   const listBox=document.getElementById('cot-list'),edBox=document.getElementById('cot-editor');
   if(listBox)listBox.style.display='';if(edBox)edBox.style.display='none';
+  if(typeof _cotRenderAviso==='function')_cotRenderAviso();
   const base=cotVisibles().slice().sort((a,b)=>(b.numero||0)-(a.numero||0));
   let lista=base;
   if(cotFiltro==='activas')lista=base.filter(c=>['borrador','enviada'].includes(c.estado));
@@ -257,7 +258,7 @@ function cotWireAutocomplete(){
   crearAutocomplete('cot-cli-search',
     (q)=>{const ql=q.toLowerCase();let base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
       return base.filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:`${c.nombre} · ${c.nit||''}`,sub:c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:'',valor:c.id}));},
-    (item)=>{cotClienteSel=item?clientes.find(c=>c.id===item.valor):null;const n=document.getElementById('cot-cli-nit');if(n&&cotClienteSel)n.value='';if(cotClienteSel){const t=document.getElementById('cot-cli-tel');if(t)t.value=cotClienteSel.telefono||'';const m=document.getElementById('cot-cli-mail');if(m)m.value=cotClienteSel.correo||'';}cotInfoCliente();});
+    (item)=>{cotClienteSel=item?clientes.find(c=>c.id===item.valor):null;const n=document.getElementById('cot-cli-nit');if(n&&cotClienteSel)n.value='';if(cotClienteSel){const t=document.getElementById('cot-cli-tel');if(t)t.value=cotClienteSel.telefono||'';const m=document.getElementById('cot-cli-mail');if(m)m.value=cotClienteSel.correo||'';}cotInfoCliente();if(!cotEditId&&typeof _cotGuardarBorrador==='function')_cotGuardarBorrador();});
   crearAutocomplete('cot-add',
     (q)=>{const ql=q.toLowerCase();
       return productos.filter(p=>p.activo!==false).filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)||(p.skuProveedor||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:p.marca||'',valor:p.id}));},
@@ -270,6 +271,12 @@ function abrirCotEditor(titulo){
   const cs=document.getElementById('cot-cli-search');if(cs)cs.value=cotClienteSel?`${cotClienteSel.nombre} · ${cotClienteSel.nit||''}`:'';
   cotInfoCliente();cotRenderCart();
   setTimeout(cotWireAutocomplete,0);
+  // Autoguardar el borrador cuando cambian los campos del editor (una sola vez).
+  if(edBox&&!edBox.dataset.borrWired){
+    edBox.dataset.borrWired='1';
+    const _g=()=>{if(!cotEditId&&typeof _cotGuardarBorrador==='function')_cotGuardarBorrador();};
+    edBox.addEventListener('input',_g);edBox.addEventListener('change',_g);
+  }
 }
 function nuevaCotizacion(){
   cotEditId=null;cotCart=[];cotClienteSel=null;
@@ -284,8 +291,70 @@ function editarCotizacion(id){
   setTimeout(()=>{const v=document.getElementById('cot-validez');if(v)v.value=c.validezDias||15;const e=document.getElementById('cot-estado');if(e)e.value=(c.estado==='convertida'?'aceptada':c.estado)||'borrador';const o=document.getElementById('cot-obs');if(o)o.value=c.observaciones||'';const n=document.getElementById('cot-cli-nit');if(!cotClienteSel){const s=document.getElementById('cot-cli-search');if(s)s.value=c.clienteComercial||c.clienteNombre||'';if(n)n.value=c.clienteNit||'';}else if(n){n.value='';}const vn=document.getElementById('cot-vend-nom');if(vn)vn.value=c.vendedorNombre||'';const vt=document.getElementById('cot-vend-tel');if(vt)vt.value=c.vendedorTel||'';const vmail=document.getElementById('cot-vend-mail');if(vmail)vmail.value=c.vendedorEmail||'';const cc=document.getElementById('cot-cli-contacto');if(cc)cc.value=c.clienteContacto||'';const ct=document.getElementById('cot-cli-tel');if(ct)ct.value=c.clienteTel||'';const cm=document.getElementById('cot-cli-mail');if(cm)cm.value=c.clienteEmail||'';},0);
 }
 window.editarCotizacion=editarCotizacion;
-function cerrarCotEditor(){cotEditId=null;renderCotizaciones();}
+function cerrarCotEditor(){cotEditId=null;_cotLimpiarBorrador();renderCotizaciones();}
 window.cerrarCotEditor=cerrarCotEditor;
+
+// ===== Borrador automático de la cotización (se guarda en el navegador) =====
+// Igual que el borrador del pedido: si la pantalla se cierra o desloguea, la
+// cotización a medias no se pierde. Sólo para cotizaciones NUEVAS (las que se
+// están editando ya están guardadas en la base).
+const COT_BORRADOR_KEY='sefe_borrador_cotizacion';
+function _cotGuardarBorrador(){
+  try{
+    if(cotEditId)return;                                   // sólo cotización nueva
+    if(!cotCart.length){localStorage.removeItem(COT_BORRADOR_KEY);return;}
+    const g=id=>(document.getElementById(id)||{}).value||'';
+    localStorage.setItem(COT_BORRADOR_KEY,JSON.stringify({
+      cart:cotCart, clienteId:cotClienteSel?cotClienteSel.id:null,
+      cliSearch:g('cot-cli-search'), cliNit:g('cot-cli-nit'), cliContacto:g('cot-cli-contacto'),
+      cliTel:g('cot-cli-tel'), cliMail:g('cot-cli-mail'),
+      vendNom:g('cot-vend-nom'), vendTel:g('cot-vend-tel'), vendMail:g('cot-vend-mail'),
+      validez:g('cot-validez'), estado:g('cot-estado'), obs:g('cot-obs'), ts:Date.now()
+    }));
+  }catch(e){/* si el navegador no permite, no pasa nada */}
+}
+window._cotGuardarBorrador=_cotGuardarBorrador;
+function _cotLimpiarBorrador(){try{localStorage.removeItem(COT_BORRADOR_KEY);}catch(e){}}
+window._cotLimpiarBorrador=_cotLimpiarBorrador;
+function _cotHayBorrador(){try{const r=localStorage.getItem(COT_BORRADOR_KEY);if(!r)return null;const b=JSON.parse(r);return (b&&b.cart&&b.cart.length)?b:null;}catch(e){return null;}}
+window._cotHayBorrador=_cotHayBorrador;
+// Pinta (o limpia) el aviso de "cotización sin guardar" arriba de la lista.
+function _cotRenderAviso(){
+  const box=document.getElementById('cot-borrador-aviso'); if(!box)return;
+  const b=_cotHayBorrador();
+  if(!b){box.innerHTML='';return;}
+  const nItems=b.cart.length, cli=b.cliSearch?(' · '+cotEsc(b.cliSearch.split(' · ')[0])):'';
+  const cuando=b.ts?fdatehora(new Date(b.ts)):'';
+  box.innerHTML=`<div class="note" style="margin:0 0 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-color:#e0b100;background:#fffbea">
+    <svg viewBox="0 0 24 24" style="flex-shrink:0"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg>
+    <span style="flex:1;min-width:180px">Tenés una <b>cotización sin guardar</b> (${nItems} producto${nItems!==1?'s':''}${cli})${cuando?` · ${cuando}`:''}.</span>
+    <button class="btn btn-primary btn-sm" onclick="_cotRecuperarBorrador()">Recuperar</button>
+    <button class="btn btn-ghost btn-sm" onclick="_cotDescartarBorrador()">Descartar</button>
+  </div>`;
+}
+function _cotRecuperarBorrador(){
+  const b=_cotHayBorrador(); if(!b){toast('No hay borrador',null,true);return;}
+  cotEditId=null;
+  cotCart=(b.cart||[]).map(it=>({...it}));
+  cotClienteSel=b.clienteId?(clientes.find(c=>c.id===b.clienteId)||null):null;
+  abrirCotEditor('Cotización recuperada');
+  setTimeout(()=>{
+    const s=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v;};
+    if(!cotClienteSel){const cs=document.getElementById('cot-cli-search');if(cs)cs.value=b.cliSearch||'';}
+    s('cot-cli-nit',b.cliNit||''); s('cot-cli-contacto',b.cliContacto||'');
+    s('cot-cli-tel',b.cliTel||''); s('cot-cli-mail',b.cliMail||'');
+    s('cot-vend-nom',b.vendNom||''); s('cot-vend-tel',b.vendTel||''); s('cot-vend-mail',b.vendMail||'');
+    s('cot-validez',b.validez||15); s('cot-estado',b.estado||'borrador'); s('cot-obs',b.obs||'');
+  },0);
+  toast('📝 Cotización recuperada','Seguí donde la dejaste');
+}
+window._cotRecuperarBorrador=_cotRecuperarBorrador;
+function _cotDescartarBorrador(){
+  confirmar('Descartar borrador','¿Seguro que querés descartar la cotización sin guardar? No se puede deshacer.','Descartar',()=>{
+    _cotLimpiarBorrador();_cotRenderAviso();toast('Borrador descartado');
+  });
+}
+window._cotDescartarBorrador=_cotDescartarBorrador;
 function cotAddProducto(pid){
   const p=productos.find(x=>x.id===pid);if(!p)return;
   const ex=cotCart.find(it=>it.id===pid);
@@ -319,6 +388,7 @@ function cotRenderCart(){
     </tr>`;
   }).join(''):`<tr><td colspan="6" class="empty">Agregá productos al presupuesto…</td></tr>`;
   const tot=document.getElementById('cot-total');if(tot)tot.textContent=money(total);
+  if(typeof _cotGuardarBorrador==='function')_cotGuardarBorrador();
 }
 function cotSet(i,campo,val){
   if(!cotCart[i])return;let n=Number(val);if(isNaN(n))n=0;
@@ -367,6 +437,7 @@ async function guardarCotizacionUI(){
   logAudit(cotEditId?'Cotización editada':'Cotización creada','COT-'+padn(cot.numero)+' · '+(cot.clienteComercial||cot.clienteNombre)+' · '+money(total));
   if(ok===false)toast('⚠ Guardada solo en pantalla','No se pudo confirmar con la base. Revisá conexión.',true);
   else toast('✓ Cotización guardada','COT-'+padn(cot.numero));
+  _cotLimpiarBorrador();
   cotEditId=null;renderCotizaciones();
 }
 window.guardarCotizacionUI=guardarCotizacionUI;

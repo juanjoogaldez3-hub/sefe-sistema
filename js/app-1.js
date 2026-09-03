@@ -691,6 +691,8 @@ async function doLoginAuth(){
     // llegan solos, sin necesidad de recargar la página.
     if(typeof iniciarRealtime==='function')iniciarRealtime();
     setTimeout(recuperarBorrador,300);
+    // Si quedó una cotización sin guardar (se cerró la pantalla), avisar.
+    setTimeout(()=>{try{if(typeof _cotHayBorrador==='function'&&_cotHayBorrador())toast('📝 Cotización sin guardar','Tenés una a medias — abrí Cotizaciones para recuperarla');}catch(e){}},1600);
     _recDismissed=false;setTimeout(()=>{try{mostrarRecordatoriosHoy();}catch(e){console.error(e);}},700);
     setTimeout(()=>{try{actualizarBellRec();mostrarRecordatoriosPopup();}catch(e){console.error(e);}},1100);
     ocultarLoader();
