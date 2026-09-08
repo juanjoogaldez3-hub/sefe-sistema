@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 22 migraciones una por una.
+-- secuencias. Reemplaza correr las 23 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 22 migraciones, en este orden:
+-- Incluye 23 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -39,6 +39,7 @@
 --   20. 20260831120000_rls_capa2.sql
 --   21. 20260831140000_purga_auditoria.sql
 --   22. 20260902120000_conciliado_ref.sql
+--   23. 20260908120000_movimiento_beneficiario.sql
 -- ============================================================
 
 
@@ -1982,4 +1983,25 @@ where jobname = 'sefe_purga_auditoria';
 
 alter table public.movimientos_banco
   add column if not exists conciliado_ref text;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260908120000_movimiento_beneficiario.sql              ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Movimientos de banco: guardar el beneficiario de la póliza
+-- ============================================================
+-- El "Páguese a la orden de" de la póliza de cheque se escribía al
+-- registrar el movimiento, pero NO se guardaba en la base: al recargar
+-- o reimprimir la póliza se perdía y salía el concepto en su lugar.
+-- Esta columna lo persiste.
+--
+-- La tabla movimientos_banco ya existe y ya tiene sus políticas RLS;
+-- una columna nueva queda cubierta por las mismas políticas.
+-- Seguro de correr de más: usa 'if not exists'.
+-- ============================================================
+
+alter table public.movimientos_banco
+  add column if not exists beneficiario text;
 

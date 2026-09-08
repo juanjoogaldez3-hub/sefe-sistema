@@ -1086,7 +1086,9 @@ window._concRegistrar=function(i){
 function polizaChequePDF(mov,beneficiario){
   if(!mov)return;
   const c=cuentasBanco.find(x=>x.id===mov.cuentaId)||{};
-  const benef=(beneficiario||mov.beneficiario||'').trim()||(mov.concepto||'—');
+  // "Páguese a la orden de": SOLO el beneficiario. Si no hay, se deja el
+  // renglón vacío (—) para escribir a mano; nunca se pone el concepto ahí.
+  const benef=(beneficiario||mov.beneficiario||'').trim()||'—';
   const numPol='POL-'+String(mov.poliza||0).padStart(6,'0');
   const numChq=(mov.referencia||'').toString().trim();
   const fechaTxt=mov.fecha?fdate(mov.fecha):'—';
