@@ -394,6 +394,9 @@ function mapMovimientoBancoFromDB(m){
     concepto:m.concepto, categoria:m.categoria, origen:m.origen, origenId:m.origen_id,
     cuentaDestinoId:m.cuenta_destino_id, referencia:m.referencia, poliza:m.poliza, registradoPor:m.registrado_por,
     registradoEl:m.registrado_el, anulado:m.anulado===true,
+    // Beneficiario ("Páguese a la orden de" en la póliza de cheque). Si la base
+    // todavía no tiene la columna, llega 'undefined' y queda vacío.
+    beneficiario:m.beneficiario||null,
     // Marca de conciliación (columna nueva). Si la base todavía no la tiene,
     // llega 'undefined' y queda como false — no rompe nada.
     conciliado:m.conciliado===true, conciliadoEl:m.conciliado_el||null,
@@ -823,6 +826,7 @@ async function guardarMovimientoBanco(m){
   const row = {cuenta_id:m.cuentaId, fecha:m.fecha, tipo:m.tipo, monto:Number(m.monto)||0,
     concepto:m.concepto||null, categoria:m.categoria||null, origen:m.origen||'manual', origen_id:m.origenId||null,
     cuenta_destino_id:m.cuentaDestinoId||null, referencia:m.referencia||null, poliza:m.poliza||null,
+    beneficiario:m.beneficiario||null,
     registrado_por:m.registradoPor||null, anulado:m.anulado===true};
   if (m._nuevo) {
     delete m._nuevo;
