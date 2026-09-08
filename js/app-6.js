@@ -284,7 +284,7 @@ function renderBancos(){
       <td><span class="badge b-muted" style="font-size:10px">${CAT_MOV_LBL[m.categoria]||m.categoria||'otro'}</span></td>
       <td class="num" style="color:var(--ok);font-weight:${m.tipo==='entrada'?'700':'400'}">${m.tipo==='entrada'?moneyC(m.monto,monedaCuenta(m.cuentaId)):'—'}</td>
       <td class="num" style="color:var(--danger);font-weight:${m.tipo==='salida'?'700':'400'}">${m.tipo==='salida'?moneyC(m.monto,monedaCuenta(m.cuentaId)):'—'}</td>
-      <td><div class="acts">${m.poliza?`<button class="btn btn-ghost btn-sm" onclick="polizaChequeUI(${m.id})" title="Póliza de cheque POL-${String(m.poliza).padStart(6,'0')}">📄 Póliza</button><button class="btn btn-ghost btn-sm" onclick="openEditarPoliza(${m.id})" title="Editar la póliza">✏️ Editar</button>`:''}${m.origen==='manual'?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="anularMovimientoBancoUI(${m.id})" title="Anular">✕</button>`:(m.poliza?'':`<span style="font-size:10.5px;color:var(--muted-2)">auto</span>`)}</div></td>
+      <td><div class="acts">${m.poliza?`<button class="btn btn-ghost btn-sm" onclick="polizaChequeUI(${m.id})" title="Póliza de cheque POL-${String(m.poliza).padStart(6,'0')}">📄 Póliza</button>`:''}${(m.poliza||m.origen==='manual')?`<button class="btn btn-ghost btn-sm" onclick="openEditarPoliza(${m.id})" title="Editar el movimiento">✏️ Editar</button>`:''}${m.origen==='manual'?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="anularMovimientoBancoUI(${m.id})" title="Anular">✕</button>`:(m.poliza?'':`<span style="font-size:10.5px;color:var(--muted-2)">auto</span>`)}</div></td>
     </tr>`).join('');
   if(tb)enhanceTable('t-movimientos');
 }
@@ -1163,27 +1163,37 @@ window.openEditarPoliza=function(id){
   const m=movimientosBanco.find(x=>x.id===id);
   if(!m){toast('Movimiento no encontrado',null,true);return;}
   const esManual=m.origen==='manual';
+  const esSalida=m.tipo==='salida';
   const numPol='POL-'+String(m.poliza||0).padStart(6,'0');
+  const titulo=m.poliza?('Editar póliza '+numPol):'Editar movimiento';
   const cats=CAT_MOV_OPCIONES.map(k=>`<option value="${k}"${m.categoria===k?' selected':''}>${CAT_MOV_LBL[k]}</option>`).join('');
   const cEsc=(m.concepto||'').replace(/"/g,'&quot;');
-  openMod('Editar póliza '+numPol,
+  const benEsc=(m.beneficiario||'').replace(/"/g,'&quot;');
+  // La cuenta solo se edita en movimientos MANUALES (los ligados a un pago van
+  // atados a su cuenta para no descuadrar). El beneficiario solo aplica a
+  // salidas manuales (los pagos a proveedor toman el nombre del proveedor).
+  const ctaOpts=cuentasActivasBanco().map(c=>`<option value="${c.id}"${String(m.cuentaId)===String(c.id)?' selected':''}>${c.nombre}</option>`).join('');
+  const mostrarBenef=esManual&&esSalida;
+  openMod(titulo,
     `<div class="row"><div><label>Fecha</label><input id="ep-fecha" type="date" value="${(m.fecha||'').slice(0,10)}"></div><div><label>Monto</label><input id="ep-monto" type="number" step="0.01" value="${Number(m.monto)}"${esManual?'':' disabled'}></div></div>
-     <div class="row"><div><label>No. de autorización / cheque</label><input id="ep-ref" value="${(m.referencia||'').toString().replace(/"/g,'&quot;')}" placeholder="Número que sale grande en la póliza"></div><div><label>Categoría</label><select id="ep-cat">${cats}</select></div></div>
+     <div class="row"><div><label>Cuenta</label><select id="ep-cuenta"${esManual?'':' disabled'}>${ctaOpts}</select></div><div><label>Categoría</label><select id="ep-cat">${cats}</select></div></div>
+     <div class="row"><div><label>No. de autorización / cheque</label><input id="ep-ref" value="${(m.referencia||'').toString().replace(/"/g,'&quot;')}" placeholder="Según la forma de pago (opcional)"></div>${mostrarBenef?`<div><label>Beneficiario / a favor de <span style="font-weight:400;color:var(--muted-2)">(sale en la póliza)</span></label><input id="ep-benef" value="${benEsc}" placeholder="A quién se le paga"></div>`:'<div></div>'}</div>
      <div class="row"><div><label>Concepto</label><input id="ep-concepto" value="${cEsc}"></div></div>
-     ${esManual?'':'<div class="note" style="margin-bottom:0;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Movimiento ligado a un pago (proveedor/cobro): el monto no se edita aquí para no descuadrar. Podés editar fecha, No. de autorización, concepto y categoría.</span></div>'}`,
+     ${esManual?'':'<div class="note" style="margin-bottom:0;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Movimiento ligado a un pago (proveedor/cobro): el monto y la cuenta no se editan aquí para no descuadrar. Podés editar fecha, No. de autorización, concepto y categoría.</span></div>'}`,
     ()=>{
       const nuevoMonto=Number($('#ep-monto').value);
       if(esManual&&!(nuevoMonto>0)){toast('Monto inválido','Debe ser mayor a cero',true);return;}
       m.fecha=$('#ep-fecha').value||m.fecha;
-      if(esManual)m.monto=nuevoMonto;
+      if(esManual){m.monto=nuevoMonto;const cta=$('#ep-cuenta')?.value;if(cta)m.cuentaId=Number(cta);}
       m.referencia=$('#ep-ref').value.trim()||null;
       m.categoria=$('#ep-cat').value;
       m.concepto=$('#ep-concepto').value.trim();
+      if(mostrarBenef){const b=$('#ep-benef');if(b)m.beneficiario=b.value.trim()||null;}
       if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(m);
-      logAudit('Póliza editada',numPol+' · '+money(m.monto)+' · '+(m.concepto||''));
+      logAudit(m.poliza?'Póliza editada':'Movimiento editado',(m.poliza?numPol+' · ':'')+money(m.monto)+' · '+(m.concepto||''));
       closeMod();renderBancos();
-      toast('✓ Póliza actualizada',numPol);
-      try{polizaChequePDF(m);}catch(e){console.error('poliza',e);}
+      toast('✓ '+(m.poliza?'Póliza actualizada':'Movimiento actualizado'),m.poliza?numPol:'');
+      if(m.poliza){try{polizaChequePDF(m);}catch(e){console.error('poliza',e);}}
     });
 };
 function openAbonoProv(id){
