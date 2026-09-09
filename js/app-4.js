@@ -852,11 +852,16 @@ function renderCliDet(){
     body=`<div class="panel">
       <div class="panel-head"><h3>Ubicación del cliente</h3><span id="cli-ubic-coords" style="font-size:12px;color:var(--muted)">${tiene?`📍 ${Number(c.lat).toFixed(6)}, ${Number(c.lng).toFixed(6)}`:'Sin ubicación guardada'}</span></div>
       <div class="panel-body">
-        ${puedeEditar?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        ${puedeEditar?`<div style="display:flex;gap:6px;margin-bottom:8px">
+          <input id="cli-ubic-q" placeholder="Buscar dirección o lugar… (ej. 12 calle 1-25 zona 10, o el nombre del negocio)" style="flex:1;min-width:0" onkeydown="if(event.key==='Enter'){event.preventDefault();_cliUbicBuscar();}">
+          <button class="btn btn-ghost btn-sm" onclick="_cliUbicBuscar()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Buscar</button>
+        </div>
+        <div id="cli-ubic-resultados" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <button class="btn btn-primary btn-sm" onclick="_cliUbicGPS()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>Usar mi ubicación actual (GPS)</button>
           <button class="btn btn-ghost btn-sm" onclick="_cliUbicGuardar(${c.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Guardar ubicación</button>
         </div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Tocá el mapa para poner el pin, o arrastralo para ajustar. Si estás parado en el cliente, usá el <b>GPS</b>. Acordate de <b>Guardar</b>.</div>`:''}
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Buscá la dirección arriba, o tocá el mapa para poner el pin (arrastralo para ajustar). Si estás parado en el cliente, usá el <b>GPS</b>. Acordate de <b>Guardar</b>.</div>`:''}
         <div id="cli-mapa" style="height:380px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#eef1ea"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px" id="cli-ubic-abrir">
           ${tiene?`<a class="btn btn-ghost btn-sm" href="${gmaps}" target="_blank" rel="noopener">Abrir en Google Maps</a>
@@ -988,6 +993,30 @@ async function _cliUbicGuardar(cid){
   renderCliDet();
 }
 window._cliUbicGuardar=_cliUbicGuardar;
+// Buscar una dirección/lugar (como Google Maps) usando el geocodificador libre
+// de OpenStreetMap (Nominatim). Prioriza Guatemala. Muestra resultados para
+// elegir; al tocar uno, cae el pin ahí.
+async function _cliUbicBuscar(){
+  const inp=document.getElementById('cli-ubic-q'); if(!inp)return;
+  const q=(inp.value||'').trim();
+  const box=document.getElementById('cli-ubic-resultados');
+  if(!q){if(box)box.innerHTML='';return;}
+  if(box)box.innerHTML='<div style="padding:6px 2px;color:var(--muted);font-size:12px">Buscando…</div>';
+  try{
+    const url='https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=gt&accept-language=es&q='+encodeURIComponent(q);
+    const r=await fetch(url,{headers:{'Accept':'application/json'}});
+    const arr=await r.json();
+    if(!Array.isArray(arr)||!arr.length){if(box)box.innerHTML='<div style="padding:6px 2px;color:var(--muted-2);font-size:12px">Sin resultados. Probá con la dirección más completa, la zona, o el nombre del lugar. También podés tocar el punto directo en el mapa.</div>';return;}
+    if(box)box.innerHTML='<div style="border:1px solid var(--line);border-radius:8px;overflow:hidden">'+arr.map((x,i)=>`<button class="btn btn-ghost btn-sm" style="display:block;width:100%;text-align:left;white-space:normal;border:0;border-top:${i?'1px solid var(--line)':'0'};border-radius:0;padding:8px 10px;font-size:12.5px" onclick="_cliUbicElegir(${Number(x.lat)},${Number(x.lon)})">📍 ${escHtml(x.display_name)}</button>`).join('')+'</div>';
+  }catch(e){if(box)box.innerHTML='<div style="padding:6px 2px;color:var(--danger);font-size:12px">No se pudo buscar. Revisá la conexión.</div>';}
+}
+window._cliUbicBuscar=_cliUbicBuscar;
+function _cliUbicElegir(lat,lng){
+  if(_cliMapa){_cliMapa.map.setView([lat,lng],17);_cliMapa.setPin(lat,lng);}
+  const box=document.getElementById('cli-ubic-resultados'); if(box)box.innerHTML='';
+  toast('Ubicación encontrada','Revisá el pin en el mapa y tocá Guardar');
+}
+window._cliUbicElegir=_cliUbicElegir;
 // Genera el estado de cuenta del cliente en PDF (para imprimir o enviar)
 function estadoCuentaPDF(cliId){
   const c=clientes.find(x=>x.id===cliId);if(!c)return;

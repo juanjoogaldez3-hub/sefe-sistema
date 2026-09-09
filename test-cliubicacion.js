@@ -27,6 +27,8 @@ ok('tocar el mapa o arrastrar el pin actualiza la ubicación', /map\.on\('click'
 ok('botón GPS usa la geolocalización del dispositivo', /function _cliUbicGPS\(/.test(src) && /navigator\.geolocation\.getCurrentPosition/.test(src) && /window\._cliUbicGPS=/.test(src));
 ok('guardar persiste con guardarCliente y refresca', /async function _cliUbicGuardar\(/.test(src) && /guardarCliente\(c\)/.test(src) && /window\._cliUbicGuardar=/.test(src));
 ok('botones para abrir en Google Maps y Waze', /google\.com\/maps\?q=\$\{c\.lat\},\$\{c\.lng\}/.test(src) && /waze\.com\/ul\?ll=\$\{c\.lat\},\$\{c\.lng\}/.test(src));
+ok('hay buscador de dirección/lugar (como Google Maps)', /id="cli-ubic-q"/.test(src) && /function _cliUbicBuscar\(/.test(src) && /nominatim\.openstreetmap\.org\/search/.test(src));
+ok('elegir un resultado del buscador cae el pin', /function _cliUbicElegir\(/.test(src) && /_cliMapa\.setPin\(lat,lng\)/.test(src) && /window\._cliUbicElegir=/.test(src));
 ok('solo quien puede editar clientes ve los botones de captura', /const puedeEditar=canCrearCliente\(\)/.test(src));
 
 console.log('\n═══ Migración ═══');
