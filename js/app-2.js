@@ -233,6 +233,15 @@ function renderPanel(){
   renderSeguimiento();
 }
 
+// Días sin comprar a partir de los cuales un cliente se considera "perdido" y
+// se separa del seguimiento (default 180, editable y recordado en el navegador).
+let _segLimiteDias=(()=>{try{const v=parseInt(localStorage.getItem('sefe_seg_limite_dias'));return (v>0)?v:180;}catch(e){return 180;}})();
+let _segVerPerdidos=false;   // mostrar/ocultar el grupo de perdidos
+function _segSetLimite(v){const n=parseInt(v);_segLimiteDias=(n>0)?n:180;try{localStorage.setItem('sefe_seg_limite_dias',String(_segLimiteDias));}catch(e){}renderSeguimiento();}
+window._segSetLimite=_segSetLimite;
+function _segTogglePerdidos(){_segVerPerdidos=!_segVerPerdidos;renderSeguimiento();}
+window._segTogglePerdidos=_segTogglePerdidos;
+
 // Reporte de seguimiento: frecuencia de compra y días sin facturar, por cliente
 function renderSeguimiento(){
   const cont=document.getElementById('panel-seguimiento');
@@ -294,13 +303,31 @@ function renderSeguimiento(){
     return;
   }
 
-  cont.innerHTML=filas.map(f=>`<tr>
+  // Reflejar el límite guardado en el control (sin pisar mientras se escribe)
+  const inpLim=document.getElementById('seg-limite');
+  if(inpLim&&document.activeElement!==inpLim)inpLim.value=_segLimiteDias;
+
+  const filaHTML=f=>`<tr>
     <td style="font-weight:600">${f.nombre}</td>
     <td style="font-size:12px;color:var(--muted)">${f.vendNom}</td>
     <td style="font-size:12px">${f.frecuencia}</td>
     <td style="font-size:12px;color:var(--muted)">${fdate(new Date(f.ultima).toISOString())}</td>
     <td style="font-weight:700;color:${f.colorDias}">${f.diasSinComprar} días</td>
-  </tr>`).join('');
+  </tr>`;
+  // Separar recuperables (dentro del límite) de "perdidos" (lo superan). Los
+  // perdidos van a un grupo aparte que se muestra/oculta con un botón, para que
+  // no tapen a los clientes que sí conviene perseguir.
+  const activos=filas.filter(f=>f.diasSinComprar<=_segLimiteDias);
+  const perdidos=filas.filter(f=>f.diasSinComprar>_segLimiteDias);
+  let htmlB=activos.map(filaHTML).join('');
+  if(!activos.length)htmlB=`<tr><td colspan="5" class="empty">Ningún cliente con compra dentro de los ${_segLimiteDias} días. Los perdidos figuran abajo.</td></tr>`;
+  if(perdidos.length){
+    htmlB+=`<tr><td colspan="5" style="background:#faf7f0;padding:8px 12px">
+      <button class="btn btn-ghost btn-sm" onclick="_segTogglePerdidos()">${_segVerPerdidos?'▾ Ocultar':'▸ Ver'} ${perdidos.length} cliente${perdidos.length!==1?'s':''} perdido${perdidos.length!==1?'s':''} <span style="color:var(--muted-2);font-weight:400">(+${_segLimiteDias} días sin comprar)</span></button>
+    </td></tr>`;
+    if(_segVerPerdidos)htmlB+=perdidos.map(filaHTML).join('');
+  }
+  cont.innerHTML=htmlB;
 }
 
 // ══════════ AUTOCOMPLETADO PROPIO ══════════

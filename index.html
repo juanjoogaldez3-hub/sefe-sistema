@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/estilos.css?v=20260908b">
+<link rel="stylesheet" href="css/estilos.css?v=20260909a">
 <!-- PWA: instalable como app (ícono propio, pantalla completa) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#173916">
@@ -30,11 +30,11 @@
 <!-- Librería de Supabase (conexión a la base de datos) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tus credenciales (editás este archivo una sola vez) -->
-<script src="config.js?v=20260908b"></script>
+<script src="config.js?v=20260909a"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
-<script src="db.js?v=20260908b"></script>
+<script src="db.js?v=20260909a"></script>
 <!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
-<script src="realtime.js?v=20260908b"></script>
+<script src="realtime.js?v=20260909a"></script>
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
@@ -172,7 +172,7 @@
           </div>
         </div>
         <div class="panel" style="margin-top:16px" id="panel-bloque-seguimiento">
-          <div class="panel-head"><h3 id="panel-seg-title">Seguimiento de clientes</h3><span style="font-size:11.5px;color:var(--muted)">Frecuencia de compra y días sin facturar</span></div>
+          <div class="panel-head"><h3 id="panel-seg-title">Seguimiento de clientes</h3><div style="display:flex;align-items:center;gap:7px;margin-left:auto;font-size:11.5px;color:var(--muted)"><label for="seg-limite" style="margin:0">Considerar perdido tras</label><input id="seg-limite" type="number" min="0" step="30" value="180" style="width:64px;padding:4px 7px" onchange="_segSetLimite(this.value)" title="Días sin comprar a partir de los cuales el cliente se separa como perdido"><span>días</span></div></div>
           <table><thead><tr><th>Cliente</th><th>Vendedor</th><th>Compra cada</th><th>Última factura</th><th>Días sin comprar</th></tr></thead><tbody id="panel-seguimiento"></tbody></table>
         </div>
         <div class="panel" style="margin-top:16px" id="panel-bloque-miscobros">
@@ -827,18 +827,18 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app-1.js?v=20260908b"></script>
-<script src="js/app-2.js?v=20260908b"></script>
-<script src="js/app-3.js?v=20260908b"></script>
-<script src="js/app-4.js?v=20260908b"></script>
-<script src="js/app-5.js?v=20260908b"></script>
-<script src="js/app-6.js?v=20260908b"></script>
-<script src="js/app-7.js?v=20260908b"></script>
-<script src="js/app-8.js?v=20260908b"></script>
-<script src="js/app-9.js?v=20260908b"></script>
-<script src="js/app-10.js?v=20260908b"></script>
-<script src="js/app-11.js?v=20260908b"></script>
-<script src="js/app-12.js?v=20260908b"></script>
-<script src="js/app-13.js?v=20260908b"></script>
+<script src="js/app-1.js?v=20260909a"></script>
+<script src="js/app-2.js?v=20260909a"></script>
+<script src="js/app-3.js?v=20260909a"></script>
+<script src="js/app-4.js?v=20260909a"></script>
+<script src="js/app-5.js?v=20260909a"></script>
+<script src="js/app-6.js?v=20260909a"></script>
+<script src="js/app-7.js?v=20260909a"></script>
+<script src="js/app-8.js?v=20260909a"></script>
+<script src="js/app-9.js?v=20260909a"></script>
+<script src="js/app-10.js?v=20260909a"></script>
+<script src="js/app-11.js?v=20260909a"></script>
+<script src="js/app-12.js?v=20260909a"></script>
+<script src="js/app-13.js?v=20260909a"></script>
 </body>
 </html>
