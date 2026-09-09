@@ -285,7 +285,10 @@ function mapClienteFromDB(c){
     nitsSecundarios:c.nits_secundarios||[],
     contactoPagos:c.contacto_pagos||{}, contactoCompras:c.contacto_compras||{},
     precios:c.precios||{},
-    cobroInfo:c.cobro_info||{}, seguimientos:c.seguimientos||[]
+    cobroInfo:c.cobro_info||{}, seguimientos:c.seguimientos||[],
+    // Ubicación pineada (GPS o a mano en el mapa). Si la base todavía no tiene
+    // las columnas, llegan 'undefined' y quedan en null — no rompe nada.
+    lat:(c.lat!=null?Number(c.lat):null), lng:(c.lng!=null?Number(c.lng):null)
   };
 }
 function mapProductoFromDB(p){
@@ -428,7 +431,8 @@ async function guardarCliente(cli){
     direccion_entrega:cli.direccionEntrega, ruta:cli.ruta||null, fecha_alta:cli.fechaAlta,
     nits_secundarios:cli.nitsSecundarios,
     contacto_pagos:cli.contactoPagos, contacto_compras:cli.contactoCompras, precios:cli.precios,
-    cobro_info:cli.cobroInfo||{}, seguimientos:cli.seguimientos||[]
+    cobro_info:cli.cobroInfo||{}, seguimientos:cli.seguimientos||[],
+    lat:(cli.lat!=null?cli.lat:null), lng:(cli.lng!=null?cli.lng:null)
   };
   if (cli._nuevo) {
     delete cli._nuevo;

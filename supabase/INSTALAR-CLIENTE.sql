@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 23 migraciones una por una.
+-- secuencias. Reemplaza correr las 24 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 23 migraciones, en este orden:
+-- Incluye 24 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -40,6 +40,7 @@
 --   21. 20260831140000_purga_auditoria.sql
 --   22. 20260902120000_conciliado_ref.sql
 --   23. 20260908120000_movimiento_beneficiario.sql
+--   24. 20260909120000_cliente_ubicacion.sql
 -- ============================================================
 
 
@@ -2004,4 +2005,24 @@ alter table public.movimientos_banco
 
 alter table public.movimientos_banco
   add column if not exists beneficiario text;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260909120000_cliente_ubicacion.sql                    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Clientes: ubicación pineada (lat / lng)
+-- ============================================================
+-- Para marcar dónde está cada cliente (GPS o a mano en el mapa) y poder
+-- abrirlo en Google Maps / Waze desde su ficha.
+--
+-- La tabla clientes ya existe y ya tiene sus políticas RLS; columnas
+-- nuevas quedan cubiertas por las mismas políticas.
+-- Seguro de correr de más: usa 'if not exists'.
+-- ============================================================
+
+alter table public.clientes
+  add column if not exists lat double precision,
+  add column if not exists lng double precision;
 
