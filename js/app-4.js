@@ -844,6 +844,27 @@ function renderCliDet(){
       </div>`:''}
       <table><thead><tr><th>Fecha</th><th>Resultado</th><th>Nota</th><th>Próximo</th><th>Registró</th><th></th></tr></thead><tbody>${filas}</tbody></table>
     </div>`;
+  }else if(cliTab==='ubicacion'){
+    const puedeEditar=canCrearCliente();
+    const tiene=(c.lat!=null&&c.lng!=null);
+    const gmaps=tiene?`https://www.google.com/maps?q=${c.lat},${c.lng}`:'';
+    const waze=tiene?`https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes`:'';
+    body=`<div class="panel">
+      <div class="panel-head"><h3>Ubicación del cliente</h3><span id="cli-ubic-coords" style="font-size:12px;color:var(--muted)">${tiene?`📍 ${Number(c.lat).toFixed(6)}, ${Number(c.lng).toFixed(6)}`:'Sin ubicación guardada'}</span></div>
+      <div class="panel-body">
+        ${puedeEditar?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn btn-primary btn-sm" onclick="_cliUbicGPS()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>Usar mi ubicación actual (GPS)</button>
+          <button class="btn btn-ghost btn-sm" onclick="_cliUbicGuardar(${c.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Guardar ubicación</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Tocá el mapa para poner el pin, o arrastralo para ajustar. Si estás parado en el cliente, usá el <b>GPS</b>. Acordate de <b>Guardar</b>.</div>`:''}
+        <div id="cli-mapa" style="height:380px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#eef1ea"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px" id="cli-ubic-abrir">
+          ${tiene?`<a class="btn btn-ghost btn-sm" href="${gmaps}" target="_blank" rel="noopener">Abrir en Google Maps</a>
+          <a class="btn btn-ghost btn-sm" href="${waze}" target="_blank" rel="noopener">Abrir en Waze</a>`:'<span style="font-size:12px;color:var(--muted-2)">Guardá una ubicación para poder abrirla en Google Maps o Waze.</span>'}
+        </div>
+      </div>
+    </div>`;
+    setTimeout(()=>{try{_initMapaCliente(c);}catch(e){console.error('mapa cliente',e);}},0);
   }else{
     // Reportes de ventas del cliente
     const facs=facturas;
@@ -896,11 +917,77 @@ function renderCliDet(){
       </div>
     </div></div>
     ${fichaIntegral(c,st)}
-    <div class="ct-tabs">${tabBtn('precios','Precios')}${tabBtn('facturas','Facturas Cambiarias')}${tabBtn('factabonos','Facturas y abonos')}${tabBtn('prestamos','Órdenes de préstamo')}${tabBtn('cobros','Cobros')}${tabBtn('seguimiento','Seguimiento')}${tabBtn('reportes','Reportes de ventas')}</div>
+    <div class="ct-tabs">${tabBtn('precios','Precios')}${tabBtn('facturas','Facturas Cambiarias')}${tabBtn('factabonos','Facturas y abonos')}${tabBtn('prestamos','Órdenes de préstamo')}${tabBtn('cobros','Cobros')}${tabBtn('seguimiento','Seguimiento')}${tabBtn('ubicacion','📍 Ubicación')}${tabBtn('reportes','Reportes de ventas')}</div>
     ${body}`;
 }
 function cliSetTab(t){cliTab=t;renderCliDet();}
 window.cliSetTab=cliSetTab;
+
+// ── Ubicación del cliente (mapa + GPS) ──────────────────────
+// Carga Leaflet (mapa) una sola vez, bajo demanda (solo al abrir el tab).
+let _leafletPromise=null;
+function _cargarLeaflet(){
+  if(window.L)return Promise.resolve(window.L);
+  if(_leafletPromise)return _leafletPromise;
+  _leafletPromise=new Promise((res,rej)=>{
+    const css=document.createElement('link');
+    css.rel='stylesheet';css.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+    document.head.appendChild(css);
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    s.onload=()=>res(window.L);s.onerror=()=>rej(new Error('No se pudo cargar el mapa'));
+    document.head.appendChild(s);
+  });
+  return _leafletPromise;
+}
+let _cliMapa=null;        // { map, setPin }
+let _cliUbicPend=null;    // {lat,lng} pendiente de guardar
+async function _initMapaCliente(c){
+  const cont=document.getElementById('cli-mapa'); if(!cont)return;
+  let L;
+  try{L=await _cargarLeaflet();}
+  catch(e){cont.innerHTML='<div style="padding:24px;text-align:center;color:var(--danger);font-size:13px">No se pudo cargar el mapa. Revisá la conexión.</div>';return;}
+  if(!document.getElementById('cli-mapa'))return; // el usuario cambió de tab mientras cargaba
+  const tiene=(c.lat!=null&&c.lng!=null);
+  const centro=tiene?[Number(c.lat),Number(c.lng)]:[14.6349,-90.5069]; // Guatemala por defecto
+  const map=L.map(cont).setView(centro,tiene?16:12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+  let marker=tiene?L.marker(centro,{draggable:true}).addTo(map):null;
+  _cliUbicPend=tiene?{lat:Number(c.lat),lng:Number(c.lng)}:null;
+  const refrescar=(lat,lng,guardado)=>{const s=document.getElementById('cli-ubic-coords');if(s)s.textContent='📍 '+lat.toFixed(6)+', '+lng.toFixed(6)+(guardado?'':' (sin guardar)');};
+  function setPin(lat,lng){
+    _cliUbicPend={lat,lng};
+    if(marker){marker.setLatLng([lat,lng]);}
+    else{marker=L.marker([lat,lng],{draggable:true}).addTo(map);marker.on('dragend',()=>{const p=marker.getLatLng();setPin(p.lat,p.lng);});}
+    refrescar(lat,lng,false);
+  }
+  if(marker)marker.on('dragend',()=>{const p=marker.getLatLng();setPin(p.lat,p.lng);});
+  map.on('click',(e)=>setPin(e.latlng.lat,e.latlng.lng));
+  _cliMapa={map,setPin};
+  setTimeout(()=>{try{map.invalidateSize();}catch(e){}},150);
+}
+function _cliUbicGPS(){
+  if(!navigator.geolocation){toast('Sin GPS','Este dispositivo no permite ubicación',true);return;}
+  toast('📍 Obteniendo ubicación…','Permití el acceso si te lo pide el navegador');
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>{const{latitude,longitude}=pos.coords;if(_cliMapa){_cliMapa.map.setView([latitude,longitude],17);_cliMapa.setPin(latitude,longitude);}toast('✓ Ubicación tomada','Revisá el pin y tocá Guardar');},
+    (err)=>{toast('No se pudo obtener la ubicación',err&&err.code===1?'Diste que no al permiso de ubicación':(err.message||'Intentá de nuevo'),true);},
+    {enableHighAccuracy:true,timeout:12000,maximumAge:0}
+  );
+}
+window._cliUbicGPS=_cliUbicGPS;
+async function _cliUbicGuardar(cid){
+  const c=clientes.find(x=>x.id===cid); if(!c)return;
+  if(!_cliUbicPend||_cliUbicPend.lat==null){toast('Sin ubicación','Poné el pin primero: usá el GPS o tocá el mapa',true);return;}
+  c.lat=Math.round(_cliUbicPend.lat*1e6)/1e6;
+  c.lng=Math.round(_cliUbicPend.lng*1e6)/1e6;
+  const ok=await (typeof guardarCliente==='function'?guardarCliente(c):Promise.resolve());
+  if(ok===false){toast('No se pudo guardar','¿Ya corriste el SQL de ubicación?',true);return;}
+  if(typeof logAudit==='function')logAudit('Ubicación de cliente',(c.nombre||'#'+c.id)+' · '+c.lat+', '+c.lng);
+  toast('✓ Ubicación guardada',c.nombre);
+  renderCliDet();
+}
+window._cliUbicGuardar=_cliUbicGuardar;
 // Genera el estado de cuenta del cliente en PDF (para imprimir o enviar)
 function estadoCuentaPDF(cliId){
   const c=clientes.find(x=>x.id===cliId);if(!c)return;
