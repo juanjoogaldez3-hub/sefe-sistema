@@ -3,6 +3,10 @@
 //  ⚠️ PONÉ ACÁ TU URL DE RENDER (sin barra al final)
 // ═══════════════════════════════════════════════════════════
 const FEL_BACKEND_URL = 'https://sefe-backend.onrender.com';
+// Llave de Google Maps (mapa + buscador Places en la ficha del cliente). Va
+// restringida por dominio en Google Cloud (sistema.se-fe.com), por eso puede ir
+// acá. Si queda vacía, el sistema usa OpenStreetMap como respaldo.
+const GOOGLE_MAPS_KEY = 'AIzaSyBWDjUmYyAfy-ZfvfRrSwYNDMbpmciZnpE';
 
 // ============================================================
 //  Funciones que se están probando
