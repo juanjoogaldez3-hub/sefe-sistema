@@ -453,13 +453,17 @@ function borrarCotizacionUI(id){
 window.borrarCotizacionUI=borrarCotizacionUI;
 function convertirCotizacionAPedido(id){
   const c=cotizaciones.find(x=>x.id===id);if(!c)return;
-  if(!(c.items||[]).length){toast('Sin productos',null,true);return;}
+  // Solo líneas con producto y cantidad REAL (>0). Antes bastaba con que el
+  // arreglo tuviera longitud, y una cotización con líneas en 0 (o vacías)
+  // pasaba a un pedido sin productos.
+  const lineasVal=(Array.isArray(c.items)?c.items:[]).filter(it=>it&&it.id!=null&&Number(it.cantidad)>0);
+  if(!lineasVal.length){toast('Sin productos','La cotización no tiene productos con cantidad — no se puede pasar a pedido',true);return;}
   if(c.estado==='convertida'){toast('Ya convertida','Esta cotización ya se convirtió en pedido',true);return;}
   if(!c.clienteId){toast('Cliente no registrado','Esta cotización es para un cliente nuevo (prospecto). Creá el cliente en el sistema y reasignálo en la cotización antes de convertirla en pedido.',true);return;}
   confirmar('Convertir a pedido','Se creará un pedido abierto con los productos de <b>COT-'+padn(c.numero)+'</b>, reservando inventario. ¿Continuar?','Convertir a pedido',async()=>{
     const cli=clientes.find(x=>x.id===c.clienteId);
     const vend=vendedores.find(v=>v.id===(c.vendedorId||(cli&&cli.vendedorId)))||vendedores[0];
-    const items=(c.items||[]).map(it=>{
+    const items=lineasVal.map(it=>{
       const eff=Math.round(Number(it.precio)*(1-(Number(it.descuento)||0)/100)*100)/100;
       // El modo se deriva del producto real: la cotización usa el precio de caja,
       // así que un producto por caja se reserva como caja (no como unidad).
