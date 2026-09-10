@@ -670,8 +670,9 @@ window.saldoFavor=saldoFavor;
 function tcLabel(n){return n===0?'Contado':n+' días';}
 function renderCli(){
   const acc=$('#cli-acciones');
-  if(acc)acc.innerHTML=canCrearCliente()?`<button class="btn btn-ghost btn-sm" id="btn-nuevo-cli" onclick="openCli()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
-    ` <button class="btn btn-ghost btn-sm" onclick="completarRazonSocial()" title="Consultar SAT y rellenar razón social de clientes que no la tienen" style="color:var(--blue)">Completar razón social</button>`:'';
+  if(acc)acc.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="openMapaClientes()" title="Ver todos los clientes en el mapa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M9 20l-6 2V5l6-2 6 2 6-2v13l-6 2-6-2z"/><path d="M9 3v15M15 5v15"/></svg>Mapa</button>`+
+    (canCrearCliente()?` <button class="btn btn-ghost btn-sm" id="btn-nuevo-cli" onclick="openCli()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
+    ` <button class="btn btn-ghost btn-sm" onclick="completarRazonSocial()" title="Consultar SAT y rellenar razón social de clientes que no la tienen" style="color:var(--blue)">Completar razón social</button>`:'');
   const listaBase=esVentas()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
   const filasCli=listaBase.slice().reverse().map(c=>{const saldo=saldoCliente(c);
   const esSede=!!c.sedesDe;const padre=esSede?clientes.find(x=>x.id===c.sedesDe):null;

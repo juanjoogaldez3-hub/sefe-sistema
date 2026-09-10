@@ -1114,6 +1114,89 @@ function _cliUbicElegir(lat,lng){
   toast('Ubicación encontrada','Revisá el pin en el mapa y tocá Guardar');
 }
 window._cliUbicElegir=_cliUbicElegir;
+
+// ── Mapa de TODOS los clientes ──────────────────────────────
+// Ver a todos los clientes pineados en un solo mapa (Google o, si falla, OSM),
+// filtrable por vendedor y ruta. Clic en un pin → botón para abrir la ficha.
+let _mapaTodos=null;
+function _clientesConLoc(){
+  const base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  return base.filter(c=>c.lat!=null&&c.lng!=null); // solo los que tienen pin
+}
+function openMapaClientes(){
+  const rutas=[...new Set((typeof clientes!=='undefined'?clientes:[]).map(c=>(c.ruta||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const optVend='<option value="">Todos los vendedores</option>'+(typeof vendedores!=='undefined'?vendedores:[]).map(v=>`<option value="${v.id}">${escHtml(v.nombre)}</option>`).join('');
+  const optRuta='<option value="">Todas las rutas</option>'+rutas.map(r=>`<option value="${escHtml(r)}">${escHtml(r)}</option>`).join('');
+  openMod('Mapa de clientes',
+    `<div class="row" style="margin-bottom:8px">
+       <div><label>Vendedor</label><select id="mt-vend" onchange="_mapaTodosPintar()">${optVend}</select></div>
+       <div><label>Ruta</label><select id="mt-ruta" onchange="_mapaTodosPintar()">${optRuta}</select></div>
+     </div>
+     <div id="mt-info" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
+     <div id="mapa-todos" style="height:60vh;min-height:340px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#eef1ea"></div>`,
+    null);
+  const sv=document.getElementById('m-save'); if(sv)sv.style.display='none';
+  $('#ov').classList.add('modal-wide'); const _m=document.querySelector('#ov .modal'); if(_m)_m.style.maxWidth='min(98vw,1100px)';
+  setTimeout(_initMapaTodos,0);
+}
+window.openMapaClientes=openMapaClientes;
+async function _initMapaTodos(){
+  const cont=document.getElementById('mapa-todos'); if(!cont)return;
+  if(typeof GOOGLE_MAPS_KEY!=='undefined'&&GOOGLE_MAPS_KEY&&!_gmapsAuthFail){
+    try{
+      const gm=await _cargarGoogleMaps();
+      if(!document.getElementById('mapa-todos'))return;
+      const map=new gm.Map(cont,{center:{lat:14.6349,lng:-90.5069},zoom:11,mapTypeControl:false,streetViewControl:false});
+      _mapaTodos={tipo:'google',gm,map,markers:[],info:new gm.InfoWindow()};
+      _mapaTodosPintar(); return;
+    }catch(e){console.error('Mapa de todos (Google):',e);}
+    if(!document.getElementById('mapa-todos'))return;
+  }
+  try{
+    const L=await _cargarLeaflet();
+    if(!document.getElementById('mapa-todos'))return;
+    const map=L.map(cont).setView([14.6349,-90.5069],11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+    _mapaTodos={tipo:'osm',L,map,markers:[]};
+    _mapaTodosPintar();
+    setTimeout(()=>{try{map.invalidateSize();}catch(e){}},150);
+  }catch(e){cont.innerHTML='<div style="padding:24px;text-align:center;color:var(--danger)">No se pudo cargar el mapa.</div>';}
+}
+function _mapaTodosPintar(){
+  if(!_mapaTodos)return;
+  const fVend=(document.getElementById('mt-vend')||{}).value||'';
+  const fRuta=(document.getElementById('mt-ruta')||{}).value||'';
+  let lista=_clientesConLoc();
+  if(fVend)lista=lista.filter(c=>String(c.vendedorId)===fVend);
+  if(fRuta)lista=lista.filter(c=>(c.ruta||'').trim()===fRuta);
+  const info=document.getElementById('mt-info'); if(info)info.textContent=lista.length+' cliente(s) con ubicación en el mapa';
+  (_mapaTodos.markers||[]).forEach(m=>{try{_mapaTodos.tipo==='google'?m.setMap(null):_mapaTodos.map.removeLayer(m);}catch(e){}});
+  _mapaTodos.markers=[];
+  if(_mapaTodos.tipo==='google'){
+    const gm=_mapaTodos.gm, map=_mapaTodos.map, bounds=new gm.LatLngBounds();
+    lista.forEach(c=>{
+      const pos={lat:Number(c.lat),lng:Number(c.lng)};
+      const mk=new gm.Marker({position:pos,map,title:c.nombre});
+      mk.addListener('click',()=>{
+        _mapaTodos.info.setContent('<div style="font-size:13px;min-width:150px"><b>'+escHtml(c.nombre)+'</b>'+(c.ruta?'<br><span style="color:#666">'+escHtml(c.ruta)+'</span>':'')+'<br><button onclick="_mapaTodosVerFicha('+c.id+')" style="margin-top:6px;background:#2e7d32;color:#fff;border:0;border-radius:6px;padding:5px 10px;cursor:pointer">Ver ficha</button></div>');
+        _mapaTodos.info.open(map,mk);
+      });
+      _mapaTodos.markers.push(mk); bounds.extend(pos);
+    });
+    if(lista.length){map.fitBounds(bounds); gm.event.addListenerOnce(map,'idle',()=>{if(map.getZoom()>16)map.setZoom(16);});}
+  }else{
+    const L=_mapaTodos.L, map=_mapaTodos.map, pts=[];
+    lista.forEach(c=>{
+      const mk=L.marker([Number(c.lat),Number(c.lng)]).addTo(map);
+      mk.bindPopup('<b>'+escHtml(c.nombre)+'</b>'+(c.ruta?'<br>'+escHtml(c.ruta):'')+'<br><button onclick="_mapaTodosVerFicha('+c.id+')" style="margin-top:6px;background:#2e7d32;color:#fff;border:0;border-radius:6px;padding:5px 10px;cursor:pointer">Ver ficha</button>');
+      _mapaTodos.markers.push(mk); pts.push([Number(c.lat),Number(c.lng)]);
+    });
+    if(pts.length)map.fitBounds(pts,{maxZoom:16,padding:[30,30]});
+  }
+}
+window._mapaTodosPintar=_mapaTodosPintar;
+function _mapaTodosVerFicha(id){ if(typeof closeMod==='function')closeMod(); if(typeof abrirCliente==='function')abrirCliente(id); }
+window._mapaTodosVerFicha=_mapaTodosVerFicha;
 // Genera el estado de cuenta del cliente en PDF (para imprimir o enviar)
 function estadoCuentaPDF(cliId){
   const c=clientes.find(x=>x.id===cliId);if(!c)return;

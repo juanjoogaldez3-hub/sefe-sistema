@@ -353,9 +353,31 @@ function closeMod(){$('#ov').classList.remove('show');$('#ov').classList.remove(
 window.closeMod=closeMod;
 $('#m-save').onclick=()=>{if(saveFn)saveFn();};
 /* cierre por clic afuera desactivado: el modal solo se cierra con × o Cancelar para no perder datos */
+// Pin elegido con el buscador de Google en el campo Dirección (se guarda con el
+// cliente). Null = no se tocó la dirección con el buscador (no piso lat/lng).
+let _cliFormLatLng=null;
+async function _wireDirAutocomplete(){
+  try{
+    if(typeof GOOGLE_MAPS_KEY==='undefined'||!GOOGLE_MAPS_KEY||(typeof _gmapsAuthFail!=='undefined'&&_gmapsAuthFail))return;
+    const inp=document.getElementById('c-dir');
+    if(!inp||typeof _cargarGoogleMaps!=='function')return;
+    const gm=await _cargarGoogleMaps();
+    if(!gm.places||!gm.places.Autocomplete||!document.getElementById('c-dir'))return;
+    const ac=new gm.places.Autocomplete(inp,{fields:['geometry','formatted_address','name'],componentRestrictions:{country:'gt'}});
+    ac.addListener('place_changed',()=>{
+      const pl=ac.getPlace();
+      if(pl&&pl.geometry&&pl.geometry.location){
+        const loc=pl.geometry.location; _cliFormLatLng={lat:loc.lat(),lng:loc.lng()};
+        if(pl.formatted_address)inp.value=pl.formatted_address;
+        toast('📍 Ubicación tomada','Se guardará el pin del cliente al Guardar');
+      }
+    });
+  }catch(e){console.error('Autocomplete dirección:',e);}
+}
 function openCli(id){
   if(!id&&!canCrearCliente()){toast('Sin permiso','Solo Admin y Gerencia pueden crear clientes',true);return;}
   const c=id?clientes.find(x=>x.id===id):null;
+  _cliFormLatLng=null;
   const cp=c?c.contactoPagos||{}:{},cc=c?c.contactoCompras||{}:{};
   const tc=c?(c.tiempoCredito!=null?c.tiempoCredito:0):0;
   const OPTS=[0,15,30,45,60];
@@ -424,6 +446,8 @@ function openCli(id){
     const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:normalizarNit($('#c-nit').value)||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),ruta:$('#c-ruta').value.trim(),tiempoCredito,vendedorId,subVendedorNombre,sedesDe,nitsSecundarios:leerNitsSecundarios(),
       contactoPagos:{nombre:$('#cp-nom').value,telefono:$('#cp-tel').value,correo:$('#cp-mail').value},
       contactoCompras:{nombre:$('#cc-nom').value,telefono:$('#cc-tel').value,correo:$('#cc-mail').value}};
+    // Si se eligió una dirección del buscador de Google, guardar también el pin.
+    if(_cliFormLatLng){datos.lat=Math.round(_cliFormLatLng.lat*1e6)/1e6;datos.lng=Math.round(_cliFormLatLng.lng*1e6)/1e6;}
     const creditoAnterior=c?(c.tiempoCredito||0):null;
     if(c){Object.assign(c,datos);logAudit('Cliente editado',nom+' · NIT '+datos.nit);toast('✓ Cliente actualizado');if(typeof guardarCliente==='function')guardarCliente(c);}
     else{const nuevo={id:cliN++,...datos,fechaAlta:fechaHoyGT(),precios:{},_nuevo:true};clientes.push(nuevo);logAudit('Cliente creado',nom+' · NIT '+datos.nit);toast('✓ Cliente agregado');if(typeof guardarCliente==='function')guardarCliente(nuevo);}
@@ -433,6 +457,7 @@ function openCli(id){
     const cv=$('#c-vend'),sw=$('#c-subvend-wrap');
     const toggleSub=()=>{if(!sw)return;const vn=vendedores.find(v=>v.id===Number(cv.value));sw.style.display=esVendedorCanal(vn?.nombre)?'':'none';};
     if(cv){cv.onchange=toggleSub;toggleSub();}
+    _wireDirAutocomplete();
   },0);
 }
 window.openCli=openCli;
