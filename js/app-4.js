@@ -460,6 +460,24 @@ function convertirCotizacionAPedido(id){
   if(!lineasVal.length){toast('Sin productos','La cotización no tiene productos con cantidad — no se puede pasar a pedido',true);return;}
   if(c.estado==='convertida'){toast('Ya convertida','Esta cotización ya se convirtió en pedido',true);return;}
   if(!c.clienteId){toast('Cliente no registrado','Esta cotización es para un cliente nuevo (prospecto). Creá el cliente en el sistema y reasignálo en la cotización antes de convertirla en pedido.',true);return;}
+  // Validar STOCK antes de convertir. La conversión reserva inventario, y sin
+  // este chequeo dejaba el stock en negativo — a diferencia del pedido normal,
+  // que bloquea el botón cuando falta existencia. Se calcula la disponibilidad
+  // igual que el pedido (por caja o por unidad, según el empaque del producto).
+  const faltantes=[];
+  lineasVal.forEach(it=>{
+    const p=productos.find(x=>x.id===it.id);
+    if(!p||(typeof esServicio==='function'&&esServicio(p)))return; // servicios: sin inventario
+    const te=(p.tipoEmpaque)||it.tipoEmpaque||'unidad';
+    const modo=(te==='caja'||te==='caja_unidad')?'caja':(it.modoVenta||'unidad');
+    const disp=(modo==='caja')?(te==='caja'?(Number(p.stock)||0):(Number(p.stockCajas)||0)):(Number(p.stock)||0);
+    const pide=Number(it.cantidad)||0;
+    if(pide>disp)faltantes.push(`${p.nombre} (pide ${pide}, hay ${disp} ${modo==='caja'?'caja(s)':'unidad(es)'})`);
+  });
+  if(faltantes.length){
+    toast('Inventario insuficiente','No se puede pasar a pedido: no alcanza el stock de '+faltantes.join('; ')+'. Ajustá las cantidades de la cotización o reabastecé antes de convertir.',true);
+    return;
+  }
   confirmar('Convertir a pedido','Se creará un pedido abierto con los productos de <b>COT-'+padn(c.numero)+'</b>, reservando inventario. ¿Continuar?','Convertir a pedido',async()=>{
     const cli=clientes.find(x=>x.id===c.clienteId);
     const vend=vendedores.find(v=>v.id===(c.vendedorId||(cli&&cli.vendedorId)))||vendedores[0];
