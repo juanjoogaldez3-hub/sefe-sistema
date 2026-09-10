@@ -39,6 +39,20 @@ ok('buscador de Google Places (Autocomplete) sobre el input', /new gm\.places\.A
 ok('si la llave/dominio falla, cae a OSM solo (gm_authFailure)', /window\.gm_authFailure=function\(\)/.test(src) && /_gmapsAuthFail=true/.test(src));
 ok('la interfaz del mapa es uniforme (setPin + center) para GPS y buscador', /_cliMapa=\{setPin,center:/.test(src) && /_cliMapa\.center\(latitude,longitude,17\)/.test(src));
 
+console.log('\n═══ Mapa de TODOS los clientes ═══');
+ok('hay botón "Mapa" en la lista de clientes (todos los roles)', /onclick="openMapaClientes\(\)"/.test(src));
+ok('existe el mapa de todos (openMapaClientes + _initMapaTodos)', /function openMapaClientes\(/.test(src) && /async function _initMapaTodos\(/.test(src) && /window\.openMapaClientes=/.test(src));
+ok('usa Google y cae a OSM (dos ramas)', /_mapaTodos=\{tipo:'google'/.test(src) && /_mapaTodos=\{tipo:'osm'/.test(src));
+ok('filtra por vendedor y ruta', /document\.getElementById\('mt-vend'\)/.test(src) && /document\.getElementById\('mt-ruta'\)/.test(src) && /function _mapaTodosPintar\(/.test(src));
+ok('clic en un pin abre la ficha del cliente', /function _mapaTodosVerFicha\(id\)/.test(src) && /abrirCliente\(id\)/.test(src));
+ok('solo pinea clientes con ubicación', /return base\.filter\(c=>c\.lat!=null&&c\.lng!=null\)/.test(src));
+
+console.log('\n═══ Autocompletar dirección al crear/editar cliente ═══');
+ok('el buscador de Google se engancha al campo Dirección (#c-dir)', /function _wireDirAutocomplete\(/.test(src) && /new gm\.places\.Autocomplete\(inp/.test(src));
+ok('al elegir dirección guarda el pin (_cliFormLatLng)', /_cliFormLatLng=\{lat:loc\.lat\(\),lng:loc\.lng\(\)\}/.test(src));
+ok('al guardar el cliente se incluye lat/lng si hubo pin', /if\(_cliFormLatLng\)\{datos\.lat=/.test(src));
+ok('no pisa la ubicación si no se tocó la dirección (arranca en null)', /_cliFormLatLng=null;/.test(src));
+
 console.log('\n═══ Migración ═══');
 const migs = fs.readdirSync(__dirname + '/supabase/migrations');
 ok('existe la migración de ubicación del cliente', migs.some(n => /cliente_ubicacion/.test(n)));
