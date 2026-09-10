@@ -51,8 +51,8 @@ async function facturarPedidoExento(id,dias,escenario){
     return;
   }
 
-  // Modo real: llamar al backend con los datos de exención
-  toast('⏳ Emitiendo factura exenta...','Conectando con EcoFactura');
+  // Modo real: llamar al backend con los datos de exención (candado + carga)
+  if(!_felLock('Emitiendo factura exenta…','Conectando con EcoFactura')) return;
   const hoy=fechaHoyGT();
   const venc=sumarDiasFecha(fechaHoyGT(),dias);
   const condicionPago=(dias>0)?'CREDITO':'CONTADO';
@@ -99,7 +99,7 @@ async function facturarPedidoExento(id,dias,escenario){
     }
   }catch(err){
     toast('✗ No se pudo conectar con el servidor FEL','¿Está el backend andando? '+err.message,true);
-  }
+  }finally{_felUnlock();}
 }
 window.facturarPedidoExento=facturarPedidoExento;
 function generarNota(id,type){
@@ -156,7 +156,7 @@ async function anularFacturaReal(id,motivo,devolverAPedido){
 
   // Si es factura real certificada, anular primero en EcoFactura
   if(esRealFEL && typeof FEL_BACKEND_URL!=='undefined' && !FEL_BACKEND_URL.includes('TU-BACKEND')){
-    toast('⏳ Anulando en EcoFactura...','Conectando con SAT (puede tardar un momento)');
+    if(!_felLock('Anulando factura…','Conectando con EcoFactura / SAT')) return;
     try{
       const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/anular',{
         method:'POST',headers:{'Content-Type':'application/json'},
@@ -195,7 +195,7 @@ async function anularFacturaReal(id,motivo,devolverAPedido){
     }catch(err){
       toast('✗ No se pudo conectar con el servidor FEL','¿Está el backend andando? '+err.message,true);
       return;
-    }
+    }finally{_felUnlock();}
   }
 
   // EcoFactura confirmó (o era simulada): anular en el sistema y reintegrar inventario
