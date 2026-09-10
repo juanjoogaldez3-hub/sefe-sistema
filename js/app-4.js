@@ -876,7 +876,7 @@ function renderCliDet(){
       <div class="panel-body">
         ${puedeEditar?`<div style="display:flex;gap:6px;margin-bottom:8px">
           <input id="cli-ubic-q" placeholder="Buscar dirección o lugar… (ej. 12 calle 1-25 zona 10, o el nombre del negocio)" style="flex:1;min-width:0" onkeydown="if(event.key==='Enter'){event.preventDefault();_cliUbicBuscar();}">
-          <button class="btn btn-ghost btn-sm" onclick="_cliUbicBuscar()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Buscar</button>
+          <button id="cli-ubic-btn-buscar" class="btn btn-ghost btn-sm" onclick="_cliUbicBuscar()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Buscar</button>
         </div>
         <div id="cli-ubic-resultados" style="margin-bottom:8px"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -967,9 +967,22 @@ function _cargarLeaflet(){
   });
   return _leafletPromise;
 }
-let _cliMapa=null;        // { map, setPin }
+let _cliMapa=null;        // { setPin(lat,lng), center(lat,lng,zoom) }
 let _cliUbicPend=null;    // {lat,lng} pendiente de guardar
+// Texto de coordenadas bajo el título del panel.
+function _cliUbicRefrescar(lat,lng,guardado){const s=document.getElementById('cli-ubic-coords');if(s)s.textContent='📍 '+lat.toFixed(6)+', '+lng.toFixed(6)+(guardado?'':' (sin guardar)');}
+// Abre el mapa: si hay llave de Google, usa Google Maps + Places; si falla o no
+// hay llave, cae a OpenStreetMap (respaldo gratis).
 async function _initMapaCliente(c){
+  const cont=document.getElementById('cli-mapa'); if(!cont)return;
+  if(typeof GOOGLE_MAPS_KEY!=='undefined' && GOOGLE_MAPS_KEY && !_gmapsAuthFail){
+    try{ await _initMapaClienteGoogle(c); return; }
+    catch(e){ console.error('Google Maps falló, uso OpenStreetMap:',e); }
+    if(!document.getElementById('cli-mapa'))return;
+  }
+  return _initMapaClienteOSM(c);
+}
+async function _initMapaClienteOSM(c){
   const cont=document.getElementById('cli-mapa'); if(!cont)return;
   let L;
   try{L=await _cargarLeaflet();}
@@ -981,23 +994,85 @@ async function _initMapaCliente(c){
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
   let marker=tiene?L.marker(centro,{draggable:true}).addTo(map):null;
   _cliUbicPend=tiene?{lat:Number(c.lat),lng:Number(c.lng)}:null;
-  const refrescar=(lat,lng,guardado)=>{const s=document.getElementById('cli-ubic-coords');if(s)s.textContent='📍 '+lat.toFixed(6)+', '+lng.toFixed(6)+(guardado?'':' (sin guardar)');};
   function setPin(lat,lng){
     _cliUbicPend={lat,lng};
     if(marker){marker.setLatLng([lat,lng]);}
     else{marker=L.marker([lat,lng],{draggable:true}).addTo(map);marker.on('dragend',()=>{const p=marker.getLatLng();setPin(p.lat,p.lng);});}
-    refrescar(lat,lng,false);
+    _cliUbicRefrescar(lat,lng,false);
   }
   if(marker)marker.on('dragend',()=>{const p=marker.getLatLng();setPin(p.lat,p.lng);});
   map.on('click',(e)=>setPin(e.latlng.lat,e.latlng.lng));
-  _cliMapa={map,setPin};
+  _cliMapa={setPin,center:(lat,lng,z)=>map.setView([lat,lng],z||16)};
   setTimeout(()=>{try{map.invalidateSize();}catch(e){}},150);
+}
+// ── Google Maps + Places ────────────────────────────────────
+let _gmapsPromise=null, _gmapsAuthFail=false;
+function _cargarGoogleMaps(){
+  if(_gmapsAuthFail)return Promise.reject(new Error('Google Maps no autorizado'));
+  if(window.google&&window.google.maps)return Promise.resolve(window.google.maps);
+  if(_gmapsPromise)return _gmapsPromise;
+  _gmapsPromise=new Promise((res,rej)=>{
+    window.__gmapsReady=()=>{ (window.google&&window.google.maps)?res(window.google.maps):rej(new Error('Google Maps no cargó')); };
+    const s=document.createElement('script');
+    s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(GOOGLE_MAPS_KEY)+'&libraries=places&language=es&region=GT&loading=async&callback=__gmapsReady';
+    s.async=true; s.onerror=()=>rej(new Error('No se pudo cargar Google Maps'));
+    document.head.appendChild(s);
+  });
+  return _gmapsPromise;
+}
+// Google llama a esta función si la llave/dominio no está autorizada: caemos a OSM.
+window.gm_authFailure=function(){
+  _gmapsAuthFail=true;
+  try{
+    if(typeof cliActual!=='undefined'&&cliActual!=null&&typeof cliTab!=='undefined'&&cliTab==='ubicacion'){
+      const c=(typeof clientes!=='undefined'?clientes:[]).find(x=>x.id===cliActual);
+      const cont=document.getElementById('cli-mapa');
+      if(c&&cont){cont.innerHTML='';_initMapaClienteOSM(c);}
+    }
+  }catch(e){}
+  toast('Mapa de Google no disponible','Revisá la llave/APIs en Google Cloud (dominio y facturación). Uso OpenStreetMap por ahora.',true);
+};
+async function _initMapaClienteGoogle(c){
+  const cont=document.getElementById('cli-mapa'); if(!cont)return;
+  const gm=await _cargarGoogleMaps();
+  if(!document.getElementById('cli-mapa'))return;
+  const tiene=(c.lat!=null&&c.lng!=null);
+  const centro=tiene?{lat:Number(c.lat),lng:Number(c.lng)}:{lat:14.6349,lng:-90.5069}; // Guatemala por defecto
+  const map=new gm.Map(cont,{center:centro,zoom:tiene?16:12,mapTypeControl:false,streetViewControl:false,fullscreenControl:true});
+  let marker=tiene?new gm.Marker({position:centro,map,draggable:true}):null;
+  _cliUbicPend=tiene?{lat:Number(c.lat),lng:Number(c.lng)}:null;
+  function setPin(lat,lng){
+    _cliUbicPend={lat,lng};
+    if(marker){marker.setPosition({lat,lng});}
+    else{marker=new gm.Marker({position:{lat,lng},map,draggable:true});marker.addListener('dragend',()=>{const p=marker.getPosition();setPin(p.lat(),p.lng());});}
+    _cliUbicRefrescar(lat,lng,false);
+  }
+  if(marker)marker.addListener('dragend',()=>{const p=marker.getPosition();setPin(p.lat(),p.lng());});
+  map.addListener('click',(e)=>setPin(e.latLng.lat(),e.latLng.lng()));
+  _cliMapa={setPin,center:(lat,lng,z)=>{map.setCenter({lat,lng});if(z)map.setZoom(z);}};
+  // Buscador de Google (Places Autocomplete) sobre el mismo input; reemplaza al
+  // buscador de OSM (se ocultan su botón y su lista de resultados).
+  try{
+    const inp=document.getElementById('cli-ubic-q');
+    if(inp&&gm.places&&gm.places.Autocomplete){
+      const ac=new gm.places.Autocomplete(inp,{fields:['geometry','name','formatted_address'],componentRestrictions:{country:'gt'}});
+      ac.bindTo('bounds',map);
+      ac.addListener('place_changed',()=>{
+        const pl=ac.getPlace();
+        if(pl&&pl.geometry&&pl.geometry.location){const loc=pl.geometry.location;map.setCenter(loc);map.setZoom(17);setPin(loc.lat(),loc.lng());}
+        else toast('Elegí un lugar de la lista','Escribí y tocá una opción del desplegable de Google',true);
+      });
+      const btn=document.getElementById('cli-ubic-btn-buscar'); if(btn)btn.style.display='none';
+      const box=document.getElementById('cli-ubic-resultados'); if(box)box.innerHTML='';
+      inp.placeholder='Buscar en Google: dirección o nombre del negocio…';
+    }
+  }catch(e){console.error('Places autocomplete:',e);}
 }
 function _cliUbicGPS(){
   if(!navigator.geolocation){toast('Sin GPS','Este dispositivo no permite ubicación',true);return;}
   toast('📍 Obteniendo ubicación…','Permití el acceso si te lo pide el navegador');
   navigator.geolocation.getCurrentPosition(
-    (pos)=>{const{latitude,longitude}=pos.coords;if(_cliMapa){_cliMapa.map.setView([latitude,longitude],17);_cliMapa.setPin(latitude,longitude);}toast('✓ Ubicación tomada','Revisá el pin y tocá Guardar');},
+    (pos)=>{const{latitude,longitude}=pos.coords;if(_cliMapa){_cliMapa.center(latitude,longitude,17);_cliMapa.setPin(latitude,longitude);}toast('✓ Ubicación tomada','Revisá el pin y tocá Guardar');},
     (err)=>{toast('No se pudo obtener la ubicación',err&&err.code===1?'Diste que no al permiso de ubicación':(err.message||'Intentá de nuevo'),true);},
     {enableHighAccuracy:true,timeout:12000,maximumAge:0}
   );
@@ -1034,7 +1109,7 @@ async function _cliUbicBuscar(){
 }
 window._cliUbicBuscar=_cliUbicBuscar;
 function _cliUbicElegir(lat,lng){
-  if(_cliMapa){_cliMapa.map.setView([lat,lng],17);_cliMapa.setPin(lat,lng);}
+  if(_cliMapa){_cliMapa.center(lat,lng,17);_cliMapa.setPin(lat,lng);}
   const box=document.getElementById('cli-ubic-resultados'); if(box)box.innerHTML='';
   toast('Ubicación encontrada','Revisá el pin en el mapa y tocá Guardar');
 }

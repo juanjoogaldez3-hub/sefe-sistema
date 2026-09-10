@@ -31,6 +31,14 @@ ok('hay buscador de dirección/lugar (como Google Maps)', /id="cli-ubic-q"/.test
 ok('elegir un resultado del buscador cae el pin', /function _cliUbicElegir\(/.test(src) && /_cliMapa\.setPin\(lat,lng\)/.test(src) && /window\._cliUbicElegir=/.test(src));
 ok('solo quien puede editar clientes ve los botones de captura', /const puedeEditar=canCrearCliente\(\)/.test(src));
 
+console.log('\n═══ Google Maps + Places (con respaldo OSM) ═══');
+ok('existe la llave de Google (GOOGLE_MAPS_KEY) y el cargador', /const GOOGLE_MAPS_KEY\s*=/.test(src) && /function _cargarGoogleMaps\(/.test(src) && /maps\.googleapis\.com\/maps\/api\/js/.test(src));
+ok('usa Google si hay llave, y cae a OSM si falla', /if\(typeof GOOGLE_MAPS_KEY!=='undefined' && GOOGLE_MAPS_KEY && !_gmapsAuthFail\)/.test(src) && /return _initMapaClienteOSM\(c\)/.test(src));
+ok('mapa de Google con pin arrastrable + clic para poner el pin', /new gm\.Map\(/.test(src) && /new gm\.Marker\(/.test(src) && /map\.addListener\('click'/.test(src));
+ok('buscador de Google Places (Autocomplete) sobre el input', /new gm\.places\.Autocomplete\(inp/.test(src) && /place_changed/.test(src));
+ok('si la llave/dominio falla, cae a OSM solo (gm_authFailure)', /window\.gm_authFailure=function\(\)/.test(src) && /_gmapsAuthFail=true/.test(src));
+ok('la interfaz del mapa es uniforme (setPin + center) para GPS y buscador', /_cliMapa=\{setPin,center:/.test(src) && /_cliMapa\.center\(latitude,longitude,17\)/.test(src));
+
 console.log('\n═══ Migración ═══');
 const migs = fs.readdirSync(__dirname + '/supabase/migrations');
 ok('existe la migración de ubicación del cliente', migs.some(n => /cliente_ubicacion/.test(n)));
