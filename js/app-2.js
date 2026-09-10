@@ -932,6 +932,33 @@ function abrirFacturar(id){
   if(((f.notaInterna)||'').trim())$('#m-save').disabled=true;
 }
 window.abrirFacturar=abrirFacturar;
+// ── Bloqueo anti-doble-clic + pantalla de carga para operaciones FEL ────────
+// EcoFactura a veces tarda en certificar/anular; sin esto, la gente hacía doble
+// clic (o creaba pedidos de más) y se duplicaban facturas/anulaciones. Mientras
+// corre una operación se muestra un overlay que BLOQUEA la pantalla y un candado
+// (_felEnCurso) que ignora clics repetidos hasta que termina.
+let _felEnCurso=false;
+function _felOverlayShow(titulo,sub){
+  let ov=document.getElementById('fel-overlay');
+  if(!ov){
+    ov=document.createElement('div');ov.id='fel-overlay';
+    ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(20,25,15,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML='<div style="background:#fff;border-radius:16px;padding:26px 32px;max-width:340px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)"><div style="width:44px;height:44px;margin:0 auto 16px;border:4px solid #e3e8da;border-top-color:#2e7d32;border-radius:50%;animation:felspin .8s linear infinite"></div><div id="fel-ov-tit" style="font-weight:700;font-size:15px;color:#173916">Procesando…</div><div id="fel-ov-sub" style="font-size:12.5px;color:#6b7280;margin-top:6px"></div><div style="font-size:11px;color:#9aa0a8;margin-top:12px">No cierres ni recargues la pantalla. Puede tardar unos segundos.</div></div>';
+    document.body.appendChild(ov);
+  }
+  const t=document.getElementById('fel-ov-tit');if(t)t.textContent=titulo||'Procesando…';
+  const s=document.getElementById('fel-ov-sub');if(s)s.textContent=sub||'';
+  ov.style.display='flex';
+}
+function _felOverlayHide(){const ov=document.getElementById('fel-overlay');if(ov)ov.style.display='none';}
+// Toma el candado. Devuelve false (y avisa) si ya hay una operación en curso.
+function _felLock(titulo,sub){
+  if(_felEnCurso){toast('Esperá un momento','Ya hay una factura emitiéndose o anulándose. Esperá a que termine — no la repitas.',true);return false;}
+  _felEnCurso=true;_felOverlayShow(titulo,sub);return true;
+}
+function _felUnlock(){_felEnCurso=false;_felOverlayHide();}
+if(typeof window!=='undefined'){window._felLock=_felLock;window._felUnlock=_felUnlock;}
+
 async function facturarPedido(id,dias){
   if(!canFacturar()){toast('Sin permiso','Tu rol no puede facturar',true);return;}
   const f=documentos.find(d=>d.id===id);
@@ -961,8 +988,8 @@ async function facturarPedido(id,dias){
     return;
   }
 
-  // Modo real: llamar al backend FEL
-  toast('⏳ Emitiendo factura...','Conectando con EcoFactura (puede tardar un momento)');
+  // Modo real: llamar al backend FEL (con candado + pantalla de carga)
+  if(!_felLock('Emitiendo factura…','Conectando con EcoFactura')) return;
   const hoy=fechaHoyGT();
   const venc=sumarDiasFecha(fechaHoyGT(),dias);
   // Datos comerciales extra para los campos adicionales del XML (TrnCampAd):
@@ -1021,7 +1048,7 @@ async function facturarPedido(id,dias){
     }
   }catch(err){
     toast('✗ No se pudo conectar con el servidor FEL','¿Está el backend andando? '+err.message,true);
-  }
+  }finally{_felUnlock();}
 }
 window.facturarPedido=facturarPedido;
 
