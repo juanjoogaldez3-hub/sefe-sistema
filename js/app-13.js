@@ -71,6 +71,40 @@ function _ctrlNombreCliente(id){
   const c=(typeof clientes!=='undefined'?clientes:[]).find(x=>String(x.id)===String(id));
   return c?c.nombre:('Cliente '+id);
 }
+// Campo de cliente con BUSCADOR (igual al de crear pedido), para los modales de
+// Controles: un input de texto + un input oculto con el id elegido. Reemplaza
+// al <select>, que con muchos clientes era imposible de usar.
+function _ctrlCampoCliente(searchId,hiddenId,cliId){
+  const nom=cliId!=null?_ctrlNombreCliente(cliId):'';
+  return `<input id="${searchId}" autocomplete="off" placeholder="Buscar cliente por nombre o NIT…" value="${escHtml(nom)}"><input type="hidden" id="${hiddenId}" value="${cliId!=null?cliId:''}">`;
+}
+// Enganchar el autocompletado (se llama justo después de abrir el modal).
+function _ctrlWireCliAC(searchId,hiddenId){
+  if(typeof crearAutocomplete!=='function')return;
+  crearAutocomplete(searchId,
+    (q)=>{const ql=q.toLowerCase();
+      return (typeof clientes!=='undefined'?clientes:[])
+        .filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql))
+        .slice(0,8)
+        .map(c=>({texto:c.nombre,sub:[(c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:''),(c.nit?'NIT '+c.nit:'')].filter(Boolean).join(' · '),valor:c.id}));},
+    (item)=>{const h=document.getElementById(hiddenId);if(h)h.value=item?item.valor:'';});
+  // Si el usuario edita el texto a mano, invalidar la selección previa.
+  const inp=document.getElementById(searchId);
+  if(inp&&!inp._ctrlClear){inp._ctrlClear=true;inp.addEventListener('input',()=>{const h=document.getElementById(hiddenId);if(h)h.value='';});}
+}
+// Resolver el id del cliente al guardar: el oculto si eligió del buscador; si
+// no, intenta calzar el texto escrito con un cliente (exacto o único parcial).
+function _ctrlCliId(searchId,hiddenId){
+  const h=document.getElementById(hiddenId);
+  if(h&&h.value)return Number(h.value);
+  const inp=document.getElementById(searchId);
+  const txt=((inp&&inp.value)||'').trim().toLowerCase();
+  if(!txt)return null;
+  const cs=(typeof clientes!=='undefined'?clientes:[]);
+  let hit=cs.find(c=>(c.nombre||'').toLowerCase()===txt);
+  if(!hit){const part=cs.filter(c=>(c.nombre||'').toLowerCase().includes(txt));if(part.length===1)hit=part[0];}
+  return hit?hit.id:null;
+}
 function renderAmbServicios(){
   const tb=$('#t-amb'); if(!tb)return;
   const lista=(typeof ambServicios!=='undefined'?ambServicios:[]).slice()
@@ -89,21 +123,17 @@ window.renderAmbServicios=renderAmbServicios;
 
 function openAmbServicio(id){
   const s=id?ambServicios.find(x=>String(x.id)===String(id)):null;
-  const optCli=`<option value="">— Elegí cliente —</option>`+
-    (typeof clientes!=='undefined'?clientes:[]).slice()
-      .sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
-      .map(c=>`<option value="${c.id}"${s&&String(s.clienteId)===String(c.id)?' selected':''}>${escHtml(c.nombre)}</option>`).join('');
   const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():'';
   openMod(s?'Editar servicio de ambiental':'Nuevo servicio de ambiental',
-    `<div class="row"><div><label>Cliente</label><select id="amb-cli">${optCli}</select></div><div><label>Ubicación <span style="font-weight:400;color:var(--muted-2)">(dónde)</span></label><input id="amb-ubi" value="${s?escHtml(s.ubicacion||''):''}" placeholder="Ej. Baño hombres, Recepción"></div></div>
+    `<div class="row"><div><label>Cliente</label>${_ctrlCampoCliente('amb-cli-search','amb-cli',s?s.clienteId:null)}</div><div><label>Ubicación <span style="font-weight:400;color:var(--muted-2)">(dónde)</span></label><input id="amb-ubi" value="${s?escHtml(s.ubicacion||''):''}" placeholder="Ej. Baño hombres, Recepción"></div></div>
      <div class="row"><div><label>Aroma / fragancia</label><input id="amb-aroma" value="${s?escHtml(s.aroma||''):''}" placeholder="Ej. Lavanda"></div><div><label>Nota</label><input id="amb-nota" value="${s?escHtml(s.nota||''):''}"></div></div>
      <div class="row"><div><label>Fecha del servicio</label><input id="amb-fecha" type="date" value="${s&&s.fecha?String(s.fecha).slice(0,10):hoy}"></div><div><label>Próximo servicio <span style="font-weight:400;color:var(--muted-2)">(si cae fin de semana pasa al lunes)</span></label><input id="amb-prox" type="date" onchange="this.value=_siguienteHabil(this.value)" value="${s&&s.proximo?String(s.proximo).slice(0,10):''}"></div></div>
      ${s?`<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_ambBorrar(${s.id})">Eliminar servicio</button></div>`:''}
      <div class="note n-danger" id="amb-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     async ()=>{
       const err=m=>{$('#amb-err').style.display='flex';$('#amb-err').querySelector('span').textContent=m;};
-      const clienteId=$('#amb-cli').value?Number($('#amb-cli').value):null;
-      if(!clienteId){err('Elegí el cliente');return;}
+      const clienteId=_ctrlCliId('amb-cli-search','amb-cli');
+      if(!clienteId){err('Elegí el cliente del buscador');return;}
       const rec=s||{_nuevo:true};
       rec.clienteId=clienteId;
       rec.ubicacion=$('#amb-ubi').value.trim();
@@ -120,6 +150,7 @@ function openAmbServicio(id){
       if(typeof logAudit==='function')logAudit(s?'Ambiental · servicio editado':'Ambiental · servicio creado',_ctrlNombreCliente(clienteId));
       closeMod();_ambRender();toast('✓ Servicio guardado',_ctrlNombreCliente(clienteId));
     });
+  setTimeout(()=>_ctrlWireCliAC('amb-cli-search','amb-cli'),0);
 }
 window.openAmbServicio=openAmbServicio;
 
@@ -364,9 +395,6 @@ function _batEnManoDe(pilotoId,tipoId,excludeId){
 }
 
 // ── Colocaciones (cambios): salen del inventario del PILOTO ──
-function _optClientes(sel){return `<option value="">— Elegí cliente —</option>`+
-  (typeof clientes!=='undefined'?clientes:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
-    .map(x=>`<option value="${x.id}"${String(sel)===String(x.id)?' selected':''}>${escHtml(x.nombre)}</option>`).join('');}
 function _optTipos(sel){return `<option value="">— Elegí tipo —</option>`+
   (typeof batTipos!=='undefined'?batTipos:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
     .map(t=>`<option value="${t.id}"${String(sel)===String(t.id)?' selected':''}>${escHtml(t.nombre)}</option>`).join('');}
@@ -379,7 +407,7 @@ function openBatCambio(id){
   window._bcEditId=c?c.id:null;   // para excluir este cambio del "en mano"
   const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():'';
   openMod(c?'Editar colocación de batería':'Nueva colocación de batería',
-    `<div class="row"><div><label>Cliente</label><select id="bc-cli">${_optClientes(c&&c.clienteId)}</select></div><div><label>Equipo / ubicación</label><input id="bc-eq" value="${c?escHtml(c.equipo||''):''}" placeholder="Ej. Dispensador baño 1"></div></div>
+    `<div class="row"><div><label>Cliente</label>${_ctrlCampoCliente('bc-cli-search','bc-cli',c&&c.clienteId!=null?c.clienteId:null)}</div><div><label>Equipo / ubicación</label><input id="bc-eq" value="${c?escHtml(c.equipo||''):''}" placeholder="Ej. Dispensador baño 1"></div></div>
      <div class="row"><div><label>Piloto <span style="font-weight:400;color:var(--muted-2)">(de quién sale)</span></label><select id="bc-pil" onchange="_bcActualizarEnMano()">${_optPilotos(c&&c.pilotoId)}</select></div><div><label>Tipo de batería</label><select id="bc-tipo" onchange="_bcActualizarEnMano()">${_optTipos(c&&c.tipoId)}</select></div></div>
      <div class="row"><div><label>Cantidad</label><input id="bc-cant" type="number" step="1" value="${c?(Number(c.cantidad)||1):1}"></div><div></div></div>
      <div class="row"><div><label>Fecha del cambio</label><input id="bc-fecha" type="date" value="${c&&c.fecha?String(c.fecha).slice(0,10):hoy}"></div><div><label>Próximo cambio <span style="font-weight:400;color:var(--muted-2)">(si cae fin de semana pasa al lunes)</span></label><input id="bc-prox" type="date" onchange="this.value=_siguienteHabil(this.value)" value="${c&&c.proximo?String(c.proximo).slice(0,10):''}"></div></div>
@@ -389,8 +417,8 @@ function openBatCambio(id){
      <div class="note n-danger" id="bc-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     async ()=>{
       const err=m=>{$('#bc-err').style.display='flex';$('#bc-err').querySelector('span').textContent=m;};
-      const clienteId=$('#bc-cli').value?Number($('#bc-cli').value):null;
-      if(!clienteId){err('Elegí el cliente');return;}
+      const clienteId=_ctrlCliId('bc-cli-search','bc-cli');
+      if(!clienteId){err('Elegí el cliente del buscador');return;}
       const pilotoId=$('#bc-pil').value?Number($('#bc-pil').value):null;
       if(!pilotoId){err('Elegí de qué piloto sale la batería');return;}
       const tipoId=$('#bc-tipo').value?Number($('#bc-tipo').value):null;
@@ -411,7 +439,7 @@ function openBatCambio(id){
       if(typeof logAudit==='function')logAudit(c?'Batería · colocación editada':'Batería · colocación creada',_batNombrePiloto(pilotoId)+' → '+_ctrlNombreCliente(clienteId)+' · '+_batNombreTipo(tipoId)+' x'+cantidad);
       closeMod();renderBaterias();toast('✓ Colocación guardada',_ctrlNombreCliente(clienteId));
     });
-  setTimeout(_bcActualizarEnMano,50);
+  setTimeout(()=>{_ctrlWireCliAC('bc-cli-search','bc-cli');_bcActualizarEnMano();},50);
 }
 window.openBatCambio=openBatCambio;
 // Muestra cuánto tiene en mano el piloto de ese tipo (para no colocar de más).
