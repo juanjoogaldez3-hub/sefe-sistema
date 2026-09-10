@@ -463,6 +463,38 @@ function recuperarBorrador(){
 }
 function limpiarBorrador(){try{localStorage.removeItem(BORRADOR_KEY);}catch(e){}}
 window.limpiarBorrador=limpiarBorrador;
+
+// ===== Chequeo de versión =====
+// La versión publicada va embebida en index.html (window.APP_VERSION), y se sube
+// en cada publicación junto con los ?v=. La pantalla abierta trae en memoria la
+// versión con la que cargó; acá se baja index.html fresquito y, si la versión
+// del servidor cambió, se muestra un aviso fijo para actualizar. Así nadie se
+// queda con una versión vieja sin darse cuenta.
+let _verChequeoOn=false;
+async function _chequearVersion(){
+  try{
+    if(!window.APP_VERSION)return;
+    const r=await fetch('index.html?_v='+Date.now(),{cache:'no-store'});
+    if(!r.ok)return;
+    const txt=await r.text();
+    const m=txt.match(/window\.APP_VERSION\s*=\s*'([^']+)'/);
+    if(m&&m[1]&&m[1]!==window.APP_VERSION)_mostrarBannerVersion();
+  }catch(e){/* sin conexión: no molestar */}
+}
+function _mostrarBannerVersion(){
+  if(document.getElementById('ver-banner'))return;
+  const b=document.createElement('div');b.id='ver-banner';
+  b.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99990;background:#173916;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;box-shadow:0 -6px 24px rgba(0,0,0,.28);font-size:13.5px';
+  b.innerHTML='<span>🔄 Hay una <b>versión nueva</b> del sistema. Actualizá para tener los últimos cambios y evitar errores.</span><button onclick="location.reload()" style="background:#A8C038;color:#14210a;border:0;border-radius:8px;padding:8px 18px;font-weight:700;cursor:pointer">Actualizar ahora</button>';
+  document.body.appendChild(b);
+}
+function _iniciarChequeoVersion(){
+  if(_verChequeoOn)return; _verChequeoOn=true;
+  setTimeout(_chequearVersion,30000);                 // primer chequeo a los 30s
+  setInterval(_chequearVersion,5*60*1000);            // luego cada 5 minutos
+  window.addEventListener('focus',_chequearVersion);  // y al volver a la pestaña
+}
+if(typeof window!=='undefined'){window._iniciarChequeoVersion=_iniciarChequeoVersion;window._chequearVersion=_chequearVersion;}
 // (Datos de ejemplo eliminados — sistema en producción)
 let compN=11,provN=4;
 let editId=null,editOldMap={};
@@ -693,6 +725,9 @@ async function doLoginAuth(){
     setTimeout(recuperarBorrador,300);
     // Si quedó una cotización sin guardar (se cerró la pantalla), avisar.
     setTimeout(()=>{try{if(typeof _cotHayBorrador==='function'&&_cotHayBorrador())toast('📝 Cotización sin guardar','Tenés una a medias — abrí Cotizaciones para recuperarla');}catch(e){}},1600);
+    // Chequeo de versión: si se publica una versión nueva, avisar a quien tenga
+    // la pantalla abierta para que actualice (no depende de que haga Ctrl+F5).
+    if(typeof _iniciarChequeoVersion==='function')_iniciarChequeoVersion();
     _recDismissed=false;setTimeout(()=>{try{mostrarRecordatoriosHoy();}catch(e){console.error(e);}},700);
     setTimeout(()=>{try{actualizarBellRec();mostrarRecordatoriosPopup();}catch(e){console.error(e);}},1100);
     ocultarLoader();
