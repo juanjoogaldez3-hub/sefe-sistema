@@ -115,6 +115,13 @@ ok('existe la migración de entregas con la columna piloto_id en cambios', migs.
   ok('excluye el cambio en edición (15 − 3 = 12)', m(1, 9, 100) === 12, m(1, 9, 100));
 })();
 
+console.log('\n═══ Buscador de cliente (como en el pedido) ═══');
+ok('helper de campo cliente con buscador (_ctrlCampoCliente)', /function _ctrlCampoCliente\(/.test(src) && /function _ctrlWireCliAC\(/.test(src) && /function _ctrlCliId\(/.test(src));
+ok('el buscador usa el autocompletado del pedido (crearAutocomplete)', /crearAutocomplete\(searchId/.test(src));
+ok('Ambientales usa el buscador (amb-cli-search) y ya NO un <select>', /_ctrlCampoCliente\('amb-cli-search','amb-cli'/.test(src) && !/<select id="amb-cli">/.test(src));
+ok('Baterías usa el buscador (bc-cli-search) y ya NO un <select>', /_ctrlCampoCliente\('bc-cli-search','bc-cli'/.test(src) && !/<select id="bc-cli">/.test(src));
+ok('al guardar resuelve el cliente con _ctrlCliId', /_ctrlCliId\('amb-cli-search','amb-cli'\)/.test(src) && /_ctrlCliId\('bc-cli-search','bc-cli'\)/.test(src));
+
 console.log('\n═══ Reporte de baterías por cliente ═══');
 ok('existe el reporte PDF (reporteBateriasPDF)', /function reporteBateriasPDF\(/.test(src) && /window\.reporteBateriasPDF\s*=/.test(src));
 ok('existe el reporte Excel (reporteBateriasExcel)', /async function reporteBateriasExcel\(/.test(src) && /window\.reporteBateriasExcel\s*=/.test(src));
