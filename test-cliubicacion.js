@@ -58,6 +58,7 @@ ok('hay botón "Ubicar (N)" en la lista cuando faltan pines', /openPendientesUbi
 ok('el asistente recorre los clientes sin ubicación', /function openPendientesUbicacion\(/.test(src) && /c\.lat==null\|\|c\.lng==null/.test(src) && /Cliente \$\{_pendIdx\+1\} de \$\{_pendLista\.length\}/.test(src));
 ok('guarda y avanza al siguiente', /function _pendGuardar\(/.test(src) && /_pendIdx\+\+; _pendRender\(\)/.test(src) && /guardarCliente\(c\)/.test(src));
 ok('el asistente busca con Google (Places)', /new gm\.places\.Autocomplete\(inp/.test(src) && /_pendWireSearch/.test(src));
+ok('busca de un toque por nombre o por dirección (findPlaceFromQuery)', /function _pendBuscarTexto\(tipo\)/.test(src) && /findPlaceFromQuery/.test(src) && /_pendBuscarTexto\('nombre'\)/.test(src) && /_pendBuscarTexto\('dir'\)/.test(src));
 ok('existe el lector de links (_parseLatLngDeLink) y "Usar link"', /function _parseLatLngDeLink\(/.test(src) && /function _pendUsarLink\(/.test(src) && /function _cliUbicPegarLink\(/.test(src));
 
 // Funcional: el parser de links
