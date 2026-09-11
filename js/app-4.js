@@ -1141,8 +1141,15 @@ function openMapaClientes(){
     `<div class="row" style="margin-bottom:8px">
        <div><label>Vendedor</label><select id="mt-vend" onchange="_mapaTodosPintar()">${optVend}</select></div>
        <div><label>Ruta</label><select id="mt-ruta" onchange="_mapaTodosPintar()">${optRuta}</select></div>
+       <div><label>Ver por</label><select id="mt-color" onchange="_mapaTodosPintar()">
+         <option value="">Normal</option>
+         <option value="saldo">Saldo pendiente</option>
+         <option value="ultima">Última compra</option>
+         <option value="ventas">Ventas (total)</option>
+       </select></div>
      </div>
      <div id="mt-info" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
+     <div id="mt-leyenda" style="font-size:11.5px;color:var(--muted);margin-bottom:8px;display:none"></div>
      <div id="mapa-todos" style="height:60vh;min-height:340px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#eef1ea"></div>`,
     null);
   const sv=document.getElementById('m-save'); if(sv)sv.style.display='none';
@@ -1176,37 +1183,226 @@ function _mapaTodosPintar(){
   if(!_mapaTodos)return;
   const fVend=(document.getElementById('mt-vend')||{}).value||'';
   const fRuta=(document.getElementById('mt-ruta')||{}).value||'';
+  const modo=(document.getElementById('mt-color')||{}).value||'';
   let lista=_clientesConLoc();
   if(fVend)lista=lista.filter(c=>String(c.vendedorId)===fVend);
   if(fRuta)lista=lista.filter(c=>(c.ruta||'').trim()===fRuta);
   const info=document.getElementById('mt-info'); if(info)info.textContent=lista.length+' cliente(s) con ubicación en el mapa';
+  const ley=document.getElementById('mt-leyenda'); if(ley){const lh=_mapaLeyenda(modo); ley.innerHTML=lh; ley.style.display=lh?'':'none';}
   (_mapaTodos.markers||[]).forEach(m=>{try{_mapaTodos.tipo==='google'?m.setMap(null):_mapaTodos.map.removeLayer(m);}catch(e){}});
   _mapaTodos.markers=[];
   if(_mapaTodos.tipo==='google'){
     const gm=_mapaTodos.gm, map=_mapaTodos.map, bounds=new gm.LatLngBounds();
     lista.forEach(c=>{
       const pos={lat:Number(c.lat),lng:Number(c.lng)};
-      const mk=new gm.Marker({position:pos,map,title:c.nombre});
-      mk.addListener('click',()=>{
-        _mapaTodos.info.setContent('<div style="font-size:13px;min-width:150px"><b>'+escHtml(c.nombre)+'</b>'+(c.ruta?'<br><span style="color:#666">'+escHtml(c.ruta)+'</span>':'')+'<br><button onclick="_mapaTodosVerFicha('+c.id+')" style="margin-top:6px;background:#2e7d32;color:#fff;border:0;border-radius:6px;padding:5px 10px;cursor:pointer">Ver ficha</button></div>');
-        _mapaTodos.info.open(map,mk);
-      });
+      const col=_mapaColor(c,modo);
+      const mk=new gm.Marker({position:pos,map,title:c.nombre,icon:modo?{path:gm.SymbolPath.CIRCLE,scale:8,fillColor:col,fillOpacity:.95,strokeColor:'#fff',strokeWeight:1.5}:undefined});
+      mk.addListener('click',()=>{_mapaTodos.info.setContent(_mapaInfoHTML(c,modo)); _mapaTodos.info.open(map,mk);});
       _mapaTodos.markers.push(mk); bounds.extend(pos);
     });
     if(lista.length){map.fitBounds(bounds); gm.event.addListenerOnce(map,'idle',()=>{if(map.getZoom()>16)map.setZoom(16);});}
   }else{
     const L=_mapaTodos.L, map=_mapaTodos.map, pts=[];
     lista.forEach(c=>{
-      const mk=L.marker([Number(c.lat),Number(c.lng)]).addTo(map);
-      mk.bindPopup('<b>'+escHtml(c.nombre)+'</b>'+(c.ruta?'<br>'+escHtml(c.ruta):'')+'<br><button onclick="_mapaTodosVerFicha('+c.id+')" style="margin-top:6px;background:#2e7d32;color:#fff;border:0;border-radius:6px;padding:5px 10px;cursor:pointer">Ver ficha</button>');
+      const col=_mapaColor(c,modo);
+      const mk=modo?L.circleMarker([Number(c.lat),Number(c.lng)],{radius:8,color:'#fff',weight:1.5,fillColor:col,fillOpacity:.95}).addTo(map):L.marker([Number(c.lat),Number(c.lng)]).addTo(map);
+      mk.bindPopup(_mapaInfoHTML(c,modo));
       _mapaTodos.markers.push(mk); pts.push([Number(c.lat),Number(c.lng)]);
     });
     if(pts.length)map.fitBounds(pts,{maxZoom:16,padding:[30,30]});
   }
 }
 window._mapaTodosPintar=_mapaTodosPintar;
+// ---- Métricas por cliente (para colorear el mapa y armar rutas) ----
+function _cliUltimaCompra(c){
+  let ult=null;
+  (typeof documentos!=='undefined'?documentos:[]).forEach(d=>{
+    if(d.clienteId===c.id&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada'){
+      const f=d.fechaCertificacion||d.creada; if(f&&(!ult||new Date(f)>new Date(ult)))ult=f;
+    }
+  });
+  return ult;
+}
+function _cliDiasSinComprar(c){const u=_cliUltimaCompra(c); return u?Math.floor((Date.now()-new Date(u))/86400000):null;}
+function _cliVentasTotal(c){return (typeof documentos!=='undefined'?documentos:[]).filter(d=>d.clienteId===c.id&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+((d.totales&&d.totales.total)||0),0);}
+function _cliPedidosAbiertos(c){return (typeof documentos!=='undefined'?documentos:[]).filter(d=>d.clienteId===c.id&&d.tipoDoc==='pedido'&&d.estado==='abierto').length;}
+// Color del pin según el modo elegido
+function _mapaColor(c,modo){
+  if(modo==='saldo'){const s=(typeof saldoCliente==='function')?saldoCliente(c):0; return s>0.5?'#c62828':'#9e9e9e';}
+  if(modo==='ultima'){const d=_cliDiasSinComprar(c); if(d==null)return '#9e9e9e'; if(d<=15)return '#2e7d32'; if(d<=45)return '#8bc34a'; if(d<=90)return '#f9a825'; return '#c62828';}
+  if(modo==='ventas'){const v=_cliVentasTotal(c); if(v<=0)return '#9e9e9e'; if(v<2000)return '#c8e6c9'; if(v<10000)return '#81c784'; if(v<40000)return '#43a047'; return '#1b5e20';}
+  return '#2e7d32';
+}
+function _mapaLeyenda(modo){
+  const p=(col,txt)=>`<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><span style="width:11px;height:11px;border-radius:50%;background:${col};border:1px solid #fff;box-shadow:0 0 0 1px #ccc"></span>${txt}</span>`;
+  if(modo==='saldo')return p('#c62828','Debe')+p('#9e9e9e','Al día');
+  if(modo==='ultima')return p('#2e7d32','≤15 días')+p('#8bc34a','≤45')+p('#f9a825','≤90')+p('#c62828','+90 / olvidado')+p('#9e9e9e','Nunca');
+  if(modo==='ventas')return p('#1b5e20','Muy alto')+p('#43a047','Alto')+p('#81c784','Medio')+p('#c8e6c9','Bajo')+p('#9e9e9e','Sin ventas');
+  return '';
+}
+function _mapaInfoHTML(c,modo){
+  let extra='';
+  const s=(typeof saldoCliente==='function')?saldoCliente(c):0;
+  if(modo==='saldo')extra=s>0.5?'<br><span style="color:#c62828;font-weight:600">Debe '+money(s)+'</span>':'<br><span style="color:#666">Al día</span>';
+  else if(modo==='ultima'){const d=_cliDiasSinComprar(c); extra=d==null?'<br><span style="color:#666">Nunca compró</span>':'<br><span style="color:#666">Última compra: hace '+d+' día'+(d===1?'':'s')+'</span>';}
+  else if(modo==='ventas')extra='<br><span style="color:#666">Ventas: '+money(_cliVentasTotal(c))+'</span>';
+  else if(s>0.5)extra='<br><span style="color:#c62828">Debe '+money(s)+'</span>';
+  const ped=_cliPedidosAbiertos(c); if(ped)extra+='<br><span style="color:#1565c0">'+ped+' pedido(s) abierto(s)</span>';
+  return '<div style="font-size:13px;min-width:160px"><b>'+escHtml(c.nombre)+'</b>'+(c.ruta?'<br><span style="color:#666">'+escHtml(c.ruta)+'</span>':'')+extra+'<br><button onclick="_mapaTodosVerFicha('+c.id+')" style="margin-top:6px;background:#2e7d32;color:#fff;border:0;border-radius:6px;padding:5px 10px;cursor:pointer">Ver ficha</button></div>';
+}
 function _mapaTodosVerFicha(id){ if(typeof closeMod==='function')closeMod(); if(typeof abrirCliente==='function')abrirCliente(id); }
 window._mapaTodosVerFicha=_mapaTodosVerFicha;
+
+// ============================================================
+//  RUTA DEL DÍA — ordena por cercanía y abre la ruta en Google Maps
+// ============================================================
+let _rutaLista=[], _rutaOrden=[], _rutaMapa=null, _rutaInicio=null;
+// Distancia aproximada en km entre dos puntos (Haversine)
+function _distKm(a,b){
+  const R=6371, rad=Math.PI/180;
+  const dLat=(b.lat-a.lat)*rad, dLng=(b.lng-a.lng)*rad;
+  const la1=a.lat*rad, la2=b.lat*rad;
+  const h=Math.sin(dLat/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+// Ordena por vecino más cercano, arrancando desde 'start' ({lat,lng} o null)
+function _ordenarPorCercania(lista,start){
+  const pend=lista.slice(); const orden=[];
+  let cur=start||(pend.length?{lat:Number(pend[0].lat),lng:Number(pend[0].lng)}:null);
+  while(pend.length){
+    let mi=0,md=Infinity;
+    pend.forEach((c,i)=>{const d=_distKm(cur,{lat:Number(c.lat),lng:Number(c.lng)});if(d<md){md=d;mi=i;}});
+    const sig=pend.splice(mi,1)[0]; orden.push(sig); cur={lat:Number(sig.lat),lng:Number(sig.lng)};
+  }
+  return orden;
+}
+function openRutaDia(){
+  const conLoc=_clientesConLoc();
+  if(!conLoc.length){toast('Sin ubicaciones','Todavía no hay clientes con pin en el mapa. Usá "Ubicar" primero.',false);return;}
+  const rutas=[...new Set(conLoc.map(c=>(c.ruta||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const optVend='<option value="">Todos los vendedores</option>'+(typeof vendedores!=='undefined'?vendedores:[]).map(v=>`<option value="${v.id}"${(esVentas()&&v.id===miVendedorId())?' selected':''}>${escHtml(v.nombre)}</option>`).join('');
+  const optRuta='<option value="">Todas las rutas</option>'+rutas.map(r=>`<option value="${escHtml(r)}">${escHtml(r)}</option>`).join('');
+  _rutaInicio=null; _rutaLista=[]; _rutaOrden=[]; _rutaMapa=null;
+  openMod('Ruta del día',
+    `<div class="row" style="margin-bottom:8px">
+       <div><label>Vendedor</label><select id="rd-vend" ${esVentas()?'disabled':''} onchange="_rutaCalcular()">${optVend}</select></div>
+       <div><label>Ruta</label><select id="rd-ruta" onchange="_rutaCalcular()">${optRuta}</select></div>
+       <div><label>Incluir</label><select id="rd-filtro" onchange="_rutaCalcular()">
+         <option value="todos">Todos con ubicación</option>
+         <option value="saldo">Solo con saldo pendiente</option>
+         <option value="pedido">Solo con pedido abierto</option>
+       </select></div>
+     </div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+       <button class="btn btn-ghost btn-sm" onclick="_rutaGPS()">📍 Salir desde mi ubicación</button>
+       <span id="rd-info" style="font-size:12px;color:var(--muted)"></span>
+     </div>
+     <div id="rd-map" style="height:38vh;min-height:220px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#eef1ea;margin-bottom:8px"></div>
+     <div id="rd-lista" style="max-height:26vh;overflow-y:auto;font-size:13px"></div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+       <button class="btn btn-primary btn-sm" onclick="_rutaAbrir()">🗺️ Abrir ruta en Google Maps</button>
+       <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeMod()">Cerrar</button>
+     </div>`,
+    null);
+  const sv=document.getElementById('m-save'); if(sv)sv.style.display='none';
+  $('#ov').classList.add('modal-wide'); const _m=document.querySelector('#ov .modal'); if(_m)_m.style.maxWidth='min(98vw,900px)';
+  setTimeout(()=>{_rutaInitMap();_rutaCalcular();},0);
+}
+window.openRutaDia=openRutaDia;
+function _rutaClientesFiltrados(){
+  const fVend=(document.getElementById('rd-vend')||{}).value||'';
+  const fRuta=(document.getElementById('rd-ruta')||{}).value||'';
+  const fFil=(document.getElementById('rd-filtro')||{}).value||'todos';
+  let lista=_clientesConLoc();
+  if(fVend)lista=lista.filter(c=>String(c.vendedorId)===fVend);
+  if(fRuta)lista=lista.filter(c=>(c.ruta||'').trim()===fRuta);
+  if(fFil==='saldo')lista=lista.filter(c=>((typeof saldoCliente==='function')?saldoCliente(c):0)>0.5);
+  else if(fFil==='pedido')lista=lista.filter(c=>_cliPedidosAbiertos(c)>0);
+  return lista;
+}
+function _rutaCalcular(){
+  _rutaLista=_rutaClientesFiltrados();
+  _rutaOrden=_ordenarPorCercania(_rutaLista,_rutaInicio);
+  const info=document.getElementById('rd-info');
+  if(info){let t=_rutaOrden.length+' parada(s)'+(_rutaInicio?' · desde tu ubicación':'');
+    if(_rutaOrden.length>23)t+=' · ⚠ Google Maps abre máx. 23 — se abrirán las primeras 23';
+    info.textContent=t;}
+  _rutaPintarLista(); _rutaPintarMapa();
+}
+window._rutaCalcular=_rutaCalcular;
+function _rutaPintarLista(){
+  const box=document.getElementById('rd-lista'); if(!box)return;
+  if(!_rutaOrden.length){box.innerHTML='<div style="color:var(--muted-2);padding:10px">No hay clientes que cumplan el filtro.</div>';return;}
+  box.innerHTML=_rutaOrden.map((c,i)=>{
+    const s=(typeof saldoCliente==='function')?saldoCliente(c):0; const ped=_cliPedidosAbiertos(c);
+    const tags=(s>0.5?`<span style="color:#c62828">Debe ${money(s)}</span>`:'')+(ped?`${s>0.5?' · ':''}<span style="color:#1565c0">${ped} pedido(s)</span>`:'');
+    return `<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 4px;border-top:${i?'1px solid var(--line)':'0'}">
+      <span style="flex:0 0 22px;height:22px;border-radius:50%;background:#2e7d32;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">${i+1}</span>
+      <div style="flex:1;min-width:0"><div style="font-weight:600">${escHtml(c.nombre)}</div><div style="font-size:11.5px;color:var(--muted)">${c.ruta?escHtml(c.ruta)+' · ':''}${tags||'—'}</div></div>
+    </div>`;
+  }).join('');
+}
+async function _rutaInitMap(){
+  const cont=document.getElementById('rd-map'); if(!cont)return;
+  try{
+    if(typeof GOOGLE_MAPS_KEY!=='undefined'&&GOOGLE_MAPS_KEY&&!_gmapsAuthFail){
+      const gm=await _cargarGoogleMaps(); if(!document.getElementById('rd-map'))return;
+      const map=new gm.Map(cont,{center:{lat:14.6349,lng:-90.5069},zoom:11,mapTypeControl:false,streetViewControl:false});
+      _rutaMapa={tipo:'google',gm,map,markers:[],linea:null}; _rutaPintarMapa(); return;
+    }
+    const L=await _cargarLeaflet(); if(!document.getElementById('rd-map'))return;
+    const map=L.map(cont).setView([14.6349,-90.5069],11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+    _rutaMapa={tipo:'osm',L,map,markers:[],linea:null}; _rutaPintarMapa();
+    setTimeout(()=>{try{map.invalidateSize();}catch(e){}},150);
+  }catch(e){cont.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted-2);font-size:12px">No se pudo cargar el mapa.</div>';}
+}
+function _rutaPintarMapa(){
+  if(!_rutaMapa)return;
+  (_rutaMapa.markers||[]).forEach(m=>{try{_rutaMapa.tipo==='google'?m.setMap(null):_rutaMapa.map.removeLayer(m);}catch(e){}});
+  _rutaMapa.markers=[];
+  if(_rutaMapa.linea){try{_rutaMapa.tipo==='google'?_rutaMapa.linea.setMap(null):_rutaMapa.map.removeLayer(_rutaMapa.linea);}catch(e){} _rutaMapa.linea=null;}
+  const path=[]; if(_rutaInicio)path.push({lat:_rutaInicio.lat,lng:_rutaInicio.lng});
+  _rutaOrden.forEach(c=>path.push({lat:Number(c.lat),lng:Number(c.lng)}));
+  if(_rutaMapa.tipo==='google'){
+    const gm=_rutaMapa.gm, map=_rutaMapa.map, bounds=new gm.LatLngBounds();
+    if(_rutaInicio){const mk=new gm.Marker({position:{lat:_rutaInicio.lat,lng:_rutaInicio.lng},map,title:'Tu ubicación',icon:{path:gm.SymbolPath.CIRCLE,scale:7,fillColor:'#1565c0',fillOpacity:1,strokeColor:'#fff',strokeWeight:2}}); _rutaMapa.markers.push(mk); bounds.extend(mk.getPosition());}
+    _rutaOrden.forEach((c,i)=>{
+      const pos={lat:Number(c.lat),lng:Number(c.lng)};
+      const mk=new gm.Marker({position:pos,map,title:(i+1)+'. '+c.nombre,label:{text:String(i+1),color:'#fff',fontSize:'11px',fontWeight:'700'}});
+      _rutaMapa.markers.push(mk); bounds.extend(pos);
+    });
+    if(path.length>1)_rutaMapa.linea=new gm.Polyline({path,map,strokeColor:'#2e7d32',strokeOpacity:.8,strokeWeight:3});
+    if(path.length){map.fitBounds(bounds); gm.event.addListenerOnce(map,'idle',()=>{if(map.getZoom()>16)map.setZoom(16);});}
+  }else{
+    const L=_rutaMapa.L, map=_rutaMapa.map, pts=[];
+    if(_rutaInicio){const mk=L.circleMarker([_rutaInicio.lat,_rutaInicio.lng],{radius:7,color:'#fff',weight:2,fillColor:'#1565c0',fillOpacity:1}).addTo(map); _rutaMapa.markers.push(mk); pts.push([_rutaInicio.lat,_rutaInicio.lng]);}
+    _rutaOrden.forEach((c,i)=>{
+      const mk=L.marker([Number(c.lat),Number(c.lng)]).addTo(map); mk.bindTooltip(String(i+1),{permanent:true,direction:'center',className:'rd-num'});
+      _rutaMapa.markers.push(mk); pts.push([Number(c.lat),Number(c.lng)]);
+    });
+    if(path.length>1)_rutaMapa.linea=L.polyline(path.map(p=>[p.lat,p.lng]),{color:'#2e7d32',weight:3,opacity:.8}).addTo(map);
+    if(pts.length)map.fitBounds(pts,{maxZoom:16,padding:[30,30]});
+  }
+}
+function _rutaGPS(){
+  const info=document.getElementById('rd-info');
+  if(!navigator.geolocation){if(info)info.textContent='Este dispositivo no da ubicación.';return;}
+  if(info)info.textContent='Ubicándote…';
+  navigator.geolocation.getCurrentPosition(
+    p=>{_rutaInicio={lat:p.coords.latitude,lng:p.coords.longitude}; _rutaCalcular();},
+    ()=>{if(info)info.textContent='No se pudo obtener tu ubicación (revisá los permisos).';},
+    {enableHighAccuracy:true,timeout:8000,maximumAge:60000});
+}
+window._rutaGPS=_rutaGPS;
+function _rutaAbrir(){
+  if(!_rutaOrden.length){toast('Ruta vacía','No hay clientes que cumplan el filtro.',false);return;}
+  const stops=[]; if(_rutaInicio)stops.push(_rutaInicio.lat+','+_rutaInicio.lng);
+  _rutaOrden.slice(0,23).forEach(c=>stops.push(Number(c.lat)+','+Number(c.lng)));
+  const url='https://www.google.com/maps/dir/'+stops.map(encodeURIComponent).join('/');
+  window.open(url,'_blank');
+}
+window._rutaAbrir=_rutaAbrir;
 
 // Saca lat/lng de un link de Google Maps / Waze, o de un "lat, lng" pegado.
 // Cubre los formatos comunes; los links CORTOS (maps.app.goo.gl / goo.gl) no
