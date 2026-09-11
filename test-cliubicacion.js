@@ -53,6 +53,29 @@ ok('al elegir dirección guarda el pin (_cliFormLatLng)', /_cliFormLatLng=\{lat:
 ok('al guardar el cliente se incluye lat/lng si hubo pin', /if\(_cliFormLatLng\)\{datos\.lat=/.test(src));
 ok('no pisa la ubicación si no se tocó la dirección (arranca en null)', /_cliFormLatLng=null;/.test(src));
 
+console.log('\n═══ Asignar en tanda (pendientes) + pegar link ═══');
+ok('hay botón "Ubicar (N)" en la lista cuando faltan pines', /openPendientesUbicacion\(\)/.test(src) && /Ubicar \(\$\{_sinUbic\}\)/.test(src));
+ok('el asistente recorre los clientes sin ubicación', /function openPendientesUbicacion\(/.test(src) && /c\.lat==null\|\|c\.lng==null/.test(src) && /Cliente \$\{_pendIdx\+1\} de \$\{_pendLista\.length\}/.test(src));
+ok('guarda y avanza al siguiente', /function _pendGuardar\(/.test(src) && /_pendIdx\+\+; _pendRender\(\)/.test(src) && /guardarCliente\(c\)/.test(src));
+ok('el asistente busca con Google (Places)', /new gm\.places\.Autocomplete\(inp/.test(src) && /_pendWireSearch/.test(src));
+ok('existe el lector de links (_parseLatLngDeLink) y "Usar link"', /function _parseLatLngDeLink\(/.test(src) && /function _pendUsarLink\(/.test(src) && /function _cliUbicPegarLink\(/.test(src));
+
+// Funcional: el parser de links
+(() => {
+  const vm = require('vm');
+  const i = src.indexOf('function _parseLatLngDeLink(');
+  const j = src.indexOf('window._parseLatLngDeLink=');
+  const ctx = { parseFloat, isFinite, Math }; vm.createContext(ctx);
+  vm.runInContext(src.slice(i, j) + ';globalThis.__f=_parseLatLngDeLink;', ctx);
+  const f = ctx.__f, near = (r, a, b) => r && Math.abs(r.lat - a) < 1e-6 && Math.abs(r.lng - b) < 1e-6;
+  ok('link ?q=lat,lng', near(f('https://www.google.com/maps?q=14.634,-90.506'), 14.634, -90.506));
+  ok('link /@lat,lng', near(f('https://www.google.com/maps/@14.634,-90.5069,17z'), 14.634, -90.5069));
+  ok('waze ?ll=lat,lng', near(f('https://waze.com/ul?ll=14.634,-90.506&navigate=yes'), 14.634, -90.506));
+  ok('place !3d!4d', near(f('x!3d14.634!4d-90.506y'), 14.634, -90.506));
+  ok('coordenadas pegadas "lat, lng"', near(f('14.634, -90.506'), 14.634, -90.506));
+  ok('link corto goo.gl → null (no trae coords)', f('https://maps.app.goo.gl/abc') === null);
+})();
+
 console.log('\n═══ Migración ═══');
 const migs = fs.readdirSync(__dirname + '/supabase/migrations');
 ok('existe la migración de ubicación del cliente', migs.some(n => /cliente_ubicacion/.test(n)));
