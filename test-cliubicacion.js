@@ -58,8 +58,11 @@ ok('hay botón "Ubicar (N)" en la lista cuando faltan pines', /openPendientesUbi
 ok('el asistente recorre los clientes sin ubicación', /function openPendientesUbicacion\(/.test(src) && /c\.lat==null\|\|c\.lng==null/.test(src) && /Cliente \$\{_pendIdx\+1\} de \$\{_pendLista\.length\}/.test(src));
 ok('guarda y avanza al siguiente', /function _pendGuardar\(/.test(src) && /_pendIdx\+\+; _pendRender\(\)/.test(src) && /guardarCliente\(c\)/.test(src));
 ok('el asistente busca con Google (Places)', /new gm\.places\.Autocomplete\(inp/.test(src) && /_pendWireSearch/.test(src));
-ok('busca de un toque por nombre o por dirección (findPlaceFromQuery)', /function _pendBuscarTexto\(tipo\)/.test(src) && /findPlaceFromQuery/.test(src) && /_pendBuscarTexto\('nombre'\)/.test(src) && /_pendBuscarTexto\('dir'\)/.test(src));
+ok('busca por nombre o por dirección mostrando VARIAS opciones (textSearch)', /function _pendBuscarTexto\(tipo\)/.test(src) && /svc\.textSearch\(/.test(src) && /_pendBuscarTexto\('nombre'\)/.test(src) && /_pendBuscarTexto\('dir'\)/.test(src));
+ok('lista las opciones y al elegir una cae el pin', /function _pendRenderResultados\(/.test(src) && /function _pendElegirResultado\(i\)/.test(src) && /_pendResultados\[i\]/.test(src) && /_pendMarcar\(r\.lat,r\.lng/.test(src));
+ok('el asistente muestra el mapa para verificar (pin al elegir)', /function _pendInitMap\(/.test(src) && /function _pendPintarPin\(lat,lng\)/.test(src) && /id="pend-map"/.test(src) && /_pendPintarPin\(_pendLatLng\.lat,_pendLatLng\.lng\)/.test(src));
 ok('existe el lector de links (_parseLatLngDeLink) y "Usar link"', /function _parseLatLngDeLink\(/.test(src) && /function _pendUsarLink\(/.test(src) && /function _cliUbicPegarLink\(/.test(src));
+ok('"Ubicar" y el asistente respetan el filtro por vendedor', /function _clientesUbicPendientes\(/.test(src) && /const _sinUbic=_clientesUbicPendientes\(\)\.length/.test(src) && /_clientesUbicPendientes\(\)/.test(src.slice(src.indexOf('function openPendientesUbicacion'))));
 
 // Funcional: el parser de links
 (() => {

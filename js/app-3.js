@@ -671,6 +671,16 @@ function tcLabel(n){return n===0?'Contado':n+' días';}
 // Filtro por vendedor del catálogo de clientes (default: '' = Todos).
 let _cliFiltroVend='';
 function _cliSetFiltroVend(v){_cliFiltroVend=v||'';renderCli();}
+// Clientes que faltan ubicar, respetando el mismo filtro por vendedor que la
+// lista (para que "Ubicar (N)" y el asistente muestren lo mismo que se ve).
+function _clientesUbicPendientes(){
+  let base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  if((typeof esVentas!=='function'||!esVentas())&&_cliFiltroVend){
+    base=(_cliFiltroVend==='none')?base.filter(c=>c.vendedorId==null):base.filter(c=>String(c.vendedorId)===String(_cliFiltroVend));
+  }
+  return base.filter(c=>!c.sedesDe&&(c.lat==null||c.lng==null));
+}
+window._clientesUbicPendientes=_clientesUbicPendientes;
 window._cliSetFiltroVend=_cliSetFiltroVend;
 function renderCli(){
   const acc=$('#cli-acciones');
@@ -685,7 +695,7 @@ function renderCli(){
     filtroHTML=`<select id="cli-filtro-vend" onchange="_cliSetFiltroVend(this.value)" title="Filtrar por vendedor" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:#fff;color:var(--ink)">${opts}</select> `;
   }
   // Cuántos clientes (no-sede) están sin ubicación, para el botón de asignar en tanda.
-  const _sinUbic=(esVentas()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes).filter(c=>!c.sedesDe&&(c.lat==null||c.lng==null)).length;
+  const _sinUbic=_clientesUbicPendientes().length;
   const btnUbicar=(canCrearCliente()&&_sinUbic>0)?` <button class="btn btn-ghost btn-sm" onclick="openPendientesUbicacion()" title="Asignar ubicación a los clientes que no tienen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M12 21s-6-5.686-6-10a6 6 0 0 1 12 0c0 4.314-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg>Ubicar (${_sinUbic})</button>`:'';
   if(acc)acc.innerHTML=filtroHTML+`<button class="btn btn-ghost btn-sm" onclick="openMapaClientes()" title="Ver todos los clientes en el mapa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M9 20l-6 2V5l6-2 6 2 6-2v13l-6 2-6-2z"/><path d="M9 3v15M15 5v15"/></svg>Mapa</button>`+btnUbicar+
     (canCrearCliente()?` <button class="btn btn-ghost btn-sm" id="btn-nuevo-cli" onclick="openCli()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
