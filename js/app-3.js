@@ -668,12 +668,30 @@ function saldoFavor(clienteId){
 }
 window.saldoFavor=saldoFavor;
 function tcLabel(n){return n===0?'Contado':n+' días';}
+// Filtro por vendedor del catálogo de clientes (default: '' = Todos).
+let _cliFiltroVend='';
+function _cliSetFiltroVend(v){_cliFiltroVend=v||'';renderCli();}
+window._cliSetFiltroVend=_cliSetFiltroVend;
 function renderCli(){
   const acc=$('#cli-acciones');
-  if(acc)acc.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="openMapaClientes()" title="Ver todos los clientes en el mapa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M9 20l-6 2V5l6-2 6 2 6-2v13l-6 2-6-2z"/><path d="M9 3v15M15 5v15"/></svg>Mapa</button>`+
+  // Filtro por vendedor (default: Todos). Solo para roles que ven todos los
+  // clientes; el vendedor ya ve únicamente los suyos, así que no le hace falta.
+  let filtroHTML='';
+  if(!esVentas()){
+    const vendConCli=[...new Set(clientes.map(c=>c.vendedorId).filter(v=>v!=null))];
+    const opts='<option value="">Todos los vendedores</option>'+
+      (typeof vendedores!=='undefined'?vendedores:[]).filter(v=>vendConCli.includes(v.id)).sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es')).map(v=>`<option value="${v.id}"${String(_cliFiltroVend)===String(v.id)?' selected':''}>${escHtml(v.nombre)}</option>`).join('')+
+      (clientes.some(c=>c.vendedorId==null)?`<option value="none"${_cliFiltroVend==='none'?' selected':''}>Sin vendedor asignado</option>`:'');
+    filtroHTML=`<select id="cli-filtro-vend" onchange="_cliSetFiltroVend(this.value)" title="Filtrar por vendedor" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:#fff;color:var(--ink)">${opts}</select> `;
+  }
+  if(acc)acc.innerHTML=filtroHTML+`<button class="btn btn-ghost btn-sm" onclick="openMapaClientes()" title="Ver todos los clientes en el mapa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M9 20l-6 2V5l6-2 6 2 6-2v13l-6 2-6-2z"/><path d="M9 3v15M15 5v15"/></svg>Mapa</button>`+
     (canCrearCliente()?` <button class="btn btn-ghost btn-sm" id="btn-nuevo-cli" onclick="openCli()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
     ` <button class="btn btn-ghost btn-sm" onclick="completarRazonSocial()" title="Consultar SAT y rellenar razón social de clientes que no la tienen" style="color:var(--blue)">Completar razón social</button>`:'');
-  const listaBase=esVentas()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  let listaBase=esVentas()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  // Aplicar el filtro por vendedor (si se eligió uno).
+  if(!esVentas()&&_cliFiltroVend){
+    listaBase=(_cliFiltroVend==='none')?listaBase.filter(c=>c.vendedorId==null):listaBase.filter(c=>String(c.vendedorId)===String(_cliFiltroVend));
+  }
   const filasCli=listaBase.slice().reverse().map(c=>{const saldo=saldoCliente(c);
   const esSede=!!c.sedesDe;const padre=esSede?clientes.find(x=>x.id===c.sedesDe):null;
   const nSedes=clientes.filter(x=>x.sedesDe===c.id).length;
