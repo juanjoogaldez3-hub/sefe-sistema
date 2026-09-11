@@ -216,6 +216,7 @@
   let temporizador = null;
   let reintento = null;
   let intentos = 0;
+  let estableTimer = null;       // resetea el backoff solo si la conexión se mantiene
   let vigilante = null;
   let vigilanteAuth = null;      // escucha la renovación del token (RLS)
   let temporizadorResync = null; // espera a que la conexión se estabilice
@@ -552,14 +553,35 @@
     if (p) p.classList.remove('show');
   }
 
-  function pintarConexion(estado) {
-    estadoConexion = estado;
+  // Pintado del indicador con "anti-parpadeo": el estado interno (estadoConexion)
+  // siempre es exacto, pero el TEXTO/color visible no baja a "Conectando…/Sin
+  // conexión" por cortes breves. Si la conexión flapea (cae y vuelve en pocos
+  // segundos), el indicador se queda en "En vivo" y no titila. Solo muestra el
+  // corte si se mantiene caído más de unos segundos.
+  let _visEstado = 'off';
+  let _visTimer = null;
+  const _GRACIA_VIS = 6000;   // cuánto esperar antes de mostrar un corte
+  function _pintarVisual(estado) {
     const dot = document.getElementById('rt-dot');
     const txt = document.getElementById('rt-conn-txt');
     if (!dot) return;
     dot.className = 'rt-dot ' + (estado === 'off' ? '' : estado);
     const etiquetas = { vivo: 'En vivo', conectando: 'Conectando…', caido: 'Sin conexión', off: '' };
     if (txt) txt.textContent = etiquetas[estado] || '';
+    _visEstado = estado;
+  }
+  function pintarConexion(estado) {
+    estadoConexion = estado;                 // estado interno: siempre exacto
+    clearTimeout(_visTimer); _visTimer = null;
+    // Subir a "En vivo" (o apagar) es inmediato.
+    if (estado === 'vivo' || estado === 'off') { _pintarVisual(estado); return; }
+    // Bajar desde "En vivo": esperar la gracia. Si vuelve a "vivo" antes, no se
+    // muestra el corte (sin parpadeo). Si ya no estaba en vivo, mostrar normal.
+    if (_visEstado === 'vivo') {
+      _visTimer = setTimeout(() => { _visTimer = null; if (estadoConexion !== 'vivo') _pintarVisual(estadoConexion); }, _GRACIA_VIS);
+    } else {
+      _pintarVisual(estado);
+    }
   }
 
   // ============================================================
@@ -681,11 +703,16 @@
 
       canal.subscribe((estado) => {
         if (estado === 'SUBSCRIBED') {
-          intentos = 0;
           pintarConexion('vivo');
+          // Solo resetear el contador de reintentos si la conexión se MANTIENE
+          // estable un rato. Si vuelve a caerse antes, el backoff sigue creciendo
+          // (2s, 4s, 8s…) en vez de martillar cada 2s (que es lo que parpadeaba).
+          clearTimeout(estableTimer);
+          estableTimer = setTimeout(() => { if (estadoConexion === 'vivo') intentos = 0; }, 12000);
           if (huboCaida) { huboCaida = false; programarResincronizacion(); }
         } else if (estado === 'CHANNEL_ERROR' || estado === 'TIMED_OUT' || estado === 'CLOSED') {
           if (!activo) return;
+          clearTimeout(estableTimer);
           huboCaida = true;
           pintarConexion('caido');
           reconectarConEspera();
@@ -769,6 +796,7 @@
     if (vigilanteAuth) { try { vigilanteAuth.unsubscribe(); } catch (e) {} vigilanteAuth = null; }
     clearTimeout(temporizadorResync);
     temporizadorResync = null;
+    clearTimeout(estableTimer);
     clearInterval(vigilante);
     clearTimeout(temporizador);
     clearTimeout(reintento);

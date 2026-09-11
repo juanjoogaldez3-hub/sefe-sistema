@@ -379,6 +379,12 @@ console.log('\n═══ 16. PARADA LIMPIA ═══');
 ctx.detenerRealtime();
 ok('queda inactivo', ctx._realtime.estado().activo===false);
 
+console.log('\n═══ 17. ANTI-PARPADEO DEL INDICADOR ═══');
+const _rtSrc = fs.readFileSync(BASE+'realtime.js','utf8');
+ok('subir a "En vivo" es inmediato', /if \(estado === 'vivo' \|\| estado === 'off'\) \{ _pintarVisual\(estado\); return; \}/.test(_rtSrc));
+ok('un corte breve no se muestra (gracia antes de "Conectando…")', /_visEstado === 'vivo'\) \{[\s\S]*?setTimeout\([\s\S]*?estadoConexion !== 'vivo'\) _pintarVisual\(estadoConexion\)/.test(_rtSrc));
+ok('el backoff solo se resetea si la conexión se mantiene estable', /estableTimer = setTimeout\(\(\) => \{ if \(estadoConexion === 'vivo'\) intentos = 0; \}, 12000\)/.test(_rtSrc));
+
 console.log('\n' + '═'.repeat(46));
 console.log(fallos===0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron`
                        : `✗ ${fallos} de ${pruebas} pruebas fallaron`);
