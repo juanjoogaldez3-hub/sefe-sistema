@@ -1255,8 +1255,12 @@ function _pendRender(){
     <div style="font-size:12px;color:var(--muted-2)">Cliente ${_pendIdx+1} de ${_pendLista.length}</div>
     <div style="font-weight:700;font-size:15px;color:var(--ink);margin:2px 0 2px">${escHtml(c.nombre)}</div>
     ${dir?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Dirección registrada: ${escHtml(dir)}</div>`:'<div style="font-size:12px;color:var(--muted-2);margin-bottom:8px">Sin dirección registrada</div>'}
-    <label>Buscar en Google</label>
-    <input id="pend-search" autocomplete="off" placeholder="Dirección o nombre del negocio…" value="${escHtml(dir)}">
+    <label>Buscar en Google (de un toque)</label>
+    <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="_pendBuscarTexto('nombre')">🔎 Por nombre</button>
+      ${dir?`<button class="btn btn-ghost btn-sm" onclick="_pendBuscarTexto('dir')">🔎 Por dirección</button>`:''}
+    </div>
+    <input id="pend-search" autocomplete="off" placeholder="…o escribí a mano (negocio o dirección)" value="">
     <label style="display:block;margin-top:10px">o pegá un link de Google Maps / Waze / WhatsApp</label>
     <div style="display:flex;gap:6px"><input id="pend-link" placeholder="https://maps.google.com/…  o  14.63, -90.51" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();_pendUsarLink();}"><button class="btn btn-ghost btn-sm" onclick="_pendUsarLink()">Usar</button></div>
     <div id="pend-status" style="font-size:12.5px;margin-top:10px;color:var(--muted)"></div>
@@ -1281,6 +1285,29 @@ function _pendMarcar(lat,lng,txt){
   _pendLatLng={lat:Math.round(lat*1e6)/1e6,lng:Math.round(lng*1e6)/1e6};
   const s=document.getElementById('pend-status'); if(s)s.innerHTML='✓ Ubicación tomada: <b>'+_pendLatLng.lat+', '+_pendLatLng.lng+'</b>'+(txt?' · '+escHtml(txt):'')+' <span style="color:var(--muted-2)">— tocá Guardar</span>';
 }
+// Buscar de un toque en Google por NOMBRE o por DIRECCIÓN del cliente actual
+// (usa Places findPlaceFromQuery). Si lo encuentra, deja el pin listo.
+async function _pendBuscarTexto(tipo){
+  const c=_pendLista[_pendIdx]; if(!c)return;
+  const q=((tipo==='nombre'?c.nombre:c.direccion)||'').trim();
+  const s=document.getElementById('pend-status');
+  if(!q){if(s)s.innerHTML='<span style="color:var(--danger)">Este cliente no tiene '+(tipo==='nombre'?'nombre':'dirección')+' para buscar.</span>';return;}
+  if(s)s.textContent='Buscando en Google…';
+  try{
+    if(typeof GOOGLE_MAPS_KEY==='undefined'||!GOOGLE_MAPS_KEY){if(s)s.textContent='Falta la llave de Google';return;}
+    const gm=await _cargarGoogleMaps();
+    if(!gm.places||!gm.places.PlacesService){if(s)s.textContent='Buscador no disponible';return;}
+    const svc=new gm.places.PlacesService(document.createElement('div'));
+    svc.findPlaceFromQuery({query:q+', Guatemala',fields:['geometry','name','formatted_address']},(res,status)=>{
+      if(status===gm.places.PlacesServiceStatus.OK && res && res[0] && res[0].geometry && res[0].geometry.location){
+        const p=res[0],loc=p.geometry.location; _pendMarcar(loc.lat(),loc.lng(),p.name||p.formatted_address||'');
+      }else{
+        if(s)s.innerHTML='<span style="color:var(--danger)">No lo encontré '+(tipo==='nombre'?'por nombre':'por dirección')+'. Probá el otro botón, escribí a mano, o pegá un link.</span>';
+      }
+    });
+  }catch(e){if(s)s.textContent='No se pudo buscar (revisá la conexión)';}
+}
+window._pendBuscarTexto=_pendBuscarTexto;
 function _pendUsarLink(){
   const inp=document.getElementById('pend-link'); if(!inp)return;
   const r=_parseLatLngDeLink(inp.value);
