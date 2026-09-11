@@ -879,6 +879,7 @@ function renderCliDet(){
           <button id="cli-ubic-btn-buscar" class="btn btn-ghost btn-sm" onclick="_cliUbicBuscar()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Buscar</button>
         </div>
         <div id="cli-ubic-resultados" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px;margin-bottom:8px"><input id="cli-ubic-link" placeholder="o pegá un link de Google Maps / Waze / WhatsApp…" style="flex:1;min-width:0" onkeydown="if(event.key==='Enter'){event.preventDefault();_cliUbicPegarLink();}"><button class="btn btn-ghost btn-sm" onclick="_cliUbicPegarLink()">Usar link</button></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <button class="btn btn-primary btn-sm" onclick="_cliUbicGPS()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>Usar mi ubicación actual (GPS)</button>
           <button class="btn btn-ghost btn-sm" onclick="_cliUbicGuardar(${c.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Guardar ubicación</button>
@@ -1114,6 +1115,15 @@ function _cliUbicElegir(lat,lng){
   toast('Ubicación encontrada','Revisá el pin en el mapa y tocá Guardar');
 }
 window._cliUbicElegir=_cliUbicElegir;
+// Pegar un link de Google Maps / Waze / WhatsApp en la ficha → cae el pin.
+function _cliUbicPegarLink(){
+  const inp=document.getElementById('cli-ubic-link'); if(!inp)return;
+  const r=_parseLatLngDeLink(inp.value);
+  if(!r){toast('No pude leer el link','Si es un link corto (maps.app.goo.gl), abrilo y pegá el link largo, o pegá "lat, lng"',true);return;}
+  if(_cliMapa){_cliMapa.center(r.lat,r.lng,17);_cliMapa.setPin(r.lat,r.lng);}
+  toast('Ubicación del link tomada','Revisá el pin en el mapa y tocá Guardar');
+}
+window._cliUbicPegarLink=_cliUbicPegarLink;
 
 // ── Mapa de TODOS los clientes ──────────────────────────────
 // Ver a todos los clientes pineados en un solo mapa (Google o, si falla, OSM),
@@ -1197,6 +1207,100 @@ function _mapaTodosPintar(){
 window._mapaTodosPintar=_mapaTodosPintar;
 function _mapaTodosVerFicha(id){ if(typeof closeMod==='function')closeMod(); if(typeof abrirCliente==='function')abrirCliente(id); }
 window._mapaTodosVerFicha=_mapaTodosVerFicha;
+
+// Saca lat/lng de un link de Google Maps / Waze, o de un "lat, lng" pegado.
+// Cubre los formatos comunes; los links CORTOS (maps.app.goo.gl / goo.gl) no
+// traen las coordenadas, así que devuelven null (hay que abrirlos y copiar el
+// link largo). Devuelve {lat,lng} o null.
+function _parseLatLngDeLink(s){
+  s=(s||'').trim(); if(!s)return null;
+  const val=(a,b)=>{const la=parseFloat(a),ln=parseFloat(b);return (isFinite(la)&&isFinite(ln)&&Math.abs(la)<=90&&Math.abs(ln)<=180)?{lat:la,lng:ln}:null;};
+  let m;
+  // Google Maps: /@lat,lng  ·  ?q=lat,lng  ·  &ll=lat,lng  ·  q=loc:lat,lng
+  m=s.match(/[@=](?:loc:)?(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/i); if(m){const r=val(m[1],m[2]);if(r)return r;}
+  // Waze: ?ll=lat,lng  ·  &ll=lat%2Clng
+  m=s.match(/ll=(-?\d{1,2}\.\d+)[,%]+(-?\d{1,3}\.\d+)/i); if(m){const r=val(m[1],m[2]);if(r)return r;}
+  // Google place URL: !3dLAT!4dLNG
+  m=s.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/); if(m){const r=val(m[1],m[2]);if(r)return r;}
+  // "lat, lng" pegado directo
+  m=s.match(/^(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/); if(m){const r=val(m[1],m[2]);if(r)return r;}
+  return null;
+}
+window._parseLatLngDeLink=_parseLatLngDeLink;
+
+// ── Asignar ubicaciones en tanda (clientes sin pin) ─────────
+// Un asistente que recorre los clientes SIN ubicación uno por uno: por cada
+// uno, buscás en Google o pegás un link (Maps/WhatsApp) y Guardás → siguiente.
+let _pendLista=[], _pendIdx=0, _pendLatLng=null;
+function openPendientesUbicacion(){
+  const base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  _pendLista=base.filter(c=>!c.sedesDe&&(c.lat==null||c.lng==null)).sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es'));
+  _pendIdx=0; _pendLatLng=null;
+  if(!_pendLista.length){toast('¡Todo ubicado!','No hay clientes sin ubicación',false);return;}
+  openMod('Asignar ubicaciones','<div id="pend-wrap"></div>',null);
+  const sv=document.getElementById('m-save'); if(sv)sv.style.display='none';
+  _pendRender();
+}
+window.openPendientesUbicacion=openPendientesUbicacion;
+function _pendRender(){
+  const wrap=document.getElementById('pend-wrap'); if(!wrap)return;
+  if(_pendIdx>=_pendLista.length){
+    wrap.innerHTML='<div style="text-align:center;padding:22px"><div style="font-size:34px">✅</div><div style="font-weight:700;margin-top:6px">¡Listo!</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Terminaste de asignar ubicaciones.</div><button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="closeMod()">Cerrar</button></div>';
+    return;
+  }
+  _pendLatLng=null;
+  const c=_pendLista[_pendIdx];
+  const dir=(c.direccion&&c.direccion.toLowerCase()!=='ciudad')?c.direccion:'';
+  wrap.innerHTML=`
+    <div style="font-size:12px;color:var(--muted-2)">Cliente ${_pendIdx+1} de ${_pendLista.length}</div>
+    <div style="font-weight:700;font-size:15px;color:var(--ink);margin:2px 0 2px">${escHtml(c.nombre)}</div>
+    ${dir?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Dirección registrada: ${escHtml(dir)}</div>`:'<div style="font-size:12px;color:var(--muted-2);margin-bottom:8px">Sin dirección registrada</div>'}
+    <label>Buscar en Google</label>
+    <input id="pend-search" autocomplete="off" placeholder="Dirección o nombre del negocio…" value="${escHtml(dir)}">
+    <label style="display:block;margin-top:10px">o pegá un link de Google Maps / Waze / WhatsApp</label>
+    <div style="display:flex;gap:6px"><input id="pend-link" placeholder="https://maps.google.com/…  o  14.63, -90.51" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();_pendUsarLink();}"><button class="btn btn-ghost btn-sm" onclick="_pendUsarLink()">Usar</button></div>
+    <div id="pend-status" style="font-size:12.5px;margin-top:10px;color:var(--muted)"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      <button class="btn btn-primary btn-sm" onclick="_pendGuardar()">Guardar y siguiente</button>
+      <button class="btn btn-ghost btn-sm" onclick="_pendSaltar()">Saltar</button>
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeMod()">Cerrar</button>
+    </div>`;
+  setTimeout(_pendWireSearch,0);
+}
+async function _pendWireSearch(){
+  try{
+    if(typeof GOOGLE_MAPS_KEY==='undefined'||!GOOGLE_MAPS_KEY||_gmapsAuthFail)return;
+    const inp=document.getElementById('pend-search'); if(!inp)return;
+    const gm=await _cargarGoogleMaps();
+    if(!gm.places||!gm.places.Autocomplete||!document.getElementById('pend-search'))return;
+    const ac=new gm.places.Autocomplete(inp,{fields:['geometry','formatted_address','name'],componentRestrictions:{country:'gt'}});
+    ac.addListener('place_changed',()=>{const pl=ac.getPlace();if(pl&&pl.geometry&&pl.geometry.location){const loc=pl.geometry.location;_pendMarcar(loc.lat(),loc.lng(),pl.formatted_address||pl.name||'');}});
+  }catch(e){console.error('pend search',e);}
+}
+function _pendMarcar(lat,lng,txt){
+  _pendLatLng={lat:Math.round(lat*1e6)/1e6,lng:Math.round(lng*1e6)/1e6};
+  const s=document.getElementById('pend-status'); if(s)s.innerHTML='✓ Ubicación tomada: <b>'+_pendLatLng.lat+', '+_pendLatLng.lng+'</b>'+(txt?' · '+escHtml(txt):'')+' <span style="color:var(--muted-2)">— tocá Guardar</span>';
+}
+function _pendUsarLink(){
+  const inp=document.getElementById('pend-link'); if(!inp)return;
+  const r=_parseLatLngDeLink(inp.value);
+  if(!r){const s=document.getElementById('pend-status'); if(s)s.innerHTML='<span style="color:var(--danger)">No pude leer coordenadas de ese link. Si es un link corto (maps.app.goo.gl), abrilo y pegá el link largo, o pegá "lat, lng".</span>';return;}
+  _pendMarcar(r.lat,r.lng,'del link');
+}
+window._pendUsarLink=_pendUsarLink;
+async function _pendGuardar(){
+  const c=_pendLista[_pendIdx]; if(!c)return;
+  if(!_pendLatLng){const s=document.getElementById('pend-status'); if(s)s.innerHTML='<span style="color:var(--danger)">Primero elegí una ubicación (buscá o pegá un link).</span>';return;}
+  c.lat=_pendLatLng.lat; c.lng=_pendLatLng.lng;
+  const ok=await (typeof guardarCliente==='function'?guardarCliente(c):Promise.resolve());
+  if(ok===false){toast('No se pudo guardar','Revisá la conexión',true);return;}
+  if(typeof logAudit==='function')logAudit('Ubicación de cliente',(c.nombre||'#'+c.id)+' · '+c.lat+', '+c.lng);
+  _pendIdx++; _pendRender();
+  if(typeof renderCli==='function'){try{renderCli();}catch(e){}}
+}
+window._pendGuardar=_pendGuardar;
+function _pendSaltar(){ _pendIdx++; _pendRender(); }
+window._pendSaltar=_pendSaltar;
 // Genera el estado de cuenta del cliente en PDF (para imprimir o enviar)
 function estadoCuentaPDF(cliId){
   const c=clientes.find(x=>x.id===cliId);if(!c)return;
