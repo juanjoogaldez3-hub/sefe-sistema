@@ -1231,10 +1231,10 @@ window._parseLatLngDeLink=_parseLatLngDeLink;
 // ── Asignar ubicaciones en tanda (clientes sin pin) ─────────
 // Un asistente que recorre los clientes SIN ubicación uno por uno: por cada
 // uno, buscás en Google o pegás un link (Maps/WhatsApp) y Guardás → siguiente.
-let _pendLista=[], _pendIdx=0, _pendLatLng=null;
+let _pendLista=[], _pendIdx=0, _pendLatLng=null, _pendMapaObj=null, _pendResultados=[];
 function openPendientesUbicacion(){
-  const base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
-  _pendLista=base.filter(c=>!c.sedesDe&&(c.lat==null||c.lng==null)).sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es'));
+  const base=(typeof _clientesUbicPendientes==='function')?_clientesUbicPendientes():clientes.filter(c=>!c.sedesDe&&(c.lat==null||c.lng==null));
+  _pendLista=base.slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es'));
   _pendIdx=0; _pendLatLng=null;
   if(!_pendLista.length){toast('¡Todo ubicado!','No hay clientes sin ubicación',false);return;}
   openMod('Asignar ubicaciones','<div id="pend-wrap"></div>',null);
@@ -1248,7 +1248,7 @@ function _pendRender(){
     wrap.innerHTML='<div style="text-align:center;padding:22px"><div style="font-size:34px">✅</div><div style="font-weight:700;margin-top:6px">¡Listo!</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Terminaste de asignar ubicaciones.</div><button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="closeMod()">Cerrar</button></div>';
     return;
   }
-  _pendLatLng=null;
+  _pendLatLng=null; _pendResultados=[]; _pendMapaObj=null;
   const c=_pendLista[_pendIdx];
   const dir=(c.direccion&&c.direccion.toLowerCase()!=='ciudad')?c.direccion:'';
   wrap.innerHTML=`
@@ -1261,16 +1261,53 @@ function _pendRender(){
       ${dir?`<button class="btn btn-ghost btn-sm" onclick="_pendBuscarTexto('dir')">🔎 Por dirección</button>`:''}
     </div>
     <input id="pend-search" autocomplete="off" placeholder="…o escribí a mano (negocio o dirección)" value="">
-    <label style="display:block;margin-top:10px">o pegá un link de Google Maps / Waze / WhatsApp</label>
-    <div style="display:flex;gap:6px"><input id="pend-link" placeholder="https://maps.google.com/…  o  14.63, -90.51" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();_pendUsarLink();}"><button class="btn btn-ghost btn-sm" onclick="_pendUsarLink()">Usar</button></div>
-    <div id="pend-status" style="font-size:12.5px;margin-top:10px;color:var(--muted)"></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+    <div style="display:flex;gap:6px;margin-top:8px"><input id="pend-link" placeholder="o pegá un link de Maps / Waze / WhatsApp  ·  o  14.63, -90.51" style="flex:1;min-width:0" onkeydown="if(event.key==='Enter'){event.preventDefault();_pendUsarLink();}"><button class="btn btn-ghost btn-sm" onclick="_pendUsarLink()">Usar</button></div>
+    <div id="pend-resultados" style="margin-top:8px"></div>
+    <div id="pend-map" style="height:230px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#eef1ea;margin-top:8px"></div>
+    <div id="pend-status" style="font-size:12.5px;margin-top:8px;color:var(--muted)">Buscá arriba (por nombre suele ser lo más certero), verificá el pin en el mapa y Guardá.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
       <button class="btn btn-primary btn-sm" onclick="_pendGuardar()">Guardar y siguiente</button>
       <button class="btn btn-ghost btn-sm" onclick="_pendSaltar()">Saltar</button>
       <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeMod()">Cerrar</button>
     </div>`;
-  setTimeout(_pendWireSearch,0);
+  setTimeout(()=>{_pendWireSearch();_pendInitMap();},0);
 }
+// Mapa del asistente (Google). Muestra el pin elegido; se puede tocar/arrastrar.
+async function _pendInitMap(){
+  const cont=document.getElementById('pend-map'); if(!cont)return;
+  try{
+    if(typeof GOOGLE_MAPS_KEY==='undefined'||!GOOGLE_MAPS_KEY){cont.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted-2);font-size:12px">Mapa no disponible (falta la llave de Google).</div>';return;}
+    const gm=await _cargarGoogleMaps();
+    if(!document.getElementById('pend-map'))return;
+    const map=new gm.Map(cont,{center:{lat:14.6349,lng:-90.5069},zoom:11,mapTypeControl:false,streetViewControl:false});
+    _pendMapaObj={gm,map,marker:null};
+    map.addListener('click',(e)=>_pendMarcar(e.latLng.lat(),e.latLng.lng(),'(tocado en el mapa)'));
+    if(_pendLatLng)_pendPintarPin(_pendLatLng.lat,_pendLatLng.lng);
+  }catch(e){cont.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted-2);font-size:12px">No se pudo cargar el mapa.</div>';}
+}
+function _pendPintarPin(lat,lng){
+  if(!_pendMapaObj)return;
+  const {gm,map}=_pendMapaObj;
+  map.setCenter({lat,lng}); map.setZoom(17);
+  if(_pendMapaObj.marker){_pendMapaObj.marker.setPosition({lat,lng});}
+  else{
+    _pendMapaObj.marker=new gm.Marker({position:{lat,lng},map,draggable:true});
+    _pendMapaObj.marker.addListener('dragend',()=>{const p=_pendMapaObj.marker.getPosition();_pendMarcar(p.lat(),p.lng(),'(ajustado a mano)');});
+  }
+}
+function _pendRenderResultados(){
+  const box=document.getElementById('pend-resultados'); if(!box)return;
+  if(!_pendResultados.length){box.innerHTML='';return;}
+  box.innerHTML='<div style="font-size:11px;color:var(--muted-2);margin:2px 2px 4px">Elegí la ubicación correcta:</div>'+
+    '<div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;max-height:170px;overflow-y:auto">'+
+    _pendResultados.map((r,i)=>`<button class="btn btn-ghost btn-sm" style="display:block;width:100%;text-align:left;white-space:normal;border:0;border-top:${i?'1px solid var(--line)':'0'};border-radius:0;padding:8px 10px;font-size:12.5px" onclick="_pendElegirResultado(${i})">📍 <b>${escHtml(r.nombre||'(sin nombre)')}</b>${r.dir?`<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:1px">${escHtml(r.dir)}</div>`:''}</button>`).join('')+
+    '</div>';
+}
+function _pendElegirResultado(i){
+  const r=_pendResultados[i]; if(!r)return;
+  _pendMarcar(r.lat,r.lng,r.nombre||r.dir||'');
+}
+window._pendElegirResultado=_pendElegirResultado;
 async function _pendWireSearch(){
   try{
     if(typeof GOOGLE_MAPS_KEY==='undefined'||!GOOGLE_MAPS_KEY||_gmapsAuthFail)return;
@@ -1283,14 +1320,17 @@ async function _pendWireSearch(){
 }
 function _pendMarcar(lat,lng,txt){
   _pendLatLng={lat:Math.round(lat*1e6)/1e6,lng:Math.round(lng*1e6)/1e6};
-  const s=document.getElementById('pend-status'); if(s)s.innerHTML='✓ Ubicación tomada: <b>'+_pendLatLng.lat+', '+_pendLatLng.lng+'</b>'+(txt?' · '+escHtml(txt):'')+' <span style="color:var(--muted-2)">— tocá Guardar</span>';
+  const s=document.getElementById('pend-status'); if(s)s.innerHTML='✓ Ubicación tomada: <b>'+_pendLatLng.lat+', '+_pendLatLng.lng+'</b>'+(txt?' · '+escHtml(txt):'')+' <span style="color:var(--muted-2)">— revisá el mapa y tocá Guardar</span>';
+  _pendPintarPin(_pendLatLng.lat,_pendLatLng.lng);
 }
-// Buscar de un toque en Google por NOMBRE o por DIRECCIÓN del cliente actual
-// (usa Places findPlaceFromQuery). Si lo encuentra, deja el pin listo.
+// Buscar en Google por NOMBRE o por DIRECCIÓN del cliente actual. Usa
+// textSearch, que devuelve VARIAS opciones (no sólo la primera): las
+// listamos para que el usuario elija la correcta y verifique en el mapa.
 async function _pendBuscarTexto(tipo){
   const c=_pendLista[_pendIdx]; if(!c)return;
   const q=((tipo==='nombre'?c.nombre:c.direccion)||'').trim();
   const s=document.getElementById('pend-status');
+  _pendResultados=[]; _pendRenderResultados();
   if(!q){if(s)s.innerHTML='<span style="color:var(--danger)">Este cliente no tiene '+(tipo==='nombre'?'nombre':'dirección')+' para buscar.</span>';return;}
   if(s)s.textContent='Buscando en Google…';
   try{
@@ -1298,9 +1338,11 @@ async function _pendBuscarTexto(tipo){
     const gm=await _cargarGoogleMaps();
     if(!gm.places||!gm.places.PlacesService){if(s)s.textContent='Buscador no disponible';return;}
     const svc=new gm.places.PlacesService(document.createElement('div'));
-    svc.findPlaceFromQuery({query:q+', Guatemala',fields:['geometry','name','formatted_address']},(res,status)=>{
-      if(status===gm.places.PlacesServiceStatus.OK && res && res[0] && res[0].geometry && res[0].geometry.location){
-        const p=res[0],loc=p.geometry.location; _pendMarcar(loc.lat(),loc.lng(),p.name||p.formatted_address||'');
+    svc.textSearch({query:q+', Guatemala'},(res,status)=>{
+      if(status===gm.places.PlacesServiceStatus.OK && res && res.length){
+        _pendResultados=res.slice(0,6).filter(p=>p.geometry&&p.geometry.location).map(p=>({lat:p.geometry.location.lat(),lng:p.geometry.location.lng(),nombre:p.name||'',dir:p.formatted_address||''}));
+        _pendRenderResultados();
+        if(s)s.innerHTML=_pendResultados.length>1?'Elegí la opción correcta de la lista 👇':(_pendResultados.length?'Encontré una opción 👇':'<span style="color:var(--danger)">Sin resultados. Probá el otro botón, escribí a mano, o pegá un link.</span>');
       }else{
         if(s)s.innerHTML='<span style="color:var(--danger)">No lo encontré '+(tipo==='nombre'?'por nombre':'por dirección')+'. Probá el otro botón, escribí a mano, o pegá un link.</span>';
       }
