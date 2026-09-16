@@ -599,11 +599,17 @@ function _gasQuien(g){
   return pil||g.vehiculo||'—';
 }
 // Rendimiento km/gal: km recorridos desde la carga anterior del mismo
-// piloto ÷ galones de esta carga.
+// VEHÍCULO ÷ galones de esta carga. El odómetro (kilometraje) es del
+// vehículo, no del piloto: un mismo piloto puede manejar varios vehículos
+// (y un vehículo lo manejan varios pilotos), así que comparar por piloto
+// mezclaba odómetros de vehículos distintos y daba rendimientos absurdos.
+// Sin placa no se puede saber de qué odómetro se trata → no se calcula.
 function _gasRendimiento(g){
   if(g.kilometraje==null||!(Number(g.galones)>0))return null;
+  const veh=String(g.vehiculo||'').trim().toUpperCase();
+  if(!veh)return null;
   const prev=(typeof gasolina!=='undefined'?gasolina:[])
-    .filter(x=>String(x.id)!==String(g.id)&&String(x.pilotoId)===String(g.pilotoId)&&x.kilometraje!=null&&Number(x.kilometraje)<Number(g.kilometraje))
+    .filter(x=>String(x.id)!==String(g.id)&&String(x.vehiculo||'').trim().toUpperCase()===veh&&x.kilometraje!=null&&Number(x.kilometraje)<Number(g.kilometraje))
     .sort((a,b)=>Number(b.kilometraje)-Number(a.kilometraje))[0];
   if(!prev)return null;
   const km=Number(g.kilometraje)-Number(prev.kilometraje);
