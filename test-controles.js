@@ -148,7 +148,7 @@ ok('registra el gasto en Bancos (categoría combustible, origen gasolina)', /cat
 ok('al borrar una carga se anula su gasto en Bancos', /_gasAnularMov\(g\.movPoliza\)/.test(src));
 ok('tiene reporte de gasolina (detalle PDF + Excel)', /function reporteGasolinaPDF\(/.test(src) && /function reporteGasolinaExcel\(/.test(src) && /CONSUMO DE COMBUSTIBLE/.test(src));
 ok('tiene selector de reportes (reporteGasolinaUI)', /function reporteGasolinaUI\(/.test(src) && /onclick="reporteGasolinaUI\(\)"/.test(html));
-ok('tiene resumen por piloto y consumo por mes', /function _reporteGasPiloto\(/.test(src) && /function _reporteGasMes\(/.test(src) && /RESUMEN POR PILOTO/.test(src) && /CONSUMO POR MES/.test(src));
+ok('tiene resumen por unidad y consumo por mes', /function _reporteGasUnidad\(/.test(src) && /function _reporteGasMes\(/.test(src) && /RESUMEN POR UNIDAD/.test(src) && /CONSUMO POR MES/.test(src));
 
 console.log('\n═══ Capa de datos · Gasolina (db.js) ═══');
 ok('db.js mapea/guarda gasolina (mapGasolinaFromDB / guardarGasolina)', /function mapGasolinaFromDB\(/.test(dbjs) && /async function guardarGasolina\(/.test(dbjs));
