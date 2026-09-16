@@ -536,6 +536,14 @@ function mostrarAlertaSaldo(cli){
 window.mostrarAlertaSaldo=mostrarAlertaSaldo;
 // (El manejo del input de cliente ahora lo hace el autocompletado en setupAutocomplete)
 function precioCliente(cli,prod){return (cli&&cli.precios&&cli.precios[prod.id]!=null)?cli.precios[prod.id]:prod.precio;}
+// ── Cálculo de importes COMO LO HACE SAT ──────────────────────────────
+// SAT redondea el PRECIO UNITARIO a 2 decimales (centavos) ANTES de
+// multiplicar por la cantidad. Si un precio trae 3 decimales (ej. Q1.415),
+// hacer la cuenta al precio completo (360×1.415=509.40) daba un total que
+// NO cuadraba con el certificado (360×1.42=511.20). Redondeando el precio
+// primero, el total de SEFE queda igual al de SAT.
+function _cent(n){return Math.round((Number(n)||0)*100)/100;}
+function _impLin(it){return _cent(_cent(it.precio)*(Number(it.cantidad)||0)-(Number(it.descuento)||0));}
 // Guarda los precios del pedido actual en la ficha del cliente (lista de precios por cliente)
 function guardarPreciosAlCliente(){
   const cli=clienteSel();
@@ -667,9 +675,9 @@ function render(){
     <input type="number" min="1" value="${it.cantidad}" style="${ex?'border-color:var(--danger)':''}" oninput="updLive(${i},'cantidad',this.value)" onblur="render()">
     <input type="number" min="0" step="0.01" value="${it.precio}" oninput="updLive(${i},'precio',this.value)" onblur="render()">
     <input type="number" min="0" step="0.01" value="${it.descuento}" oninput="updLive(${i},'descuento',this.value)" onblur="render()">
-    <div style="text-align:right;font-weight:600" class="num">${money(it.cantidad*it.precio-it.descuento)}</div>
+    <div style="text-align:right;font-weight:600" class="num">${money(_impLin(it))}</div>
     <button class="x" onclick="rm(${i})">×</button></div>`;}).join('');
-  const total=cart.reduce((s,it)=>s+(it.cantidad*it.precio-it.descuento),0);
+  const total=_cent(cart.reduce((s,it)=>s+_impLin(it),0));
   $('#s-base').textContent=money(total/1.12);$('#s-iva').textContent=money(total-total/1.12);$('#s-tot').textContent=money(total);
   const sin=cart.filter(it=>it.cantidad>avail(it));
   $('#n-stk').style.display=sin.length?'flex':'none';
@@ -684,18 +692,18 @@ window.updLive=(i,k,v)=>{
   cart[i][k]=Number(v)||0;
   // El descuento no puede superar el importe de la línea (dejaba totales negativos)
   if(k==='descuento'||k==='cantidad'||k==='precio'){
-    const it=cart[i], tope=(Number(it.cantidad)||0)*(Number(it.precio)||0);
+    const it=cart[i], tope=_cent(it.precio)*(Number(it.cantidad)||0);
     if((Number(it.descuento)||0)>tope)it.descuento=Math.round(tope*100)/100;
     if((Number(it.descuento)||0)<0)it.descuento=0;
   }
   // Recalcula solo los totales y el subtotal de la fila, sin redibujar inputs
-  const total=cart.reduce((s,it)=>s+(it.cantidad*it.precio-it.descuento),0);
+  const total=_cent(cart.reduce((s,it)=>s+_impLin(it),0));
   if($('#s-base'))$('#s-base').textContent=money(total/1.12);
   if($('#s-iva'))$('#s-iva').textContent=money(total-total/1.12);
   if($('#s-tot'))$('#s-tot').textContent=money(total);
   // Actualiza el subtotal visible de la fila editada
   const fila=document.querySelectorAll('.li')[i];
-  if(fila){const sub=fila.querySelector('.num');if(sub)sub.textContent=money(cart[i].cantidad*cart[i].precio-cart[i].descuento);}
+  if(fila){const sub=fila.querySelector('.num');if(sub)sub.textContent=money(_impLin(cart[i]));}
 };
 window.rm=i=>{cart.splice(i,1);render();};
 
@@ -703,8 +711,11 @@ $('#f-go').onclick=async()=>{
   const cli=clientes.find(c=>c.id===Number($('#f-cli').value));
   if(!cli){toast('Seleccioná un cliente','Buscá por nombre o NIT en el campo de cliente',true);return;}
   if(esVentas()&&cli.vendedorId!==miVendedorId()){toast('Cliente no asignado','Solo podés crear pedidos para tus clientes',true);return;}
-  const total=cart.reduce((s,it)=>s+(it.cantidad*it.precio-it.descuento),0);
+  const total=_cent(cart.reduce((s,it)=>s+_impLin(it),0));
   const totales={total,baseSinIva:total/1.12,iva:total-total/1.12};
+  // Guardar los precios redondeados a centavos (como SAT), para que el detalle
+  // y el total del documento coincidan con lo que se certifica.
+  const itemsPed=cart.map(it=>({...it,precio:_cent(it.precio)}));
   const _nitPed=leerNitPedido(cli);
   if(editId){
     const f=documentos.find(d=>d.id===editId);
@@ -720,7 +731,7 @@ $('#f-go').onclick=async()=>{
     });
     const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
     const subVendEd=esVendedorCanal(vend?.nombre)?(cli.subVendedorNombre||null):null;
-    Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,subVendedorNombre:subVendEd,items:cart.map(it=>({...it})),totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre});
+    Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,subVendedorNombre:subVendEd,items:itemsPed,totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre});
     toast('✓ Pedido actualizado',refPed(f)+' · inventario ajustado');
     logAudit('Pedido editado',refPed(f)+' · '+cli.nombre+' · '+money(totales.total));
     if(typeof guardarDocumento==='function')guardarDocumento(f);
@@ -733,7 +744,7 @@ $('#f-go').onclick=async()=>{
     // temporal nunca puede coincidir con otro documento (evita facturar el equivocado).
     const nuevoId=-Date.now();
     const doc={id:nuevoId,numero:corr,tipoDoc:'pedido',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend?.id,vendedorNombre:vend?.nombre,subVendedorNombre:subVend,
-      items:cart.map(it=>({...it})),totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre,_nuevo:true};
+      items:itemsPed,totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre,_nuevo:true};
     documentos.push(doc);corr++;
     logAudit('Pedido creado','PED-'+padn(doc.numero)+' · '+cli.nombre+' · '+money(totales.total));
     // Esperamos el id real de la base ANTES de dibujar la lista, para que los
