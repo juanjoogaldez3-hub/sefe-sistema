@@ -59,5 +59,21 @@ console.log('\n═══ Otra cuenta: no se confunde ═══');
 ctx = ctxCon([entrada()]);
 ok('cuenta distinta → null', ctx.__f(F, { cuentaBancoId: 9, monto: 575 }) === null);
 
+console.log('\n═══ Cobro en ruta con SOBREPAGO: el banco tiene el depósito completo ═══');
+// El banco registró el depósito COMPLETO (Q1000), pero el abono aplicado a la
+// factura fue Q760 (el resto quedó como saldo a favor). Antes no cuadraba el
+// monto y el movimiento quedaba huérfano. Ahora casa por referencia + monto ≥.
+ctx = ctxCon([{ id: 700, anulado: false, origen: 'cobro', origenId: 2667, cuentaId: 5, monto: 1000, referencia: '29544249' }]);
+r = ctx.__f(F, { cuentaBancoId: 5, monto: 760, referencia: '29544249' });
+ok('encuentra el depósito completo por referencia', r && r.id === 700);
+ok('lo deja anulado', ctx.movimientosBanco[0].anulado === true);
+
+console.log('\n═══ Sobrepago pero SIN referencia igual: no adivina ═══');
+ctx = ctxCon([{ id: 701, anulado: false, origen: 'cobro', origenId: 2667, cuentaId: 5, monto: 1000, referencia: 'OTRA' }]);
+ok('sin referencia que coincida → null (no anula de más)', ctx.__f(F, { cuentaBancoId: 5, monto: 760, referencia: '29544249' }) === null);
+
+console.log('\n═══ Cableado del aviso en openAnularAbono ═══');
+ok('avisa si el abono tenía cuenta pero no se halló el movimiento', /else if\(a\.cuentaBancoId\)\{/.test(src) && /no encontré su movimiento de banco/.test(src));
+
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
