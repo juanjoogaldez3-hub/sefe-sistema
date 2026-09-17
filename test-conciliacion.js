@@ -112,23 +112,24 @@ console.log('\n═══ Movimientos de un mes anterior no ensucian el corte ═
 // para que emparejen con líneas de inicio de mes), pero los sobrantes de SEFE
 // ANTERIORES al inicio del estado de cuenta se sacan (son de un mes ya
 // conciliado) para que no inflen la diferencia ni ensucien la lista.
-ok('_concCalcular saca de "sólo SEFE" lo anterior al inicio (desde)', /r\.soloSEFE=r\.soloSEFE\.filter\(m=>\(m\.fecha\|\|''\)\.slice\(0,10\)>=desde\)/.test(src));
-ok('cuenta esos anteriores para avisarlo (_anteriores)', /const anteriores=r\.soloSEFE\.filter\(m=>\(m\.fecha\|\|''\)\.slice\(0,10\)<desde\)\.length/.test(src) && /r\._anteriores=anteriores/.test(src));
+ok('_concCalcular saca de "sólo SEFE" lo ya conciliado o lo anterior al inicio', /const _fuera=m=>m\.conciliado===true\|\|\(m\.fecha\|\|''\)\.slice\(0,10\)<desde/.test(src) && /r\.soloSEFE=r\.soloSEFE\.filter\(m=>!_fuera\(m\)\)/.test(src));
+ok('cuenta los que deja fuera para avisarlo (_anteriores)', /const anteriores=r\.soloSEFE\.filter\(_fuera\)\.length/.test(src) && /r\._anteriores=anteriores/.test(src));
 ok('_concAjustar propaga _anteriores', /_anteriores:r\._anteriores/.test(src));
-ok('la pantalla avisa de los movimientos anteriores al estado de cuenta', /movimiento\(s\) de SEFE anteriores al/.test(src) && /r\._anteriores>0/.test(src));
-// Funcional: simula el filtro sobre el resultado del cruce.
+ok('la pantalla avisa de los movimientos que no se cuentan', /ya estaban conciliados o son de un estado de cuenta anterior/.test(src) && /r\._anteriores>0/.test(src));
+// Funcional: simula el filtro (ya conciliado O anterior a "desde") sobre el cruce.
 (() => {
   const desde = '2026-09-01';
+  const _fuera = m => m.conciliado === true || (m.fecha || '').slice(0, 10) < desde;
   const movsSEFE = [
     { id: 1, fecha: '2026-08-25', tipo: 'entrada', monto: 1255, anulado: false }, // mes anterior → fuera
-    { id: 2, fecha: '2026-08-26', tipo: 'salida', monto: 2634.24, anulado: false }, // mes anterior → fuera
-    { id: 3, fecha: '2026-09-10', tipo: 'entrada', monto: 999, anulado: false }, // del mes → pendiente real
+    { id: 2, fecha: '2026-09-03', tipo: 'salida', monto: 2634.24, anulado: false, conciliado: true }, // ya conciliado → fuera aunque sea de septiembre
+    { id: 3, fecha: '2026-09-10', tipo: 'entrada', monto: 999, anulado: false }, // del mes, sin conciliar → pendiente real
   ];
   const c = conciliar([], movsSEFE); // sin líneas de banco: todos quedan "sólo SEFE"
-  const antes = c.soloSEFE.filter(m => m.fecha < desde);
-  const queda = c.soloSEFE.filter(m => m.fecha >= desde);
-  ok('sin el filtro habría 3 sólo-SEFE (incluye los 2 de agosto)', c.soloSEFE.length === 3);
-  ok('con el filtro por "desde" quedan sólo los del mes (1) y se sacan 2 de agosto', queda.length === 1 && queda[0].id === 3 && antes.length === 2);
+  const queda = c.soloSEFE.filter(m => !_fuera(m));
+  const fuera = c.soloSEFE.filter(_fuera);
+  ok('sin el filtro habría 3 sólo-SEFE', c.soloSEFE.length === 3);
+  ok('queda sólo el pendiente real (id 3); se sacan el de agosto y el ya conciliado', queda.length === 1 && queda[0].id === 3 && fuera.length === 2);
 })();
 
 console.log('\n═══ Cableado de la pantalla (que el botón exista y llame a la función) ═══');
