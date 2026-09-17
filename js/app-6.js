@@ -1272,6 +1272,25 @@ function histPagosProv(id){
 }
 window.histPagosProv=histPagosProv;
 
+// Anula el movimiento de banco (salida) ligado a un pago de proveedor. Espejo
+// de _anularEntradaBancoDeAbono: primero por monto exacto y, si no, por
+// referencia + monto >= (para pagos que salieron junto con otros). Sin
+// referencia que coincida, no adivina (no anula un pago real de otro monto).
+function _anularSalidaBancoDePagoProv(c,a){
+  if(!a||!a.cuentaBancoId||typeof movimientosBanco==='undefined')return null;
+  const cta=Number(a.cuentaBancoId);
+  const cand=movimientosBanco.filter(m=>!m.anulado&&m.origen==='pago_proveedor'&&Number(m.origenId)===Number(c.id)&&Number(m.cuentaId)===cta);
+  let mv=cand.find(m=>Math.abs(Number(m.monto)-Number(a.monto))<0.01);
+  if(!mv){
+    const refA=(a.referencia!=null&&a.referencia!=='')?String(a.referencia):null;
+    if(refA)mv=cand.filter(m=>String(m.referencia||'')===refA&&Number(m.monto)>=Number(a.monto)-0.01).sort((x,y)=>Number(x.monto)-Number(y.monto))[0]||null;
+  }
+  if(!mv)return null;
+  mv.anulado=true;
+  if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mv);
+  return mv;
+}
+window._anularSalidaBancoDePagoProv=_anularSalidaBancoDePagoProv;
 function anularPagoProv(compraId,idx){
   if(!canAnular()){toast('Sin permiso','Tu rol no puede anular',true);return;}
   const c=compras.find(x=>x.id===compraId);if(!c)return;
@@ -1285,8 +1304,16 @@ function anularPagoProv(compraId,idx){
       const motivo=$('#ap-motivo').value.trim();
       if(!motivo){$('#ap-err').style.display='flex';return;}
       a.anulado=true;a.anuladoPor=currentUser;a.anuladoFecha=new Date().toISOString();a.motivoAnulacion=motivo;
+      // Anular el pago = borrar también su SALIDA de banco (nunca salió el dinero).
+      const _mvSal=_anularSalidaBancoDePagoProv(c,a);
+      if(_mvSal)logAudit('Banco · salida de pago a proveedor anulada','CMP-'+padn(c.id)+' · cuenta '+_mvSal.cuentaId+' · '+money(_mvSal.monto)+' · por anulación de pago');
+      else if(a.cuentaBancoId){
+        toast('⚠ Revisá Bancos','Anulé el pago, pero no encontré su movimiento de banco para anularlo. Revisá la cuenta y anulá ese movimiento a mano si quedó.',true);
+        logAudit('Banco · movimiento de pago NO hallado al anular pago','CMP-'+padn(c.id)+' · '+money(a.monto)+' · cuenta '+a.cuentaBancoId);
+      }
       logAudit('Pago a proveedor anulado','CMP-'+padn(c.id)+' · '+(a.noRecibo||'')+' · '+money(a.monto)+' · Motivo: '+motivo);
       cerrarTodo();renderPorPagar();renderCompras();
+      if(typeof renderBancos==='function'){try{renderBancos();}catch(e){}}
       toast('✓ Pago anulado','Saldo actualizado: '+money(apInfo(c).saldo));
       if(typeof anularPagoProveedorDB==='function')anularPagoProveedorDB(a);
     });
