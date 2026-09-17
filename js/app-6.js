@@ -940,7 +940,14 @@ function _concCalcular(){
   const enRango=movimientosBanco.filter(m=>dela(m)&&(m.fecha||'').slice(0,10)<=corte);
   const posteriores=movimientosBanco.filter(m=>dela(m)&&(m.fecha||'').slice(0,10)>corte).length;
   const r=conciliarBanco(_concData.filas, enRango, {toleranciaDias:5});
-  r._posteriores=posteriores; r._corte=corte;
+  // Los sobrantes de SEFE ANTERIORES al inicio del estado de cuenta son de un
+  // período previo (ya se conciliaron en su mes): no son "pendientes" de este
+  // corte y no deben inflar la diferencia ni ensuciar la lista. Se dejan entrar
+  // al cruce (con un colchón de días) sólo para que puedan EMPAREJAR con líneas
+  // del banco de inicio de mes; los que quedan sueltos y son < desde se sacan.
+  const anteriores=r.soloSEFE.filter(m=>(m.fecha||'').slice(0,10)<desde).length;
+  r.soloSEFE=r.soloSEFE.filter(m=>(m.fecha||'').slice(0,10)>=desde);
+  r._posteriores=posteriores; r._anteriores=anteriores; r._corte=corte; r._desde=desde;
   return r;
 }
 
@@ -966,7 +973,7 @@ function _concAjustar(r){
     soloBancoEntradas:sumT(sb,'entrada'), soloBancoSalidas:sumT(sb,'salida'),
     soloSEFEEntradas:sumT(ss,'entrada'), soloSEFESalidas:sumT(ss,'salida')
   });
-  return {conciliados:conc, soloBanco:sb, soloSEFE:ss, resumen, _corte:r._corte, _posteriores:r._posteriores};
+  return {conciliados:conc, soloBanco:sb, soloSEFE:ss, resumen, _corte:r._corte, _desde:r._desde, _posteriores:r._posteriores, _anteriores:r._anteriores};
 }
 
 function _concRender(){
@@ -1027,6 +1034,9 @@ function _concRender(){
   }
   if(r._posteriores>0){
     html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._posteriores} movimiento(s) de SEFE posteriores al ${fdate(corte)} no se cuentan acá — son de después de este estado de cuenta y aparecerán en el próximo.</div>`;
+  }
+  if(r._anteriores>0){
+    html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._anteriores} movimiento(s) de SEFE anteriores al ${r._desde?fdate(r._desde):'inicio del estado de cuenta'} no se cuentan acá — son de un estado de cuenta anterior (ya conciliado en su mes).</div>`;
   }
   if(_concEmparejando){
     const bf=(r.soloBanco||[]).find(f=>_concBankKey(f)===_concEmparejando);

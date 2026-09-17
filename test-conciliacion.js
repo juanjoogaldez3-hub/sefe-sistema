@@ -107,6 +107,30 @@ const dos640 = parse([
 const c2 = conciliar(dos640.filas, [{ id: 7, fecha: '2026-08-15', tipo: 'entrada', monto: 640, anulado: false }]);
 ok('sólo 1 de las dos de Q640 concilia', c2.conciliados.length === 1 && c2.soloBanco.length === 1);
 
+console.log('\n═══ Movimientos de un mes anterior no ensucian el corte ═══');
+// El cruce deja entrar movimientos de SEFE de días previos al inicio (colchón
+// para que emparejen con líneas de inicio de mes), pero los sobrantes de SEFE
+// ANTERIORES al inicio del estado de cuenta se sacan (son de un mes ya
+// conciliado) para que no inflen la diferencia ni ensucien la lista.
+ok('_concCalcular saca de "sólo SEFE" lo anterior al inicio (desde)', /r\.soloSEFE=r\.soloSEFE\.filter\(m=>\(m\.fecha\|\|''\)\.slice\(0,10\)>=desde\)/.test(src));
+ok('cuenta esos anteriores para avisarlo (_anteriores)', /const anteriores=r\.soloSEFE\.filter\(m=>\(m\.fecha\|\|''\)\.slice\(0,10\)<desde\)\.length/.test(src) && /r\._anteriores=anteriores/.test(src));
+ok('_concAjustar propaga _anteriores', /_anteriores:r\._anteriores/.test(src));
+ok('la pantalla avisa de los movimientos anteriores al estado de cuenta', /movimiento\(s\) de SEFE anteriores al/.test(src) && /r\._anteriores>0/.test(src));
+// Funcional: simula el filtro sobre el resultado del cruce.
+(() => {
+  const desde = '2026-09-01';
+  const movsSEFE = [
+    { id: 1, fecha: '2026-08-25', tipo: 'entrada', monto: 1255, anulado: false }, // mes anterior → fuera
+    { id: 2, fecha: '2026-08-26', tipo: 'salida', monto: 2634.24, anulado: false }, // mes anterior → fuera
+    { id: 3, fecha: '2026-09-10', tipo: 'entrada', monto: 999, anulado: false }, // del mes → pendiente real
+  ];
+  const c = conciliar([], movsSEFE); // sin líneas de banco: todos quedan "sólo SEFE"
+  const antes = c.soloSEFE.filter(m => m.fecha < desde);
+  const queda = c.soloSEFE.filter(m => m.fecha >= desde);
+  ok('sin el filtro habría 3 sólo-SEFE (incluye los 2 de agosto)', c.soloSEFE.length === 3);
+  ok('con el filtro por "desde" quedan sólo los del mes (1) y se sacan 2 de agosto', queda.length === 1 && queda[0].id === 3 && antes.length === 2);
+})();
+
 console.log('\n═══ Cableado de la pantalla (que el botón exista y llame a la función) ═══');
 const html = fs.readFileSync(__dirname + '/index.html', 'utf8');
 ok('index.html tiene el botón de conciliación', /onclick="openConciliacion\(\)"/.test(html));
