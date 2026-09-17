@@ -855,7 +855,18 @@ window.openEditarAbono=openEditarAbono;
 // igual que el ajuste al editar un abono.
 function _anularEntradaBancoDeAbono(f,a){
   if(!a||!a.cuentaBancoId||typeof movimientosBanco==='undefined')return null;
-  const mv=movimientosBanco.find(m=>!m.anulado&&m.origen==='cobro'&&Number(m.origenId)===Number(f.id)&&Number(m.cuentaId)===Number(a.cuentaBancoId)&&Math.abs(Number(m.monto)-Number(a.monto))<0.01);
+  const cta=Number(a.cuentaBancoId);
+  // Candidatos: entradas de banco por cobro, de ESTA factura, en ESA cuenta.
+  const cand=movimientosBanco.filter(m=>!m.anulado&&m.origen==='cobro'&&Number(m.origenId)===Number(f.id)&&Number(m.cuentaId)===cta);
+  // 1) Monto exacto (el caso normal).
+  let mv=cand.find(m=>Math.abs(Number(m.monto)-Number(a.monto))<0.01);
+  // 2) Cobro en ruta con SOBREPAGO: el banco registró el depósito COMPLETO
+  //    (≥ al abono aplicado, la diferencia fue saldo a favor). Si la referencia
+  //    coincide, ése es; se toma el menor que alcance para no anular de más.
+  if(!mv){
+    const refA=(a.referencia!=null&&a.referencia!=='')?String(a.referencia):null;
+    if(refA)mv=cand.filter(m=>String(m.referencia||'')===refA&&Number(m.monto)>=Number(a.monto)-0.01).sort((x,y)=>Number(x.monto)-Number(y.monto))[0]||null;
+  }
   if(!mv)return null;
   mv.anulado=true;
   if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mv);
@@ -880,6 +891,13 @@ function openAnularAbono(facturaId,abonoIdx){
       // (Para correcciones chicas de monto/fecha se EDITA el abono, no se anula.)
       const _mvEnt=_anularEntradaBancoDeAbono(f,a);
       if(_mvEnt)logAudit('Banco · entrada de cobro anulada','Factura '+f.serie+'-'+f.numeroDte+' · cuenta '+_mvEnt.cuentaId+' · '+money(_mvEnt.monto)+' · por anulación de abono');
+      else if(a.cuentaBancoId){
+        // El abono decía haber entrado a una cuenta de banco, pero no encontré su
+        // movimiento para anularlo: aviso (antes quedaba un Q huérfano en silencio,
+        // que descuadraba la conciliación).
+        toast('⚠ Revisá Bancos','Anulé el abono, pero no encontré su movimiento de banco para anularlo. Revisá la cuenta y anulá ese movimiento a mano si quedó.',true);
+        logAudit('Banco · movimiento de cobro NO hallado al anular abono','Factura '+f.serie+'-'+f.numeroDte+' · '+money(a.monto)+' · cuenta '+a.cuentaBancoId);
+      }
       // Si el abono se pagó con saldo a favor, devolver ese crédito al cliente.
       if(a.metodo==='Saldo a favor'){
         const _cr={clienteId:f.clienteId,tipo:'ingreso',monto:a.monto,fecha:fechaHoyGT(),documentoId:f.id,
