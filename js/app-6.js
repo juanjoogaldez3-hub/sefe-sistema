@@ -940,17 +940,18 @@ function _concCalcular(){
   const enRango=movimientosBanco.filter(m=>dela(m)&&(m.fecha||'').slice(0,10)<=corte);
   const posteriores=movimientosBanco.filter(m=>dela(m)&&(m.fecha||'').slice(0,10)>corte).length;
   const r=conciliarBanco(_concData.filas, enRango, {toleranciaDias:5});
-  // Un sobrante de SEFE NO es "pendiente" de este corte si: (a) YA está marcado
-  // como conciliado (cuadró contra el banco en su mes) — este es el criterio
-  // fuerte, sin importar la fecha; o (b) su fecha es anterior al inicio del
-  // estado de cuenta (es de un período previo). Se dejan entrar al cruce con un
-  // colchón de días sólo para que puedan EMPAREJAR con líneas de inicio de mes;
-  // los que quedan sueltos y caen en (a) o (b) se sacan (no inflan la diferencia
-  // ni ensucian la lista).
-  const _fuera=m=>m.conciliado===true||(m.fecha||'').slice(0,10)<desde;
-  const anteriores=r.soloSEFE.filter(_fuera).length;
-  r.soloSEFE=r.soloSEFE.filter(m=>!_fuera(m));
-  r._posteriores=posteriores; r._anteriores=anteriores; r._corte=corte; r._desde=desde;
+  // Un sobrante de SEFE sólo se saca de la lista si YA está conciliado: cuadró
+  // contra el banco en su mes, así que está en el saldo del banco Y en el de
+  // SEFE → se cancela, no es parte de la diferencia de este corte. Los que NO
+  // están conciliados SÍ se muestran —incluidos los arrastres de meses
+  // anteriores—: son pendientes reales que hay que conciliar y no deben
+  // perderse (además el saldo de SEFE los incluye, así que sostienen la
+  // diferencia). Sacar por fecha estaba mal: escondía pendientes de verdad.
+  const yaConciliados=r.soloSEFE.filter(m=>m.conciliado===true).length;
+  r.soloSEFE=r.soloSEFE.filter(m=>m.conciliado!==true);
+  // De los que quedan, cuántos son de un mes anterior (arrastres sin conciliar).
+  const arrastres=r.soloSEFE.filter(m=>(m.fecha||'').slice(0,10)<desde).length;
+  r._posteriores=posteriores; r._yaConciliados=yaConciliados; r._arrastres=arrastres; r._corte=corte; r._desde=desde;
   return r;
 }
 
@@ -976,7 +977,7 @@ function _concAjustar(r){
     soloBancoEntradas:sumT(sb,'entrada'), soloBancoSalidas:sumT(sb,'salida'),
     soloSEFEEntradas:sumT(ss,'entrada'), soloSEFESalidas:sumT(ss,'salida')
   });
-  return {conciliados:conc, soloBanco:sb, soloSEFE:ss, resumen, _corte:r._corte, _desde:r._desde, _posteriores:r._posteriores, _anteriores:r._anteriores};
+  return {conciliados:conc, soloBanco:sb, soloSEFE:ss, resumen, _corte:r._corte, _desde:r._desde, _posteriores:r._posteriores, _yaConciliados:r._yaConciliados, _arrastres:r._arrastres};
 }
 
 function _concRender(){
@@ -1038,8 +1039,11 @@ function _concRender(){
   if(r._posteriores>0){
     html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._posteriores} movimiento(s) de SEFE posteriores al ${fdate(corte)} no se cuentan acá — son de después de este estado de cuenta y aparecerán en el próximo.</div>`;
   }
-  if(r._anteriores>0){
-    html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._anteriores} movimiento(s) de SEFE no se cuentan acá — ya estaban conciliados o son de un estado de cuenta anterior (antes del ${r._desde?fdate(r._desde):'inicio del período'}).</div>`;
+  if(r._yaConciliados>0){
+    html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._yaConciliados} movimiento(s) de SEFE ya conciliados no se cuentan acá — cuadraron contra el banco en su mes.</div>`;
+  }
+  if(r._arrastres>0){
+    html+=`<div style="font-size:12px;color:#7A4A07;background:var(--warn-bg,#fbf1d9);border:1px solid var(--warn);border-radius:10px;padding:8px 12px;margin:6px 0 2px">⚠️ De la lista "Sólo en SEFE", ${r._arrastres} son de un mes anterior y siguen SIN conciliar — revisalos y conciliálos (o corregilos) para que dejen de arrastrarse.</div>`;
   }
   if(_concEmparejando){
     const bf=(r.soloBanco||[]).find(f=>_concBankKey(f)===_concEmparejando);
@@ -1083,7 +1087,7 @@ function _concTabla(r){
   }
   if(!r.soloSEFE.length)return '<div class="empty">Todo lo de SEFE aparece en el banco. 🎉</div>';
   return `<table><thead><tr><th>Fecha</th><th>Movimiento en SEFE</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead><tbody>`+
-    r.soloSEFE.map(m=>`<tr><td style="white-space:nowrap">${fdate(m.fecha)}</td><td>${escHtml(m.concepto||'—')}${m.referencia?`<div style="color:var(--muted-2);font-size:11px">${escHtml(String(m.referencia))}</div>`:''}</td><td>${bdg(m.tipo)}</td><td class="num">${money(m.monto)}</td><td style="text-align:right">${_concEmparejando?`<button class="btn btn-primary btn-sm" onclick="_concConfirmarManual(${m.id})">Emparejar con esta</button>`:''}</td></tr>`).join('')+'</tbody></table>';
+    r.soloSEFE.map(m=>{const viejo=r._desde&&(m.fecha||'').slice(0,10)<r._desde;return `<tr><td style="white-space:nowrap">${fdate(m.fecha)}${viejo?'<div style="font-size:10px;color:#7A4A07;font-weight:700">⚠ mes anterior</div>':''}</td><td>${escHtml(m.concepto||'—')}${m.referencia?`<div style="color:var(--muted-2);font-size:11px">${escHtml(String(m.referencia))}</div>`:''}</td><td>${bdg(m.tipo)}</td><td class="num">${money(m.monto)}</td><td style="text-align:right">${_concEmparejando?`<button class="btn btn-primary btn-sm" onclick="_concConfirmarManual(${m.id})">Emparejar con esta</button>`:''}</td></tr>`;}).join('')+'</tbody></table>';
 }
 
 // Abre el formulario de movimiento pre-llenado con la fila del banco; al

@@ -107,29 +107,28 @@ const dos640 = parse([
 const c2 = conciliar(dos640.filas, [{ id: 7, fecha: '2026-08-15', tipo: 'entrada', monto: 640, anulado: false }]);
 ok('sólo 1 de las dos de Q640 concilia', c2.conciliados.length === 1 && c2.soloBanco.length === 1);
 
-console.log('\n═══ Movimientos de un mes anterior no ensucian el corte ═══');
-// El cruce deja entrar movimientos de SEFE de días previos al inicio (colchón
-// para que emparejen con líneas de inicio de mes), pero los sobrantes de SEFE
-// ANTERIORES al inicio del estado de cuenta se sacan (son de un mes ya
-// conciliado) para que no inflen la diferencia ni ensucien la lista.
-ok('_concCalcular saca de "sólo SEFE" lo ya conciliado o lo anterior al inicio', /const _fuera=m=>m\.conciliado===true\|\|\(m\.fecha\|\|''\)\.slice\(0,10\)<desde/.test(src) && /r\.soloSEFE=r\.soloSEFE\.filter\(m=>!_fuera\(m\)\)/.test(src));
-ok('cuenta los que deja fuera para avisarlo (_anteriores)', /const anteriores=r\.soloSEFE\.filter\(_fuera\)\.length/.test(src) && /r\._anteriores=anteriores/.test(src));
-ok('_concAjustar propaga _anteriores', /_anteriores:r\._anteriores/.test(src));
-ok('la pantalla avisa de los movimientos que no se cuentan', /ya estaban conciliados o son de un estado de cuenta anterior/.test(src) && /r\._anteriores>0/.test(src));
-// Funcional: simula el filtro (ya conciliado O anterior a "desde") sobre el cruce.
+console.log('\n═══ Sólo se saca lo YA conciliado; los pendientes viejos NO se pierden ═══');
+// Un sobrante de SEFE se saca de la lista sólo si ya está conciliado (cuadró
+// contra el banco en su mes → está en ambos saldos → se cancela). Los que NO
+// están conciliados —incluso de meses anteriores— SÍ se muestran: son
+// pendientes reales que sostienen la diferencia y no deben perderse.
+ok('_concCalcular saca de "sólo SEFE" SÓLO lo ya conciliado (no por fecha)', /r\.soloSEFE=r\.soloSEFE\.filter\(m=>m\.conciliado!==true\)/.test(src) && !/m\.conciliado===true\|\|\(m\.fecha/.test(src));
+ok('cuenta los ya conciliados y los arrastres de meses anteriores', /const yaConciliados=r\.soloSEFE\.filter\(m=>m\.conciliado===true\)\.length/.test(src) && /const arrastres=r\.soloSEFE\.filter\(m=>\(m\.fecha\|\|''\)\.slice\(0,10\)<desde\)\.length/.test(src));
+ok('_concAjustar propaga _yaConciliados y _arrastres', /_yaConciliados:r\._yaConciliados/.test(src) && /_arrastres:r\._arrastres/.test(src));
+ok('la pantalla avisa de ya conciliados y de arrastres sin conciliar', /ya conciliados no se cuentan acá/.test(src) && /son de un mes anterior y siguen SIN conciliar/.test(src));
+ok('las filas viejas se marcan "mes anterior" en la lista', /⚠ mes anterior/.test(src) && /const viejo=r\._desde&&\(m\.fecha\|\|''\)\.slice\(0,10\)<r\._desde/.test(src));
+// Funcional: sólo el conciliado se saca; el pendiente viejo SIN conciliar queda.
 (() => {
-  const desde = '2026-09-01';
-  const _fuera = m => m.conciliado === true || (m.fecha || '').slice(0, 10) < desde;
   const movsSEFE = [
-    { id: 1, fecha: '2026-08-25', tipo: 'entrada', monto: 1255, anulado: false }, // mes anterior → fuera
-    { id: 2, fecha: '2026-09-03', tipo: 'salida', monto: 2634.24, anulado: false, conciliado: true }, // ya conciliado → fuera aunque sea de septiembre
+    { id: 1, fecha: '2026-08-25', tipo: 'entrada', monto: 1255, anulado: false }, // mes anterior SIN conciliar → SE MUESTRA (pendiente real)
+    { id: 2, fecha: '2026-09-03', tipo: 'salida', monto: 2634.24, anulado: false, conciliado: true }, // ya conciliado → fuera
     { id: 3, fecha: '2026-09-10', tipo: 'entrada', monto: 999, anulado: false }, // del mes, sin conciliar → pendiente real
   ];
   const c = conciliar([], movsSEFE); // sin líneas de banco: todos quedan "sólo SEFE"
-  const queda = c.soloSEFE.filter(m => !_fuera(m));
-  const fuera = c.soloSEFE.filter(_fuera);
-  ok('sin el filtro habría 3 sólo-SEFE', c.soloSEFE.length === 3);
-  ok('queda sólo el pendiente real (id 3); se sacan el de agosto y el ya conciliado', queda.length === 1 && queda[0].id === 3 && fuera.length === 2);
+  const queda = c.soloSEFE.filter(m => m.conciliado !== true);
+  const yaConc = c.soloSEFE.filter(m => m.conciliado === true);
+  ok('sin filtro habría 3 sólo-SEFE', c.soloSEFE.length === 3);
+  ok('se saca sólo el ya conciliado (id 2); el pendiente viejo (id 1) NO se pierde', yaConc.length === 1 && yaConc[0].id === 2 && queda.length === 2 && queda.some(m => m.id === 1) && queda.some(m => m.id === 3));
 })();
 
 console.log('\n═══ Cableado de la pantalla (que el botón exista y llame a la función) ═══');
