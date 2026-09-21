@@ -673,6 +673,30 @@ function renderReportes(){
         </tr></thead><tbody>${cuerpo}</tbody></table></div>`;
     }
   }
+  else if(repType==='seguimiento'){
+    // SEGUIMIENTO DE CLIENTES — a quién llamar y por qué (ordenado por prioridad)
+    const lista=(typeof _seguimientoClientes==='function')?_seguimientoClientes({vendedorNombre:repFiltros.vendedor_simple||''}):[];
+    const LBL={dejo:'Dejó de comprar',cayendo:'Cayendo',reponer:'Toca reponer',creciendo:'Creciendo',ok:'Al día',nunca:'Nunca compró'};
+    const soloAtencion=(repFiltros.segTodos!=='1');
+    const filtrada=lista.filter(c=>soloAtencion?['dejo','cayendo','reponer'].includes(c.estado):c.estado!=='nunca');
+    const nAt=lista.filter(c=>['dejo','cayendo','reponer'].includes(c.estado)).length;
+    const expFilas=[];
+    const cuerpo=filtrada.map(c=>{
+      expFilas.push({Cliente:c.nombre,Vendedor:c.vendedorNombre||'',Estado:LBL[c.estado]||c.estado,Motivo:c.razon,'Última compra':c.ultimaCompra||'','Días sin comprar':c.diasSinComprar==null?'':c.diasSinComprar,'Cadencia (días)':c.cadencia==null?'':c.cadencia,'Ritmo mensual':c.promMensual||0});
+      const badge=`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${c.color};white-space:nowrap"><span style="width:9px;height:9px;border-radius:50%;background:${c.color};flex:0 0 auto"></span>${LBL[c.estado]||c.estado}</span>`;
+      const btn=`<button class="btn btn-ghost btn-sm" onclick="crearSeguimiento(${c.clienteId})" title="Crear una tarea de seguimiento para este cliente">📞 Seguimiento</button>`;
+      return `<tr style="border-bottom:1px solid var(--line)"><td style="font-weight:600">${escHtml(c.nombre)}${c.vendedorNombre?`<div style="font-size:11px;color:var(--muted)">${escHtml(c.vendedorNombre)}</div>`:''}</td><td>${badge}</td><td style="font-size:12px">${escHtml(c.razon)}</td><td class="num">${c.ultimaCompra?fdate(c.ultimaCompra):'—'}</td><td class="num">${c.promMensual?money(c.promMensual):'—'}</td><td>${btn}</td></tr>`;
+    }).join('');
+    exportData=expFilas;
+    const toggle=`<label style="font-size:12px;color:var(--muted);display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" ${soloAtencion?'':'checked'} onchange="setRepFiltro('segTodos',this.checked?'1':'')" style="width:auto"> Mostrar también los que van bien / al día</label>`;
+    if(!filtrada.length){
+      html+=`<div class="panel"><div class="panel-body"><p class="empty">${lista.length?'🎉 Ningún cliente necesita seguimiento ahora mismo.':'No hay clientes con historial de compras.'}</p></div></div>`;
+    }else{
+      html+=`<div class="panel"><div class="panel-head"><h3>Seguimiento de clientes</h3><span style="font-size:12px;color:var(--muted)">${nAt} necesita${nAt!==1?'n':''} seguimiento · ordenados por prioridad (llamá de arriba hacia abajo)</span></div>
+        <div style="padding:2px 4px 10px">${toggle}</div>
+        <div style="overflow-x:auto"><table><thead><tr><th>Cliente</th><th>Estado</th><th>Motivo</th><th class="num">Última compra</th><th class="num">Ritmo mensual</th><th></th></tr></thead><tbody>${cuerpo}</tbody></table></div></div>`;
+    }
+  }
   else if(repType==='factem'){
     // REPORTE GENERAL DE FACTURAS EMITIDAS
     // Columnas: Documento, Fecha, Cliente, Tipo (Contado/Crédito), Neto, IVA, Valor, Saldo

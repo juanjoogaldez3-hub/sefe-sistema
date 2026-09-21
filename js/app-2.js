@@ -242,85 +242,40 @@ window._segSetLimite=_segSetLimite;
 function _segTogglePerdidos(){_segVerPerdidos=!_segVerPerdidos;renderSeguimiento();}
 window._segTogglePerdidos=_segTogglePerdidos;
 
-// Reporte de seguimiento: frecuencia de compra y días sin facturar, por cliente
+// Panel "a quién llamar": usa el semáforo de seguimiento (_seguimientoClientes)
+// — dejó de comprar / cayendo / toca reponer — ordenado por PRIORIDAD (tamaño
+// del cliente × urgencia), con el motivo y un botón para crear la tarea. Los
+// que superan el límite de días se apartan como "perdidos" (grupo colapsable).
 function renderSeguimiento(){
   const cont=document.getElementById('panel-seguimiento');
   if(!cont)return;
-  const bloque=document.getElementById('panel-bloque-seguimiento');
-  const esVentasRol=currentRole==='ventas';
-  const miVend=miVendedorId();
-
-  // Solo facturas certificadas/cambiarias (ventas reales)
-  const facturas=documentos.filter(d=>(d.tipoDoc==='cambiaria'||d.estado==='certificada') && d.estado!=='anulada');
-
-  // Agrupar por cliente
-  const porCliente={};
-  facturas.forEach(f=>{
-    const cid=f.clienteId;
-    if(cid==null)return;
-    if(!porCliente[cid])porCliente[cid]={fechas:[],nombre:f.clienteComercial||f.clienteNombre,vendedorId:null};
-    const fch=f.fechaCertificacion||f.creada;
-    if(fch)porCliente[cid].fechas.push(new Date(fch).getTime());
-  });
-
-  const hoy=Date.now();
-  let filas=[];
-  Object.entries(porCliente).forEach(([cid,info])=>{
-    const cli=clientes.find(c=>String(c.id)===String(cid));
-    const vendId=cli?cli.vendedorId:null;
-    // Si es vendedor, solo sus clientes
-    if(esVentasRol && vendId!==miVend)return;
-
-    const fechas=info.fechas.sort((a,b)=>a-b);
-    const ultima=fechas[fechas.length-1];
-    const diasSinComprar=Math.floor((hoy-ultima)/86400000);
-
-    // Frecuencia: promedio de días entre compras (si hay 2+ facturas)
-    let frecuencia='—';
-    if(fechas.length>=2){
-      let suma=0;
-      for(let i=1;i<fechas.length;i++)suma+=(fechas[i]-fechas[i-1]);
-      const prom=Math.round(suma/(fechas.length-1)/86400000);
-      frecuencia=prom+' días';
-    }
-
-    const vend=vendedores.find(v=>v.id===vendId);
-    const vendNom=vend?vend.nombre:'—';
-
-    // Color de alerta según días sin comprar
-    let colorDias='var(--muted)';
-    if(diasSinComprar>=60)colorDias='var(--danger)';
-    else if(diasSinComprar>=30)colorDias='#C9A227';
-
-    filas.push({nombre:info.nombre,vendNom,frecuencia,ultima,diasSinComprar,colorDias,nFacturas:fechas.length});
-  });
-
-  // Ordenar por días sin comprar (los más urgentes primero)
-  filas.sort((a,b)=>b.diasSinComprar-a.diasSinComprar);
-
-  if(!filas.length){
-    cont.innerHTML='<tr><td colspan="5" class="empty">Aún no hay facturas para mostrar seguimiento</td></tr>';
-    return;
-  }
-
-  // Reflejar el límite guardado en el control (sin pisar mientras se escribe)
+  const lista=(typeof _seguimientoClientes==='function')?_seguimientoClientes():[];
   const inpLim=document.getElementById('seg-limite');
   if(inpLim&&document.activeElement!==inpLim)inpLim.value=_segLimiteDias;
-
-  const filaHTML=f=>`<tr>
-    <td style="font-weight:600">${f.nombre}</td>
-    <td style="font-size:12px;color:var(--muted)">${f.vendNom}</td>
-    <td style="font-size:12px">${f.frecuencia}</td>
-    <td style="font-size:12px;color:var(--muted)">${fdate(new Date(f.ultima).toISOString())}</td>
-    <td style="font-weight:700;color:${f.colorDias}">${f.diasSinComprar} días</td>
-  </tr>`;
-  // Separar recuperables (dentro del límite) de "perdidos" (lo superan). Los
-  // perdidos van a un grupo aparte que se muestra/oculta con un botón, para que
-  // no tapen a los clientes que sí conviene perseguir.
-  const activos=filas.filter(f=>f.diasSinComprar<=_segLimiteDias);
-  const perdidos=filas.filter(f=>f.diasSinComprar>_segLimiteDias);
-  let htmlB=activos.map(filaHTML).join('');
-  if(!activos.length)htmlB=`<tr><td colspan="5" class="empty">Ningún cliente con compra dentro de los ${_segLimiteDias} días. Los perdidos figuran abajo.</td></tr>`;
+  const LBL={dejo:'Dejó de comprar',cayendo:'Cayendo',reponer:'Toca reponer'};
+  const atencion=lista.filter(c=>['dejo','cayendo','reponer'].includes(c.estado)); // ya viene por prioridad
+  const activos=atencion.filter(c=>c.diasSinComprar==null||c.diasSinComprar<=_segLimiteDias);
+  const perdidos=atencion.filter(c=>c.diasSinComprar!=null&&c.diasSinComprar>_segLimiteDias);
+  const filaHTML=c=>{
+    const badge=`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${c.color};white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:${c.color};flex:0 0 auto"></span>${LBL[c.estado]||c.estado}</span>`;
+    return `<tr>
+      <td style="font-weight:600">${escHtml(c.nombre)}${c.vendedorNombre?`<div style="font-size:11px;color:var(--muted)">${escHtml(c.vendedorNombre)}</div>`:''}</td>
+      <td>${badge}</td>
+      <td style="font-size:12px;color:var(--muted)">${escHtml(c.razon)}</td>
+      <td style="font-size:12px;color:var(--muted)">${c.ultimaCompra?fdate(c.ultimaCompra):'—'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="crearSeguimiento(${c.clienteId})" title="Crear una tarea de seguimiento">📞 Seguimiento</button></td>
+    </tr>`;
+  };
+  if(!atencion.length){
+    cont.innerHTML=`<tr><td colspan="5" class="empty">${lista.length?'🎉 Ningún cliente necesita seguimiento ahora mismo.':'Aún no hay facturas para mostrar seguimiento'}</td></tr>`;
+    return;
+  }
+  const TOPE=12;
+  let htmlB=activos.slice(0,TOPE).map(filaHTML).join('');
+  if(!activos.length)htmlB=`<tr><td colspan="5" class="empty">Ningún cliente por seguir dentro de los ${_segLimiteDias} días. Los perdidos figuran abajo.</td></tr>`;
+  if(activos.length>TOPE){
+    htmlB+=`<tr><td colspan="5" style="text-align:center;padding:8px"><button class="btn btn-ghost btn-sm" onclick="abrirReporte('seguimiento')">Ver los ${activos.length} en el reporte completo →</button></td></tr>`;
+  }
   if(perdidos.length){
     htmlB+=`<tr><td colspan="5" style="background:#faf7f0;padding:8px 12px">
       <button class="btn btn-ghost btn-sm" onclick="_segTogglePerdidos()">${_segVerPerdidos?'▾ Ocultar':'▸ Ver'} ${perdidos.length} cliente${perdidos.length!==1?'s':''} perdido${perdidos.length!==1?'s':''} <span style="color:var(--muted-2);font-weight:400">(+${_segLimiteDias} días sin comprar)</span></button>

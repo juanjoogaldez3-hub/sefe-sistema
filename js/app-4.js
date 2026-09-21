@@ -77,14 +77,14 @@ function openRecordatorio(id,preset){
   }
   const refInit=(curTipo==='contrasena')?cliRefLabel:((r&&r.refLabel)?r.refLabel:presetRefLabel);
   const refIdInit=(curTipo==='contrasena')?cliRefId:((r&&r.refId)?r.refId:(preset.refId||''));
-  const usrOpts=usuarios.filter(u=>u.activo!==false).map(u=>`<option value="${_escRec(u.nombre)}"${(r?r.asignadoA:currentUser)===u.nombre?' selected':''}>${_escRec(u.nombre)}</option>`).join('');
+  const usrOpts=usuarios.filter(u=>u.activo!==false).map(u=>`<option value="${_escRec(u.nombre)}"${(r?r.asignadoA:(preset.asignadoA||currentUser))===u.nombre?' selected':''}>${_escRec(u.nombre)}</option>`).join('');
   const tipoOpts=[['tarea','Tarea libre'],['cliente','Cliente'],['contrasena','Contraseña de pago'],['factura','Factura'],['producto','Producto'],['compra','Compra']].map(([v,l])=>`<option value="${v}"${curTipo===v?' selected':''}>${l}</option>`).join('');
   const prioOpts=[['alta','Alta'],['normal','Normal'],['baja','Baja']].map(([v,l])=>`<option value="${v}"${(r?r.prioridad:'normal')===v?' selected':''}>${l}</option>`).join('');
   openMod(id?'Editar recordatorio':'Nuevo recordatorio',
-    `<div class="row" id="rec-titulo-wrap"><div style="grid-column:1/-1"><label>Título</label><input id="rec-titulo" value="${r&&curTipo!=='contrasena'?_escRec(r.titulo):''}" placeholder="Ej. Llamar al cliente por su orden de compra"></div></div>
+    `<div class="row" id="rec-titulo-wrap"><div style="grid-column:1/-1"><label>Título</label><input id="rec-titulo" value="${r&&curTipo!=='contrasena'?_escRec(r.titulo):(preset.titulo?_escRec(preset.titulo):'')}" placeholder="Ej. Llamar al cliente por su orden de compra"></div></div>
      <div class="row" id="rec-forma-wrap" style="display:none"><div style="grid-column:1/-1"><label>Forma de cobro</label><select id="rec-forma" onchange="recFormaChange()"><option value="contra"${curForma==='contra'?' selected':''}>Con contraseña de pago</option><option value="credito"${curForma==='credito'?' selected':''}>Al crédito (sin contraseña)</option></select></div></div>
      <div class="row" id="rec-contra-wrap" style="display:none"><div style="grid-column:1/-1"><label>No. de contraseña de pago</label><input id="rec-contra" value="${_escRec(contraNo)}" placeholder="Ej. 04521"></div></div>
-     <div class="row"><div style="grid-column:1/-1"><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="rec-nota" value="${r?_escRec(r.nota):''}" placeholder="Detalle"></div></div>
+     <div class="row"><div style="grid-column:1/-1"><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="rec-nota" value="${r?_escRec(r.nota):(preset.nota?_escRec(preset.nota):'')}" placeholder="Detalle"></div></div>
      <div class="row"><div><label>Tipo</label><select id="rec-tipo" onchange="recTipoChange()">${tipoOpts}</select></div>
        <div id="rec-ref-wrap"><label id="rec-ref-label">Ligado a</label><input id="rec-ref" placeholder="Buscar…" autocomplete="off" value="${_escRec(refInit)}"><input type="hidden" id="rec-refid" value="${refIdInit}"></div></div>
      <div class="row" id="rec-fact-wrap" style="display:none"><div style="grid-column:1/-1"><label>Factura</label><input id="rec-fact" placeholder="Buscar factura del cliente…" autocomplete="off" value="${_escRec(factRefLabel)}"><input type="hidden" id="rec-factid" value="${factRefId}"></div></div>
@@ -1225,6 +1225,98 @@ function _cliUltimaCompra(c){
 }
 function _cliDiasSinComprar(c){const u=_cliUltimaCompra(c); return u?Math.floor((Date.now()-new Date(u))/86400000):null;}
 function _cliVentasTotal(c){return (typeof documentos!=='undefined'?documentos:[]).filter(d=>d.clienteId===c.id&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+((d.totales&&d.totales.total)||0),0);}
+// ============================================================
+//  SEGUIMIENTO DE CLIENTES — a quién llamar y por qué
+// ============================================================
+// A partir del historial de compras de UN cliente, determina su estado:
+//   dejo      → era comprador regular y se calló (rojo, urgente)
+//   reponer   → se pasó de su ciclo de recompra (amarillo)
+//   cayendo   → este mes va muy por debajo de su ritmo (a los mismos días)
+//   creciendo → va por arriba de su ritmo (verde)
+//   ok        → sin señal · nunca → nunca compró
+// 'ventas' = [{fecha, monto}] del cliente. 'hoy' = fecha de referencia (para
+// poder probarlo). Función PURA: no lee nada de afuera.
+function _segEstadoVentas(ventas, hoy){
+  hoy=hoy||new Date();
+  const _dia=86400000;
+  const v=(ventas||[]).map(x=>({t:new Date(x.fecha),m:Number(x.monto)||0})).filter(x=>!isNaN(x.t)).sort((a,b)=>a.t-b.t);
+  const n=v.length;
+  if(!n)return {comprasCount:0,estado:'nunca',color:'#9e9e9e',prioridad:0,razon:'Nunca compró',diasSinComprar:null,cadencia:null,promMensual:0,varPct:null,ultimaCompra:null,mtd:0,baseMismoDia:0};
+  const ultima=v[n-1].t;
+  const diasSin=Math.floor((hoy-ultima)/_dia);
+  // Cadencia = promedio de días entre compras (si hay al menos 2 compras).
+  let cadencia=null;
+  if(n>=2){let s=0;for(let i=1;i<n;i++)s+=(v[i].t-v[i-1].t)/_dia;cadencia=Math.round(s/(n-1));}
+  // Ritmo mensual reciente: ventas de los últimos 90 días / 3.
+  const hace90=new Date(hoy.getTime()-90*_dia);
+  const prom=v.filter(x=>x.t>=hace90).reduce((s,x)=>s+x.m,0)/3;
+  // Ritmo JUSTO del mes en curso: mes al día X vs mes anterior al día X.
+  const y=hoy.getFullYear(),mo=hoy.getMonth(),dc=hoy.getDate();
+  const enMes=(t,yy,mm)=>t.getFullYear()===yy&&t.getMonth()===mm;
+  const prevY=mo===0?y-1:y, prevMo=mo===0?11:mo-1;
+  const mtd=v.filter(x=>enMes(x.t,y,mo)).reduce((s,x)=>s+x.m,0);
+  const baseMis=v.filter(x=>enMes(x.t,prevY,prevMo)&&x.t.getDate()<=dc).reduce((s,x)=>s+x.m,0);
+  let varPct=null;
+  if(baseMis>0.005)varPct=(mtd-baseMis)/baseMis;
+  else if(mtd>0.005)varPct=1;
+  // Estado, por prioridad (el más urgente gana).
+  let estado='ok';
+  if(n>=2&&cadencia&&diasSin>Math.max(cadencia*2.5,30))estado='dejo';
+  else if(cadencia&&diasSin>Math.round(cadencia*1.4)&&diasSin>=10)estado='reponer';
+  else if(varPct!=null&&prom>0&&varPct<=-0.35)estado='cayendo';
+  else if(varPct!=null&&varPct>=0.3)estado='creciendo';
+  const pesoSev={dejo:3,cayendo:2.2,reponer:1.7,creciendo:0.6,ok:0,nunca:0}[estado];
+  const size=prom>0?prom:v.reduce((s,x)=>s+x.m,0)/Math.max(1,n);
+  const prioridad=Math.round(size*pesoSev);
+  const color={dejo:'#c62828',cayendo:'#e65100',reponer:'#f9a825',creciendo:'#2e7d32',ok:'#9e9e9e',nunca:'#9e9e9e'}[estado];
+  const razones={
+    dejo:`Dejó de comprar — última compra hace ${diasSin} días`+(cadencia?` (solía cada ${cadencia})`:''),
+    reponer:`Toca reponer — hace ${diasSin} días`+(cadencia?`, suele comprar cada ${cadencia}`:''),
+    cayendo:`Va ${Math.round((varPct||0)*100)}% este mes vs. los mismos días del mes pasado`,
+    creciendo:`Creciendo · +${Math.round((varPct||0)*100)}% vs. los mismos días del mes pasado`,
+    ok:'Al día',nunca:'Nunca compró'
+  };
+  return {comprasCount:n,estado,color,prioridad,razon:razones[estado],diasSinComprar:diasSin,cadencia,promMensual:Math.round(prom),varPct,ultimaCompra:ultima.toISOString().slice(0,10),mtd:Math.round(mtd),baseMismoDia:Math.round(baseMis)};
+}
+window._segEstadoVentas=_segEstadoVentas;
+// Arma la lista de seguimiento de todos los clientes (respeta al vendedor del
+// rol Ventas, y un filtro opcional por vendedor). Ordenada por prioridad.
+function _seguimientoClientes(opts){
+  opts=opts||{};
+  const hoy=new Date();
+  let base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  if(opts.vendedorNombre){base=base.filter(c=>{const v=(typeof vendedores!=='undefined'?vendedores:[]).find(x=>x.id===c.vendedorId);return (v&&v.nombre)===opts.vendedorNombre;});}
+  const ventasDe={};
+  (typeof documentos!=='undefined'?documentos:[]).forEach(d=>{
+    if(d.tipoDoc!=='cambiaria'||d.estado==='anulada'||d.clienteId==null)return;
+    (ventasDe[d.clienteId]=ventasDe[d.clienteId]||[]).push({fecha:d.fechaCertificacion||d.creada,monto:(d.totales&&d.totales.total)||0});
+  });
+  const out=[];
+  base.forEach(c=>{
+    if(c.sedesDe)return;
+    const est=_segEstadoVentas(ventasDe[c.id]||[],hoy);
+    const vend=(typeof vendedores!=='undefined'?vendedores:[]).find(x=>x.id===c.vendedorId);
+    out.push(Object.assign({clienteId:c.id,nombre:c.nombre,vendedorNombre:vend?vend.nombre:''},est));
+  });
+  out.sort((a,b)=>b.prioridad-a.prioridad);
+  return out;
+}
+window._seguimientoClientes=_seguimientoClientes;
+// Los estados que ameritan una llamada (para la lista corta y el panel).
+const SEG_ATENCION=['dejo','cayendo','reponer'];
+function _seguimientoParaLlamar(opts){return _seguimientoClientes(opts).filter(c=>SEG_ATENCION.includes(c.estado));}
+window._seguimientoParaLlamar=_seguimientoParaLlamar;
+// Abre un recordatorio de seguimiento ya prellenado desde la lista.
+function crearSeguimiento(clienteId){
+  const c=clientes.find(x=>x.id===clienteId); if(!c)return;
+  const est=_segEstadoVentas((typeof documentos!=='undefined'?documentos:[]).filter(d=>d.clienteId===clienteId&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').map(d=>({fecha:d.fechaCertificacion||d.creada,monto:(d.totales&&d.totales.total)||0})),new Date());
+  const vend=(typeof vendedores!=='undefined'?vendedores:[]).find(x=>x.id===c.vendedorId);
+  openRecordatorio(null,{tipo:'cliente',refId:c.id,refLabel:c.nombre,
+    titulo:'Seguimiento: '+c.nombre,
+    nota:est.razon||'',
+    asignadoA:(vend&&vend.nombre)||undefined});
+}
+window.crearSeguimiento=crearSeguimiento;
 function _cliPedidosAbiertos(c){return (typeof documentos!=='undefined'?documentos:[]).filter(d=>d.clienteId===c.id&&d.tipoDoc==='pedido'&&d.estado==='abierto').length;}
 // Color del pin según el modo elegido
 function _mapaColor(c,modo){

@@ -23,8 +23,8 @@ ok('existe el bloque de período #rep-period', /id="rep-period"/.test(html));
 console.log('\n═══ En inventario (foto) se oculta el rango ═══');
 const rf = src.slice(src.indexOf('function renderRepFilters('), src.indexOf('function renderRepFilters(') + 900);
 ok('detecta los reportes de foto (invactual / invcosto)', /_esFoto=\(repType==='invactual'\|\|repType==='invcosto'\)/.test(rf), 'no detecta _esFoto');
-ok('oculta el período cuando es foto', /_per\.style\.display=_esFoto\?'none':'flex'/.test(rf));
-ok('oculta el rango Desde/Hasta cuando es foto', /_ran\.style\.display=_esFoto\?'none':'flex'/.test(rf));
+ok('oculta el período cuando no lleva fecha (foto/seguimiento)', /_per\.style\.display=_sinFecha\?'none':'flex'/.test(rf) && /_sinFecha=_esFoto\|\|repType==='seguimiento'/.test(rf));
+ok('oculta el rango Desde/Hasta cuando no lleva fecha', /_ran\.style\.display=_sinFecha\?'none':'flex'/.test(rf));
 ok('el inventario conserva su campo "Existencias al día"', /Existencias al día/.test(src));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
