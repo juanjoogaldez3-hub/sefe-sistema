@@ -235,6 +235,16 @@ function repRangoLabel(){
 }
 window.repRangoLabel=repRangoLabel;
 function setRepPeriod(p){repPeriod=p;$('#rep-desde').value='';$('#rep-hasta').value='';document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.classList.toggle('on',b.dataset.p===p));renderReportes();}
+// Abre la vista de Reportes directo en un tipo (ej. desde el panel de inicio).
+window.abrirReporte=function(tipo){
+  repType=tipo;
+  repFiltros={cliente:'',vendedores:[],proveedor:'',soloVencidos:false,tiempoCredito:'',marca_prod:'',producto:''};
+  gruposColapsados={};
+  if(typeof go==='function')go('reportes');
+  document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x.dataset.r===tipo));
+  if(typeof renderRepFilters==='function')renderRepFilters();
+  if(typeof renderReportes==='function')renderReportes();
+};
 window.toggleEstcta=function(i){const det=document.getElementById('estcta-det-'+i),arr=document.getElementById('estcta-arrow-'+i);if(!det)return;const abierto=det.style.display!=='none';det.style.display=abierto?'none':'table-row';if(arr)arr.textContent=abierto?'▸':'▾';};
 window.setRepPeriod=setRepPeriod;
 // Cambia entre monto (Q) y cantidad en la Comparativa producto/mes.
@@ -262,9 +272,10 @@ function renderRepFilters(){
   // ni período — sólo el "Existencias al día". Se oculta la barra de rango para
   // no confundir (antes salían las dos cosas y parecían pelearse).
   const _esFoto=(repType==='invactual'||repType==='invcosto');
+  const _sinFecha=_esFoto||repType==='seguimiento'; // el seguimiento usa ventanas propias, no el rango
   const _per=$('#rep-period'),_ran=$('#rep-rango');
-  if(_per)_per.style.display=_esFoto?'none':'flex';
-  if(_ran)_ran.style.display=_esFoto?'none':'flex';
+  if(_per)_per.style.display=_sinFecha?'none':'flex';
+  if(_ran)_ran.style.display=_sinFecha?'none':'flex';
   let html='';
   const sel=(id,lbl,opts,val,k)=>{
     _repSelOpts[k]=opts;
@@ -337,6 +348,10 @@ function renderRepFilters(){
   else if(repType==='retenciones'){
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-cli-ret','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
+  }
+  else if(repType==='seguimiento'){
+    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    html=`<div class="rep-filter-bar">${sel('rf-vend-seg','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}</div>`;
   }
   else if(repType==='dircli'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
