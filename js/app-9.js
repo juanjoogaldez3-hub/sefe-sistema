@@ -357,13 +357,32 @@ function renderReportes(){
       porCli[key].total+=monto;
     });
     const ultM=meses[meses.length-1],prevM=meses[meses.length-2],hayComp=meses.length>=2;
+    // COMPARACIÓN PAREJA: si el último mes es el que está EN CURSO (parcial),
+    // compararlo contra el mes completo anterior marcaría a todos como "cayó"
+    // sólo porque el mes no terminó. Para que "subió/cayó" sea real, la
+    // variación se mide contra los MISMOS DÍAS del mes anterior (mes al día X
+    // vs. mes anterior al día X). Si el rango son meses ya cerrados, se compara
+    // mes completo vs mes completo, como siempre.
+    const _hoyCC=new Date();
+    const _diaCorteCC=_hoyCC.getDate();
+    const esParcial = hayComp && ultM===_mkDate(_hoyCC);
+    let _prevCmpGen=0;
+    if(esParcial){
+      ventasC.forEach(d=>{
+        if(mesKey(d)!==prevM||new Date(d.creada).getDate()>_diaCorteCC)return;
+        const key=(d.clienteId!=null)?('#'+d.clienteId):(d.clienteComercial||d.clienteNombre||'Sin cliente');
+        const monto=Number(d.totales?.total||0);
+        if(porCli[key])porCli[key]._prevCmp=(porCli[key]._prevCmp||0)+monto;
+        _prevCmpGen+=monto;
+      });
+    }
+    // Base de comparación de un cliente: mismos días si el mes está en curso.
+    const _baseComp=info=>esParcial?(info._prevCmp||0):(info.meses[prevM]||0);
     // Orden de las filas: por Total (default) o por la VARIACIÓN % del último
-    // mes vs. el anterior — "Más creció" (mayor % arriba) / "Más cayó" (menor %
-    // arriba). El % es el mismo que muestra la columna: base 0 → +100% si hay
-    // venta nueva, −100% si dejó de comprar. Empate de % se desempata por el
-    // monto (Q). Si no hay dos meses para comparar, cae al orden por Total.
-    const _difCli=info=>((info.meses[ultM]||0)-(info.meses[prevM]||0));
-    const _pctCli=info=>{const u=info.meses[ultM]||0,pv=info.meses[prevM]||0,dif=u-pv;const mag=pv?Math.abs(dif/pv*100):(Math.abs(dif)>0.005?100:0);return dif>=0?mag:-mag;};
+    // mes vs. el anterior — "Más creció" / "Más cayó". Empate de % se desempata
+    // por el monto (Q). Si no hay dos meses para comparar, cae al orden por Total.
+    const _difCli=info=>((info.meses[ultM]||0)-_baseComp(info));
+    const _pctCli=info=>{const u=info.meses[ultM]||0,pv=_baseComp(info),dif=u-pv;const mag=pv?Math.abs(dif/pv*100):(Math.abs(dif)>0.005?100:0);return dif>=0?mag:-mag;};
     const _ordCC=repFiltros.climescompOrden||'total';
     const filas=Object.entries(porCli).sort((a,b)=>{
       if(hayComp&&(_ordCC==='crecio'||_ordCC==='cayo')){
@@ -392,7 +411,7 @@ function renderReportes(){
       granTotal+=info.total;
       let varCell='';
       if(hayComp){
-        const u=info.meses[ultM]||0,pv=info.meses[prevM]||0,dif=u-pv;
+        const u=info.meses[ultM]||0,pv=_baseComp(info),dif=u-pv;
         varCell=varTd(dif,pv,600);
         filaExp['Δ '+mesLbl(ultM)]=dif;filaExp['Var %']=pv?Number((dif/pv*100).toFixed(1)):'';
       }
@@ -401,17 +420,18 @@ function renderReportes(){
     });
     let celdasGen='';meses.forEach(m=>{celdasGen+=`<td class="num" style="font-weight:800">${money(totalesGen[m])}</td>`;});
     let varGen='';
-    if(hayComp){const dif=(totalesGen[ultM]||0)-(totalesGen[prevM]||0);varGen=varTd(dif,totalesGen[prevM]||0,800);}
+    if(hayComp){const baseGen=esParcial?_prevCmpGen:(totalesGen[prevM]||0);const dif=(totalesGen[ultM]||0)-baseGen;varGen=varTd(dif,baseGen,800);}
     const filaGen={Cliente:'TOTAL GENERAL'};meses.forEach(m=>{filaGen[mesLbl(m)]=totalesGen[m];});
     if(hayComp){filaGen['Δ '+mesLbl(ultM)]=(totalesGen[ultM]||0)-(totalesGen[prevM]||0);filaGen['Var %']='';}
     filaGen['Total']=granTotal;expFilas.push(filaGen);
     exportData=expFilas;
-    const ths=meses.map(m=>`<th class="num">${mesLbl(m)}</th>`).join('');
+    const ths=meses.map(m=>`<th class="num">${mesLbl(m)}${(esParcial&&m===ultM)?` <span style="font-weight:400;color:var(--muted-2)">(al día ${_diaCorteCC})</span>`:''}</th>`).join('');
     if(!meses.length){
       html+=`<div class="panel"><div class="panel-body"><p class="empty">No hay ventas en el período seleccionado.</p></div></div>`;
     }else{
       const aviso=hayComp?'':'<div style="font-size:12px;color:#b26a00;padding:2px 4px 10px">Elegí un período con varios meses (ej. «Este año» o un rango de fechas) para poder comparar mes con mes.</div>';
-      html+=`<div class="panel"><div class="panel-head"><h3>Comparativa cliente mes con mes</h3><span style="font-size:12px;color:var(--muted)">Montos con IVA · ${filas.length} cliente${filas.length!==1?'s':''}${hayComp?' · variación '+mesLbl(prevM)+' → '+mesLbl(ultM):''}</span></div>
+      const notaParcial=esParcial?`<div style="font-size:12px;color:#1565c0;background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:7px 12px;margin:2px 4px 10px">ℹ️ ${mesLbl(ultM)} va <b>al día ${_diaCorteCC}</b>. Para que sea justo, la variación se compara contra <b>los mismos días de ${mesLbl(prevM)}</b> (no contra el mes completo).</div>`:'';
+      html+=notaParcial+`<div class="panel"><div class="panel-head"><h3>Comparativa cliente mes con mes</h3><span style="font-size:12px;color:var(--muted)">Montos con IVA · ${filas.length} cliente${filas.length!==1?'s':''}${hayComp?' · variación '+mesLbl(prevM)+' → '+mesLbl(ultM)+(esParcial?' (a los mismos días)':''):''}</span></div>
         ${aviso}
         <div style="overflow-x:auto"><table style="font-size:12.5px;min-width:${420+meses.length*110}px"><thead><tr><th>Cliente</th>${ths}${hayComp?`<th class="num" style="background:#eef6ff">Δ ${mesAbbr(ultM)}</th>`:''}<th class="num" style="background:#f0f5e8">Total</th></tr></thead>
         <tbody>${cuerpo}<tr style="border-top:3px solid var(--green);background:#eaf0e0"><td style="padding:11px 12px;font-weight:800;font-size:13px">TOTAL GENERAL</td>${celdasGen}${varGen}<td class="num" style="font-weight:800">${money(granTotal)}</td></tr></tbody></table></div></div>`;

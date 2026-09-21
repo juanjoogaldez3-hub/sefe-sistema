@@ -89,5 +89,31 @@ ok('"Mes anterior" → Ago, Sep (incluye septiembre)', eq(calcMeses(docs, pma), 
 const man = deslizar({ start: new Date(2026, 6, 1), end: new Date(2026, 7, 31, 23, 59, 59) }, HOY, true);
 ok('con fechas a mano (Jul–Ago) NO mete septiembre', eq(calcMeses(docs, man), ['2026-07', '2026-08']), calcMeses(docs, man).join(','));
 
+console.log('\n═══ Comparación PAREJA cuando el mes está en curso ═══');
+// Cableado
+const rama2 = src.slice(src.indexOf('COMPARACIÓN PAREJA'), src.indexOf('Comparativa cliente mes con mes'));
+ok('detecta el mes en curso (parcial)', /const esParcial = hayComp && ultM===_mkDate\(_hoyCC\)/.test(rama2));
+ok('acumula el mes anterior SOLO hasta el mismo día (día de corte)', /new Date\(d\.creada\)\.getDate\(\)>_diaCorteCC/.test(rama2) && /_prevCmp/.test(rama2));
+ok('la variación usa la base pareja (_baseComp)', /const _difCli=info=>\(\(info\.meses\[ultM\]\|\|0\)-_baseComp\(info\)\)/.test(rama2));
+ok('la celda de variación de cada fila usa la base pareja', /const u=info\.meses\[ultM\]\|\|0,pv=_baseComp\(info\),dif=u-pv/.test(src));
+ok('avisa que la variación es contra los mismos días', /los mismos días de/.test(src) && /al día \$\{_diaCorteCC\}/.test(src));
+
+// Funcional: réplica de la lógica de base pareja
+function baseComp(ventasCli, prevM, esParcial, diaCorte) {
+  if (!esParcial) return ventasCli.filter(v => v.mes === prevM).reduce((s, v) => s + v.monto, 0);
+  return ventasCli.filter(v => v.mes === prevM && v.dia <= diaCorte).reduce((s, v) => s + v.monto, 0);
+}
+// Cliente: en agosto compró Q1000 (Q600 antes del día 21, Q400 después). En sept (al día 21) lleva Q650.
+const vCli = [
+  { mes: '2026-08', dia: 5, monto: 600 }, { mes: '2026-08', dia: 27, monto: 400 },
+  { mes: '2026-09', dia: 10, monto: 650 }
+];
+// Injusto (mes completo): base = 1000 → 650 vs 1000 = "cayó -35%" (falsa alarma)
+ok('mes completo daría base 1000 (injusto)', baseComp(vCli, '2026-08', false, 21) === 1000);
+// Justo (mismos días): base = 600 → 650 vs 600 = "subió +8%" (lo real)
+ok('mismos días (al 21) da base 600 → el cliente en realidad SUBIÓ', baseComp(vCli, '2026-08', true, 21) === 600);
+const sept = 650, baseJusta = baseComp(vCli, '2026-08', true, 21);
+ok('la variación pareja es POSITIVA (no una caída falsa)', (sept - baseJusta) > 0);
+
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

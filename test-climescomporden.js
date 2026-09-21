@@ -16,7 +16,7 @@ const src = require('./test-fuente');
 let fallos = 0, pruebas = 0;
 const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t + (c ? '' : '  → ' + e)); if (!c) fallos++; };
 
-const ini = src.indexOf('const _difCli=info=>');
+const ini = src.indexOf('const _baseComp=info=>');
 const marca = 'return b[1].total-a[1].total;';
 const fin = src.indexOf('});', src.indexOf(marca));
 if (ini < 0 || fin < 0) { console.log('✗ no se encontró el bloque de orden'); process.exit(1); }
@@ -40,7 +40,7 @@ const base = () => ({
   '#NUEVO': { meses: { '2026-08': 800 }, total: 800, nombre: 'NUEVO' },
 });
 function ordenar(modo, pc) {
-  const ctx = { Math, porCli: pc || base(), ultM: '2026-08', prevM: '2026-07', hayComp: true, repFiltros: { climescompOrden: modo } };
+  const ctx = { Math, porCli: pc || base(), ultM: '2026-08', prevM: '2026-07', hayComp: true, esParcial: false, repFiltros: { climescompOrden: modo } };
   vm.createContext(ctx);
   vm.runInContext(frag + '\n;globalThis.__filas=filas;', ctx);
   return ctx.__filas.map(([k, v]) => v.nombre);
@@ -67,7 +67,7 @@ ok('SMALL (+200%) último', cay[cay.length - 1] === 'SMALL');
 
 console.log('\n═══ Sin dos meses para comparar: cae a Total ═══');
 (() => {
-  const ctx = { Math, porCli: base(), ultM: '2026-08', prevM: undefined, hayComp: false, repFiltros: { climescompOrden: 'crecio' } };
+  const ctx = { Math, porCli: base(), ultM: '2026-08', prevM: undefined, hayComp: false, esParcial: false, repFiltros: { climescompOrden: 'crecio' } };
   vm.createContext(ctx);
   vm.runInContext(frag + '\n;globalThis.__filas=filas;', ctx);
   ok('con hayComp=false ordena por Total (BIG primero)', ctx.__filas.map(([, v]) => v.nombre)[0] === 'BIG');
