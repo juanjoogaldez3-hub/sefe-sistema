@@ -76,6 +76,8 @@ ok('el reporte se renderiza (rama repType===seguimiento) con el botón', /repTyp
 ok('el seguimiento no usa el rango de fechas (barra oculta)', /repType==='seguimiento'/.test(src) && /_sinFecha=_esFoto\|\|repType==='seguimiento'/.test(src));
 ok('el panel del inicio usa el semáforo y ofrece ver el reporte', /function renderSeguimiento\(/.test(src) && /_seguimientoClientes\(\)/.test(src) && /abrirReporte\('seguimiento'\)/.test(src));
 ok('existe abrirReporte para saltar al reporte desde el inicio', /window\.abrirReporte=function\(tipo\)/.test(src));
+ok('el reporte se puede ordenar por estado del semáforo', /setRepFiltro\('segOrden',this\.value\)/.test(src) && /Estado \(sem[aá]foro\)/.test(src) && /const _porEstado=\(repFiltros\.segOrden\|\|'prioridad'\)==='estado'/.test(src));
+ok('al ordenar por estado usa el rango dejo<cayendo<reponer y agrupa', /const _rankSeg=\{dejo:0,cayendo:1,reponer:2/.test(src) && /if\(_porEstado\)filtrada\.sort/.test(src) && /_porEstado&&c\.estado!==_grupoAnt/.test(src));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

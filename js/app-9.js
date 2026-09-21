@@ -680,19 +680,30 @@ function renderReportes(){
     const soloAtencion=(repFiltros.segTodos!=='1');
     const filtrada=lista.filter(c=>soloAtencion?['dejo','cayendo','reponer'].includes(c.estado):c.estado!=='nunca');
     const nAt=lista.filter(c=>['dejo','cayendo','reponer'].includes(c.estado)).length;
+    // Orden: por prioridad (default, ya viene así) o por estado del semáforo.
+    const _rankSeg={dejo:0,cayendo:1,reponer:2,creciendo:3,ok:4,nunca:5};
+    const _porEstado=(repFiltros.segOrden||'prioridad')==='estado';
+    if(_porEstado)filtrada.sort((a,b)=>(_rankSeg[a.estado]-_rankSeg[b.estado])||(b.prioridad-a.prioridad));
     const expFilas=[];
-    const cuerpo=filtrada.map(c=>{
+    const _mapFila=c=>{
       expFilas.push({Cliente:c.nombre,Vendedor:c.vendedorNombre||'',Estado:LBL[c.estado]||c.estado,Motivo:c.razon,'Última compra':c.ultimaCompra||'','Días sin comprar':c.diasSinComprar==null?'':c.diasSinComprar,'Cadencia (días)':c.cadencia==null?'':c.cadencia,'Ritmo mensual':c.promMensual||0});
       const badge=`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${c.color};white-space:nowrap"><span style="width:9px;height:9px;border-radius:50%;background:${c.color};flex:0 0 auto"></span>${LBL[c.estado]||c.estado}</span>`;
       const btn=`<button class="btn btn-ghost btn-sm" onclick="crearSeguimiento(${c.clienteId})" title="Crear una tarea de seguimiento para este cliente">📞 Seguimiento</button>`;
       return `<tr style="border-bottom:1px solid var(--line)"><td style="font-weight:600">${escHtml(c.nombre)}${c.vendedorNombre?`<div style="font-size:11px;color:var(--muted)">${escHtml(c.vendedorNombre)}</div>`:''}</td><td>${badge}</td><td style="font-size:12px">${escHtml(c.razon)}</td><td class="num">${c.ultimaCompra?fdate(c.ultimaCompra):'—'}</td><td class="num">${c.promMensual?money(c.promMensual):'—'}</td><td>${btn}</td></tr>`;
+    };
+    // Cuando se ordena por estado, un encabezado suave separa cada grupo del semáforo.
+    let _grupoAnt=null;
+    const cuerpo=filtrada.map(c=>{
+      let sep='';
+      if(_porEstado&&c.estado!==_grupoAnt){_grupoAnt=c.estado;sep=`<tr><td colspan="6" style="background:var(--surface-2);padding:6px 10px;font-size:11.5px;font-weight:700;color:${c.color}"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.color};margin-right:6px"></span>${LBL[c.estado]||c.estado}</td></tr>`;}
+      return sep+_mapFila(c);
     }).join('');
     exportData=expFilas;
     const toggle=`<label style="font-size:12px;color:var(--muted);display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" ${soloAtencion?'':'checked'} onchange="setRepFiltro('segTodos',this.checked?'1':'')" style="width:auto"> Mostrar también los que van bien / al día</label>`;
     if(!filtrada.length){
       html+=`<div class="panel"><div class="panel-body"><p class="empty">${lista.length?'🎉 Ningún cliente necesita seguimiento ahora mismo.':'No hay clientes con historial de compras.'}</p></div></div>`;
     }else{
-      html+=`<div class="panel"><div class="panel-head"><h3>Seguimiento de clientes</h3><span style="font-size:12px;color:var(--muted)">${nAt} necesita${nAt!==1?'n':''} seguimiento · ordenados por prioridad (llamá de arriba hacia abajo)</span></div>
+      html+=`<div class="panel"><div class="panel-head"><h3>Seguimiento de clientes</h3><span style="font-size:12px;color:var(--muted)">${nAt} necesita${nAt!==1?'n':''} seguimiento · ${_porEstado?'agrupados por estado':'ordenados por prioridad (llamá de arriba hacia abajo)'}</span></div>
         <div style="padding:2px 4px 10px">${toggle}</div>
         <div style="overflow-x:auto"><table><thead><tr><th>Cliente</th><th>Estado</th><th>Motivo</th><th class="num">Última compra</th><th class="num">Ritmo mensual</th><th></th></tr></thead><tbody>${cuerpo}</tbody></table></div></div>`;
     }
