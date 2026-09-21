@@ -22,8 +22,12 @@ console.log('\n═══ Cableado: respeta el rango, no fuerza el mes en curso �
 const rama = src.slice(src.indexOf('COMPARATIVA CLIENTE MES CON MES'), src.indexOf('COMPARATIVA PRODUCTO/MES POR CLIENTE'));
 ok('ya NO fuerza el mes en curso como columna', !/mesesSet\.add\(_mkDate\(_ahora\)\)/.test(rama), 'sigue el add(_ahora)');
 ok('ya NO arma un rango forzado _rComp hasta hoy', !/_rComp=\{start:/.test(rama));
-ok('filtra las ventas por el rango elegido (r)', /_filtrarVentas\(r\)/.test(rama));
+ok('filtra las ventas por el rango (rCC) que incluye el mes en curso', /_filtrarVentas\(rCC\)/.test(rama));
 ok('si el rango es de un mes, trae el mes anterior para comparar', /ventasC\.length&&mesesSet\.size<2/.test(rama) && /prevDate=new Date\(ba,bm-2,1\)/.test(rama));
+
+console.log('\n═══ Los presets ("3 meses", "mes anterior") incluyen el mes en curso ═══');
+ok('desliza la ventana para que TERMINE en el mes en curso', /if\(r\.end<_iniMesActual\)/.test(rama) && /_hoy\.getMonth\(\)-_span,1\)/.test(rama));
+ok('respeta las fechas puestas a mano (no desliza)', /const _hayFechasManual=/.test(rama) && /if\(!_hayFechasManual\)/.test(rama));
 
 console.log('\n═══ Lógica de selección de meses (con datos de ejemplo) ═══');
 // Réplica exacta de la lógica del reporte, para fijar el comportamiento.
@@ -62,6 +66,28 @@ const c4 = calcMeses(docs, { start: D('2026-01-01T00:00:00'), end: D('2999-01-01
 ok('"Este año" → todos los meses con ventas', eq(c4, ['2026-06', '2026-07', '2026-08', '2026-09']), c4.join(','));
 const c5 = calcMeses(docs, { start: D('2026-12-01T00:00:00'), end: D('2026-12-31T23:59:59') });
 ok('rango sin ventas → sin columnas (muestra "no hay ventas")', eq(c5, []), c5.join(','));
+
+console.log('\n═══ Deslizamiento de presets: el mes en curso siempre entra ═══');
+// Réplica de la lógica de deslizamiento (la ventana se corre para terminar hoy).
+function deslizar(r, hoy, hayManual) {
+  if (hayManual) return r;
+  const iniMesActual = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  if (r.end < iniMesActual) {
+    const span = (r.end.getFullYear() * 12 + r.end.getMonth()) - (r.start.getFullYear() * 12 + r.start.getMonth());
+    return { start: new Date(hoy.getFullYear(), hoy.getMonth() - span, 1), end: new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59) };
+  }
+  return r;
+}
+const HOY = new Date(2026, 8, 21); // 21-sep-2026
+// "Últimos 3 meses" en septiembre daba Jun–Ago; ahora Jul–Sep (incluye el actual)
+const p3 = deslizar({ start: new Date(2026, 5, 1), end: new Date(2026, 8, 0, 23, 59, 59) }, HOY, false);
+ok('"Últimos 3 meses" → Jul, Ago, Sep (incluye septiembre)', eq(calcMeses(docs, p3), ['2026-07', '2026-08', '2026-09']), calcMeses(docs, p3).join(','));
+// "Mes anterior" (Ago) → ahora incluye el actual: Ago, Sep
+const pma = deslizar({ start: new Date(2026, 7, 1), end: new Date(2026, 8, 0, 23, 59, 59) }, HOY, false);
+ok('"Mes anterior" → Ago, Sep (incluye septiembre)', eq(calcMeses(docs, pma), ['2026-08', '2026-09']), calcMeses(docs, pma).join(','));
+// Con fechas a mano NO se desliza
+const man = deslizar({ start: new Date(2026, 6, 1), end: new Date(2026, 7, 31, 23, 59, 59) }, HOY, true);
+ok('con fechas a mano (Jul–Ago) NO mete septiembre', eq(calcMeses(docs, man), ['2026-07', '2026-08']), calcMeses(docs, man).join(','));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

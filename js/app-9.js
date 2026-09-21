@@ -310,7 +310,23 @@ function renderReportes(){
       if(repFiltros.vendedor_simple)v=v.filter(d=>d.vendedorNombre===repFiltros.vendedor_simple);
       return v;
     };
-    let ventasC=_filtrarVentas(r);
+    // El mes EN CURSO siempre debe entrar: el objetivo del reporte es comparar
+    // el mes actual con los anteriores. Los presets "Últimos 3 meses" y "Mes
+    // anterior" terminan a fin del mes pasado y lo dejaban afuera. Si NO hay
+    // fechas puestas a mano, deslizamos la ventana hacia adelante para que
+    // TERMINE en el mes en curso, manteniendo la misma cantidad de meses.
+    let rCC=r;
+    const _hayFechasManual=(($('#rep-desde')&&$('#rep-desde').value)||($('#rep-hasta')&&$('#rep-hasta').value));
+    if(!_hayFechasManual){
+      const _hoy=new Date();
+      const _iniMesActual=new Date(_hoy.getFullYear(),_hoy.getMonth(),1);
+      if(r.end<_iniMesActual){
+        const _span=(r.end.getFullYear()*12+r.end.getMonth())-(r.start.getFullYear()*12+r.start.getMonth());
+        rCC={start:new Date(_hoy.getFullYear(),_hoy.getMonth()-_span,1),
+             end:new Date(_hoy.getFullYear(),_hoy.getMonth()+1,0,23,59,59)};
+      }
+    }
+    let ventasC=_filtrarVentas(rCC);
     let mesesSet=new Set();
     ventasC.forEach(d=>mesesSet.add(mesKey(d)));
     if(ventasC.length&&mesesSet.size<2){
@@ -318,7 +334,7 @@ function renderReportes(){
       const base=[...mesesSet].sort()[0];
       const [ba,bm]=base.split('-').map(Number);
       const prevDate=new Date(ba,bm-2,1);   // 1° del mes anterior al base
-      const rExt={start:(r.start<prevDate?r.start:prevDate),end:r.end};
+      const rExt={start:(rCC.start<prevDate?rCC.start:prevDate),end:rCC.end};
       ventasC=_filtrarVentas(rExt);
       mesesSet=new Set();
       ventasC.forEach(d=>mesesSet.add(mesKey(d)));
