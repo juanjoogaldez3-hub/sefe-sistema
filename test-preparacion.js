@@ -74,6 +74,7 @@ ok('escaneo continuo en la preparación (marca por barras del producto)', /funct
 ok('confirma cada lectura dentro del escáner (color + bip + vibración)', /function _scanFeedback\(/.test(src) && /navigator\.vibrate/.test(src) && /_scanBeep\(/.test(src) && /✓ '\+nom/.test(src));
 ok('cuenta unidad por unidad y muestra x/y al escanear', /const nuevo=cant\+1/.test(src) && /nuevo\+'\/'\+meta/.test(src));
 ok('permite contar 2 unidades iguales (cuenta tras un "hueco")', /if\(txt===_scanUltimo\.code && !_scanGap\)return/.test(src) && /else\{_scanGap=true;\}/.test(src));
+ok('alerta agresiva si se escanea de más (rojo + doble bip + vibración fuerte)', /¡DE MÁS!/.test(src) && /'alerta'/.test(src) && /\[120,60,120,60,120\]/.test(src) && /if\(esAlerta\)setTimeout\(\(\)=>_scanBeep\(false\)/.test(src));
 ok('avisa dentro del escáner si el producto no es de esa entrega', /_scanFeedback\('✗ No va en esta entrega','warn'\)/.test(src));
 ok('campo "Código de barras" + botón escanear en la ficha del producto', /id="p-barras"/.test(src) && /escanearBarrasProducto\(\)/.test(src));
 ok('el producto guarda su código de barras', /codigoBarras:\(\$\('#p-barras'\)\?\.value\|\|''\)\.trim\(\)/.test(src));
