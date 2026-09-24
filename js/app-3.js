@@ -467,18 +467,6 @@ async function verDoc(id){
   const _sedeBtn=document.getElementById('doc-sede-btn');
   if(_sedeBtn)_sedeBtn.style.display=(f&&f.tipoDoc==='prestamo')?'':'none';
   if(f&&f.tipoDoc==='prestamo')_docSedeId=f.id;
-  // Botón "A despacho": para facturas/notas entregables, permite mandarla (o sacarla) del módulo de Despachos.
-  const _despBtn=document.getElementById('doc-despacho-btn');
-  if(_despBtn){
-    const _eleg=f && f.estado!=='anulada' && ['cambiaria','envio','prestamo'].includes(f.tipoDoc) &&
-      (f.tipoDoc!=='cambiaria' || ['certificada','facturado'].includes(f.estado));
-    if(_eleg && !soloLectura()){
-      _despBtn.style.display='';
-      _despBtn.dataset.id=f.id;
-      _despBtn.textContent=f.paraDespacho?'✓ En despacho':'🚚 A despacho';
-      _despBtn.title=f.paraDespacho?'Quitar del módulo de Despachos':'Enviar al módulo de Despachos (entrega a domicilio)';
-    }else{_despBtn.style.display='none';}
-  }
   // El PDF oficial ya no viene en la carga inicial (pesaba 24 MB): si esta
   // factura tiene uno, se trae a pedido antes de decidir cómo mostrarla.
   if(f && !f.pdfBase64 && f.autorizacion && typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
@@ -587,9 +575,8 @@ function toggleDespacho(id){
     toast('🚚 Enviada a Despachos','Ya aparece en Despachos para asignarle piloto y ruta.');
     logAudit('Enviada a Despachos',ref);
   }
-  const b=document.getElementById('doc-despacho-btn');
-  if(b&&Number(b.dataset.id)===id){b.textContent=f.paraDespacho?'✓ En despacho':'🚚 A despacho';b.title=f.paraDespacho?'Quitar del módulo de Despachos':'Enviar al módulo de Despachos (entrega a domicilio)';}
   if(typeof guardarDocumento==='function')guardarDocumento(f);
+  if(typeof renderDocs==='function')renderDocs();
   if(typeof renderDespachos==='function')renderDespachos();
 }
 window.toggleDespacho=toggleDespacho;

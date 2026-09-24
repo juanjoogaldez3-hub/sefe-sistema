@@ -60,8 +60,8 @@ console.log('\n═══ 2 · Mandar a despacho la deja limpia ("Por asignar") �
 console.log('\n═══ 3 · Cableado (casilla + botón) ═══');
 ok('casilla "Entregar a domicilio" al facturar (normal y exenta)', (src.match(/id="fac-despacho"/g) || []).length >= 2);
 ok('facturarPedido lee la casilla', /f\.paraDespacho=_facDesp\?_facDesp\.checked:false/.test(src));
-ok('botón "A despacho" en la barra del documento', /id="doc-despacho-btn"/.test(html) && /toggleDespacho\(Number\(this\.dataset\.id\)\)/.test(html));
-ok('verDoc prende el botón sólo para tipos entregables', /_despBtn\.textContent=f\.paraDespacho\?'✓ En despacho':'🚚 A despacho'/.test(src));
+ok('opción "Enviar a despacho" en el menú de acciones de la fila', /🚚 Enviar a despacho<\/button>/.test(src) && /onclick="toggleDespacho\(\$\{f\.id\}\)"/.test(src));
+ok('la opción sólo aparece para documentos entregables', /const _despEleg=f\.estado!=='anulada'&&\(/.test(src) && /🚚 Quitar de despacho/.test(src));
 
 console.log('\n═══ 4 · El piloto sin ligar no ve todo ═══');
 ok('si el piloto no está ligado, no se le muestran entregas ajenas', /esPiloto\(\)&&pid==null/.test(src) && /todavía no está ligado a un piloto/.test(src));
