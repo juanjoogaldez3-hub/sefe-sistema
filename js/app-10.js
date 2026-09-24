@@ -876,12 +876,15 @@ function _rutaParadaDe(d){
   return dir?dir+', Guatemala':null;
 }
 // Abre la ruta (paradas ordenadas por su nº de ruta) en Google Maps para navegar.
+// El punto de salida siempre es LA UBICACIÓN ACTUAL del teléfono: Google Maps la
+// usa como origen cuando el primer tramo de la URL va vacío (queda ".../dir//...").
 function abrirRutaMaps(docs){
   const orden=(docs||[]).slice().sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999));
   const paradas=orden.map(_rutaParadaDe).filter(Boolean);
   if(!paradas.length){toast('Sin ubicaciones','Estas entregas no tienen pin ni dirección para navegar. Ubicá a los clientes primero (Clientes → Ubicar).',true);return;}
-  if(paradas.length>23)toast('Ruta larga','Google Maps abre hasta 23 paradas; se abren las primeras 23.',false);
-  window.open('https://www.google.com/maps/dir/'+paradas.slice(0,23).map(encodeURIComponent).join('/'),'_blank');
+  if(paradas.length>22)toast('Ruta larga','Google Maps abre hasta 22 paradas más tu ubicación; se abren las primeras 22.',false);
+  const stops=paradas.slice(0,22); // 22 clientes + tu ubicación = 23 (tope de Google Maps)
+  window.open('https://www.google.com/maps/dir/'+['',...stops].map(encodeURIComponent).join('/'),'_blank');
 }
 window.abrirRutaMaps=abrirRutaMaps;
 // Desde Despachos: navega la ruta del piloto elegido en el filtro (sin entregados).
