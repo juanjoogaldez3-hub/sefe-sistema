@@ -57,7 +57,8 @@ ok('en "asignado" el piloto ve "Preparar" con el avance', /est==='asignado'\).*a
 ok('recién en "preparado" aparece "Cargado, voy en ruta"', /est==='preparado'\)btn=.*marcarEnRuta\(\$\{d\.id\}\)/.test(src));
 
 console.log('\n═══ Escáner de código de barras ═══');
-ok('carga html5-qrcode desde CDN', /html5-qrcode\/2\.3\.8\/html5-qrcode\.min\.js/.test(src) && /function _scanCam\(/.test(src));
+ok('usa el lector nativo (BarcodeDetector) y html5-qrcode de respaldo', /'BarcodeDetector' in window/.test(src) && /new BarcodeDetector\(/.test(src) && /html5-qrcode\/2\.3\.8\/html5-qrcode\.min\.js/.test(src) && /function _scanCam\(/.test(src));
+ok('limpia la cámara al cerrar (stream + timer)', /_scanStream\.getTracks\(\)\.forEach\(t=>t\.stop\(\)\)/.test(src) && /clearInterval\(_scanTimer\)/.test(src));
 ok('escaneo continuo en la preparación (marca por barras del producto)', /function prepEscanear\(id\)/.test(src) && /p\.codigoBarras&&String\(p\.codigoBarras\)\.trim\(\)===code/.test(src) && /continuo:true/.test(src));
 ok('avisa si el producto escaneado no es de esa entrega', /Ese producto no va en esta entrega/.test(src));
 ok('campo "Código de barras" + botón escanear en la ficha del producto', /id="p-barras"/.test(src) && /escanearBarrasProducto\(\)/.test(src));
