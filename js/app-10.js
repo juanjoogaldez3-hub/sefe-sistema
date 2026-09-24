@@ -867,6 +867,70 @@ function dirEntrega(d){
   const cli=clientes.find(c=>c.id===d.clienteId);
   return cli?.direccion||'—';
 }
+// ---- Navegación de la ruta en Google Maps ----
+// Una "parada" es el pin del cliente si lo tiene; si no, su dirección de texto.
+function _rutaParadaDe(d){
+  const c=clientes.find(x=>x.id===d.clienteId);
+  if(c&&c.lat!=null&&c.lng!=null)return Number(c.lat)+','+Number(c.lng);
+  const dir=(c&&c.direccion&&String(c.direccion).toLowerCase()!=='ciudad')?String(c.direccion).trim():'';
+  return dir?dir+', Guatemala':null;
+}
+// Abre la ruta (paradas ordenadas por su nº de ruta) en Google Maps para navegar.
+function abrirRutaMaps(docs){
+  const orden=(docs||[]).slice().sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999));
+  const paradas=orden.map(_rutaParadaDe).filter(Boolean);
+  if(!paradas.length){toast('Sin ubicaciones','Estas entregas no tienen pin ni dirección para navegar. Ubicá a los clientes primero (Clientes → Ubicar).',true);return;}
+  if(paradas.length>23)toast('Ruta larga','Google Maps abre hasta 23 paradas; se abren las primeras 23.',false);
+  window.open('https://www.google.com/maps/dir/'+paradas.slice(0,23).map(encodeURIComponent).join('/'),'_blank');
+}
+window.abrirRutaMaps=abrirRutaMaps;
+// Desde Despachos: navega la ruta del piloto elegido en el filtro (sin entregados).
+function abrirRutaDespachos(){
+  const fPiloto=($('#desp-piloto')||{}).value||'';
+  if(!fPiloto){toast('Elegí un piloto','Seleccioná un piloto en el filtro para navegar su ruta.',false);return;}
+  const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
+  if(!lista.length){toast('Sin entregas','Ese piloto no tiene entregas pendientes.',false);return;}
+  abrirRutaMaps(lista);
+}
+window.abrirRutaDespachos=abrirRutaDespachos;
+// Desde Mis entregas: navega la ruta propia del piloto (sin entregados).
+function abrirRutaMisEntregas(){
+  const pid=(typeof miPilotoId==='function')?miPilotoId():null;
+  const esPil=(typeof esPiloto==='function')&&esPiloto();
+  const mias=docsDespachables().filter(d=>d.pilotoId!=null&&estadoEntrega(d)!=='entregado'&&(esPil?d.pilotoId===pid:true));
+  abrirRutaMaps(mias);
+}
+window.abrirRutaMisEntregas=abrirRutaMisEntregas;
+
+// ---- Asignación MASIVA (marcar varias entregas y asignarlas de una) ----
+let _despSel=new Set();
+window.despToggleSel=function(id,checked){id=Number(id);if(checked)_despSel.add(id);else _despSel.delete(id);_despActualizarBulk();};
+window.despSelAll=function(checked){document.querySelectorAll('#t-despachos input.desp-chk').forEach(cb=>{const id=Number(cb.dataset.id);cb.checked=checked;if(checked)_despSel.add(id);else _despSel.delete(id);});_despActualizarBulk();};
+function _despActualizarBulk(){const btn=document.getElementById('desp-bulk-btn');if(btn){const n=_despSel.size;btn.style.display=n?'':'none';btn.textContent='Asignar '+n+' seleccionada'+(n!==1?'s':'');}}
+function asignarMasivo(){
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede asignar entregas',true);return;}
+  const docs=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(Boolean);
+  if(!docs.length){toast('Nada seleccionado','Marcá una o más entregas en la lista',false);return;}
+  const pilOpts=pilotos.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+  const maxOrden=Math.max(0,...docsDespachables().filter(d=>d.ordenRuta!=null).map(d=>d.ordenRuta||0));
+  openMod('Asignar '+docs.length+' entrega'+(docs.length!==1?'s':''),`
+    <div class="row"><div><label>Piloto</label><select id="am-piloto"><option value="">— Seleccioná —</option>${pilOpts}</select></div>
+      <div><label>Numerar ruta desde</label><input id="am-desde" type="number" min="1" value="${maxOrden+1}"></div></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:8px;cursor:pointer"><input type="checkbox" id="am-autonum" checked style="width:auto"> Numerar la ruta automáticamente (en el orden actual de la lista)</label>
+    <div class="note n-ok" style="margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Se asignan las ${docs.length} entregas marcadas a ese piloto. Si numerás automáticamente, se ordenan según cómo están en la tabla ahora.</span></div>`,
+    ()=>{
+      const pid=$('#am-piloto').value?Number($('#am-piloto').value):null;
+      if(!pid){toast('Seleccioná un piloto',null,true);return;}
+      const auto=$('#am-autonum').checked; let n=Number($('#am-desde').value)||1;
+      const ordenados=docs.slice().sort((a,b)=>((a.ordenRuta??999)-(b.ordenRuta??999))||((a.numeroDte||a.numero||0)-(b.numeroDte||b.numero||0)));
+      const pil=pilotos.find(p=>p.id===pid);
+      ordenados.forEach(d=>{d.pilotoId=pid;if(auto)d.ordenRuta=n++;if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';if(typeof guardarDocumento==='function')guardarDocumento(d);});
+      logAudit('Entregas asignadas (masivo)',ordenados.length+' entregas · Piloto: '+(pil?.nombre||'—'));
+      _despSel.clear();closeMod();renderDespachos();
+      toast('✓ '+ordenados.length+' entregas asignadas',(pil?.nombre||'')+(auto?' · ruta numerada':''));
+    });
+}
+window.asignarMasivo=asignarMasivo;
 
 function renderDespachos(){
   // poblar selector de pilotos
@@ -884,6 +948,9 @@ function renderDespachos(){
   });
   // KPIs
   const todos=docsDespachables();
+  // Limpiar selección de documentos que ya no se pueden asignar (entregados/anulados).
+  const _asignables=new Set(todos.filter(d=>estadoEntrega(d)!=='entregado').map(d=>d.id));
+  [..._despSel].forEach(id=>{if(!_asignables.has(id))_despSel.delete(id);});
   const activos=todos.filter(d=>estadoEntrega(d)!=='entregado'); // los que realmente falta despachar
   const sinAsig=todos.filter(d=>estadoEntrega(d)==='sin').length;
   const enRuta=todos.filter(d=>estadoEntrega(d)==='ruta').length;
@@ -910,7 +977,9 @@ function renderDespachos(){
     let acts='';
     acts+=`<button class="btn btn-ghost btn-sm" onclick="verDoc(${d.id})">Ver</button>`;
     if(est!=='entregado')acts=`<button class="btn btn-primary btn-sm" onclick="asignarDespacho(${d.id})">${d.pilotoId?'Reasignar':'Asignar'}</button>`+acts;
+    const chk=(canAsignarPiloto()&&est!=='entregado')?`<input type="checkbox" class="desp-chk" data-id="${d.id}" ${_despSel.has(d.id)?'checked':''} onclick="despToggleSel(${d.id},this.checked)">`:'';
     return `<tr>
+      <td style="text-align:center">${chk}</td>
       <td class="num" style="font-weight:700;color:var(--green)">${d.ordenRuta!=null?'#'+d.ordenRuta:'—'}</td>
       <td style="font-weight:600">${docNum(d)}<div style="font-size:10.5px;color:var(--muted)">${tipoCorto[d.tipoDoc]}</div></td>
       <td>${d.clienteComercial||d.clienteNombre}</td>
@@ -922,6 +991,8 @@ function renderDespachos(){
     </tr>`;
   }).join('');
   enhanceTable('t-despachos');
+  _despActualizarBulk();
+  const selall=document.getElementById('desp-selall');if(selall)selall.checked=false;
   renderConciliacion();
 }
 window.renderDespachos=renderDespachos;
@@ -1079,6 +1150,7 @@ function renderMisEntregas(){
   $('#pil-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
   // Ordenar por ruta
   mias.sort((a,b)=>{const ra=a.ordenRuta??999,rb=b.ordenRuta??999;return ra-rb;});
+  _pilRenderMapa(mias);
   const docNum=d=>d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
   const tipoCorto={cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'};
   if(!mias.length){
@@ -1086,7 +1158,8 @@ function renderMisEntregas(){
     return;
   }
   // Tarjetas tipo lista de entregas
-  $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-head"><h3>Mis entregas de hoy</h3><span style="font-size:12px;color:var(--muted)">${mias.length} en total · ordenadas por ruta</span></div><div class="panel-body" style="display:flex;flex-direction:column;gap:11px">`+
+  const nNav=mias.filter(d=>estadoEntrega(d)!=='entregado').length;
+  $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-head"><h3>Mis entregas de hoy</h3><div style="display:flex;align-items:center;gap:10px;margin-left:auto"><span style="font-size:12px;color:var(--muted)">${mias.length} en total · ordenadas por ruta</span>${nNav?`<button class="btn btn-primary btn-sm" onclick="abrirRutaMisEntregas()" title="Abrir toda la ruta en Google Maps para navegar">🗺️ Navegar mi ruta</button>`:''}</div></div><div class="panel-body" style="display:flex;flex-direction:column;gap:11px">`+
     mias.map(d=>{
       const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];
       const cli=clientes.find(c=>c.id===d.clienteId);
@@ -1116,6 +1189,40 @@ function renderMisEntregas(){
     }).join('')+`</div></div>`+corteCajaHTML(mias);
 }
 window.renderMisEntregas=renderMisEntregas;
+// ---- Mapa de la ruta del piloto (colapsable, mobile-friendly) ----
+let _pilMapaAbierto=false;
+function _pilToggleMapa(){_pilMapaAbierto=!_pilMapaAbierto;renderMisEntregas();}
+window._pilToggleMapa=_pilToggleMapa;
+function _pilRenderMapa(mias){
+  const wrap=document.getElementById('pil-mapa-wrap'); if(!wrap)return;
+  const conLoc=(mias||[]).filter(d=>{const c=clientes.find(x=>x.id===d.clienteId);return c&&c.lat!=null&&c.lng!=null&&estadoEntrega(d)!=='entregado';});
+  if(!conLoc.length){wrap.innerHTML='';return;}
+  wrap.innerHTML=`<div class="panel" style="margin-bottom:14px"><div class="panel-head"><h3>Mapa de la ruta</h3><button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="_pilToggleMapa()">${_pilMapaAbierto?'Ocultar mapa':'🗺️ Ver mapa ('+conLoc.length+')'}</button></div>${_pilMapaAbierto?'<div id="pil-mapa" style="height:46vh;min-height:280px;border-top:1px solid var(--line);background:#eef1ea"></div>':''}</div>`;
+  if(_pilMapaAbierto)setTimeout(()=>_pilInitMapa(conLoc),0);
+}
+async function _pilInitMapa(docs){
+  const cont=document.getElementById('pil-mapa'); if(!cont)return;
+  const pts=docs.slice().sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999)).map(d=>{const c=clientes.find(x=>x.id===d.clienteId);return {lat:Number(c.lat),lng:Number(c.lng),n:d.ordenRuta,nombre:d.clienteComercial||d.clienteNombre};});
+  try{
+    if(typeof GOOGLE_MAPS_KEY!=='undefined'&&GOOGLE_MAPS_KEY&&typeof _cargarGoogleMaps==='function'&&!(typeof _gmapsAuthFail!=='undefined'&&_gmapsAuthFail)){
+      const gm=await _cargarGoogleMaps(); if(!document.getElementById('pil-mapa'))return;
+      const map=new gm.Map(cont,{center:{lat:pts[0].lat,lng:pts[0].lng},zoom:12,mapTypeControl:false,streetViewControl:false});
+      const bounds=new gm.LatLngBounds();
+      pts.forEach(p=>{new gm.Marker({position:{lat:p.lat,lng:p.lng},map,title:(p.n!=null?p.n+'. ':'')+p.nombre,label:p.n!=null?{text:String(p.n),color:'#fff',fontSize:'11px',fontWeight:'700'}:undefined});bounds.extend({lat:p.lat,lng:p.lng});});
+      if(pts.length>1)new gm.Polyline({path:pts.map(p=>({lat:p.lat,lng:p.lng})),map,strokeColor:'#2e7d32',strokeOpacity:.85,strokeWeight:3});
+      map.fitBounds(bounds); gm.event.addListenerOnce(map,'idle',()=>{if(map.getZoom()>16)map.setZoom(16);});
+      return;
+    }
+    const L=await _cargarLeaflet(); if(!document.getElementById('pil-mapa'))return;
+    const map=L.map(cont).setView([pts[0].lat,pts[0].lng],12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+    const latlngs=[];
+    pts.forEach(p=>{const mk=L.marker([p.lat,p.lng]).addTo(map);if(p.n!=null)mk.bindTooltip(String(p.n),{permanent:true,direction:'center',className:'rd-num'});latlngs.push([p.lat,p.lng]);});
+    if(pts.length>1)L.polyline(latlngs,{color:'#2e7d32',weight:3,opacity:.85}).addTo(map);
+    map.fitBounds(latlngs,{maxZoom:16,padding:[30,30]});
+    setTimeout(()=>{try{map.invalidateSize();}catch(e){}},150);
+  }catch(e){cont.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted-2);font-size:12px">No se pudo cargar el mapa.</div>';}
+}
 
 // ---- Corte de caja del piloto (del día) ----
 function corteCajaHTML(entregas){
