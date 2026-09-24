@@ -508,7 +508,10 @@ const TIPO_TIT={pedido:'PEDIDO',cambiaria:'FACTURA CAMBIARIA',envio:'NOTA DE ENV
 const FISCAL={cambiaria:1};
 
 // Módulos desactivados temporalmente (no pulidos para producción). Reactivar = quitar de esta lista.
-const MODULOS_DESACTIVADOS=['despachos','misentregas'];
+const MODULOS_DESACTIVADOS=['misentregas'];
+// Módulos en fase de prueba: sólo el Administrador los ve, aunque el rol los tenga en sus vistas.
+// (Despachos se está afinando; se abre a Logística/Gerencia quitándolo de esta lista.)
+const MODULOS_SOLO_ADMIN=['despachos'];
 
 // ============================================================
 //  MÓDULOS (paquete base + opcionales por cliente)
@@ -543,6 +546,7 @@ window.moduloActivo=moduloActivo; window.vistaDisponible=vistaDisponible;
 
 function tienePermiso(v){
   if(MODULOS_DESACTIVADOS.includes(v))return false;
+  if(MODULOS_SOLO_ADMIN.includes(v) && currentRole!=='admin')return false; // en prueba: sólo admin
   if(!vistaDisponible(v))return false;   // módulo apagado para este cliente
   const r=ROLES[currentRole];if(!r)return true;
   return r.views==='ALL'||r.views.includes(v);
