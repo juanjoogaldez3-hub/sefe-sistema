@@ -43,14 +43,14 @@ function _cargarEscaner(){
   });
   return _escanerPromise;
 }
-let _scanInstancia=null, _scanStream=null, _scanTimer=null, _scanUltimo={code:'',ts:0};
+let _scanInstancia=null, _scanStream=null, _scanTimer=null, _scanTorchOn=false, _scanUltimo={code:'',ts:0};
 async function _scanCam(onCode, opts){
   opts=opts||{};
   let ov=document.getElementById('scan-ov');
   if(!ov){
     ov=document.createElement('div'); ov.id='scan-ov';
     ov.style.cssText='position:fixed;inset:0;z-index:100001;background:#000;display:flex;flex-direction:column';
-    ov.innerHTML='<div style="color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;background:#111"><div id="scan-tit" style="font-weight:700;font-size:15px;flex:1"></div><button onclick="_scanCerrar()" style="background:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px">Cerrar</button></div>'+
+    ov.innerHTML='<div style="color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px;background:#111"><button onclick="_scanCerrar()" style="background:#333;color:#fff;border:0;border-radius:8px;padding:8px 13px;font-weight:700;font-size:14px">‹ Volver</button><div id="scan-tit" style="font-weight:700;font-size:14px;flex:1;text-align:center"></div><button id="scan-torch" onclick="_scanTorch()" style="display:none;background:#fff;border:0;border-radius:8px;padding:8px 13px;font-weight:700;font-size:14px">🔦 Linterna</button></div>'+
       '<div style="flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">'+
         '<video id="scan-video" playsinline muted style="width:100%;height:100%;object-fit:cover"></video>'+
         '<div id="scan-reader" style="width:100%;height:100%;display:none"></div>'+
@@ -83,6 +83,14 @@ async function _scanCam(onCode, opts){
     catch(e){ toast('No se pudo abrir la cámara','Revisá el permiso de cámara del navegador, o marcá a mano.',true); _scanCerrar(); return; }
     _scanStream=stream; video.srcObject=stream;
     try{ await video.play(); }catch(e){}
+    // Mostrar el botón de linterna sólo si el dispositivo la permite
+    _scanTorchOn=false;
+    const _tbtn=document.getElementById('scan-torch');
+    if(_tbtn){
+      const _trk=stream.getVideoTracks()[0];
+      const _caps=(_trk&&_trk.getCapabilities)?_trk.getCapabilities():{};
+      if(_caps&&_caps.torch){_tbtn.style.display='';_tbtn.textContent='🔦 Linterna';}else{_tbtn.style.display='none';}
+    }
     _scanTimer=setInterval(async()=>{
       if(!_scanStream||!video.videoWidth)return;
       try{ const codes=await Detector.detect(video); if(codes&&codes.length)emit(codes[0].rawValue); }catch(e){}
@@ -105,7 +113,21 @@ async function _scanCam(onCode, opts){
     _scanCerrar();
   }
 }
+// Enciende/apaga la linterna del teléfono (sólo lector nativo, Android/Chrome).
+async function _scanTorch(){
+  if(!_scanStream){return;}
+  const track=_scanStream.getVideoTracks()[0]; if(!track)return;
+  const caps=track.getCapabilities?track.getCapabilities():{};
+  if(!caps||!caps.torch){toast('Sin linterna','Este dispositivo no permite encender la linterna desde el navegador.',false);return;}
+  _scanTorchOn=!_scanTorchOn;
+  try{ await track.applyConstraints({advanced:[{torch:_scanTorchOn}]}); }
+  catch(e){ _scanTorchOn=!_scanTorchOn; toast('No se pudo cambiar la linterna',null,true); return; }
+  const tbtn=document.getElementById('scan-torch'); if(tbtn)tbtn.textContent=_scanTorchOn?'🔦 Apagar':'🔦 Linterna';
+}
+window._scanTorch=_scanTorch;
 function _scanCerrar(){
+  _scanTorchOn=false;
+  const _tb=document.getElementById('scan-torch'); if(_tb)_tb.style.display='none';
   if(_scanTimer){clearInterval(_scanTimer);_scanTimer=null;}
   if(_scanStream){try{_scanStream.getTracks().forEach(t=>t.stop());}catch(e){} _scanStream=null;}
   const v=document.getElementById('scan-video'); if(v){try{v.pause();}catch(e){} try{v.srcObject=null;}catch(e){}}
