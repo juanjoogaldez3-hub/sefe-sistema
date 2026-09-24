@@ -43,41 +43,72 @@ function _cargarEscaner(){
   });
   return _escanerPromise;
 }
-let _scanInstancia=null, _scanUltimo={code:'',ts:0};
+let _scanInstancia=null, _scanStream=null, _scanTimer=null, _scanUltimo={code:'',ts:0};
 async function _scanCam(onCode, opts){
   opts=opts||{};
-  let Html5Qrcode;
-  try{ Html5Qrcode=await _cargarEscaner(); }
-  catch(e){ toast('Escáner no disponible','No se pudo cargar el lector. Marcá los productos a mano.',true); return; }
   let ov=document.getElementById('scan-ov');
   if(!ov){
     ov=document.createElement('div'); ov.id='scan-ov';
     ov.style.cssText='position:fixed;inset:0;z-index:100001;background:#000;display:flex;flex-direction:column';
-    ov.innerHTML='<div style="color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;background:#111"><div id="scan-tit" style="font-weight:700;font-size:15px;flex:1"></div><button onclick="_scanCerrar()" style="background:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px">Cerrar</button></div><div style="flex:1;position:relative;overflow:hidden"><div id="scan-reader" style="width:100%;height:100%"></div></div><div id="scan-hint" style="color:#fff;text-align:center;padding:12px 16px;font-size:13px;background:#111"></div>';
+    ov.innerHTML='<div style="color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;background:#111"><div id="scan-tit" style="font-weight:700;font-size:15px;flex:1"></div><button onclick="_scanCerrar()" style="background:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px">Cerrar</button></div>'+
+      '<div style="flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">'+
+        '<video id="scan-video" playsinline muted style="width:100%;height:100%;object-fit:cover"></video>'+
+        '<div id="scan-reader" style="width:100%;height:100%;display:none"></div>'+
+        '<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:78%;max-width:340px;height:120px;border:3px solid #4ADE80;border-radius:14px;pointer-events:none"></div>'+
+      '</div>'+
+      '<div id="scan-hint" style="color:#fff;text-align:center;padding:12px 16px;font-size:13px;background:#111"></div>';
     document.body.appendChild(ov);
   }
   ov.style.display='flex';
   document.getElementById('scan-tit').textContent=opts.titulo||'Escaneá el código de barras';
-  document.getElementById('scan-hint').textContent=opts.hint||'Apuntá la cámara al código de barras del producto.';
-  const F=window.Html5QrcodeSupportedFormats;
-  const fmts=F?[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.CODABAR]:undefined;
-  _scanInstancia=new Html5Qrcode('scan-reader',{formatsToSupport:fmts,verbose:false});
+  document.getElementById('scan-hint').textContent=opts.hint||'Apuntá la cámara al código de barras del empaque.';
   _scanUltimo={code:'',ts:0};
-  const onOk=(txt)=>{
-    const now=Date.now(); txt=String(txt).trim();
+  const emit=(txt)=>{
+    const now=Date.now(); txt=String(txt||'').trim(); if(!txt)return;
     if(txt===_scanUltimo.code && now-_scanUltimo.ts<1500)return; // evita repetidos del mismo código
     _scanUltimo={code:txt,ts:now};
     try{onCode(txt);}catch(e){}
     if(!opts.continuo)_scanCerrar();
   };
+  // 1) Lector NATIVO del navegador (Android/Chrome): cámara limpia, sin parpadeo
+  let Detector=null;
+  if('BarcodeDetector' in window){
+    try{ Detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','codabar']}); }catch(e){ Detector=null; }
+  }
+  if(Detector){
+    const video=document.getElementById('scan-video'); video.style.display='';
+    const rd=document.getElementById('scan-reader'); if(rd)rd.style.display='none';
+    let stream;
+    try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}}); }
+    catch(e){ toast('No se pudo abrir la cámara','Revisá el permiso de cámara del navegador, o marcá a mano.',true); _scanCerrar(); return; }
+    _scanStream=stream; video.srcObject=stream;
+    try{ await video.play(); }catch(e){}
+    _scanTimer=setInterval(async()=>{
+      if(!_scanStream||!video.videoWidth)return;
+      try{ const codes=await Detector.detect(video); if(codes&&codes.length)emit(codes[0].rawValue); }catch(e){}
+    },220);
+    return;
+  }
+  // 2) Respaldo: html5-qrcode (iPhone u otros sin lector nativo)
+  let Html5Qrcode;
+  try{ Html5Qrcode=await _cargarEscaner(); }
+  catch(e){ toast('Escáner no disponible','No se pudo cargar el lector. Marcá los productos a mano.',true); _scanCerrar(); return; }
+  const _v=document.getElementById('scan-video'); if(_v)_v.style.display='none';
+  const rd=document.getElementById('scan-reader'); if(rd)rd.style.display='';
+  const F=window.Html5QrcodeSupportedFormats;
+  const fmts=F?[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.CODABAR]:undefined;
+  _scanInstancia=new Html5Qrcode('scan-reader',{formatsToSupport:fmts,verbose:false});
   try{
-    await _scanInstancia.start({facingMode:'environment'},{fps:10,qrbox:{width:280,height:150}},onOk,()=>{});
+    await _scanInstancia.start({facingMode:'environment'},{fps:10,qrbox:{width:280,height:150}},emit,()=>{});
   }catch(e){
     toast('No se pudo abrir la cámara','Revisá el permiso de cámara del navegador, o marcá a mano.',true);
     _scanCerrar();
   }
 }
 function _scanCerrar(){
+  if(_scanTimer){clearInterval(_scanTimer);_scanTimer=null;}
+  if(_scanStream){try{_scanStream.getTracks().forEach(t=>t.stop());}catch(e){} _scanStream=null;}
+  const v=document.getElementById('scan-video'); if(v){try{v.pause();}catch(e){} try{v.srcObject=null;}catch(e){}}
   const ov=document.getElementById('scan-ov');
   const done=()=>{ if(ov)ov.style.display='none'; };
   if(_scanInstancia){
