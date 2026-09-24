@@ -703,6 +703,9 @@ function openProd(id){
   const tipoEmp=p?(p.tipoEmpaque||'unidad'):'unidad';
   openMod(p?'Editar producto':'Nuevo producto',`
   <div class="row"><div style="flex:2"><label>Nombre interno</label><input id="p-nom" value="${p?p.nombre:''}"></div><div><label>Código</label><input id="p-cod" value="${p?p.codigo:''}"></div></div>
+  <div class="row"><div style="flex:1"><label>Código de barras <span style="color:var(--muted);font-weight:400">(para escanear en despacho)</span></label>
+    <div style="display:flex;gap:8px"><input id="p-barras" placeholder="Escaneá o escribí el código del empaque" value="${p?(p.codigoBarras||''):''}" style="flex:1">
+    <button type="button" class="btn btn-ghost btn-sm" onclick="escanearBarrasProducto()" title="Escanear con la cámara">📷</button></div></div></div>
   <div class="row"><div style="flex:1"><label>Marca</label><input id="p-marca" placeholder="Opcional" value="${p?(p.marca||''):''}"></div><div style="flex:1"><label>Categoría <span style="color:var(--muted);font-weight:400">(umbral de stock)</span></label><input id="p-categoria" list="p-cat-list" placeholder="Ej. Papel, Jabón…" value="${p?(p.categoria||''):''}"><datalist id="p-cat-list">${[...new Set([...categorias.map(c=>c.nombre),...productos.map(x=>x.categoria)].map(s=>(s||'').trim()).filter(Boolean))].sort().map(n=>`<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('')}</datalist></div></div>
   <div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin:2px 0 8px">Nomenclatura del proveedor</div>
   <div class="row"><div style="flex:2"><label>Nombre del proveedor</label><input id="p-nom-prov" placeholder="Opcional" value="${p?(p.nombreProveedor||''):''}"></div><div><label>SKU del proveedor</label><input id="p-sku-prov" placeholder="Ej. QV-DES-1GL" value="${p?(p.skuProveedor||''):''}"></div></div>
@@ -733,7 +736,7 @@ function openProd(id){
     const tipoEmpaque=$('#p-tipo').value;
     const unidadesPorCaja=tipoEmpaque==='caja_unidad'?(Number($('#p-upc').value)||0):null;
     if(tipoEmpaque==='caja_unidad'&&!(unidadesPorCaja>0)){toast('Faltan unidades por caja','Indicá cuántas unidades trae una caja',true);return;}
-    const datos={codigo:$('#p-cod').value,nombre:nom,marca:$('#p-marca').value.trim(),skuProveedor:$('#p-sku-prov').value.trim(),nombreProveedor:$('#p-nom-prov').value.trim(),precio:Number($('#p-pre').value)||0,precioUnidad:Number($('#p-preuni')?.value)||0,costo:Number($('#p-cos').value)||0,unidad:$('#p-uni').value,proveedorIds,tipoEmpaque,unidadesPorCaja,categoria:($('#p-categoria')?.value||'').trim()};
+    const datos={codigo:$('#p-cod').value,codigoBarras:($('#p-barras')?.value||'').trim(),nombre:nom,marca:$('#p-marca').value.trim(),skuProveedor:$('#p-sku-prov').value.trim(),nombreProveedor:$('#p-nom-prov').value.trim(),precio:Number($('#p-pre').value)||0,precioUnidad:Number($('#p-preuni')?.value)||0,costo:Number($('#p-cos').value)||0,unidad:$('#p-uni').value,proveedorIds,tipoEmpaque,unidadesPorCaja,categoria:($('#p-categoria')?.value||'').trim()};
     if(p){
       const tipoViejo=p.tipoEmpaque||'unidad';
       // Si cambió el tipo de empaque y hay stock, reacomodar (o bloquear)
@@ -851,6 +854,7 @@ window.quitarProvProd=quitarProvProd;
 const ESTADO_ENTREGA={
   sin:['Sin asignar','b-muted'],
   asignado:['Asignado','b-info'],
+  preparado:['Preparado','b-prep'],
   ruta:['En ruta','b-warn'],
   entregado:['Entregado','b-ok'],
 };
@@ -1178,7 +1182,8 @@ function renderMisEntregas(){
       const tel=cli?.contactoCompras?.telefono||cli?.contactoPagos?.telefono||'';
       const items=d.items.map(it=>`${it.cantidad}× ${it.nombre}`).join(', ');
       let btn='';
-      if(est==='asignado')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEnRuta(${d.id})">📦 Cargado, voy en ruta</button>`;
+      if(est==='asignado'){const _dn=_prepPacked(d),_tt=_prepTotal(d);btn=`<button class="btn btn-primary btn-sm" onclick="abrirPreparacion(${d.id})">📦 Preparar${_tt?` (${_dn}/${_tt})`:''}</button>`;}
+      else if(est==='preparado')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEnRuta(${d.id})">📦 Cargado, voy en ruta</button>`;
       else if(est==='ruta')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEntregado(${d.id})">✓ Marcar entregado</button>`;
       else if(est==='entregado')btn=`<span class="badge b-ok">✓ Entregado a ${d.entregaInfo?.recibe||'—'}</span>`;
       return `<div style="border:1.5px solid var(--line-strong);border-radius:12px;padding:14px 16px;${est==='entregado'?'opacity:.65':''}">

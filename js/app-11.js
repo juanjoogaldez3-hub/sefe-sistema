@@ -27,6 +27,137 @@ function marcarEnRuta(id){
 }
 window.marcarEnRuta=marcarEnRuta;
 
+// ================= ESCÁNER DE CÓDIGO DE BARRAS (cámara) =================
+// Usa html5-qrcode (CDN). Abre la cámara a pantalla completa y llama onCode(codigo)
+// por cada lectura. continuo=true → sigue leyendo; false → cierra tras la primera.
+let _escanerPromise=null;
+function _cargarEscaner(){
+  if(window.Html5Qrcode)return Promise.resolve(window.Html5Qrcode);
+  if(_escanerPromise)return _escanerPromise;
+  _escanerPromise=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js';
+    s.onload=()=>res(window.Html5Qrcode);
+    s.onerror=()=>rej(new Error('No se pudo cargar el escáner'));
+    document.head.appendChild(s);
+  });
+  return _escanerPromise;
+}
+let _scanInstancia=null, _scanUltimo={code:'',ts:0};
+async function _scanCam(onCode, opts){
+  opts=opts||{};
+  let Html5Qrcode;
+  try{ Html5Qrcode=await _cargarEscaner(); }
+  catch(e){ toast('Escáner no disponible','No se pudo cargar el lector. Marcá los productos a mano.',true); return; }
+  let ov=document.getElementById('scan-ov');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='scan-ov';
+    ov.style.cssText='position:fixed;inset:0;z-index:100001;background:#000;display:flex;flex-direction:column';
+    ov.innerHTML='<div style="color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;background:#111"><div id="scan-tit" style="font-weight:700;font-size:15px;flex:1"></div><button onclick="_scanCerrar()" style="background:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px">Cerrar</button></div><div style="flex:1;position:relative;overflow:hidden"><div id="scan-reader" style="width:100%;height:100%"></div></div><div id="scan-hint" style="color:#fff;text-align:center;padding:12px 16px;font-size:13px;background:#111"></div>';
+    document.body.appendChild(ov);
+  }
+  ov.style.display='flex';
+  document.getElementById('scan-tit').textContent=opts.titulo||'Escaneá el código de barras';
+  document.getElementById('scan-hint').textContent=opts.hint||'Apuntá la cámara al código de barras del producto.';
+  const F=window.Html5QrcodeSupportedFormats;
+  const fmts=F?[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.CODABAR]:undefined;
+  _scanInstancia=new Html5Qrcode('scan-reader',{formatsToSupport:fmts,verbose:false});
+  _scanUltimo={code:'',ts:0};
+  const onOk=(txt)=>{
+    const now=Date.now(); txt=String(txt).trim();
+    if(txt===_scanUltimo.code && now-_scanUltimo.ts<1500)return; // evita repetidos del mismo código
+    _scanUltimo={code:txt,ts:now};
+    try{onCode(txt);}catch(e){}
+    if(!opts.continuo)_scanCerrar();
+  };
+  try{
+    await _scanInstancia.start({facingMode:'environment'},{fps:10,qrbox:{width:280,height:150}},onOk,()=>{});
+  }catch(e){
+    toast('No se pudo abrir la cámara','Revisá el permiso de cámara del navegador, o marcá a mano.',true);
+    _scanCerrar();
+  }
+}
+function _scanCerrar(){
+  const ov=document.getElementById('scan-ov');
+  const done=()=>{ if(ov)ov.style.display='none'; };
+  if(_scanInstancia){
+    const inst=_scanInstancia; _scanInstancia=null;
+    inst.stop().then(()=>{try{inst.clear();}catch(e){}}).catch(()=>{}).finally(done);
+  }else done();
+}
+window._scanCerrar=_scanCerrar;
+// Captura el código de barras de un producto (en su ficha) escaneándolo una vez.
+function escanearBarrasProducto(){
+  _scanCam((code)=>{ const inp=document.getElementById('p-barras'); if(inp)inp.value=code; toast('✓ Código capturado',code); },
+    {titulo:'Escaneá el código del producto',hint:'Apuntá al código de barras del empaque.'});
+}
+window.escanearBarrasProducto=escanearBarrasProducto;
+
+// ================= PREPARACIÓN DE ENTREGA (checklist del piloto) =================
+function _prepDe(d){ const p=(d.preparacion&&typeof d.preparacion==='object')?d.preparacion:{}; return {packed:(p.packed&&typeof p.packed==='object')?p.packed:{},por:p.por,fecha:p.fecha}; }
+function _prepPacked(d){ const pk=_prepDe(d).packed; return (d.items||[]).reduce((n,_,i)=>n+(pk[i]?1:0),0); }
+function _prepTotal(d){ return (d.items||[]).length; }
+function _prepCompleta(d){ const t=_prepTotal(d); return t>0 && _prepPacked(d)>=t; }
+function _prepGuardar(d){
+  if(_prepCompleta(d)){
+    if(['sin','asignado'].includes(estadoEntrega(d))){
+      d.estadoEntrega='preparado';
+      const pr=_prepDe(d); pr.por=currentUser; pr.fecha=new Date().toISOString(); d.preparacion=pr;
+    }
+  }else if(estadoEntrega(d)==='preparado'){ d.estadoEntrega='asignado'; }
+  if(typeof guardarDocumento==='function')guardarDocumento(d);
+}
+let _prepModalId=null;
+function _prepModalHTML(d){
+  const packed=_prepDe(d).packed, done=_prepPacked(d), tot=_prepTotal(d);
+  const rows=(d.items||[]).map((it,i)=>{
+    const prod=productos.find(p=>p.codigo&&it.codigo&&String(p.codigo)===String(it.codigo));
+    const sinBarras=!(prod&&prod.codigoBarras);
+    return `<label style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:8px;${packed[i]?'background:#EEF9EE;border-color:#BFE0BF':''}">
+      <input type="checkbox" ${packed[i]?'checked':''} onchange="prepTogglear(${d.id},${i},this.checked)" style="width:20px;height:20px;flex:none">
+      <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${it.cantidad}× ${it.nombre}</div><div style="font-size:11px;color:var(--muted)">${it.codigo||''}${sinBarras?' · <span style="color:var(--warn)">sin barras (marcá a mano)</span>':''}</div></div>
+    </label>`;
+  }).join('');
+  return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <button class="btn btn-primary btn-sm" onclick="prepEscanear(${d.id})">📷 Escanear</button>
+      <span style="font-size:13px;color:var(--muted)"><b style="color:var(--ink)">${done}</b> / ${tot} listos</span>
+    </div>
+    ${rows||'<div class="empty">Esta entrega no tiene productos.</div>'}
+    ${(done>=tot&&tot>0)?'<div class="note n-ok" style="margin-top:6px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg><span>Todo preparado. Ya podés cargar y salir en ruta.</span></div>':''}`;
+}
+function _renderPrepModal(d){ if(_prepModalId!==d.id)return; const body=document.getElementById('m-body'); if(body)body.innerHTML=_prepModalHTML(d); }
+function abrirPreparacion(id){
+  const d=documentos.find(x=>x.id===id); if(!d)return;
+  _prepModalId=id;
+  openMod('📦 Preparar · '+((d.clienteComercial||d.clienteNombre)||''),_prepModalHTML(d),()=>{_prepModalId=null;closeMod();renderMisEntregas();});
+  $('#m-save').textContent='Listo';
+}
+window.abrirPreparacion=abrirPreparacion;
+function prepTogglear(id,idx,checked){
+  const d=documentos.find(x=>x.id===id); if(!d)return;
+  const pr=_prepDe(d); pr.packed[idx]=!!checked; d.preparacion=pr;
+  _prepGuardar(d);
+  _renderPrepModal(d);
+}
+window.prepTogglear=prepTogglear;
+// Escaneo continuo: cada lectura marca el producto correspondiente de la entrega.
+function prepEscanear(id){
+  const d=documentos.find(x=>x.id===id); if(!d)return;
+  _scanCam((code)=>{
+    let idx=-1;
+    const prod=productos.find(p=>p.codigoBarras&&String(p.codigoBarras).trim()===code);
+    if(prod)idx=(d.items||[]).findIndex(it=>String(it.codigo)===String(prod.codigo));
+    if(idx<0)idx=(d.items||[]).findIndex(it=>String(it.codigo)===code); // por si el código escaneado es el código interno
+    if(idx<0){ toast('No coincide','Ese producto no va en esta entrega (o no tiene barras cargado).',true); return; }
+    const pr=_prepDe(d);
+    if(pr.packed[idx]){ toast('Ya estaba marcado',(d.items[idx].nombre)); }
+    else { pr.packed[idx]=true; d.preparacion=pr; _prepGuardar(d); toast('✓ '+(d.items[idx].nombre),'Marcado'); }
+    _renderPrepModal(d);
+    if(_prepCompleta(d)){ _scanCerrar(); toast('📦 ¡Preparación lista!','Ya podés cargar y salir en ruta.'); }
+  },{continuo:true,titulo:'Escaneá los productos',hint:'Escaneá cada producto; se van marcando solos.'});
+}
+window.prepEscanear=prepEscanear;
+
 // Estado de la entrega en curso (modal)
 let _entregaPago='efectivo'; // efectivo | cheque | contrasena | credito
 let _firmaCanvas=null,_firmaCtx=null,_firmando=false,_firmaVacia=true;
