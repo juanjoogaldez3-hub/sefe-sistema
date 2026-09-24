@@ -236,6 +236,21 @@ function repRangoLabel(){
 window.repRangoLabel=repRangoLabel;
 function setRepPeriod(p){repPeriod=p;$('#rep-desde').value='';$('#rep-hasta').value='';document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.classList.toggle('on',b.dataset.p===p));renderReportes();}
 // Abre la vista de Reportes directo en un tipo (ej. desde el panel de inicio).
+// Tooltip flotante para las barras de los gráficos (pasar el mouse muestra la info).
+function _barTip(e,txt){
+  let t=document.getElementById('chart-tip');
+  if(!t){t=document.createElement('div');t.id='chart-tip';document.body.appendChild(t);}
+  t.textContent=txt; t.style.display='block';
+  const x=e.clientX,y=e.clientY;
+  t.style.left=(x+12)+'px'; t.style.top=(y-10)+'px';
+  const r=t.getBoundingClientRect();
+  if(r.right>window.innerWidth)t.style.left=(x-r.width-12)+'px';
+  if(r.top<0)t.style.top=(y+16)+'px';
+}
+function _barTipHide(){const t=document.getElementById('chart-tip');if(t)t.style.display='none';}
+window._barTip=_barTip; window._barTipHide=_barTipHide;
+// Texto seguro para meter en un atributo onmousemove (sin comillas ni backslash).
+function _tipSafe(s){return String(s).replace(/['"\\]/g,' ');}
 window.abrirReporte=function(tipo){
   repType=tipo;
   repFiltros={cliente:'',vendedores:[],proveedor:'',soloVencidos:false,tiempoCredito:'',marca_prod:'',producto:''};
