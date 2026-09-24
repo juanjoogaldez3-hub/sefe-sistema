@@ -64,7 +64,7 @@ ok('opción "Enviar a despacho" en el menú de acciones de la fila', /🚚 Envia
 ok('la opción sólo aparece para documentos entregables', /const _despEleg=f\.estado!=='anulada'&&\(/.test(src) && /🚚 Quitar de despacho/.test(src));
 
 console.log('\n═══ 4 · El piloto sin ligar no ve todo ═══');
-ok('si el piloto no está ligado, no se le muestran entregas ajenas', /esPiloto\(\)&&pid==null/.test(src) && /todavía no está ligado a un piloto/.test(src));
+ok('si el piloto no está ligado, no se le muestran entregas ajenas', /esPil&&pid==null/.test(src) && /todavía no está ligado a un piloto/.test(src));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
