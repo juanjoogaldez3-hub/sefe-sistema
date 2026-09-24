@@ -44,7 +44,7 @@ function _cargarEscaner(){
   return _escanerPromise;
 }
 let _scanInstancia=null, _scanStream=null, _scanTimer=null, _scanTorchOn=false, _scanUltimo={code:'',ts:0};
-let _scanHintBase='', _scanBeepCtx=null, _scanFbTimer=null;
+let _scanHintBase='', _scanBeepCtx=null, _scanFbTimer=null, _scanGap=true;
 // Bip corto de confirmación (agudo=ok, grave=error)
 function _scanBeep(ok){
   try{
@@ -88,11 +88,14 @@ async function _scanCam(onCode, opts){
   document.getElementById('scan-tit').textContent=opts.titulo||'Escaneá el código de barras';
   _scanHintBase=opts.hint||'Apuntá la cámara al código de barras del empaque.';
   const _h0=document.getElementById('scan-hint'); if(_h0){_h0.textContent=_scanHintBase;_h0.style.background='#111';_h0.style.fontWeight='';_h0.style.fontSize='13px';}
-  _scanUltimo={code:'',ts:0};
+  _scanUltimo={code:'',ts:0}; _scanGap=true;
   const emit=(txt)=>{
     const now=Date.now(); txt=String(txt||'').trim(); if(!txt)return;
-    if(txt===_scanUltimo.code && now-_scanUltimo.ts<1500)return; // evita repetidos del mismo código
-    _scanUltimo={code:txt,ts:now};
+    // Cuenta de nuevo el MISMO código sólo si salió del cuadro (hubo un "hueco"),
+    // así se pueden escanear 2 unidades iguales; otro código cuenta siempre.
+    if(txt===_scanUltimo.code && !_scanGap)return;
+    if(now-_scanUltimo.ts<400)return; // anti-rebote mínimo
+    _scanUltimo={code:txt,ts:now}; _scanGap=false;
     try{onCode(txt);}catch(e){}
     if(!opts.continuo)_scanCerrar();
   };
@@ -119,7 +122,7 @@ async function _scanCam(onCode, opts){
     }
     _scanTimer=setInterval(async()=>{
       if(!_scanStream||!video.videoWidth)return;
-      try{ const codes=await Detector.detect(video); if(codes&&codes.length)emit(codes[0].rawValue); }catch(e){}
+      try{ const codes=await Detector.detect(video); if(codes&&codes.length){emit(codes[0].rawValue);}else{_scanGap=true;} }catch(e){}
     },220);
     return;
   }
@@ -133,7 +136,7 @@ async function _scanCam(onCode, opts){
   const fmts=F?[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.CODABAR]:undefined;
   _scanInstancia=new Html5Qrcode('scan-reader',{formatsToSupport:fmts,verbose:false});
   try{
-    await _scanInstancia.start({facingMode:'environment'},{fps:10,qrbox:{width:280,height:150}},emit,()=>{});
+    await _scanInstancia.start({facingMode:'environment'},{fps:10,qrbox:{width:280,height:150}},emit,()=>{_scanGap=true;});
   }catch(e){
     toast('No se pudo abrir la cámara','Revisá el permiso de cámara del navegador, o marcá a mano.',true);
     _scanCerrar();
@@ -174,9 +177,14 @@ window.escanearBarrasProducto=escanearBarrasProducto;
 
 // ================= PREPARACIÓN DE ENTREGA (checklist del piloto) =================
 function _prepDe(d){ const p=(d.preparacion&&typeof d.preparacion==='object')?d.preparacion:{}; return {packed:(p.packed&&typeof p.packed==='object')?p.packed:{},por:p.por,fecha:p.fecha}; }
-function _prepPacked(d){ const pk=_prepDe(d).packed; return (d.items||[]).reduce((n,_,i)=>n+(pk[i]?1:0),0); }
+// Cuántas unidades hay que empacar en esa línea (cantidad entera; si es rara, 1).
+function _prepMeta(it){ const c=Number(it&&it.cantidad); return (isFinite(c)&&c>=1)?Math.max(1,Math.round(c)):1; }
+// Cuántas unidades lleva empacadas la línea idx (true viejo = completa).
+function _prepCant(d,idx){ const v=_prepDe(d).packed[idx]; const meta=_prepMeta((d.items||[])[idx]); if(v===true)return meta; const n=Number(v)||0; return Math.max(0,Math.min(n,meta)); }
+function _prepLineaLista(d,idx){ return _prepCant(d,idx)>=_prepMeta((d.items||[])[idx]); }
+function _prepPacked(d){ return (d.items||[]).reduce((n,_,i)=>n+(_prepLineaLista(d,i)?1:0),0); } // líneas completas
 function _prepTotal(d){ return (d.items||[]).length; }
-function _prepCompleta(d){ const t=_prepTotal(d); return t>0 && _prepPacked(d)>=t; }
+function _prepCompleta(d){ const t=_prepTotal(d); if(t<=0)return false; for(let i=0;i<t;i++)if(!_prepLineaLista(d,i))return false; return true; }
 function _prepGuardar(d){
   if(_prepCompleta(d)){
     if(['sin','asignado'].includes(estadoEntrega(d))){
@@ -188,13 +196,16 @@ function _prepGuardar(d){
 }
 let _prepModalId=null;
 function _prepModalHTML(d){
-  const packed=_prepDe(d).packed, done=_prepPacked(d), tot=_prepTotal(d);
+  const done=_prepPacked(d), tot=_prepTotal(d);
   const rows=(d.items||[]).map((it,i)=>{
     const prod=productos.find(p=>p.codigo&&it.codigo&&String(p.codigo)===String(it.codigo));
     const sinBarras=!(prod&&prod.codigoBarras);
-    return `<label style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:8px;${packed[i]?'background:#EEF9EE;border-color:#BFE0BF':''}">
-      <input type="checkbox" ${packed[i]?'checked':''} onchange="prepTogglear(${d.id},${i},this.checked)" style="width:20px;height:20px;flex:none">
+    const meta=_prepMeta(it), cant=_prepCant(d,i), lista=cant>=meta;
+    const contador=meta>1?`<span style="flex:none;font-weight:700;font-size:13px;padding:3px 10px;border-radius:20px;background:${lista?'#DCF0DC':'#FDECEA'};color:${lista?'#137333':'#B3261E'}">${cant}/${meta}</span>`:'';
+    return `<label style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:8px;${lista?'background:#EEF9EE;border-color:#BFE0BF':''}">
+      <input type="checkbox" ${lista?'checked':''} onchange="prepTogglear(${d.id},${i},this.checked)" style="width:20px;height:20px;flex:none">
       <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${it.cantidad}× ${it.nombre}</div><div style="font-size:11px;color:var(--muted)">${it.codigo||''}${sinBarras?' · <span style="color:var(--warn)">sin barras (marcá a mano)</span>':''}</div></div>
+      ${contador}
     </label>`;
   }).join('');
   return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
@@ -214,7 +225,8 @@ function abrirPreparacion(id){
 window.abrirPreparacion=abrirPreparacion;
 function prepTogglear(id,idx,checked){
   const d=documentos.find(x=>x.id===id); if(!d)return;
-  const pr=_prepDe(d); pr.packed[idx]=!!checked; d.preparacion=pr;
+  // El tildado manual completa (o vacía) toda la línea de un toque.
+  const pr=_prepDe(d); pr.packed[idx]=checked?_prepMeta((d.items||[])[idx]):0; d.preparacion=pr;
   _prepGuardar(d);
   _renderPrepModal(d);
 }
@@ -228,9 +240,12 @@ function prepEscanear(id){
     if(prod)idx=(d.items||[]).findIndex(it=>String(it.codigo)===String(prod.codigo));
     if(idx<0)idx=(d.items||[]).findIndex(it=>String(it.codigo)===code); // por si el código escaneado es el código interno
     if(idx<0){ _scanFeedback('✗ No va en esta entrega','warn'); return; }
-    const pr=_prepDe(d);
-    if(pr.packed[idx]){ _scanFeedback('Ya estaba: '+(d.items[idx].nombre),'ok'); }
-    else { pr.packed[idx]=true; d.preparacion=pr; _prepGuardar(d); _scanFeedback('✓ '+(d.items[idx].nombre),'ok'); }
+    const nom=d.items[idx].nombre, meta=_prepMeta(d.items[idx]), cant=_prepCant(d,idx);
+    if(cant>=meta){ _scanFeedback('✓ '+nom+' — ya completo ('+meta+'/'+meta+')','ok'); }
+    else {
+      const nuevo=cant+1; const pr=_prepDe(d); pr.packed[idx]=nuevo; d.preparacion=pr; _prepGuardar(d);
+      _scanFeedback((nuevo>=meta?'✓ '+nom+' completo ('+meta+'/'+meta+')':'✓ '+nom+' ('+nuevo+'/'+meta+')'),'ok');
+    }
     _renderPrepModal(d);
     if(_prepCompleta(d)){ _scanCerrar(); toast('📦 ¡Preparación lista!','Ya podés cargar y salir en ruta.'); }
   },{continuo:true,titulo:'Escaneá los productos',hint:'Escaneá cada producto; se van marcando solos.'});
