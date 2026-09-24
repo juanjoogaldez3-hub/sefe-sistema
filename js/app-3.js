@@ -11,6 +11,10 @@ function abrirFacturarExenta(id){
     </p>
     <label>Escenario de exención <span style="color:var(--danger)">*</span></label>
     <select id="ex-esc" style="margin-bottom:0"><option value="">— Seleccioná el escenario que aplica —</option>${opts}</select>${selectorNitHTML(f,clientes.find(c=>c.id===f.clienteId))}
+    <label style="display:flex;align-items:center;gap:9px;margin-top:14px;padding:11px 13px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:13px">
+      <input type="checkbox" id="fac-despacho" style="width:17px;height:17px;flex:none">
+      <span>🚚 <b>Entregar a domicilio</b> — mandar esta factura a Despachos</span>
+    </label>
     <div style="margin-top:16px;padding-top:13px;border-top:1px solid var(--line);text-align:center"><button class="btn btn-ghost btn-sm" onclick="cerrarTodo();editarPedido(${f.id})">✏️ Editar pedido antes de facturar</button></div>`,
     ()=>{
       const esc=Number($('#ex-esc').value);
@@ -22,6 +26,8 @@ function abrirFacturarExenta(id){
         const ns=nitsSecNorm(cli)[Number(selNit.value)]||null;
         if(ns){f.nitFacturado=ns.nit;f.nombreFacturado=ns.nombre||ns.nit;}
       }else{ f.nitFacturado=null; f.nombreFacturado=null; }
+      // ¿Se marcó "entregar a domicilio"? → entra al módulo de Despachos
+      const _fd=document.getElementById('fac-despacho'); f.paraDespacho=_fd?_fd.checked:false;
       const dias=cli?.tiempoCredito||0;
       facturarPedidoExento(id,dias,esc);
     });
@@ -461,6 +467,18 @@ async function verDoc(id){
   const _sedeBtn=document.getElementById('doc-sede-btn');
   if(_sedeBtn)_sedeBtn.style.display=(f&&f.tipoDoc==='prestamo')?'':'none';
   if(f&&f.tipoDoc==='prestamo')_docSedeId=f.id;
+  // Botón "A despacho": para facturas/notas entregables, permite mandarla (o sacarla) del módulo de Despachos.
+  const _despBtn=document.getElementById('doc-despacho-btn');
+  if(_despBtn){
+    const _eleg=f && f.estado!=='anulada' && ['cambiaria','envio','prestamo'].includes(f.tipoDoc) &&
+      (f.tipoDoc!=='cambiaria' || ['certificada','facturado'].includes(f.estado));
+    if(_eleg && !soloLectura()){
+      _despBtn.style.display='';
+      _despBtn.dataset.id=f.id;
+      _despBtn.textContent=f.paraDespacho?'✓ En despacho':'🚚 A despacho';
+      _despBtn.title=f.paraDespacho?'Quitar del módulo de Despachos':'Enviar al módulo de Despachos (entrega a domicilio)';
+    }else{_despBtn.style.display='none';}
+  }
   // El PDF oficial ya no viene en la carga inicial (pesaba 24 MB): si esta
   // factura tiene uno, se trae a pedido antes de decidir cómo mostrarla.
   if(f && !f.pdfBase64 && f.autorizacion && typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
@@ -552,6 +570,29 @@ async function verDoc(id){
   $('#docov').classList.add('show');
 }
 window.verDoc=verDoc;
+
+// Manda una factura/nota al módulo de Despachos (entrega a domicilio) o la saca.
+// Al mandarla entra siempre limpia como "Por asignar" (sin piloto ni orden).
+function toggleDespacho(id){
+  const f=documentos.find(d=>d.id===id); if(!f)return;
+  const ref=f.serie?f.serie+'-'+f.numeroDte:refPed(f);
+  if(f.paraDespacho){
+    f.paraDespacho=false;
+    toast('Quitada de Despachos',ref+' ya no aparece en el módulo de entregas.');
+    logAudit('Quitada de Despachos',ref);
+  }else{
+    f.paraDespacho=true;
+    // Arranca limpia en "Por asignar" (por si el documento traía datos viejos de entrega)
+    f.estadoEntrega='sin'; f.pilotoId=null; f.ordenRuta=null; f.entregaInfo=null;
+    toast('🚚 Enviada a Despachos','Ya aparece en Despachos para asignarle piloto y ruta.');
+    logAudit('Enviada a Despachos',ref);
+  }
+  const b=document.getElementById('doc-despacho-btn');
+  if(b&&Number(b.dataset.id)===id){b.textContent=f.paraDespacho?'✓ En despacho':'🚚 A despacho';b.title=f.paraDespacho?'Quitar del módulo de Despachos':'Enviar al módulo de Despachos (entrega a domicilio)';}
+  if(typeof guardarDocumento==='function')guardarDocumento(f);
+  if(typeof renderDespachos==='function')renderDespachos();
+}
+window.toggleDespacho=toggleDespacho;
 
 // Imprimir/descargar: si hay PDF oficial de EcoFactura, abrirlo; si no, imprimir la vista
 // ============================================================
