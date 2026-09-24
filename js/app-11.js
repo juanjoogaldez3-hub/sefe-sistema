@@ -44,6 +44,31 @@ function _cargarEscaner(){
   return _escanerPromise;
 }
 let _scanInstancia=null, _scanStream=null, _scanTimer=null, _scanTorchOn=false, _scanUltimo={code:'',ts:0};
+let _scanHintBase='', _scanBeepCtx=null, _scanFbTimer=null;
+// Bip corto de confirmación (agudo=ok, grave=error)
+function _scanBeep(ok){
+  try{
+    _scanBeepCtx=_scanBeepCtx||new (window.AudioContext||window.webkitAudioContext)();
+    const c=_scanBeepCtx, o=c.createOscillator(), g=c.createGain();
+    o.type='square'; o.frequency.value=ok?880:220; o.connect(g); g.connect(c.destination);
+    g.gain.setValueAtTime(0.12,c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.16);
+    o.start(); o.stop(c.currentTime+0.17);
+  }catch(e){}
+}
+// Confirmación visible DENTRO del escáner (la barra de abajo), + vibración + bip.
+function _scanFeedback(texto,tipo){
+  const hint=document.getElementById('scan-hint');
+  if(hint){
+    hint.textContent=texto;
+    hint.style.background=(tipo==='warn')?'#B3261E':'#137333';
+    hint.style.fontWeight='700'; hint.style.fontSize='15px';
+    if(_scanFbTimer)clearTimeout(_scanFbTimer);
+    _scanFbTimer=setTimeout(()=>{ const h=document.getElementById('scan-hint'); if(h){h.style.background='#111';h.style.fontWeight='';h.style.fontSize='13px';h.textContent=_scanHintBase;} },1100);
+  }
+  try{ if(navigator.vibrate)navigator.vibrate(tipo==='warn'?[60,40,60]:70); }catch(e){}
+  _scanBeep(tipo!=='warn');
+}
+window._scanFeedback=_scanFeedback;
 async function _scanCam(onCode, opts){
   opts=opts||{};
   let ov=document.getElementById('scan-ov');
@@ -61,7 +86,8 @@ async function _scanCam(onCode, opts){
   }
   ov.style.display='flex';
   document.getElementById('scan-tit').textContent=opts.titulo||'Escaneá el código de barras';
-  document.getElementById('scan-hint').textContent=opts.hint||'Apuntá la cámara al código de barras del empaque.';
+  _scanHintBase=opts.hint||'Apuntá la cámara al código de barras del empaque.';
+  const _h0=document.getElementById('scan-hint'); if(_h0){_h0.textContent=_scanHintBase;_h0.style.background='#111';_h0.style.fontWeight='';_h0.style.fontSize='13px';}
   _scanUltimo={code:'',ts:0};
   const emit=(txt)=>{
     const now=Date.now(); txt=String(txt||'').trim(); if(!txt)return;
@@ -201,10 +227,10 @@ function prepEscanear(id){
     const prod=productos.find(p=>p.codigoBarras&&String(p.codigoBarras).trim()===code);
     if(prod)idx=(d.items||[]).findIndex(it=>String(it.codigo)===String(prod.codigo));
     if(idx<0)idx=(d.items||[]).findIndex(it=>String(it.codigo)===code); // por si el código escaneado es el código interno
-    if(idx<0){ toast('No coincide','Ese producto no va en esta entrega (o no tiene barras cargado).',true); return; }
+    if(idx<0){ _scanFeedback('✗ No va en esta entrega','warn'); return; }
     const pr=_prepDe(d);
-    if(pr.packed[idx]){ toast('Ya estaba marcado',(d.items[idx].nombre)); }
-    else { pr.packed[idx]=true; d.preparacion=pr; _prepGuardar(d); toast('✓ '+(d.items[idx].nombre),'Marcado'); }
+    if(pr.packed[idx]){ _scanFeedback('Ya estaba: '+(d.items[idx].nombre),'ok'); }
+    else { pr.packed[idx]=true; d.preparacion=pr; _prepGuardar(d); _scanFeedback('✓ '+(d.items[idx].nombre),'ok'); }
     _renderPrepModal(d);
     if(_prepCompleta(d)){ _scanCerrar(); toast('📦 ¡Preparación lista!','Ya podés cargar y salir en ruta.'); }
   },{continuo:true,titulo:'Escaneá los productos',hint:'Escaneá cada producto; se van marcando solos.'});
