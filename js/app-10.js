@@ -984,6 +984,7 @@ function renderDespachos(){
     const piloto=pilotos.find(p=>p.id===d.pilotoId);
     let acts='';
     acts+=`<button class="btn btn-ghost btn-sm" onclick="verDoc(${d.id})">Ver</button>`;
+    if(canAsignarPiloto()&&est!=='sin')acts+=`<button class="btn btn-ghost btn-sm" onclick="regresarEntrega(${d.id})" title="Regresar a Asignado y reiniciar el avance">↩ Regresar</button>`;
     if(est!=='entregado')acts=`<button class="btn btn-primary btn-sm" onclick="asignarDespacho(${d.id})">${d.pilotoId?'Reasignar':'Asignar'}</button>`+acts;
     const chk=(canAsignarPiloto()&&est!=='entregado')?`<input type="checkbox" class="desp-chk" data-id="${d.id}" ${_despSel.has(d.id)?'checked':''} onclick="despToggleSel(${d.id},this.checked)">`:'';
     return `<tr>

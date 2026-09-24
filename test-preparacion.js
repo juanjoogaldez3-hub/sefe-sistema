@@ -79,5 +79,22 @@ ok('avisa dentro del escáner si el producto no es de esa entrega', /_scanFeedba
 ok('campo "Código de barras" + botón escanear en la ficha del producto', /id="p-barras"/.test(src) && /escanearBarrasProducto\(\)/.test(src));
 ok('el producto guarda su código de barras', /codigoBarras:\(\$\('#p-barras'\)\?\.value\|\|''\)\.trim\(\)/.test(src));
 
+console.log('\n═══ Botón "Regresar" entrega ═══');
+(() => {
+  const rini = src.indexOf('function regresarEntrega(id)');
+  const rfin = src.indexOf('window.regresarEntrega=');
+  const doc = { id: 3081, serie: 'A', numeroDte: '1', estadoEntrega: 'ruta', pilotoId: 3, preparacion: { packed: { 0: 1 } }, entregaInfo: { recibe: 'x' } };
+  const rctx = { documentos: [doc], canAsignarPiloto: () => true, estadoEntrega: d => d.estadoEntrega || 'sin',
+    confirmar: (t, m, b, fn) => fn(), guardarDocumento: () => {}, logAudit: () => {},
+    renderDespachos: () => {}, renderMisEntregas: () => {}, toast: () => {}, padn: n => String(n) };
+  vm.createContext(rctx);
+  vm.runInContext(src.slice(rini, rfin) + ';globalThis.__reg=regresarEntrega;', rctx);
+  rctx.__reg(3081);
+  ok('regresa el estado a "asignado"', doc.estadoEntrega === 'asignado', doc.estadoEntrega);
+  ok('borra el avance de preparación y datos de entrega', doc.preparacion === null && doc.entregaInfo === null);
+  ok('mantiene el piloto asignado', doc.pilotoId === 3);
+})();
+ok('botón "Regresar" en la fila de Despachos (admin/logística)', /onclick="regresarEntrega\(\$\{d\.id\}\)"/.test(src) && /canAsignarPiloto\(\)&&est!=='sin'/.test(src));
+
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

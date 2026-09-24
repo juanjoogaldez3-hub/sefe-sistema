@@ -27,6 +27,28 @@ function marcarEnRuta(id){
 }
 window.marcarEnRuta=marcarEnRuta;
 
+// Regresa una entrega a "Asignado" y reinicia el avance (preparación/entrega).
+// Para corregir cuando alguien marcó de más (preparó, salió en ruta o entregó por error).
+function regresarEntrega(id){
+  const d=documentos.find(x=>x.id===id); if(!d)return;
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo admin/logística pueden regresar una entrega.',true);return;}
+  const est=estadoEntrega(d);
+  if(est==='sin'){toast('Nada que regresar','Esta entrega ya está sin asignar.');return;}
+  const ref=d.serie?d.serie+'-'+d.numeroDte:('PED-'+padn(d.numero));
+  const aviso=(est==='entregado')
+    ? 'Vas a regresar '+ref+' a "Asignado". OJO: esto NO borra cobros o abonos que se hayan registrado en la entrega — revisalos aparte si corresponde.'
+    : 'Vas a regresar '+ref+' a "Asignado" y se borra el avance de preparación.';
+  confirmar('Regresar entrega',aviso,'Regresar',()=>{
+    d.estadoEntrega='asignado'; d.preparacion=null; d.entregaInfo=null;
+    if(typeof guardarDocumento==='function')guardarDocumento(d);
+    logAudit('Entrega regresada a Asignado',ref+' · '+(d.clienteComercial||d.clienteNombre));
+    if(typeof renderDespachos==='function')renderDespachos();
+    if(typeof renderMisEntregas==='function')renderMisEntregas();
+    toast('↩ Regresada a Asignado',(d.clienteComercial||d.clienteNombre));
+  });
+}
+window.regresarEntrega=regresarEntrega;
+
 // ================= ESCÁNER DE CÓDIGO DE BARRAS (cámara) =================
 // Usa html5-qrcode (CDN). Abre la cámara a pantalla completa y llama onCode(codigo)
 // por cada lectura. continuo=true → sigue leyendo; false → cierra tras la primera.
