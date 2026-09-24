@@ -56,17 +56,20 @@ function _scanBeep(ok){
   }catch(e){}
 }
 // Confirmación visible DENTRO del escáner (la barra de abajo), + vibración + bip.
+// tipo: 'ok' (verde) · 'warn' (rojo) · 'alerta' (rojo + aviso agresivo: de más)
 function _scanFeedback(texto,tipo){
+  const esAlerta=(tipo==='alerta'), esRojo=(tipo==='warn'||esAlerta);
   const hint=document.getElementById('scan-hint');
   if(hint){
     hint.textContent=texto;
-    hint.style.background=(tipo==='warn')?'#B3261E':'#137333';
-    hint.style.fontWeight='700'; hint.style.fontSize='15px';
+    hint.style.background=esRojo?'#B3261E':'#137333';
+    hint.style.fontWeight='700'; hint.style.fontSize=esAlerta?'16px':'15px';
     if(_scanFbTimer)clearTimeout(_scanFbTimer);
-    _scanFbTimer=setTimeout(()=>{ const h=document.getElementById('scan-hint'); if(h){h.style.background='#111';h.style.fontWeight='';h.style.fontSize='13px';h.textContent=_scanHintBase;} },1100);
+    _scanFbTimer=setTimeout(()=>{ const h=document.getElementById('scan-hint'); if(h){h.style.background='#111';h.style.fontWeight='';h.style.fontSize='13px';h.textContent=_scanHintBase;} },esAlerta?1800:1100);
   }
-  try{ if(navigator.vibrate)navigator.vibrate(tipo==='warn'?[60,40,60]:70); }catch(e){}
-  _scanBeep(tipo!=='warn');
+  try{ if(navigator.vibrate)navigator.vibrate(esAlerta?[120,60,120,60,120]:(esRojo?[60,40,60]:70)); }catch(e){}
+  _scanBeep(!esRojo);
+  if(esAlerta)setTimeout(()=>_scanBeep(false),170); // doble bip grave = de más
 }
 window._scanFeedback=_scanFeedback;
 async function _scanCam(onCode, opts){
@@ -241,7 +244,7 @@ function prepEscanear(id){
     if(idx<0)idx=(d.items||[]).findIndex(it=>String(it.codigo)===code); // por si el código escaneado es el código interno
     if(idx<0){ _scanFeedback('✗ No va en esta entrega','warn'); return; }
     const nom=d.items[idx].nombre, meta=_prepMeta(d.items[idx]), cant=_prepCant(d,idx);
-    if(cant>=meta){ _scanFeedback('✓ '+nom+' — ya completo ('+meta+'/'+meta+')','ok'); }
+    if(cant>=meta){ _scanFeedback('⚠ ¡DE MÁS! '+nom+' ya estaba completo ('+meta+'/'+meta+')','alerta'); }
     else {
       const nuevo=cant+1; const pr=_prepDe(d); pr.packed[idx]=nuevo; d.preparacion=pr; _prepGuardar(d);
       _scanFeedback((nuevo>=meta?'✓ '+nom+' completo ('+meta+'/'+meta+')':'✓ '+nom+' ('+nuevo+'/'+meta+')'),'ok');
