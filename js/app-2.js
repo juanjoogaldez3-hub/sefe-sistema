@@ -754,6 +754,17 @@ function rowDoc(withActions){
         items.push('<div class="act-sep"></div>');
         items.push(`<button class="act-danger" onclick="confirmar('Anular ${(TIPO_LBL[f.tipoDoc]||["Documento"])[0]}','Vas a anular ${f.serie}-${f.numeroDte} por ${money(f.totales.total)}. El saldo de la factura origen se recalculará. Esta acción no se puede deshacer.','Anular',()=>anularNotaCD(${f.id}))">Anular nota</button>`);
       }
+      // Enviar / quitar de Despachos (entrega a domicilio) — para documentos entregables
+      const _despEleg=f.estado!=='anulada'&&(
+        (f.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(f.estado))||
+        ((f.tipoDoc==='envio'||f.tipoDoc==='prestamo')&&f.estado==='pendiente')
+      );
+      if(_despEleg&&!soloLectura()){
+        items.push('<div class="act-sep"></div>');
+        items.push(f.paraDespacho
+          ? `<button onclick="toggleDespacho(${f.id})">🚚 Quitar de despacho</button>`
+          : `<button onclick="toggleDespacho(${f.id})">🚚 Enviar a despacho</button>`);
+      }
     }
     const noCol=(f.serie?f.serie+'-'+f.numeroDte:refPed(f));
     const dropId='drop-'+f.id;
