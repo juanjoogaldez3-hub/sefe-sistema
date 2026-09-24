@@ -44,7 +44,8 @@ function _cargarEscaner(){
   return _escanerPromise;
 }
 let _scanInstancia=null, _scanStream=null, _scanTimer=null, _scanTorchOn=false, _scanUltimo={code:'',ts:0};
-let _scanHintBase='', _scanBeepCtx=null, _scanFbTimer=null, _scanGap=true;
+let _scanHintBase='', _scanBeepCtx=null, _scanFbTimer=null, _scanGap=true, _scanVisto=0;
+const _SCAN_AUSENCIA=700; // ms que el código debe estar FUERA del cuadro para volver a contarlo
 // Bip corto de confirmación (agudo=ok, grave=error)
 function _scanBeep(ok){
   try{
@@ -91,7 +92,7 @@ async function _scanCam(onCode, opts){
   document.getElementById('scan-tit').textContent=opts.titulo||'Escaneá el código de barras';
   _scanHintBase=opts.hint||'Apuntá la cámara al código de barras del empaque.';
   const _h0=document.getElementById('scan-hint'); if(_h0){_h0.textContent=_scanHintBase;_h0.style.background='#111';_h0.style.fontWeight='';_h0.style.fontSize='13px';}
-  _scanUltimo={code:'',ts:0}; _scanGap=true;
+  _scanUltimo={code:'',ts:0}; _scanGap=true; _scanVisto=0;
   const emit=(txt)=>{
     const now=Date.now(); txt=String(txt||'').trim(); if(!txt)return;
     // Cuenta de nuevo el MISMO código sólo si salió del cuadro (hubo un "hueco"),
@@ -125,8 +126,12 @@ async function _scanCam(onCode, opts){
     }
     _scanTimer=setInterval(async()=>{
       if(!_scanStream||!video.videoWidth)return;
-      try{ const codes=await Detector.detect(video); if(codes&&codes.length){emit(codes[0].rawValue);}else{_scanGap=true;} }catch(e){}
-    },220);
+      try{
+        const codes=await Detector.detect(video); const now=Date.now();
+        if(codes&&codes.length){ _scanVisto=now; emit(codes[0].rawValue); }
+        else if(now-_scanVisto>_SCAN_AUSENCIA){ _scanGap=true; } // ausente de verdad → se puede volver a contar
+      }catch(e){}
+    },200);
     return;
   }
   // 2) Respaldo: html5-qrcode (iPhone u otros sin lector nativo)
@@ -139,7 +144,9 @@ async function _scanCam(onCode, opts){
   const fmts=F?[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.CODABAR]:undefined;
   _scanInstancia=new Html5Qrcode('scan-reader',{formatsToSupport:fmts,verbose:false});
   try{
-    await _scanInstancia.start({facingMode:'environment'},{fps:10,qrbox:{width:280,height:150}},emit,()=>{_scanGap=true;});
+    await _scanInstancia.start({facingMode:'environment'},{fps:10,qrbox:{width:280,height:150}},
+      (t)=>{_scanVisto=Date.now();emit(t);},
+      ()=>{ if(Date.now()-_scanVisto>_SCAN_AUSENCIA)_scanGap=true; });
   }catch(e){
     toast('No se pudo abrir la cámara','Revisá el permiso de cámara del navegador, o marcá a mano.',true);
     _scanCerrar();
