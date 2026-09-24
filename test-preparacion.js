@@ -73,7 +73,7 @@ ok('botón de linterna (torch) y botón Volver', /function _scanTorch\(/.test(sr
 ok('escaneo continuo en la preparación (marca por barras del producto)', /function prepEscanear\(id\)/.test(src) && /p\.codigoBarras&&String\(p\.codigoBarras\)\.trim\(\)===code/.test(src) && /continuo:true/.test(src));
 ok('confirma cada lectura dentro del escáner (color + bip + vibración)', /function _scanFeedback\(/.test(src) && /navigator\.vibrate/.test(src) && /_scanBeep\(/.test(src) && /✓ '\+nom/.test(src));
 ok('cuenta unidad por unidad y muestra x/y al escanear', /const nuevo=cant\+1/.test(src) && /nuevo\+'\/'\+meta/.test(src));
-ok('permite contar 2 unidades iguales (cuenta tras un "hueco")', /if\(txt===_scanUltimo\.code && !_scanGap\)return/.test(src) && /else\{_scanGap=true;\}/.test(src));
+ok('cuenta 2 iguales sólo tras ausencia real del código (no por parpadeo)', /if\(txt===_scanUltimo\.code && !_scanGap\)return/.test(src) && /now-_scanVisto>_SCAN_AUSENCIA/.test(src) && /const _SCAN_AUSENCIA=700/.test(src));
 ok('alerta agresiva si se escanea de más (rojo + doble bip + vibración fuerte)', /¡DE MÁS!/.test(src) && /'alerta'/.test(src) && /\[120,60,120,60,120\]/.test(src) && /if\(esAlerta\)setTimeout\(\(\)=>_scanBeep\(false\)/.test(src));
 ok('avisa dentro del escáner si el producto no es de esa entrega', /_scanFeedback\('✗ No va en esta entrega','warn'\)/.test(src));
 ok('campo "Código de barras" + botón escanear en la ficha del producto', /id="p-barras"/.test(src) && /escanearBarrasProducto\(\)/.test(src));
