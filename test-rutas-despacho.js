@@ -20,7 +20,7 @@ console.log('\n═══ 1 · Navegación en Google Maps ═══');
 ok('existen los ayudantes de ruta (parada + abrir)', /function _rutaParadaDe\(d\)/.test(src) && /function abrirRutaMaps\(docs\)/.test(src) && /google\.com\/maps\/dir\//.test(src));
 ok('botón "Navegar ruta del piloto" en Despachos', /onclick="abrirRutaDespachos\(\)"/.test(html) && /function abrirRutaDespachos\(/.test(src));
 ok('botón "Navegar mi ruta" para el piloto', /onclick="abrirRutaMisEntregas\(\)"/.test(src) && /function abrirRutaMisEntregas\(/.test(src));
-ok('limita a 23 paradas (tope de Google Maps)', /slice\(0,23\)/.test(src.slice(src.indexOf('function abrirRutaMaps'))));
+ok('sale desde la ubicación actual (origen vacío) y deja 22 paradas', /slice\(0,22\)/.test(src.slice(src.indexOf('function abrirRutaMaps'))) && /\['',\.\.\.stops\]/.test(src));
 
 // Funcional: la parada usa el pin, si no la dirección, y ordena por nº de ruta.
 (() => {
@@ -37,7 +37,7 @@ ok('limita a 23 paradas (tope de Google Maps)', /slice\(0,23\)/.test(src.slice(s
   vm.createContext(ctx);
   vm.runInContext(src.slice(ini, fin) + ';globalThis.__abrir=abrirRutaMaps;', ctx);
   ctx.__abrir([{ clienteId: 2, ordenRuta: 2 }, { clienteId: 1, ordenRuta: 1 }, { clienteId: 3, ordenRuta: 3 }]);
-  ok('abre la ruta ordenada por nº de ruta, pin primero y dirección después', captured === 'https://www.google.com/maps/dir/14.6%2C-90.5/5a%20avenida%2C%20Guatemala', captured);
+  ok('abre la ruta desde la ubicación actual (origen vacío), ordenada por nº de ruta', captured === 'https://www.google.com/maps/dir//14.6%2C-90.5/5a%20avenida%2C%20Guatemala', captured);
   // Ninguna con ubicación → no abre nada
   captured = null;
   ctx.__abrir([{ clienteId: 3, ordenRuta: 1 }]);
