@@ -893,6 +893,10 @@ function abrirFacturar(id){
        <div style="color:var(--muted)">Condición de pago del cliente:</div>
        <div style="font-weight:600;color:var(--ink);margin-top:2px">${creditoTxt}</div>
      </div>${selectorNit}${selectorSubVend}
+     <label style="display:flex;align-items:center;gap:9px;margin-top:14px;padding:11px 13px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:13px">
+       <input type="checkbox" id="fac-despacho" style="width:17px;height:17px;flex:none">
+       <span>🚚 <b>Entregar a domicilio</b> — mandar esta factura a Despachos</span>
+     </label>
      <div style="margin-top:16px;padding-top:13px;border-top:1px solid var(--line);text-align:center"><button class="btn btn-ghost btn-sm" onclick="cerrarTodo();editarPedido(${f.id})">✏️ Editar pedido antes de facturar</button></div>`,
     ()=>facturarPedido(id,dias));
   if(((f.notaInterna)||'').trim())$('#m-save').disabled=true;
@@ -929,6 +933,10 @@ async function facturarPedido(id,dias){
   if(!canFacturar()){toast('Sin permiso','Tu rol no puede facturar',true);return;}
   const f=documentos.find(d=>d.id===id);
   if(!f){toast('✗ Pedido no encontrado',null,true);return;}
+
+  // ¿Se marcó "entregar a domicilio"? → entra al módulo de Despachos
+  const _facDesp=document.getElementById('fac-despacho');
+  f.paraDespacho=_facDesp?_facDesp.checked:false;
 
   // Si se eligió facturar a un NIT secundario, guardarlo aparte (la venta sigue en el cliente real)
   const selNit=document.getElementById('fac-nit-sel');

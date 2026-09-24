@@ -854,12 +854,13 @@ const ESTADO_ENTREGA={
   ruta:['En ruta','b-warn'],
   entregado:['Entregado','b-ok'],
 };
-// Documentos despachables: facturas cambiarias, notas de envío y préstamo, no anuladas
+// Documentos despachables: SOLO los que se marcaron "para despacho" (entrega a domicilio),
+// y que no estén anulados. Todo lo demás (mostrador, historial viejo) queda afuera.
 function docsDespachables(){
   return documentos.filter(d=>
-    ['cambiaria','envio','prestamo'].includes(d.tipoDoc) &&
+    d.paraDespacho===true &&
     d.estado!=='anulada' &&
-    (d.tipoDoc==='cambiaria' ? ['certificada','facturado'].includes(d.estado) : d.estado==='pendiente')
+    ['cambiaria','envio','prestamo'].includes(d.tipoDoc)
   );
 }
 function estadoEntrega(d){return d.estadoEntrega||'sin';}
@@ -1137,7 +1138,15 @@ window.asignarDespacho=asignarDespacho;
 // ---- Vista del Piloto ----
 function renderMisEntregas(){
   const pid=miPilotoId();
-  // Admin/logística que entran a esta vista ven todo; un piloto ve solo lo suyo
+  // Si un piloto entra pero su usuario no está ligado a un piloto, no le mostramos NADA
+  // (antes, con pid nulo, el filtro d.pilotoId===pid hacía match con todas las sin asignar).
+  if(esPiloto()&&pid==null){
+    $('#pil-kpis').innerHTML='';
+    if(document.getElementById('pil-mapa-wrap'))document.getElementById('pil-mapa-wrap').innerHTML='';
+    $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-body"><div class="empty">Tu usuario todavía no está ligado a un piloto. Pedile al administrador que lo configure en Usuarios para ver tus entregas.</div></div></div>`;
+    return;
+  }
+  // Admin/logística que entran a esta vista ven todo lo asignado; un piloto ve solo lo suyo
   const mias=esPiloto()
     ? docsDespachables().filter(d=>d.pilotoId===pid)
     : docsDespachables().filter(d=>d.pilotoId!=null);
