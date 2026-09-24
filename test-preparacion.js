@@ -96,5 +96,11 @@ console.log('\n═══ Botón "Regresar" entrega ═══');
 })();
 ok('botón "Regresar" en la fila de Despachos (admin/logística)', /onclick="regresarEntrega\(\$\{d\.id\}\)"/.test(src) && /canAsignarPiloto\(\)&&est!=='sin'/.test(src));
 
+console.log('\n═══ "Mis entregas" para no-pilotos: selector de piloto ═══');
+ok('contenedor del selector en la vista', /id="pil-selector"/.test(html));
+ok('selector sólo para no-pilotos + estado _verPilotoId', /function pilSelVer\(v\)/.test(src) && /let _verPilotoId=''/.test(src) && /if\(esPil\)\{ sel\.innerHTML=''; \}/.test(src));
+ok('no-piloto ve lo del piloto elegido (o mensaje si no eligió)', /Elegí un piloto arriba para ver su ruta del día/.test(src) && /const mias=docsDespachables\(\)\.filter\(d=>d\.pilotoId===pid\)/.test(src));
+ok('navegar respeta el piloto elegido', /const pid=esPiloto\(\)\?miPilotoId\(\):\(_verPilotoId!==''\?Number\(_verPilotoId\):null\)/.test(src));
+
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

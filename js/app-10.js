@@ -901,11 +901,11 @@ function abrirRutaDespachos(){
   abrirRutaMaps(lista);
 }
 window.abrirRutaDespachos=abrirRutaDespachos;
-// Desde Mis entregas: navega la ruta propia del piloto (sin entregados).
+// Desde Mis entregas: navega la ruta del piloto que se está viendo (sin entregados).
 function abrirRutaMisEntregas(){
-  const pid=(typeof miPilotoId==='function')?miPilotoId():null;
-  const esPil=(typeof esPiloto==='function')&&esPiloto();
-  const mias=docsDespachables().filter(d=>d.pilotoId!=null&&estadoEntrega(d)!=='entregado'&&(esPil?d.pilotoId===pid:true));
+  const pid=esPiloto()?miPilotoId():(_verPilotoId!==''?Number(_verPilotoId):null);
+  if(pid==null){toast('Elegí un piloto','Seleccioná un piloto para navegar su ruta.',false);return;}
+  const mias=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
   abrirRutaMaps(mias);
 }
 window.abrirRutaMisEntregas=abrirRutaMisEntregas;
@@ -1141,26 +1141,46 @@ function asignarDespacho(id){
 window.asignarDespacho=asignarDespacho;
 
 // ---- Vista del Piloto ----
+// Qué piloto se está viendo: el propio si es piloto; el elegido en el selector si es admin/supervisor.
+let _verPilotoId='';
+function pilSelVer(v){ _verPilotoId=v; renderMisEntregas(); }
+window.pilSelVer=pilSelVer;
 function renderMisEntregas(){
-  const pid=miPilotoId();
-  // Si un piloto entra pero su usuario no está ligado a un piloto, no le mostramos NADA
-  // (antes, con pid nulo, el filtro d.pilotoId===pid hacía match con todas las sin asignar).
-  if(esPiloto()&&pid==null){
+  const esPil=esPiloto();
+  // Selector de piloto SOLO para quien no es piloto (admin/supervisor)
+  const sel=document.getElementById('pil-selector');
+  if(sel){
+    if(esPil){ sel.innerHTML=''; }
+    else{
+      const ops=(pilotos||[]).filter(p=>p.activo!==false).map(p=>`<option value="${p.id}" ${String(_verPilotoId)===String(p.id)?'selected':''}>${p.nombre}</option>`).join('');
+      sel.innerHTML=`<div class="panel" style="margin-bottom:14px"><div class="panel-body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-size:13px;color:var(--muted)">Ver la ruta de:</span>
+        <select onchange="pilSelVer(this.value)" style="max-width:240px"><option value="">— Elegí un piloto —</option>${ops}</select>
+      </div></div>`;
+    }
+  }
+  const pid=esPil?miPilotoId():(_verPilotoId!==''?Number(_verPilotoId):null);
+  // Piloto sin usuario ligado: no mostrarle nada ajeno.
+  if(esPil&&pid==null){
     $('#pil-kpis').innerHTML='';
     if(document.getElementById('pil-mapa-wrap'))document.getElementById('pil-mapa-wrap').innerHTML='';
     $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-body"><div class="empty">Tu usuario todavía no está ligado a un piloto. Pedile al administrador que lo configure en Usuarios para ver tus entregas.</div></div></div>`;
     return;
   }
-  // Admin/logística que entran a esta vista ven todo lo asignado; un piloto ve solo lo suyo
-  const mias=esPiloto()
-    ? docsDespachables().filter(d=>d.pilotoId===pid)
-    : docsDespachables().filter(d=>d.pilotoId!=null);
+  // Admin/supervisor que todavía no eligió piloto.
+  if(!esPil&&pid==null){
+    $('#pil-kpis').innerHTML='';
+    if(document.getElementById('pil-mapa-wrap'))document.getElementById('pil-mapa-wrap').innerHTML='';
+    $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-body"><div class="empty">Elegí un piloto arriba para ver su ruta del día.</div></div></div>`;
+    return;
+  }
+  const mias=docsDespachables().filter(d=>d.pilotoId===pid);
   // KPIs del piloto
   const pendientes=mias.filter(d=>estadoEntrega(d)!=='entregado').length;
   const enRuta=mias.filter(d=>estadoEntrega(d)==='ruta').length;
   const entregadas=mias.filter(d=>estadoEntrega(d)==='entregado').length;
   const k=[
-    {ic:'i-warn',svg:'<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',lbl:'Por entregar',val:pendientes,sub:'asignadas a mí'},
+    {ic:'i-warn',svg:'<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',lbl:'Por entregar',val:pendientes,sub:esPil?'asignadas a mí':'asignadas'},
     {ic:'i-blue',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'En ruta',val:enRuta,sub:'cargadas'},
     {ic:'i-green',svg:'<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/>',lbl:'Entregadas',val:entregadas,sub:'completadas'},
   ];
@@ -1171,7 +1191,7 @@ function renderMisEntregas(){
   const docNum=d=>d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
   const tipoCorto={cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'};
   if(!mias.length){
-    $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-body"><div class="empty">No tenés entregas asignadas en este momento.</div></div></div>`;
+    $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-body"><div class="empty">${esPil?'No tenés entregas asignadas en este momento.':'Este piloto no tiene entregas asignadas.'}</div></div></div>`;
     return;
   }
   // Tarjetas tipo lista de entregas
