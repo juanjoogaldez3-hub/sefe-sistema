@@ -151,6 +151,7 @@
   .badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
   .b-ok{background:var(--ok-bg);color:var(--ok)}.b-warn{background:var(--warn-bg);color:var(--warn)}
   .b-muted{background:#EEF0E8;color:var(--muted)}.b-info{background:#E6EEF6;color:var(--blue)}.b-danger{background:var(--danger-bg);color:var(--danger)}
+  .b-prep{background:#EDE7F6;color:#6A3FB5}
   .acts{position:relative;display:inline-block}
   .acts-btn{background:var(--surface-2);border:1.5px solid var(--line-strong);border-radius:var(--r-sm);padding:6px 10px;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;transition:.12s}
   .acts-btn:hover{border-color:var(--lime-dk);background:var(--surface)}
