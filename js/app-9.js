@@ -43,9 +43,9 @@ function renderReportes(){
     exportData=mv.map((m,i)=>{const mg=m.v-mc[i].v;return {Mes:m.lbl,Ventas:m.v,Costo:mc[i].v,Margen:mg,'Margen%':m.v?(mg/m.v*100).toFixed(1):0};});
     html+=`<div class="panel"><div class="panel-head"><h3>Ventas vs costos por mes</h3>
       <div style="display:flex;gap:14px;font-size:11.5px"><span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:var(--lime)"></span>Ventas</span><span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:var(--muted-2)"></span>Costo</span></div></div>
-      <div class="panel-body"><div class="bars">${mv.map((m,i)=>`<div class="bcol"><div style="display:flex;gap:3px;align-items:flex-end;height:100%;width:100%;justify-content:center">
-        <div class="bar" style="height:${Math.round(m.v/max*100)}%;max-width:18px"></div>
-        <div class="bar" style="height:${Math.round(mc[i].v/max*100)}%;max-width:18px;background:var(--muted-2)"></div></div><div class="blbl">${m.lbl}</div></div>`).join('')}</div></div></div>
+      <div class="panel-body"><div class="bars">${mv.map((m,i)=>{const _tv=_tipSafe('Ventas · '+m.lbl+': '+money(m.v)),_tc=_tipSafe('Costo · '+m.lbl+': '+money(mc[i].v));return `<div class="bcol"><div style="display:flex;gap:3px;align-items:flex-end;height:100%;width:100%;justify-content:center">
+        <div class="bar" style="height:${Math.round(m.v/max*100)}%;max-width:18px" title="${_tv}" onmousemove="_barTip(event,'${_tv}')" onmouseleave="_barTipHide()"></div>
+        <div class="bar" style="height:${Math.round(mc[i].v/max*100)}%;max-width:18px;background:var(--muted-2)" title="${_tc}" onmousemove="_barTip(event,'${_tc}')" onmouseleave="_barTipHide()"></div></div><div class="blbl">${m.lbl}</div></div>`;}).join('')}</div></div></div>
       <div class="panel"><table><thead><tr><th>Mes</th><th>Ventas</th><th>Costo</th><th>Margen</th><th>%</th></tr></thead><tbody>
       ${mv.map((m,i)=>{const mg=m.v-mc[i].v;return `<tr><td style="font-weight:600">${m.lbl}</td><td class="num">${money(m.v)}</td><td class="num" style="color:var(--muted)">${money(mc[i].v)}</td><td class="num" style="font-weight:600">${money(mg)}</td><td class="num">${m.v?(mg/m.v*100).toFixed(0):0}%</td></tr>`;}).join('')}</tbody></table></div>`;
   }
@@ -73,7 +73,7 @@ function renderReportes(){
     const compBarras=`<div class="panel"><div class="panel-head"><h3>Comparativa por mes</h3>
       <div style="display:flex;gap:12px;flex-wrap:wrap">${activos.map((n,i)=>`<span style="display:flex;align-items:center;gap:5px;font-size:11.5px"><span style="width:10px;height:10px;border-radius:3px;background:${colores[n]}"></span>${n}</span>`).join('')}</div></div>
       <div class="panel-body"><div class="bars">${mesesLbl.map((lbl,mi)=>`<div class="bcol">
-        <div class="bar-wrap">${activos.map(n=>`<div class="bar" style="height:${Math.round((datos[n]?.meses[mi]?.v||0)/maxComp*100)}%;max-width:${Math.floor(36/Math.max(activos.length,1))}px;background:${colores[n]}"></div>`).join('')}</div>
+        <div class="bar-wrap">${activos.map(n=>{const _v=datos[n]?.meses[mi]?.v||0;const _tip=_tipSafe(n+' · '+lbl+': '+money(_v));return `<div class="bar" style="height:${Math.round(_v/maxComp*100)}%;max-width:${Math.floor(36/Math.max(activos.length,1))}px;background:${colores[n]}" title="${_tip}" onmousemove="_barTip(event,'${_tip}')" onmouseleave="_barTipHide()"></div>`;}).join('')}</div>
         <div class="blbl">${lbl}</div></div>`).join('')}</div></div></div>`;
     html+=compBarras;
     html+=`<div class="panel"><div class="panel-head"><h3>Resumen por vendedor</h3></div>
