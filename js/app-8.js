@@ -353,7 +353,9 @@ function renderRepFilters(){
   else if(repType==='prodmescomp'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
     const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
-    html=`<div class="rep-filter-bar">${sel('rf-vend-pm','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}${sel('rf-cli-pm','Cliente',cliOpts,repFiltros.cliente,'cliente')}
+    // Mismo ordenamiento que la Comparativa cliente/mes: Total (default), Más creció, Más cayó.
+    const ordPM=`<div><label>Ordenar por</label><select style="margin-top:4px;height:34px" onchange="setRepFiltro('prodmescompOrden',this.value)"><option value="total"${(repFiltros.prodmescompOrden||'total')==='total'?' selected':''}>Total</option><option value="crecio"${repFiltros.prodmescompOrden==='crecio'?' selected':''}>Más creció</option><option value="cayo"${repFiltros.prodmescompOrden==='cayo'?' selected':''}>Más cayó</option></select></div>`;
+    html=`<div class="rep-filter-bar">${sel('rf-vend-pm','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}${sel('rf-cli-pm','Cliente',cliOpts,repFiltros.cliente,'cliente')}${ordPM}
       <div style="display:flex;align-items:flex-end;gap:8px">
         <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(true)" title="Expandir todo">⊞ Expandir</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(false)" title="Colapsar todo">⊟ Colapsar</button>
