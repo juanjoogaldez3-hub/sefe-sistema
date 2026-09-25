@@ -938,49 +938,84 @@ function _distKm(a,b){
   const s=Math.sin(dLat/2)**2+Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(dLng/2)**2;
   return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));
 }
-// Numera las entregas de la más cercana a la más lejana, saliendo de la bodega.
-// Devuelve el nº de paradas ordenadas. Las que no tienen pin quedan al final.
-function _ordenarPorCercania(docs){
-  const bod=(typeof SEFE_BODEGA!=='undefined')?SEFE_BODEGA:null;
-  if(!bod||bod.lat==null){toast('Falta la bodega','Configurá el punto de la bodega para ordenar por cercanía.',true);return 0;}
-  const conPin=[],sinPin=[];
-  (docs||[]).forEach(d=>{
-    const c=clientes.find(x=>x.id===d.clienteId);
-    if(c&&c.lat!=null&&c.lng!=null)conPin.push({d,pt:{lat:Number(c.lat),lng:Number(c.lng)}});
-    else sinPin.push(d);
-  });
-  if(!conPin.length){toast('Sin ubicaciones','Estas entregas no tienen pin para ordenar por cercanía. Ubicá a los clientes primero.',true);return 0;}
-  // Vecino más cercano, PERO respetando la hora límite: en cada paso, si quedan
-  // entregas con hora, se elige entre las de la hora MÁS TEMPRANA la más cercana;
-  // recién cuando no quedan con hora, se sigue por pura cercanía.
-  conPin.forEach(x=>{x.hlm=_horaLimMinDoc(x.d);});
-  const rest=conPin.slice(); let actual=bod; let n=1;
+// Vecino más cercano (línea recta) desde un punto, respetando la hora límite:
+// en cada paso, entre las de la hora más temprana que quedan, elige la más cercana.
+function _nnRespetaHora(from, items){
+  const rest=items.slice(); let actual=from; const out=[];
   while(rest.length){
     const minHora=Math.min(...rest.map(x=>x.hlm));
     let mejor=-1,md=Infinity;
-    for(let i=0;i<rest.length;i++){
-      if(rest[i].hlm!==minHora)continue; // sólo los de la hora más urgente que queda
-      const dd=_distKm(actual,rest[i].pt);
-      if(dd<md){md=dd;mejor=i;}
-    }
+    for(let i=0;i<rest.length;i++){ if(rest[i].hlm!==minHora)continue; const dd=_distKm(actual,rest[i].pt); if(dd<md){md=dd;mejor=i;} }
     if(mejor<0)mejor=0;
-    const elegido=rest.splice(mejor,1)[0];
-    elegido.d.ordenRuta=n++; actual=elegido.pt;
-    if(estadoEntrega(elegido.d)==='sin')elegido.d.estadoEntrega='asignado';
-    if(typeof guardarDocumento==='function')guardarDocumento(elegido.d);
+    const el=rest.splice(mejor,1)[0]; out.push(el); actual=el.pt;
   }
-  // Las que no tienen pin van al final, sin número (o al final de la lista).
+  return out;
+}
+// Optimización REAL por calles con Google (viaje redondo desde 'from'). Devuelve
+// los items reordenados según Google, o null si no se pudo (sin internet, límite,
+// llave inválida, etc.) para caer al método de línea recta.
+async function _googleOptimOrden(from, items){
+  if(!items||items.length<2||items.length>23)return null;
+  if(typeof _cargarGoogleMaps!=='function')return null;
+  if(typeof _gmapsAuthFail!=='undefined'&&_gmapsAuthFail)return null;
+  let gm; try{ gm=await _cargarGoogleMaps(); }catch(e){ return null; }
+  if(!gm||!gm.DirectionsService)return null;
+  try{
+    const svc=new gm.DirectionsService();
+    const origin={lat:Number(from.lat),lng:Number(from.lng)};
+    const waypoints=items.map(x=>({location:{lat:x.pt.lat,lng:x.pt.lng},stopover:true}));
+    const res=await new Promise(resolve=>{
+      svc.route({origin,destination:origin,waypoints,optimizeWaypoints:true,travelMode:gm.TravelMode.DRIVING},
+        (r,st)=>resolve(st==='OK'?r:null));
+    });
+    const order=res&&res.routes&&res.routes[0]&&res.routes[0].waypoint_order;
+    if(!order||order.length!==items.length)return null;
+    return order.map(i=>items[i]);
+  }catch(e){ return null; }
+}
+// Numera las entregas por cercanía: las de HORA LÍMITE primero (por hora), y el
+// RESTO optimizado por CALLES con Google (respaldo: línea recta). Es async.
+// Devuelve {n, motor:'google'|'recta'} — n = paradas con pin ordenadas.
+async function _ordenarPorCercania(docs){
+  const bod=(typeof SEFE_BODEGA!=='undefined')?SEFE_BODEGA:null;
+  if(!bod||bod.lat==null){toast('Falta la bodega','Configurá el punto de la bodega para ordenar por cercanía.',true);return {n:0};}
+  const conPin=[],sinPin=[];
+  (docs||[]).forEach(d=>{
+    const c=clientes.find(x=>x.id===d.clienteId);
+    if(c&&c.lat!=null&&c.lng!=null)conPin.push({d,pt:{lat:Number(c.lat),lng:Number(c.lng)},hlm:_horaLimMinDoc(d)});
+    else sinPin.push(d);
+  });
+  if(!conPin.length){toast('Sin ubicaciones','Estas entregas no tienen pin para ordenar por cercanía. Ubicá a los clientes primero.',true);return {n:0};}
+  // 1) Con hora límite: primero, en orden de hora (cercanía como desempate).
+  const conHoraOrd=_nnRespetaHora(bod, conPin.filter(x=>x.hlm<Infinity));
+  // 2) Sin hora: optimizado por calles con Google; si no se puede, línea recta.
+  const sinHora=conPin.filter(x=>x.hlm===Infinity);
+  const desde=conHoraOrd.length?conHoraOrd[conHoraOrd.length-1].pt:bod;
+  let motor='recta', sinHoraOrd=await _googleOptimOrden(desde, sinHora);
+  if(sinHoraOrd)motor='google'; else sinHoraOrd=_nnRespetaHora(desde, sinHora);
+  // 3) Numerar todo (con hora + resto) y, al final, las que no tienen pin.
+  let n=1;
+  [...conHoraOrd, ...sinHoraOrd].forEach(x=>{
+    x.d.ordenRuta=n++;
+    if(estadoEntrega(x.d)==='sin')x.d.estadoEntrega='asignado';
+    if(typeof guardarDocumento==='function')guardarDocumento(x.d);
+  });
   sinPin.forEach(d=>{d.ordenRuta=n++;if(typeof guardarDocumento==='function')guardarDocumento(d);});
-  return conPin.length;
+  return {n:conPin.length, motor};
 }
 // Desde Despachos: ordena por cercanía la ruta del piloto elegido en el filtro.
-function ordenarCercaniaDespachos(){
+async function ordenarCercaniaDespachos(){
   const fPiloto=($('#desp-piloto')||{}).value||'';
   if(!fPiloto){toast('Elegí un piloto','Seleccioná un piloto en el filtro para ordenar su ruta.',false);return;}
   const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
   if(!lista.length){toast('Sin entregas','Ese piloto no tiene entregas pendientes.',false);return;}
-  const n=_ordenarPorCercania(lista);
-  if(n){logAudit('Ruta ordenada por cercanía',n+' paradas');renderDespachos();toast('🧭 Ruta ordenada','Se numeraron '+n+' paradas de la más cercana a la más lejana. Podés reordenar a mano.');}
+  toast('🧭 Ordenando ruta…','Calculando el mejor recorrido…',false);
+  const {n,motor}=await _ordenarPorCercania(lista);
+  if(n){
+    logAudit('Ruta ordenada por cercanía',n+' paradas ('+(motor||'recta')+')');
+    renderDespachos();
+    toast('🧭 Ruta ordenada',(motor==='google'?'Optimizada por calles (Google Maps) · ':'')+n+' paradas numeradas. Podés reordenar a mano.');
+  }
 }
 window.ordenarCercaniaDespachos=ordenarCercaniaDespachos;
 // Desde Mis entregas: navega la ruta del piloto que se está viendo (sin entregados).
@@ -1013,16 +1048,16 @@ function asignarMasivo(){
       const porCercania=hayBodega&&$('#am-cercania').checked;
       const pil=pilotos.find(p=>p.id===pid);
       docs.forEach(d=>{d.pilotoId=pid;if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';if(typeof guardarDocumento==='function')guardarDocumento(d);});
-      let extra='';
-      if(porCercania){
-        // Reordena TODA la ruta pendiente de ese piloto por cercanía (no solo las nuevas).
-        const rutaPiloto=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
-        const n=_ordenarPorCercania(rutaPiloto);
-        if(n)extra=' · ruta ordenada por cercanía';
-      }
       logAudit('Entregas asignadas (masivo)',docs.length+' entregas · Piloto: '+(pil?.nombre||'—')+(porCercania?' · por cercanía':''));
       _despSel.clear();closeMod();renderDespachos();
-      toast('✓ '+docs.length+' entregas asignadas',(pil?.nombre||'')+extra);
+      toast('✓ '+docs.length+' entregas asignadas',(pil?.nombre||'')+(porCercania?' · ordenando ruta…':''));
+      if(porCercania){
+        // Reordena TODA la ruta pendiente de ese piloto (async: Google + respaldo).
+        const rutaPiloto=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
+        _ordenarPorCercania(rutaPiloto).then(({n,motor})=>{
+          if(n){renderDespachos();toast('🧭 Ruta ordenada',(motor==='google'?'Optimizada por calles (Google Maps) · ':'')+n+' paradas.');}
+        });
+      }
     });
 }
 window.asignarMasivo=asignarMasivo;
