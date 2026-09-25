@@ -45,12 +45,13 @@ console.log('\n═══ Agrupa por zona (2 zonas claras) ═══');
   ok('no hay entregas sin ubicación en este caso', sinUbic.length === 0);
 })();
 
-console.log('\n═══ Balancea impares (5 → 3 y 2) ═══');
+console.log('\n═══ Geografía pura: NO fuerza parejo ═══');
 (() => {
-  const docs = [1, 2, 3, 4, 5].map(id => ({ id: 200 + id, clienteId: id }));
+  // 3 pegadas en una esquina + 1 sola lejos. Balanceado daría 2/2; geografía pura da 3/1.
+  const docs = [1, 2, 3, 4].map(id => ({ id: 200 + id, clienteId: id }));
   const { grupos } = ctx.__f(docs, 2);
   const tam = grupos.map(g => g.docs.length).sort((a, b) => b - a);
-  ok('quedan tamaños 3 y 2 (lo más parejo posible)', tam[0] === 3 && tam[1] === 2, JSON.stringify(tam));
+  ok('respeta la geografía aunque quede disparejo (3 y 1)', tam[0] === 3 && tam[1] === 1, JSON.stringify(tam));
 })();
 
 console.log('\n═══ Separa las que no tienen ubicación ═══');
@@ -74,7 +75,7 @@ ok('botón "Armar rutas por zona" en Despachos', /Armar rutas por zona/.test(htm
 ok('modal pregunta cuántas rutas y reagrupa', /id="agr-n"/.test(src) && /onclick="_agruparPreview\(\)"/.test(src));
 ok('asigna un grupo completo a un piloto', /function asignarGrupoZona\(idx\)/.test(src) && /d\.pilotoId=pid;if\(estadoEntrega\(d\)==='sin'\)d\.estadoEntrega='asignado'/.test(src));
 ok('al asignar ordena la ruta por cercanía', /_ordenarCercaniaPura\(rutaPil,_paradasPiloto\(pid\)\)/.test(src));
-ok('reparte parejo (capacidades base y base+1)', /const base=Math\.floor\(n\/k\),resto=n%k;/.test(src) && /base\+\(i<resto\?1:0\)/.test(src));
+ok('agrupa por geografía (k-means al centroide más cercano)', /cent\.forEach\(\(c,ci\)=>\{const d=_distKm\(p,c\);if\(d<bd\)/.test(src) && /sum\[g\]\.lat\+=p\.lat/.test(src));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

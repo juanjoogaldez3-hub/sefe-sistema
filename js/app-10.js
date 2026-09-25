@@ -1296,25 +1296,16 @@ function _agruparPorZona(docs,k){
     conUbic.forEach(p=>{let dm=Infinity;cent.forEach(c=>{const d=_distKm(p,c);if(d<dm)dm=d;});if(dm>bd){bd=dm;best=p;}});
     cent.push({lat:best.lat,lng:best.lng});
   }
-  // Tamaños objetivo lo más parejos posible (base y base+1).
-  const base=Math.floor(n/k),resto=n%k;
-  const cap=Array.from({length:k},(_,i)=>base+(i<resto?1:0));
+  // Geografía PURA (k-means de Lloyd): cada entrega va al centroide más cercano,
+  // se recalculan los centroides y se repite hasta que se estabiliza. Los grupos
+  // pueden quedar disparejos (una zona con muchas, otra con pocas) pero cada uno
+  // es geográficamente coherente. NO se fuerza que queden parejos.
   let asign=new Array(n).fill(0);
-  for(let it=0;it<12;it++){
-    // Asignación balanceada por "regret": los puntos más decididos (mayor
-    // diferencia entre su 1er y 2do centroide) eligen primero; si un grupo se
-    // llena, el punto va al siguiente más cercano con cupo.
-    const libres=cap.slice();
-    const orden=conUbic.map((p,i)=>{
-      const ds=cent.map(c=>_distKm(p,c)).sort((a,b)=>a-b);
-      return {i,regret:(ds[1]!=null?ds[1]:ds[0])-ds[0]};
-    }).sort((a,b)=>b.regret-a.regret);
-    const na=new Array(n).fill(0);
-    orden.forEach(({i})=>{
-      const p=conUbic[i];
-      const ord=cent.map((c,ci)=>({ci,d:_distKm(p,c)})).sort((a,b)=>a.d-b.d);
-      let put=ord.find(o=>libres[o.ci]>0)||ord[0];
-      na[i]=put.ci;libres[put.ci]--;
+  for(let it=0;it<15;it++){
+    const na=conUbic.map(p=>{
+      let bi=0,bd=Infinity;
+      cent.forEach((c,ci)=>{const d=_distKm(p,c);if(d<bd){bd=d;bi=ci;}});
+      return bi;
     });
     const sum=Array.from({length:k},()=>({lat:0,lng:0,c:0}));
     conUbic.forEach((p,i)=>{const g=na[i];sum[g].lat+=p.lat;sum[g].lng+=p.lng;sum[g].c++;});
@@ -1334,7 +1325,7 @@ function openAgruparRutas(){
   if(!docsSin.length){toast('Nada por asignar','No hay entregas sin asignar.',false);return;}
   const defK=Math.max(1,Math.min(pilotos.length||1,docsSin.length));
   openMod('🗺️ Armar rutas por zona',`
-    <div class="note n-ok" style="margin-bottom:12px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El sistema agrupa las <b>${docsSin.length}</b> entregas sin asignar en zonas cercanas, repartidas <b>parejo</b>. Vos elegís qué piloto lleva cada grupo. No consume Google.</span></div>
+    <div class="note n-ok" style="margin-bottom:12px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El sistema agrupa las <b>${docsSin.length}</b> entregas sin asignar por <b>zonas cercanas</b> (los que están más juntos van en la misma ruta). Los grupos pueden quedar disparejos. Vos elegís qué piloto lleva cada grupo. No consume Google.</span></div>
     <div class="row" style="align-items:flex-end;gap:10px"><div style="max-width:150px"><label>¿En cuántas rutas?</label><input id="agr-n" type="number" min="1" max="${docsSin.length}" value="${defK}" onchange="_agruparPreview()"></div><button class="btn btn-ghost btn-sm" onclick="_agruparPreview()">🔄 Reagrupar</button></div>
     <div id="agr-res" style="margin-top:12px"></div>`,
     ()=>{closeMod();renderDespachos();});
