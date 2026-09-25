@@ -461,6 +461,14 @@ function renderReportes(){
     mesesSet.add(_mkDate(_ahora)); mesesSet.add(_mkDate(_iniPrev));
     const meses=[...mesesSet].sort();
     const ultM=meses[meses.length-1],prevM=meses[meses.length-2],hayComp=meses.length>=2;
+    // COMPARACIÓN PAREJA (igual que cliente/mes): si el último mes es el que está
+    // EN CURSO (parcial), la variación se mide contra los MISMOS DÍAS del mes
+    // anterior (mes al día X vs. mes anterior al día X), no contra el mes completo.
+    const _diaCortePM=_ahora.getDate();
+    const esParcial = hayComp && ultM===_mkDate(_ahora);
+    let _prevCmpGen=0;
+    const _baseCli=g=>esParcial?(g._prevCmp||0):(g.meses[prevM]||0);
+    const _baseProd=p=>esParcial?(p._prevCmp||0):(p.meses[prevM]||0);
     const valLinea=it=>_esCant?(Number(it.cantidad)||0):((Number(it.cantidad)||0)*(Number(it.precio)||0)-(Number(it.descuento)||0));
     const grupos={};
     ventasC.forEach(d=>{
@@ -469,6 +477,8 @@ function renderReportes(){
       const mk=mesKey(d);
       if(!grupos[cliKey])grupos[cliKey]={nombre:cliNom,prods:{},meses:{},total:0};
       if(d.clienteComercial)grupos[cliKey].nombre=d.clienteComercial;
+      const _diaD=new Date(d.creada).getDate();
+      const _cuentaPrev=esParcial&&mk===prevM&&_diaD<=_diaCortePM; // mes anterior, mismos días
       (d.items||[]).forEach(it=>{
         const pKey=(it.id!=null?('#'+it.id):(it.codigo||it.nombre||'—'));
         const g=grupos[cliKey];
@@ -478,6 +488,7 @@ function renderReportes(){
         g.prods[pKey].total+=v;
         g.meses[mk]=(g.meses[mk]||0)+v;
         g.total+=v;
+        if(_cuentaPrev){ g.prods[pKey]._prevCmp=(g.prods[pKey]._prevCmp||0)+v; g._prevCmp=(g._prevCmp||0)+v; _prevCmpGen+=v; }
       });
     });
     const totalesGen={};meses.forEach(m=>totalesGen[m]=0);let granTotal=0;
@@ -488,7 +499,17 @@ function renderReportes(){
       const pct=pv?Math.abs(dif/pv*100):(Math.abs(dif)>0.005?100:0);
       return `<td class="num" style="color:${col};font-weight:${peso};white-space:nowrap">${arr} ${fmt(Math.abs(dif))}${pv?` <span style="font-size:10.5px">(${dif>=0?'+':'-'}${pct.toFixed(0)}%)</span>`:''}</td>`;
     };
-    const cliOrden=Object.entries(grupos).sort((a,b)=>b[1].total-a[1].total);
+    const _ordPM=repFiltros.prodmescompOrden||'total';
+    const _difCliPM=g=>((g.meses[ultM]||0)-_baseCli(g));
+    const _pctCliPM=g=>{const u=g.meses[ultM]||0,pv=_baseCli(g),dif=u-pv;const mag=pv?Math.abs(dif/pv*100):(Math.abs(dif)>0.005?100:0);return dif>=0?mag:-mag;};
+    const cliOrden=Object.entries(grupos).sort((a,b)=>{
+      if(hayComp&&(_ordPM==='crecio'||_ordPM==='cayo')){
+        const pa=_pctCliPM(a[1]),pb=_pctCliPM(b[1]);
+        if(pa!==pb)return _ordPM==='crecio'?pb-pa:pa-pb;
+        return _ordPM==='crecio'?_difCliPM(b[1])-_difCliPM(a[1]):_difCliPM(a[1])-_difCliPM(b[1]);
+      }
+      return b[1].total-a[1].total;
+    });
     const primeraVez=!gruposColapsados.__prodMesInit;
     cliOrden.forEach(([cliKey,g])=>{
       const gk='V:'+cliKey;
@@ -496,7 +517,7 @@ function renderReportes(){
       let celdasCli='';meses.forEach(m=>{const val=g.meses[m]||0;totalesGen[m]+=val;celdasCli+=`<td class="num" style="color:#fff;font-weight:700">${val?fmt(val):'—'}</td>`;});
       granTotal+=g.total;
       let varCli='';
-      if(hayComp){const u=g.meses[ultM]||0,pv=g.meses[prevM]||0;varCli=varTd(u-pv,pv,700,true);}
+      if(hayComp){const u=g.meses[ultM]||0,pv=_baseCli(g);varCli=varTd(u-pv,pv,700,true);}
       cuerpo+=`<tr data-grupo-key="${gk}" style="background:var(--green);cursor:pointer" onclick="toggleGrupo('${gk.replace(/'/g,"\\'")}')"><td style="color:#fff;font-weight:700;padding:8px 12px"><span class="flecha-grupo" style="display:inline-block;width:14px">▾</span>${g.nombre}</td>${celdasCli}${varCli}<td class="num" style="color:#fff;font-weight:800">${fmt(g.total)}</td></tr>`;
       const prods=Object.values(g.prods).sort((a,b)=>b.total-a.total);
       prods.forEach(p=>{
@@ -504,7 +525,7 @@ function renderReportes(){
         let celdas='';const filaExp={Cliente:g.nombre,'Código':p.codigo,Producto:p.nombre};
         meses.forEach(m=>{const val=p.meses[m]||0;celdas+=`<td class="num">${val?fmt(val):'<span style="color:var(--muted-2)">—</span>'}</td>`;filaExp[mesLbl(m)]=val;});
         let varCell='';
-        if(hayComp){const u=p.meses[ultM]||0,pv=p.meses[prevM]||0,dif=u-pv;varCell=varTd(dif,pv,600,false);filaExp['Δ '+mesLbl(ultM)]=dif;filaExp['Var %']=pv?Number((dif/pv*100).toFixed(1)):'';}
+        if(hayComp){const u=p.meses[ultM]||0,pv=_baseProd(p),dif=u-pv;varCell=varTd(dif,pv,600,false);filaExp['Δ '+mesLbl(ultM)]=dif;filaExp['Var %']=pv?Number((dif/pv*100).toFixed(1)):'';}
         filaExp['Total']=p.total;expFilas.push(filaExp);
         cuerpo+=`<tr data-pertenece="1" data-vend="${cliKey}" style="border-bottom:1px solid var(--line)"><td style="padding-left:26px">${nom}</td>${celdas}${varCell}<td class="num" style="font-weight:600;background:#fafdf5">${fmt(p.total)}</td></tr>`;
       });
@@ -512,9 +533,9 @@ function renderReportes(){
     gruposColapsados.__prodMesInit=true;
     let celdasGen='';meses.forEach(m=>{celdasGen+=`<td class="num" style="font-weight:800">${fmt(totalesGen[m])}</td>`;});
     let varGen='';
-    if(hayComp){const dif=(totalesGen[ultM]||0)-(totalesGen[prevM]||0);varGen=varTd(dif,totalesGen[prevM]||0,800,false);}
+    if(hayComp){const baseGen=esParcial?_prevCmpGen:(totalesGen[prevM]||0);const dif=(totalesGen[ultM]||0)-baseGen;varGen=varTd(dif,baseGen,800,false);}
     exportData=expFilas;
-    const ths=meses.map(m=>`<th class="num">${mesLbl(m)}</th>`).join('');
+    const ths=meses.map(m=>`<th class="num">${mesLbl(m)}${(esParcial&&m===ultM)?` <span style="font-weight:400;color:var(--muted-2)">(al día ${_diaCortePM})</span>`:''}</th>`).join('');
     const _cliSel=repFiltros.cliente?((clientes.find(c=>String(c.id)===repFiltros.cliente)||{}).nombre||''):'';
     const toggle=`<div style="display:flex;gap:6px;margin-bottom:10px"><button class="btn btn-sm ${_esCant?'btn-ghost':'btn-primary'}" onclick="setRepMetrica('monto')">Q Monto</button><button class="btn btn-sm ${_esCant?'btn-primary':'btn-ghost'}" onclick="setRepMetrica('cantidad')"># Cantidad</button></div>`;
     const avisoHist=`<div style="font-size:11.5px;color:#7A4A07;background:var(--warn-bg);border:1px solid rgba(168,130,0,.2);border-radius:8px;padding:7px 10px;margin-bottom:10px">Sólo aparecen productos de <b>agosto 2026 en adelante</b>: las ventas de ene–jul se importaron sin el detalle de productos.</div>`;
@@ -522,7 +543,8 @@ function renderReportes(){
       html+=`${toggle}${avisoHist}<div class="panel"><div class="panel-body"><p class="empty">No hay ventas con detalle de productos en el período seleccionado.</p></div></div>`;
     }else{
       const aviso=hayComp?'':'<div style="font-size:12px;color:#b26a00;padding:2px 4px 10px">Elegí un período con varios meses para poder comparar mes con mes.</div>';
-      html+=`${toggle}${avisoHist}<div class="panel"><div class="panel-head"><h3>Comparativa producto/mes por cliente${_cliSel?' · '+_cliSel:''}</h3><span style="font-size:12px;color:var(--muted)">${_esCant?'Cantidades':'Montos con IVA'} · ${cliOrden.length} cliente${cliOrden.length!==1?'s':''}${hayComp?' · variación '+mesLbl(prevM)+' → '+mesLbl(ultM):''} · tocá un cliente para ver sus productos</span></div>
+      const notaParcial=esParcial?`<div style="font-size:12px;color:#1565c0;background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:7px 12px;margin:2px 4px 10px">ℹ️ ${mesLbl(ultM)} va <b>al día ${_diaCortePM}</b>. Para que sea justo, la variación se compara contra <b>los mismos días de ${mesLbl(prevM)}</b> (no contra el mes completo).</div>`:'';
+      html+=`${toggle}${avisoHist}${notaParcial}<div class="panel"><div class="panel-head"><h3>Comparativa producto/mes por cliente${_cliSel?' · '+_cliSel:''}</h3><span style="font-size:12px;color:var(--muted)">${_esCant?'Cantidades':'Montos con IVA'} · ${cliOrden.length} cliente${cliOrden.length!==1?'s':''}${hayComp?' · variación '+mesLbl(prevM)+' → '+mesLbl(ultM)+(esParcial?' (a los mismos días)':''):''} · tocá un cliente para ver sus productos</span></div>
         ${aviso}
         <div style="overflow-x:auto"><table style="font-size:12.5px;min-width:${420+meses.length*110}px"><thead><tr><th>Cliente / Producto</th>${ths}${hayComp?`<th class="num" style="background:#eef6ff">Δ ${mesAbbr(ultM)}</th>`:''}<th class="num" style="background:#f0f5e8">Total</th></tr></thead>
         <tbody>${cuerpo}<tr style="border-top:3px solid var(--green);background:#eaf0e0"><td style="padding:11px 12px;font-weight:800;font-size:13px">TOTAL GENERAL</td>${celdasGen}${varGen}<td class="num" style="font-weight:800">${fmt(granTotal)}</td></tr></tbody></table></div></div>`;
