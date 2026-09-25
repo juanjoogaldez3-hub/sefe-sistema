@@ -117,6 +117,14 @@ ok('el dashboard arma la alerta de ambientales vencidos', /recarga vencida/.test
 ok('la alerta respeta el permiso de Controles', /tienePermiso\('controles'\)/.test(src));
 ok('distingue vencidos de "por vencer en 7 días"', /por recargar en los próximos 7 días/.test(src));
 
+console.log('\n═══ Ambientales · reporte PDF / Excel ═══');
+ok('existe el reporte PDF (reporteAmbientalesPDF)', /function reporteAmbientalesPDF\(/.test(src) && /window\.reporteAmbientalesPDF\s*=/.test(src));
+ok('existe el reporte Excel (reporteAmbientalesExcel)', /async function reporteAmbientalesExcel\(/.test(src) && /window\.reporteAmbientalesExcel\s*=/.test(src));
+ok('el reporte agrupa por cliente y muestra el estado', /AMBIENTALES POR CLIENTE/.test(src) && /_ambEstadoTxt\(/.test(src));
+ok('el reporte muestra frecuencia y # de recargas', /_ambFrecTxt\(/.test(src) && /Recargas hechas/.test(src));
+ok('el Excel usa los ayudantes estándar (_cargarXLSX / descargarXlsx)', /reporteAmbientalesExcel[\s\S]*?_cargarXLSX\(\)/.test(src) && /reporteAmbientalesExcel[\s\S]*?descargarXlsx\(XLSX/.test(src));
+ok('index.html tiene los botones de reporte de ambientales (PDF/Excel)', /onclick="reporteAmbientalesPDF\(\)"/.test(html) && /onclick="reporteAmbientalesExcel\(\)"/.test(html));
+
 console.log('\n═══ Baterías (parte 2) ═══');
 ok('index.html tiene la tabla de existencias (#t-bat-stock)', /id="t-bat-stock"/.test(html));
 ok('index.html tiene la tabla de cambios (#t-bat-cambios)', /id="t-bat-cambios"/.test(html));
