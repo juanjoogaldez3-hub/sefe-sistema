@@ -406,7 +406,7 @@ function renderReportes(){
       let celdas='';const filaExp={Cliente:cli};
       meses.forEach(m=>{
         const val=info.meses[m]||0;totalesGen[m]+=val;
-        celdas+=`<td class="num">${val?money(val):'<span style="color:var(--muted-2)">—</span>'}</td>`;
+        celdas+=`<td class="num">${val?money(val):'<span style="color:var(--muted-2)">—</span>'}${(esParcial&&m===prevM)?`<div style="font-size:10px;color:var(--muted-2);font-weight:400">al ${_diaCorteCC}: ${money(info._prevCmp||0)}</div>`:''}</td>`;
         filaExp[mesLbl(m)]=val;
       });
       granTotal+=info.total;
@@ -419,7 +419,7 @@ function renderReportes(){
       filaExp['Total']=info.total;expFilas.push(filaExp);
       cuerpo+=`<tr style="border-bottom:1px solid var(--line)"><td style="font-weight:600">${cli}</td>${celdas}${varCell}<td class="num" style="font-weight:600;background:#fafdf5">${money(info.total)}</td></tr>`;
     });
-    let celdasGen='';meses.forEach(m=>{celdasGen+=`<td class="num" style="font-weight:800">${money(totalesGen[m])}</td>`;});
+    let celdasGen='';meses.forEach(m=>{celdasGen+=`<td class="num" style="font-weight:800">${money(totalesGen[m])}${(esParcial&&m===prevM)?`<div style="font-size:10px;color:var(--muted-2);font-weight:400">al ${_diaCorteCC}: ${money(_prevCmpGen)}</div>`:''}</td>`;});
     let varGen='';
     if(hayComp){const baseGen=esParcial?_prevCmpGen:(totalesGen[prevM]||0);const dif=(totalesGen[ultM]||0)-baseGen;varGen=varTd(dif,baseGen,800,_tipCmp(totalesGen[ultM]||0,baseGen));}
     const filaGen={Cliente:'TOTAL GENERAL'};meses.forEach(m=>{filaGen[mesLbl(m)]=totalesGen[m];});
@@ -517,7 +517,7 @@ function renderReportes(){
     cliOrden.forEach(([cliKey,g])=>{
       const gk='V:'+cliKey;
       if(primeraVez&&gruposColapsados[gk]===undefined)gruposColapsados[gk]=true;
-      let celdasCli='';meses.forEach(m=>{const val=g.meses[m]||0;totalesGen[m]+=val;celdasCli+=`<td class="num" style="color:#fff;font-weight:700">${val?fmt(val):'—'}</td>`;});
+      let celdasCli='';meses.forEach(m=>{const val=g.meses[m]||0;totalesGen[m]+=val;celdasCli+=`<td class="num" style="color:#fff;font-weight:700">${val?fmt(val):'—'}${(esParcial&&m===prevM)?`<div style="font-size:10px;color:rgba(255,255,255,.75);font-weight:400">al ${_diaCortePM}: ${fmt(g._prevCmp||0)}</div>`:''}</td>`;});
       granTotal+=g.total;
       let varCli='';
       if(hayComp){const u=g.meses[ultM]||0,pv=_baseCli(g);varCli=varTd(u-pv,pv,700,true,_tipCmp(u,pv));}
@@ -526,7 +526,7 @@ function renderReportes(){
       prods.forEach(p=>{
         const nom=(p.codigo?`<span style="color:var(--muted);font-size:11px">${p.codigo}</span> `:'')+p.nombre;
         let celdas='';const filaExp={Cliente:g.nombre,'Código':p.codigo,Producto:p.nombre};
-        meses.forEach(m=>{const val=p.meses[m]||0;celdas+=`<td class="num">${val?fmt(val):'<span style="color:var(--muted-2)">—</span>'}</td>`;filaExp[mesLbl(m)]=val;});
+        meses.forEach(m=>{const val=p.meses[m]||0;celdas+=`<td class="num">${val?fmt(val):'<span style="color:var(--muted-2)">—</span>'}${(esParcial&&m===prevM)?`<div style="font-size:10px;color:var(--muted-2);font-weight:400">al ${_diaCortePM}: ${fmt(p._prevCmp||0)}</div>`:''}</td>`;filaExp[mesLbl(m)]=val;});
         let varCell='';
         if(hayComp){const u=p.meses[ultM]||0,pv=_baseProd(p),dif=u-pv;varCell=varTd(dif,pv,600,false,_tipCmp(u,pv));filaExp['Δ '+mesLbl(ultM)]=dif;filaExp['Var %']=pv?Number((dif/pv*100).toFixed(1)):'';}
         filaExp['Total']=p.total;expFilas.push(filaExp);
@@ -534,7 +534,7 @@ function renderReportes(){
       });
     });
     gruposColapsados.__prodMesInit=true;
-    let celdasGen='';meses.forEach(m=>{celdasGen+=`<td class="num" style="font-weight:800">${fmt(totalesGen[m])}</td>`;});
+    let celdasGen='';meses.forEach(m=>{celdasGen+=`<td class="num" style="font-weight:800">${fmt(totalesGen[m])}${(esParcial&&m===prevM)?`<div style="font-size:10px;color:var(--muted-2);font-weight:400">al ${_diaCortePM}: ${fmt(_prevCmpGen)}</div>`:''}</td>`;});
     let varGen='';
     if(hayComp){const baseGen=esParcial?_prevCmpGen:(totalesGen[prevM]||0);const dif=(totalesGen[ultM]||0)-baseGen;varGen=varTd(dif,baseGen,800,false,_tipCmp(totalesGen[ultM]||0,baseGen));}
     exportData=expFilas;
