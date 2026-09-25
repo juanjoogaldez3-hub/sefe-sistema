@@ -699,38 +699,51 @@ function renderReportes(){
     }
   }
   else if(repType==='seguimiento'){
-    // SEGUIMIENTO DE CLIENTES — a quién llamar y por qué (ordenado por prioridad)
+    // SEGUIMIENTO DE CLIENTES — "a quién llamar hoy y por qué", en cristiano.
+    // Tarjetas agrupadas por acción; dentro de cada grupo, los que más compran primero.
     const lista=(typeof _seguimientoClientes==='function')?_seguimientoClientes({vendedorNombre:repFiltros.vendedor_simple||''}):[];
-    const LBL={dejo:'Dejó de comprar',cayendo:'Cayendo',reponer:'Toca reponer',creciendo:'Creciendo',ok:'Al día',nunca:'Nunca compró'};
-    const soloAtencion=(repFiltros.segTodos!=='1');
-    const filtrada=lista.filter(c=>soloAtencion?['dejo','cayendo','reponer'].includes(c.estado):c.estado!=='nunca');
-    const nAt=lista.filter(c=>['dejo','cayendo','reponer'].includes(c.estado)).length;
-    // Orden: por prioridad (default, ya viene así) o por estado del semáforo.
-    const _rankSeg={dejo:0,cayendo:1,reponer:2,creciendo:3,ok:4,nunca:5};
-    const _porEstado=(repFiltros.segOrden||'prioridad')==='estado';
-    if(_porEstado)filtrada.sort((a,b)=>(_rankSeg[a.estado]-_rankSeg[b.estado])||(b.prioridad-a.prioridad));
-    const expFilas=[];
-    const _mapFila=c=>{
-      expFilas.push({Cliente:c.nombre,Vendedor:c.vendedorNombre||'',Estado:LBL[c.estado]||c.estado,Motivo:c.razon,'Última compra':c.ultimaCompra||'','Días sin comprar':c.diasSinComprar==null?'':c.diasSinComprar,'Cadencia (días)':c.cadencia==null?'':c.cadencia,'Ritmo mensual':c.promMensual||0});
-      const badge=`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${c.color};white-space:nowrap"><span style="width:9px;height:9px;border-radius:50%;background:${c.color};flex:0 0 auto"></span>${LBL[c.estado]||c.estado}</span>`;
-      const btn=`<button class="btn btn-ghost btn-sm" onclick="crearSeguimiento(${c.clienteId})" title="Crear una tarea de seguimiento para este cliente">📞 Seguimiento</button>`;
-      return `<tr style="border-bottom:1px solid var(--line)"><td style="font-weight:600">${escHtml(c.nombre)}${c.vendedorNombre?`<div style="font-size:11px;color:var(--muted)">${escHtml(c.vendedorNombre)}</div>`:''}</td><td>${badge}</td><td style="font-size:12px">${escHtml(c.razon)}</td><td class="num">${c.ultimaCompra?fdate(c.ultimaCompra):'—'}</td><td class="num">${c.promMensual?money(c.promMensual):'—'}</td><td>${btn}</td></tr>`;
+    const verBien=(repFiltros.segTodos==='1');
+    const _q=n=>money(n||0);
+    // Una frase clara por estado (sin jerga).
+    const _frase=c=>{
+      if(c.estado==='dejo')return `Última compra ${c.ultimaCompra?fdate(c.ultimaCompra):'—'} · <b>hace ${c.diasSinComprar} días</b>`+(c.cadencia?` (compraba cada ${c.cadencia} días)`:'');
+      if(c.estado==='reponer')return `Suele comprar cada <b>${c.cadencia} días</b> · ya lleva <b>${c.diasSinComprar} sin comprar</b>`;
+      if(c.estado==='cayendo')return `Este mes <b>${_q(c.mtd)}</b> vs <b>${_q(c.baseMismoDia)}</b> a esta altura del mes pasado · <span style="color:var(--danger);font-weight:700">${Math.round((c.varPct||0)*100)}%</span>`;
+      if(c.estado==='creciendo')return `Este mes <b>${_q(c.mtd)}</b> vs <b>${_q(c.baseMismoDia)}</b> a esta altura del mes pasado · <span style="color:var(--green);font-weight:700">+${Math.round((c.varPct||0)*100)}%</span>`;
+      return 'Al día';
     };
-    // Cuando se ordena por estado, un encabezado suave separa cada grupo del semáforo.
-    let _grupoAnt=null;
-    const cuerpo=filtrada.map(c=>{
-      let sep='';
-      if(_porEstado&&c.estado!==_grupoAnt){_grupoAnt=c.estado;sep=`<tr><td colspan="6" style="background:var(--surface-2);padding:6px 10px;font-size:11.5px;font-weight:700;color:${c.color}"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.color};margin-right:6px"></span>${LBL[c.estado]||c.estado}</td></tr>`;}
-      return sep+_mapFila(c);
-    }).join('');
+    const COLOR={dejo:'#c62828',cayendo:'#e65100',reponer:'#f9a825',creciendo:'#2e7d32'};
+    const GRUPOS=[
+      {k:'dejo',ic:'🔴',tit:'Se fueron',sub:'No compran hace tiempo — hay que recuperarlos'},
+      {k:'cayendo',ic:'🟠',tit:'Están bajando',sub:'Compran menos que antes'},
+      {k:'reponer',ic:'🟡',tit:'Les toca pedido',sub:'Ya deberían haber comprado'},
+      {k:'creciendo',ic:'🟢',tit:'Van creciendo',sub:'Están comprando más — buenas noticias'},
+    ];
+    const gruposMostrar=verBien?GRUPOS:GRUPOS.slice(0,3);
+    const expFilas=[];let bloques='';let totalAtencion=0;
+    gruposMostrar.forEach(g=>{
+      const items=lista.filter(c=>c.estado===g.k).sort((a,b)=>(b.gastoTipico||0)-(a.gastoTipico||0));
+      if(['dejo','cayendo','reponer'].includes(g.k))totalAtencion+=items.length;
+      if(!items.length)return;
+      const filas=items.map(c=>{
+        expFilas.push({Grupo:g.tit,Cliente:c.nombre,Vendedor:c.vendedorNombre||'',Detalle:c.razon,'Gasto ~mensual':c.gastoTipico||0,'Última compra':c.ultimaCompra||''});
+        return `<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--line)">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:13.5px">${escHtml(c.nombre)}${c.vendedorNombre?` <span style="font-weight:400;color:var(--muted);font-size:11.5px">· ${escHtml(c.vendedorNombre)}</span>`:''}</div>
+            <div style="font-size:12px;color:var(--ink);margin-top:2px">${_frase(c)}</div>
+          </div>
+          <div style="text-align:right;flex:0 0 auto"><div style="font-weight:700;font-size:13px">${_q(c.gastoTipico)}</div><div style="font-size:10px;color:var(--muted)">al mes aprox.</div></div>
+          <button class="btn btn-ghost btn-sm" style="flex:0 0 auto" onclick="crearSeguimiento(${c.clienteId})" title="Crear una tarea de seguimiento para este cliente">📞</button>
+        </div>`;
+      }).join('');
+      bloques+=`<div class="panel" style="margin-bottom:14px"><div class="panel-head" style="border-left:4px solid ${COLOR[g.k]};padding-left:12px"><h3 style="display:flex;align-items:center;gap:8px">${g.ic} ${g.tit} <span style="font-weight:700;color:var(--muted);font-size:13px">(${items.length})</span></h3><span style="font-size:12px;color:var(--muted)">${g.sub}</span></div>${filas}</div>`;
+    });
     exportData=expFilas;
-    const toggle=`<label style="font-size:12px;color:var(--muted);display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" ${soloAtencion?'':'checked'} onchange="setRepFiltro('segTodos',this.checked?'1':'')" style="width:auto"> Mostrar también los que van bien / al día</label>`;
-    if(!filtrada.length){
+    const toggle=`<label style="font-size:12px;color:var(--muted);display:inline-flex;gap:6px;align-items:center;cursor:pointer;margin-bottom:12px"><input type="checkbox" ${verBien?'checked':''} onchange="setRepFiltro('segTodos',this.checked?'1':'')" style="width:auto"> Mostrar también los que van creciendo</label>`;
+    if(!bloques){
       html+=`<div class="panel"><div class="panel-body"><p class="empty">${lista.length?'🎉 Ningún cliente necesita seguimiento ahora mismo.':'No hay clientes con historial de compras.'}</p></div></div>`;
     }else{
-      html+=`<div class="panel"><div class="panel-head"><h3>Seguimiento de clientes</h3><span style="font-size:12px;color:var(--muted)">${nAt} necesita${nAt!==1?'n':''} seguimiento · ${_porEstado?'agrupados por estado':'ordenados por prioridad (llamá de arriba hacia abajo)'}</span></div>
-        <div style="padding:2px 4px 10px">${toggle}</div>
-        <div style="overflow-x:auto"><table><thead><tr><th>Cliente</th><th>Estado</th><th>Motivo</th><th class="num">Última compra</th><th class="num">Ritmo mensual</th><th></th></tr></thead><tbody>${cuerpo}</tbody></table></div></div>`;
+      html+=`<div style="font-size:13px;color:var(--muted);margin-bottom:10px"><b style="color:var(--ink)">${totalAtencion}</b> cliente${totalAtencion!==1?'s':''} para atender · llamá de arriba hacia abajo (los que más compran, primero)</div>${toggle}${bloques}`;
     }
   }
   else if(repType==='factem'){

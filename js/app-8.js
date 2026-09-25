@@ -368,8 +368,7 @@ function renderRepFilters(){
   }
   else if(repType==='seguimiento'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
-    const ordSeg=`<div><label>Ordenar por</label><select style="margin-top:4px;height:34px" onchange="setRepFiltro('segOrden',this.value)"><option value="prioridad"${(repFiltros.segOrden||'prioridad')==='prioridad'?' selected':''}>Prioridad</option><option value="estado"${repFiltros.segOrden==='estado'?' selected':''}>Estado (semáforo)</option></select></div>`;
-    html=`<div class="rep-filter-bar">${sel('rf-vend-seg','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}${ordSeg}</div>`;
+    html=`<div class="rep-filter-bar">${sel('rf-vend-seg','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}</div>`;
   }
   else if(repType==='dircli'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));

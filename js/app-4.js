@@ -1266,7 +1266,14 @@ function _segEstadoVentas(ventas, hoy){
   else if(varPct!=null&&prom>0&&varPct<=-0.35)estado='cayendo';
   else if(varPct!=null&&varPct>=0.3)estado='creciendo';
   const pesoSev={dejo:3,cayendo:2.2,reponer:1.7,creciendo:0.6,ok:0,nunca:0}[estado];
-  const size=prom>0?prom:v.reduce((s,x)=>s+x.m,0)/Math.max(1,n);
+  // Gasto típico mensual: el ritmo reciente si compra; si dejó de comprar, su
+  // promedio histórico (total ÷ meses activos). Sirve para ordenar y para mostrar
+  // "compraba ~QX/mes" incluso en los que se fueron.
+  const spanDias=(ultima-v[0].t)/_dia;
+  const mesesAct=Math.max(1,Math.round(spanDias/30));
+  const totalHist=v.reduce((s,x)=>s+x.m,0);
+  const gastoTipico=Math.round(prom>0?prom:(totalHist/mesesAct));
+  const size=gastoTipico;
   const prioridad=Math.round(size*pesoSev);
   const color={dejo:'#c62828',cayendo:'#e65100',reponer:'#f9a825',creciendo:'#2e7d32',ok:'#9e9e9e',nunca:'#9e9e9e'}[estado];
   const razones={
@@ -1276,7 +1283,7 @@ function _segEstadoVentas(ventas, hoy){
     creciendo:`Creciendo · +${Math.round((varPct||0)*100)}% vs. los mismos días del mes pasado`,
     ok:'Al día',nunca:'Nunca compró'
   };
-  return {comprasCount:n,estado,color,prioridad,razon:razones[estado],diasSinComprar:diasSin,cadencia,promMensual:Math.round(prom),varPct,ultimaCompra:ultima.toISOString().slice(0,10),mtd:Math.round(mtd),baseMismoDia:Math.round(baseMis)};
+  return {comprasCount:n,estado,color,prioridad,razon:razones[estado],diasSinComprar:diasSin,cadencia,promMensual:Math.round(prom),gastoTipico,varPct,ultimaCompra:ultima.toISOString().slice(0,10),mtd:Math.round(mtd),baseMismoDia:Math.round(baseMis)};
 }
 window._segEstadoVentas=_segEstadoVentas;
 // Arma la lista de seguimiento de todos los clientes (respeta al vendedor del

@@ -76,8 +76,10 @@ ok('el reporte se renderiza (rama repType===seguimiento) con el botón', /repTyp
 ok('el seguimiento no usa el rango de fechas (barra oculta)', /repType==='seguimiento'/.test(src) && /_sinFecha=_esFoto\|\|repType==='seguimiento'/.test(src));
 ok('el panel del inicio usa el semáforo y ofrece ver el reporte', /function renderSeguimiento\(/.test(src) && /_seguimientoClientes\(\)/.test(src) && /abrirReporte\('seguimiento'\)/.test(src));
 ok('existe abrirReporte para saltar al reporte desde el inicio', /window\.abrirReporte=function\(tipo\)/.test(src));
-ok('el reporte se puede ordenar por estado del semáforo', /setRepFiltro\('segOrden',this\.value\)/.test(src) && /Estado \(sem[aá]foro\)/.test(src) && /const _porEstado=\(repFiltros\.segOrden\|\|'prioridad'\)==='estado'/.test(src));
-ok('al ordenar por estado usa el rango dejo<cayendo<reponer y agrupa', /const _rankSeg=\{dejo:0,cayendo:1,reponer:2/.test(src) && /if\(_porEstado\)filtrada\.sort/.test(src) && /_porEstado&&c\.estado!==_grupoAnt/.test(src));
+ok('el reporte agrupa por acción (Se fueron / Bajando / Toca pedido / Creciendo)', /tit:'Se fueron'/.test(src) && /tit:'Están bajando'/.test(src) && /tit:'Les toca pedido'/.test(src) && /tit:'Van creciendo'/.test(src));
+ok('dentro de cada grupo ordena por cuánto compra (gasto mensual)', /\.sort\(\(a,b\)=>\(b\.gastoTipico\|\|0\)-\(a\.gastoTipico\|\|0\)\)/.test(src) && /al mes aprox\./.test(src));
+ok('muestra frases claras (sin jerga) por estado', /const _frase=c=>/.test(src) && /a esta altura del mes pasado/.test(src) && /ya lleva <b>\$\{c\.diasSinComprar\} sin comprar/.test(src));
+ok('_segEstadoVentas expone el gasto típico mensual', /const gastoTipico=Math\.round\(prom>0\?prom:/.test(src) && /gastoTipico,varPct/.test(src));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
