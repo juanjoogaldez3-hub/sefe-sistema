@@ -1020,15 +1020,10 @@ function _tardiosRuta(orden,M,dl,salida,serv){
   for(const j of orden){const arr=t+M[cur][j+1]; if(dl[j]<Infinity&&arr>dl[j]+0.001)tarde++; t=arr+serv; cur=j+1;}
   return tarde;
 }
-// Numera las entregas armando el MEJOR orden posible considerando los HORARIOS y
-// los tiempos de manejo reales (Google, con respaldo de línea recta). Calcula la
-// hora estimada de llegada (ETA) a cada parada = salida + manejo + minutos/entrega.
-// Heurística: inserción por urgencia + mejora 2-opt (respetando las horas límite).
-// Devuelve {n, motor:'google'|'recta', tarde}.
-async function _ordenarPorCercania(docs,paradas){
-  const bod=(typeof SEFE_BODEGA!=='undefined')?SEFE_BODEGA:null;
-  if(!bod||bod.lat==null){toast('Falta la bodega','Configurá el punto de la bodega para ordenar la ruta.',true);return {n:0};}
-  // "Stops" genéricos: entregas (por su cliente) y paradas manuales, unificados.
+// "Stops" genéricos: entregas (por la ubicación de su cliente) y paradas
+// manuales, unificados. Cada uno trae su punto (o null si no tiene ubicación),
+// su hora límite y un callback aplicar(orden,eta) que graba el resultado.
+function _construirStops(docs,paradas){
   const conPin=[],sinPin=[];
   (docs||[]).forEach(d=>{
     const c=clientes.find(x=>x.id===d.clienteId);
@@ -1042,6 +1037,45 @@ async function _ordenarPorCercania(docs,paradas){
       aplicar:(n,eta)=>{p.ordenRuta=n;p.eta=eta;if(typeof guardarParadaRuta==='function')guardarParadaRuta(p);}};
     (it.pt?conPin:sinPin).push(it);
   });
+  return {conPin,sinPin};
+}
+// Orden por CERCANÍA PURA: vecino más cercano desde la bodega, por distancia en
+// línea recta. Es simple, predecible e instantáneo (no llama a Google) y va de
+// la más cercana a la más lejana. Los HORARIOS no reordenan acá: solo avisan
+// (la lista pinta en rojo la entrega que quedó tarde para su hora límite).
+// La ETA es una estimación (a ~22 km/h) para que igual se vea la hora de llegada.
+// Devuelve {n, motor:'cercania'}.
+function _ordenarCercaniaPura(docs,paradas){
+  const bod=(typeof SEFE_BODEGA!=='undefined')?SEFE_BODEGA:null;
+  if(!bod||bod.lat==null){toast('Falta la bodega','Configurá el punto de la bodega para ordenar la ruta.',true);return {n:0};}
+  const {conPin,sinPin}=_construirStops(docs,paradas);
+  if(!conPin.length){
+    if(!sinPin.length){toast('Sin ubicaciones','No hay paradas con pin para ordenar. Ubicá a los clientes primero.',true);return {n:0};}
+    let nn=1; sinPin.forEach(it=>it.aplicar(nn++,null)); return {n:0,motor:'cercania'};
+  }
+  const salida=_parseMinHora((typeof SEFE_REPARTO!=='undefined'&&SEFE_REPARTO.salida))||510;
+  const serv=(typeof SEFE_REPARTO!=='undefined'&&SEFE_REPARTO.minPorEntrega)||20;
+  const rest=conPin.slice(); let cur={lat:bod.lat,lng:bod.lng}, n=1, t=salida;
+  while(rest.length){
+    let bi=0,bd=Infinity;
+    for(let i=0;i<rest.length;i++){const d=_distKm(cur,rest[i].pt); if(d<bd){bd=d;bi=i;}}
+    const x=rest.splice(bi,1)[0];
+    t+=bd/_VEL_CIUDAD_KMH*60; // manejo estimado hasta esa parada
+    x.aplicar(n++, _minToHora(t));
+    t+=serv; cur=x.pt;
+  }
+  sinPin.forEach(it=>it.aplicar(n++,null)); // sin ubicación: al final, sin ETA
+  return {n:conPin.length, motor:'cercania'};
+}
+// Numera las entregas armando el MEJOR orden posible considerando los HORARIOS y
+// los tiempos de manejo reales (Google, con respaldo de línea recta). Calcula la
+// hora estimada de llegada (ETA) a cada parada = salida + manejo + minutos/entrega.
+// Heurística: inserción por urgencia + mejora 2-opt (respetando las horas límite).
+// Devuelve {n, motor:'google'|'recta', tarde}.
+async function _ordenarPorCercania(docs,paradas){
+  const bod=(typeof SEFE_BODEGA!=='undefined')?SEFE_BODEGA:null;
+  if(!bod||bod.lat==null){toast('Falta la bodega','Configurá el punto de la bodega para ordenar la ruta.',true);return {n:0};}
+  const {conPin,sinPin}=_construirStops(docs,paradas);
   if(!conPin.length){ // nada con ubicación: sólo numerar lo que haya (paradas sin pin, etc.)
     if(!sinPin.length){toast('Sin ubicaciones','No hay paradas con pin para ordenar. Ubicá a los clientes primero.',true);return {n:0};}
     let nn=1; sinPin.forEach(it=>it.aplicar(nn++,null)); return {n:0,motor:'recta',tarde:0};
@@ -1092,19 +1126,20 @@ async function _ordenarPorCercania(docs,paradas){
 }
 // Paradas manuales pendientes de un piloto.
 function _paradasPiloto(pid){ return (typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>String(p.pilotoId||'')===String(pid)&&!p.hecha); }
-// Desde Despachos: ordena por cercanía la ruta del piloto elegido en el filtro.
-async function ordenarCercaniaDespachos(){
+// Desde Despachos: ordena la ruta por CERCANÍA PURA (de la más cercana a la más
+// lejana desde la bodega). Predecible e instantáneo. Para el orden inteligente
+// con tiempos de Google y horas límite está el "Optimizar" al asignar.
+function ordenarCercaniaDespachos(){
   const fPiloto=($('#desp-piloto')||{}).value||'';
   if(!fPiloto){toast('Elegí un piloto','Seleccioná un piloto en el filtro para ordenar su ruta.',false);return;}
   const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
   const paradas=_paradasPiloto(fPiloto);
   if(!lista.length&&!paradas.length){toast('Sin entregas','Ese piloto no tiene entregas ni paradas pendientes.',false);return;}
-  toast('🧭 Optimizando ruta…','Calculando horas de llegada y el mejor recorrido…',false);
-  const {n,motor,tarde}=await _ordenarPorCercania(lista,paradas);
+  const {n}=_ordenarCercaniaPura(lista,paradas);
   if(n){
-    logAudit('Ruta optimizada',n+' paradas ('+(motor||'recta')+')'+(tarde?' · '+tarde+' fuera de hora':''));
+    logAudit('Ruta ordenada por cercanía',n+' paradas');
     renderDespachos();
-    toast('🧭 Ruta optimizada',(motor==='google'?'Con tiempos reales de Google · ':'')+n+' paradas con hora de llegada.'+(tarde?' ⚠ '+tarde+' no llega'+(tarde!==1?'n':'')+' a tiempo — revisá.':''));
+    toast('🧭 Ruta ordenada por cercanía',n+' paradas, de la más cercana a la más lejana. Revisá los ⏰ en rojo por si alguna quedó tarde para su hora.');
   }
 }
 window.ordenarCercaniaDespachos=ordenarCercaniaDespachos;
@@ -1228,7 +1263,7 @@ function asignarMasivo(){
   const hayBodega=(typeof SEFE_BODEGA!=='undefined'&&SEFE_BODEGA&&SEFE_BODEGA.lat!=null);
   openMod('Asignar '+docs.length+' entrega'+(docs.length!==1?'s':''),`
     <div class="row"><div style="flex:1"><label>Piloto</label><select id="am-piloto"><option value="">— Seleccioná —</option>${pilOpts}</select></div></div>
-    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:10px;cursor:pointer${hayBodega?'':';opacity:.5'}"><input type="checkbox" id="am-cercania" ${hayBodega?'checked':'disabled'} style="width:auto"> 🧭 Optimizar la ruta automáticamente (cercanía + horarios)</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:10px;cursor:pointer${hayBodega?'':';opacity:.5'}"><input type="checkbox" id="am-cercania" ${hayBodega?'checked':'disabled'} style="width:auto"> 🧭 Optimizar con tiempos reales de Google y horas límite</label>
     <div class="note n-ok" style="margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Se asignan las ${docs.length} entregas a ese piloto. Al optimizar, el sistema arma <b>toda su ruta</b> con los tiempos reales de Google, calcula la <b>hora de llegada</b> a cada parada y respeta las <b>horas límite</b>. Igual podés reordenar a mano.</span></div>`,
     ()=>{
       const pid=$('#am-piloto').value?Number($('#am-piloto').value):null;
