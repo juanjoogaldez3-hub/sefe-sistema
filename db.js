@@ -76,7 +76,7 @@ async function cargarTodo() {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
-      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios, rBatEntregas, rGas, rRecEsp
+      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios, rBatEntregas, rGas, rRecEsp, rParadas
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -112,6 +112,8 @@ async function cargarTodo() {
       sb.from('ctrl_gasolina').select('*').order('id',{ascending:false}),
       // Planilla · Recibos especiales (prestaciones; tolera tabla ausente).
       sb.from('recibos_especiales').select('*').order('id',{ascending:false}),
+      // Paradas manuales de ruta (banco, recolección, etc.; tolera tabla ausente).
+      sb.from('paradas_ruta').select('*').order('id'),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -122,6 +124,7 @@ async function cargarTodo() {
     proveedores = (rProveedores.data||[]).map(mapProveedorFromDB);
     documentos = (rDocumentos.data||[]).map(d=>mapDocumentoFromDB(d, rAbonos.data||[]));
     cobrosRuta = (rCobrosRuta.data||[]).map(mapCobroRutaFromDB);
+    paradasRuta = (rParadas&&rParadas.data||[]).map(mapParadaRutaFromDB);
     compras = (rCompras.data||[]).map(c=>mapCompraFromDB(c, rPagos.data||[]));
     usuarios = (rUsuarios.data||[]).map(mapUsuarioFromDB);
     // Roles: reconstruir el objeto ROLES
@@ -499,6 +502,33 @@ async function guardarAbono(documentoId, ab){
   if(error)console.error(error); else ab._id = data.id;
 }
 
+function mapParadaRutaFromDB(p){
+  return { id:p.id, pilotoId:p.piloto_id, titulo:p.titulo||'', nota:p.nota||'', direccion:p.direccion||'',
+    lat:(p.lat!=null?Number(p.lat):null), lng:(p.lng!=null?Number(p.lng):null),
+    horaLimite:p.hora_limite||'', ordenRuta:p.orden_ruta, hecha:p.hecha===true, hechaFecha:p.hecha_fecha,
+    creada:p.creada, creadaPor:p.creada_por, eta:p.eta||null };
+}
+async function guardarParadaRuta(p){
+  const row = {
+    piloto_id:p.pilotoId||null, titulo:p.titulo||'', nota:p.nota||null, direccion:p.direccion||null,
+    lat:(p.lat!=null?p.lat:null), lng:(p.lng!=null?p.lng:null), hora_limite:p.horaLimite||null,
+    orden_ruta:(p.ordenRuta!=null?p.ordenRuta:null), hecha:p.hecha===true, hecha_fecha:p.hechaFecha||null,
+    creada_por:p.creadaPor||null
+  };
+  if (p._nuevo) {
+    delete p._nuevo;
+    const {data,error} = await sb.from('paradas_ruta').insert(row).select().single();
+    if(error){console.error('Error guardando parada de ruta:',error); p._nuevo=true;}
+    else p.id = data.id;
+  } else {
+    const {error} = await sb.from('paradas_ruta').update(row).eq('id', p.id);
+    if(error)console.error('Error actualizando parada de ruta:',error);
+  }
+}
+async function borrarParadaRuta(id){
+  const {error} = await sb.from('paradas_ruta').delete().eq('id', id);
+  if(error)console.error('Error borrando parada de ruta:',error);
+}
 async function guardarCobroRuta(c){
   const row = {
     documento_id:c.docId, doc_num:c.docNum, cliente:c.cliente, monto:c.monto,

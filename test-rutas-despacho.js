@@ -20,7 +20,7 @@ console.log('\n═══ 1 · Navegación en Google Maps ═══');
 ok('existen los ayudantes de ruta (parada + abrir)', /function _rutaParadaDe\(d\)/.test(src) && /function abrirRutaMaps\(docs\)/.test(src) && /google\.com\/maps\/dir\//.test(src));
 ok('botón "Navegar ruta del piloto" en Despachos', /onclick="abrirRutaDespachos\(\)"/.test(html) && /function abrirRutaDespachos\(/.test(src));
 ok('botón "Navegar mi ruta" para el piloto', /onclick="abrirRutaMisEntregas\(\)"/.test(src) && /function abrirRutaMisEntregas\(/.test(src));
-ok('sale desde la ubicación actual (origen vacío) y deja 22 paradas', /slice\(0,22\)/.test(src.slice(src.indexOf('function abrirRutaMaps'))) && /\['',\.\.\.stops\]/.test(src));
+ok('sale desde la ubicación actual (origen vacío) y deja 22 paradas', /slice\(0,22\)/.test(src.slice(src.indexOf('function _abrirMapsLocs'))) && /\['',\.\.\.stops\]/.test(src));
 
 // Funcional: la parada usa el pin, si no la dirección, y ordena por nº de ruta.
 (() => {
@@ -47,13 +47,13 @@ ok('sale desde la ubicación actual (origen vacío) y deja 22 paradas', /slice\(
 console.log('\n═══ 2 · Asignación masiva ═══');
 ok('casillas de selección + "seleccionar todo"', /class="desp-chk"/.test(src) && /id="desp-selall"/.test(html) && /window\.despSelAll=/.test(src));
 ok('botón "Asignar seleccionadas" y su contador', /id="desp-bulk-btn"/.test(html) && /function _despActualizarBulk\(/.test(src) && /Asignar '\+n\+' seleccionada/.test(src));
-ok('asignarMasivo asigna al piloto y ordena la ruta por cercanía', /function asignarMasivo\(/.test(src) && /docs\.forEach\(d=>\{d\.pilotoId=pid;/.test(src) && /_ordenarPorCercania\(rutaPiloto\)/.test(src) && /Entregas asignadas \(masivo\)/.test(src));
+ok('asignarMasivo asigna al piloto y ordena la ruta por cercanía', /function asignarMasivo\(/.test(src) && /docs\.forEach\(d=>\{d\.pilotoId=pid;/.test(src) && /_ordenarPorCercania\(rutaPiloto,_paradasPiloto\(pid\)\)/.test(src) && /Entregas asignadas \(masivo\)/.test(src));
 ok('limpia la selección de entregas ya entregadas', /const _asignables=new Set\(todos\.filter\(d=>estadoEntrega\(d\)!=='entregado'\)/.test(src));
 
 console.log('\n═══ 3 · Mapa para el piloto ═══');
 ok('contenedor del mapa en Mis entregas', /id="pil-mapa-wrap"/.test(html));
-ok('render + toggle del mapa del piloto', /function _pilRenderMapa\(mias\)/.test(src) && /function _pilToggleMapa\(/.test(src) && /id="pil-mapa"/.test(src));
-ok('pinta paradas numeradas por ruta y la línea (Google + OSM)', /function _pilInitMapa\(docs\)/.test(src) && /new gm\.Polyline\(/.test(src) && /L\.polyline\(/.test(src) && /label:p\.n!=null/.test(src));
+ok('render + toggle del mapa del piloto', /function _pilRenderMapa\(mias,paradas\)/.test(src) && /function _pilToggleMapa\(/.test(src) && /id="pil-mapa"/.test(src));
+ok('pinta paradas numeradas por ruta y la línea (Google + OSM)', /function _pilInitMapa\(pts\)/.test(src) && /new gm\.Polyline\(/.test(src) && /L\.polyline\(/.test(src) && /label:p\.n!=null/.test(src));
 ok('solo muestra el mapa si hay entregas con ubicación', /c\.lat!=null&&c\.lng!=null&&estadoEntrega\(d\)!=='entregado'/.test(src));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');

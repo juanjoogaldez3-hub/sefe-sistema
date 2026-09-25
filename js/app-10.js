@@ -881,25 +881,36 @@ function _rutaParadaDe(d){
   const dir=(c&&c.direccion&&String(c.direccion).toLowerCase()!=='ciudad')?String(c.direccion).trim():'';
   return dir?dir+', Guatemala':null;
 }
-// Abre la ruta (paradas ordenadas por su nº de ruta) en Google Maps para navegar.
-// El punto de salida siempre es LA UBICACIÓN ACTUAL del teléfono: Google Maps la
-// usa como origen cuando el primer tramo de la URL va vacío (queda ".../dir//...").
-function abrirRutaMaps(docs){
-  const orden=(docs||[]).slice().sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999));
-  const paradas=orden.map(_rutaParadaDe).filter(Boolean);
-  if(!paradas.length){toast('Sin ubicaciones','Estas entregas no tienen pin ni dirección para navegar. Ubicá a los clientes primero (Clientes → Ubicar).',true);return;}
+// Ubicación de una parada manual para navegar: pin, o su dirección.
+function _locParadaManual(p){ if(p.lat!=null&&p.lng!=null)return Number(p.lat)+','+Number(p.lng); const dir=(p.direccion||'').trim(); return dir?dir+', Guatemala':null; }
+// Abre en Google Maps una lista de ubicaciones (ya ordenadas). Punto de salida =
+// LA UBICACIÓN ACTUAL del teléfono (origen vacío → ".../dir//...").
+function _abrirMapsLocs(locs){
+  const paradas=(locs||[]).filter(Boolean);
+  if(!paradas.length){toast('Sin ubicaciones','No hay paradas con pin ni dirección para navegar. Ubicá a los clientes primero.',true);return;}
   if(paradas.length>22)toast('Ruta larga','Google Maps abre hasta 22 paradas más tu ubicación; se abren las primeras 22.',false);
-  const stops=paradas.slice(0,22); // 22 clientes + tu ubicación = 23 (tope de Google Maps)
+  const stops=paradas.slice(0,22);
   window.open('https://www.google.com/maps/dir/'+['',...stops].map(encodeURIComponent).join('/'),'_blank');
 }
+// Combina entregas + paradas manuales de un piloto, en orden de ruta, y las abre.
+function _abrirRutaPiloto(docs,paradas){
+  const combinada=[
+    ...(docs||[]).map(d=>({ord:d.ordenRuta??999,loc:_rutaParadaDe(d)})),
+    ...(paradas||[]).map(p=>({ord:p.ordenRuta??999,loc:_locParadaManual(p)}))
+  ].sort((a,b)=>a.ord-b.ord);
+  _abrirMapsLocs(combinada.map(x=>x.loc));
+}
+// Compat: navegar sólo una lista de entregas.
+function abrirRutaMaps(docs){ _abrirRutaPiloto(docs,[]); }
 window.abrirRutaMaps=abrirRutaMaps;
-// Desde Despachos: navega la ruta del piloto elegido en el filtro (sin entregados).
+// Desde Despachos: navega la ruta (entregas + paradas) del piloto elegido en el filtro.
 function abrirRutaDespachos(){
   const fPiloto=($('#desp-piloto')||{}).value||'';
   if(!fPiloto){toast('Elegí un piloto','Seleccioná un piloto en el filtro para navegar su ruta.',false);return;}
   const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
-  if(!lista.length){toast('Sin entregas','Ese piloto no tiene entregas pendientes.',false);return;}
-  abrirRutaMaps(lista);
+  const paradas=(typeof _paradasPiloto==='function')?_paradasPiloto(fPiloto):[];
+  if(!lista.length&&!paradas.length){toast('Sin entregas','Ese piloto no tiene entregas ni paradas pendientes.',false);return;}
+  _abrirRutaPiloto(lista,paradas);
 }
 window.abrirRutaDespachos=abrirRutaDespachos;
 
@@ -956,7 +967,19 @@ function _matrizTiemposRecta(puntos){
   for(let i=0;i<N;i++)for(let j=0;j<N;j++)M[i][j]= i===j?0:(_distKm(puntos[i],puntos[j])/_VEL_CIUDAD_KMH*60);
   return M;
 }
+// Próxima fecha/hora de salida (hoy a la hora de reparto, o mañana si ya pasó).
+// Google exige que departureTime sea a futuro para calcular tráfico proyectado.
+function _proximaSalida(){
+  const hhmm=(typeof SEFE_REPARTO!=='undefined'&&SEFE_REPARTO.salida)||'08:30';
+  const salMin=_parseMinHora(hhmm); if(salMin==null)return null;
+  const now=new Date();
+  const d=new Date(now.getFullYear(),now.getMonth(),now.getDate(),Math.floor(salMin/60),salMin%60,0,0);
+  if(d.getTime()<=now.getTime()+60000)d.setDate(d.getDate()+1); // si ya pasó, la de mañana
+  return d;
+}
 // Matriz de tiempos REALES de manejo (minutos) con Google Distance Matrix.
+// Usa el TRÁFICO PROYECTADO a la hora de salida (8:30), no el de ahora mismo:
+// pide duration_in_traffic con departureTime = próxima salida y trafficModel bestguess.
 // Devuelve NxN o null si no se pudo. Trocea para respetar el límite de elementos.
 async function _matrizTiemposGoogle(puntos){
   const N=puntos.length;
@@ -969,16 +992,21 @@ async function _matrizTiemposGoogle(puntos){
   const perReq=Math.max(1,Math.floor(100/N)); // ≤100 elementos por consulta
   const M=Array.from({length:N},()=>new Array(N).fill(null));
   const svc=new gm.DistanceMatrixService();
+  const salida=_proximaSalida();
+  const opts={travelMode:gm.TravelMode.DRIVING};
+  if(salida)opts.drivingOptions={departureTime:salida,trafficModel:(gm.TrafficModel&&gm.TrafficModel.BEST_GUESS)||'bestguess'};
   try{
     for(let start=0;start<N;start+=perReq){
       const idx=[],origins=[];
       for(let i=start;i<Math.min(start+perReq,N);i++){idx.push(i);origins.push({lat:puntos[i].lat,lng:puntos[i].lng});}
       const res=await new Promise(resolve=>{
-        svc.getDistanceMatrix({origins,destinations:dest,travelMode:gm.TravelMode.DRIVING},(r,st)=>resolve(st==='OK'?r:null));
+        svc.getDistanceMatrix(Object.assign({origins,destinations:dest},opts),(r,st)=>resolve(st==='OK'?r:null));
       });
       if(!res||!res.rows)return null;
       res.rows.forEach((row,ri)=>{const i=idx[ri];(row.elements||[]).forEach((el,j)=>{
-        M[i][j]=(el&&el.status==='OK'&&el.duration)?(el.duration.value/60):(_distKm(puntos[i],puntos[j])/_VEL_CIUDAD_KMH*60);
+        // Preferir el tiempo CON tráfico proyectado; si no vino, el típico; si nada, recta.
+        const dur=el&&el.status==='OK'?(el.duration_in_traffic||el.duration):null;
+        M[i][j]=dur?(dur.value/60):(_distKm(puntos[i],puntos[j])/_VEL_CIUDAD_KMH*60);
       });});
     }
   }catch(e){ return null; }
@@ -997,16 +1025,27 @@ function _tardiosRuta(orden,M,dl,salida,serv){
 // hora estimada de llegada (ETA) a cada parada = salida + manejo + minutos/entrega.
 // Heurística: inserción por urgencia + mejora 2-opt (respetando las horas límite).
 // Devuelve {n, motor:'google'|'recta', tarde}.
-async function _ordenarPorCercania(docs){
+async function _ordenarPorCercania(docs,paradas){
   const bod=(typeof SEFE_BODEGA!=='undefined')?SEFE_BODEGA:null;
   if(!bod||bod.lat==null){toast('Falta la bodega','Configurá el punto de la bodega para ordenar la ruta.',true);return {n:0};}
+  // "Stops" genéricos: entregas (por su cliente) y paradas manuales, unificados.
   const conPin=[],sinPin=[];
   (docs||[]).forEach(d=>{
     const c=clientes.find(x=>x.id===d.clienteId);
-    if(c&&c.lat!=null&&c.lng!=null)conPin.push({d,pt:{lat:Number(c.lat),lng:Number(c.lng)},hlm:_horaLimMinDoc(d)});
-    else sinPin.push(d);
+    const it={pt:(c&&c.lat!=null&&c.lng!=null)?{lat:Number(c.lat),lng:Number(c.lng)}:null,hlm:_horaLimMinDoc(d),
+      aplicar:(n,eta)=>{d.ordenRuta=n;d.etaEntrega=eta;if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';if(typeof guardarDocumento==='function')guardarDocumento(d);}};
+    (it.pt?conPin:sinPin).push(it);
   });
-  if(!conPin.length){toast('Sin ubicaciones','Estas entregas no tienen pin para ordenar la ruta. Ubicá a los clientes primero.',true);return {n:0};}
+  (paradas||[]).forEach(p=>{
+    const hl=_parseMinHora(p.horaLimite);
+    const it={pt:(p.lat!=null&&p.lng!=null)?{lat:Number(p.lat),lng:Number(p.lng)}:null,hlm:(hl==null?Infinity:hl),
+      aplicar:(n,eta)=>{p.ordenRuta=n;p.eta=eta;if(typeof guardarParadaRuta==='function')guardarParadaRuta(p);}};
+    (it.pt?conPin:sinPin).push(it);
+  });
+  if(!conPin.length){ // nada con ubicación: sólo numerar lo que haya (paradas sin pin, etc.)
+    if(!sinPin.length){toast('Sin ubicaciones','No hay paradas con pin para ordenar. Ubicá a los clientes primero.',true);return {n:0};}
+    let nn=1; sinPin.forEach(it=>it.aplicar(nn++,null)); return {n:0,motor:'recta',tarde:0};
+  }
   const N=conPin.length;
   const puntos=[{lat:bod.lat,lng:bod.lng},...conPin.map(x=>x.pt)]; // 0 = bodega
   let M=await _matrizTiemposGoogle(puntos), motor='google';
@@ -1040,27 +1079,28 @@ async function _ordenarPorCercania(docs){
       if(ctar<mejorTardios || (ctar===mejorTardios && ct<mejorT-0.001)){ mejor=cand; mejorT=ct; mejorTardios=ctar; cambió=true; }
     }
   }
-  // 3) Recalcular ETAs del orden final y numerar.
+  // 3) Recalcular ETAs del orden final y numerar (entregas y paradas por igual).
   let tt=salida, c2=0, n=1, tarde=0;
   mejor.forEach(j=>{
     const arr=tt+M[c2][j+1]; const x=conPin[j];
-    const esTarde=x.hlm<Infinity&&arr>x.hlm+0.001; if(esTarde)tarde++;
-    x.d.ordenRuta=n++; x.d.etaEntrega=_minToHora(arr);
-    if(estadoEntrega(x.d)==='sin')x.d.estadoEntrega='asignado';
-    if(typeof guardarDocumento==='function')guardarDocumento(x.d);
+    if(x.hlm<Infinity&&arr>x.hlm+0.001)tarde++;
+    x.aplicar(n++, _minToHora(arr));
     tt=arr+serv; c2=j+1;
   });
-  sinPin.forEach(d=>{d.ordenRuta=n++; d.etaEntrega=null; if(typeof guardarDocumento==='function')guardarDocumento(d);});
+  sinPin.forEach(it=>it.aplicar(n++,null));
   return {n:N, motor, tarde};
 }
+// Paradas manuales pendientes de un piloto.
+function _paradasPiloto(pid){ return (typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>String(p.pilotoId||'')===String(pid)&&!p.hecha); }
 // Desde Despachos: ordena por cercanía la ruta del piloto elegido en el filtro.
 async function ordenarCercaniaDespachos(){
   const fPiloto=($('#desp-piloto')||{}).value||'';
   if(!fPiloto){toast('Elegí un piloto','Seleccioná un piloto en el filtro para ordenar su ruta.',false);return;}
   const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
-  if(!lista.length){toast('Sin entregas','Ese piloto no tiene entregas pendientes.',false);return;}
+  const paradas=_paradasPiloto(fPiloto);
+  if(!lista.length&&!paradas.length){toast('Sin entregas','Ese piloto no tiene entregas ni paradas pendientes.',false);return;}
   toast('🧭 Optimizando ruta…','Calculando horas de llegada y el mejor recorrido…',false);
-  const {n,motor,tarde}=await _ordenarPorCercania(lista);
+  const {n,motor,tarde}=await _ordenarPorCercania(lista,paradas);
   if(n){
     logAudit('Ruta optimizada',n+' paradas ('+(motor||'recta')+')'+(tarde?' · '+tarde+' fuera de hora':''));
     renderDespachos();
@@ -1073,7 +1113,7 @@ function abrirRutaMisEntregas(){
   const pid=esPiloto()?miPilotoId():(_verPilotoId!==''?Number(_verPilotoId):null);
   if(pid==null){toast('Elegí un piloto','Seleccioná un piloto para navegar su ruta.',false);return;}
   const mias=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
-  abrirRutaMaps(mias);
+  _abrirRutaPiloto(mias,_paradasPiloto(pid));
 }
 window.abrirRutaMisEntregas=abrirRutaMisEntregas;
 
@@ -1114,6 +1154,72 @@ function desasignarDespacho(id){
   toast('✓ Desasignada','Volvió a Sin asignar.');
 }
 window.desasignarDespacho=desasignarDespacho;
+
+// ================= PARADAS MANUALES DE RUTA (banco, recolección, etc.) =================
+// Geocodifica una dirección con Google (mejor esfuerzo) → {lat,lng} o null.
+async function _geocodeGoogle(dir){
+  if(!dir)return null;
+  if(typeof _cargarGoogleMaps!=='function')return null;
+  if(typeof _gmapsAuthFail!=='undefined'&&_gmapsAuthFail)return null;
+  let gm; try{ gm=await _cargarGoogleMaps(); }catch(e){ return null; }
+  if(!gm||!gm.Geocoder)return null;
+  try{
+    const g=new gm.Geocoder();
+    const res=await new Promise(r=>g.geocode({address:dir+', Guatemala'},(x,st)=>r(st==='OK'&&x&&x[0]?x[0]:null)));
+    if(!res)return null; const loc=res.geometry.location; return {lat:loc.lat(),lng:loc.lng()};
+  }catch(e){ return null; }
+}
+function openParadaRuta(pidPre){
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede agregar paradas',true);return;}
+  const pilOpts=pilotos.map(p=>`<option value="${p.id}" ${String(pidPre||'')===String(p.id)?'selected':''}>${escHtml(p.nombre)}</option>`).join('');
+  openMod('➕ Agregar parada a la ruta',`
+    <div class="row"><div style="flex:1"><label>Piloto</label><select id="pr-piloto"><option value="">— Seleccioná —</option>${pilOpts}</select></div></div>
+    <div class="row"><div><label>Título</label><input id="pr-tit" placeholder="Ej. Ir al banco · Recolectar en Proveedor X · Cargar combustible"></div></div>
+    <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" placeholder="Dirección o nombre del lugar"></div></div>
+    <div class="row"><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px"></div></div>
+    <div class="row"><div><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-nota" placeholder="Detalle"></div></div>
+    <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La parada entra a la ruta del piloto. Si le ponés dirección, también entra al mapa, la navegación y el orden por cercanía/horarios.</span></div>`,
+    async ()=>{
+      const pid=$('#pr-piloto').value?Number($('#pr-piloto').value):null;
+      const tit=$('#pr-tit').value.trim();
+      if(!pid){toast('Elegí un piloto',null,true);return;}
+      if(!tit){toast('Ponele un título a la parada',null,true);return;}
+      const dir=$('#pr-dir').value.trim();
+      const nueva={pilotoId:pid,titulo:tit,nota:$('#pr-nota').value.trim(),direccion:dir,horaLimite:$('#pr-hora').value||'',hecha:false,creadaPor:currentUser,_nuevo:true};
+      if(dir){const g=await _geocodeGoogle(dir); if(g){nueva.lat=g.lat;nueva.lng=g.lng;}}
+      paradasRuta.push(nueva);
+      if(typeof guardarParadaRuta==='function')await guardarParadaRuta(nueva);
+      logAudit('Parada de ruta creada',tit+' · '+(pilotos.find(p=>p.id===pid)?.nombre||''));
+      closeMod();renderDespachos();
+      toast('✓ Parada agregada',tit+(nueva.lat!=null?' · ubicada en el mapa':' · sin ubicación (solo en la lista)'));
+    });
+}
+window.openParadaRuta=openParadaRuta;
+// El piloto (o admin) marca una parada como hecha.
+function paradaHecha(id){
+  const p=paradasRuta.find(x=>x.id===id); if(!p)return;
+  p.hecha=true; p.hechaFecha=new Date().toISOString();
+  if(typeof guardarParadaRuta==='function')guardarParadaRuta(p);
+  logAudit('Parada completada',p.titulo);
+  // Refrescar la vista que esté abierta (Mis entregas del piloto o Despachos de logística).
+  if(document.getElementById('v-misentregas')?.classList.contains('active'))renderMisEntregas();
+  if(document.getElementById('v-despachos')?.classList.contains('active'))renderDespachos();
+  toast('✓ Parada hecha',p.titulo);
+}
+window.paradaHecha=paradaHecha;
+// Borrar una parada (admin/logística).
+function borrarParadaUI(id){
+  const p=paradasRuta.find(x=>x.id===id); if(!p)return;
+  if(!canAsignarPiloto()){toast('Sin permiso',null,true);return;}
+  confirmar('Borrar parada','Se elimina la parada «'+p.titulo+'» de la ruta.','Borrar',()=>{
+    paradasRuta=paradasRuta.filter(x=>x.id!==id);
+    if(typeof borrarParadaRuta==='function')borrarParadaRuta(id);
+    logAudit('Parada de ruta borrada',p.titulo);
+    renderDespachos();
+    toast('Parada borrada',p.titulo);
+  });
+}
+window.borrarParadaUI=borrarParadaUI;
 function asignarMasivo(){
   if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede asignar entregas',true);return;}
   const docs=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(Boolean);
@@ -1136,7 +1242,7 @@ function asignarMasivo(){
       if(porCercania){
         // Reordena TODA la ruta pendiente de ese piloto (async: Google + respaldo).
         const rutaPiloto=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
-        _ordenarPorCercania(rutaPiloto).then(({n,motor,tarde})=>{
+        _ordenarPorCercania(rutaPiloto,_paradasPiloto(pid)).then(({n,motor,tarde})=>{
           if(n){renderDespachos();toast('🧭 Ruta optimizada',(motor==='google'?'Con tiempos reales de Google · ':'')+n+' paradas con hora de llegada.'+(tarde?' ⚠ '+tarde+' fuera de hora.':''));}
         });
       }
@@ -1211,9 +1317,41 @@ function renderDespachos(){
   enhanceTable('t-despachos');
   _despActualizarBulk();
   const selall=document.getElementById('desp-selall');if(selall)selall.checked=false;
+  renderParadasPanel();
   renderConciliacion();
 }
 window.renderDespachos=renderDespachos;
+
+// ---- Panel de paradas manuales (banco, recolección, etc.) para logística/admin ----
+function renderParadasPanel(){
+  const box=$('#desp-paradas-panel');if(!box)return;
+  const fPiloto=$('#desp-piloto')?.value;
+  let pend=(typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>!p.hecha);
+  if(fPiloto)pend=pend.filter(p=>String(p.pilotoId||'')===fPiloto);
+  if(!pend.length){box.style.display='none';return;}
+  box.style.display='';
+  pend.sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999));
+  const row=p=>{
+    const pil=pilotos.find(x=>x.id===p.pilotoId);
+    const hora=p.horaLimite?`<span style="font-size:11px;font-weight:700;color:var(--warn);white-space:nowrap">⏰ antes de ${p.horaLimite}</span>`:'';
+    const eta=p.eta?`<span style="font-size:11px;color:var(--muted);white-space:nowrap">🕐 llega ~${p.eta}</span>`:'';
+    const ubic=p.lat!=null?'📍 en mapa':'<span style="color:var(--muted-2)">sin ubicación</span>';
+    return `<tr>
+      <td class="num" style="font-weight:700;color:var(--green)">${p.ordenRuta!=null?'#'+p.ordenRuta:'—'}</td>
+      <td style="font-weight:600">${escHtml(p.titulo)}${p.nota?`<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.nota)}</div>`:''}${(hora||eta)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${hora}${eta}</div>`:''}</td>
+      <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${p.direccion?escHtml(p.direccion):'—'}</td>
+      <td style="font-size:12px">${ubic}</td>
+      <td>${pil?escHtml(pil.nombre):'<span style="color:var(--muted-2)">—</span>'}</td>
+      <td><div class="acts">
+        <button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Hecha</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>
+      </div></td>
+    </tr>`;
+  };
+  box.innerHTML=`<div class="panel-head"><h3>🧭 Paradas manuales de ruta</h3><span style="font-size:12px;color:var(--muted)">${pend.length} parada${pend.length!==1?'s':''} pendiente${pend.length!==1?'s':''}</span></div>
+    <table><thead><tr><th>Ruta</th><th>Parada</th><th>Dirección</th><th>Mapa</th><th>Piloto</th><th>Acciones</th></tr></thead><tbody>${pend.map(row).join('')}</tbody></table>`;
+}
+window.renderParadasPanel=renderParadasPanel;
 
 // ---- Conciliación de cobros en ruta (3 estados) ----
 function renderConciliacion(){
@@ -1384,6 +1522,7 @@ function renderMisEntregas(){
     return;
   }
   const mias=docsDespachables().filter(d=>d.pilotoId===pid);
+  const misParadas=(typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>String(p.pilotoId||'')===String(pid)&&!p.hecha);
   // KPIs del piloto
   const pendientes=mias.filter(d=>estadoEntrega(d)!=='entregado').length;
   const enRuta=mias.filter(d=>estadoEntrega(d)==='ruta').length;
@@ -1397,17 +1536,44 @@ function renderMisEntregas(){
   // Ordenar por ruta
   mias.sort((a,b)=>{const ra=a.ordenRuta??999,rb=b.ordenRuta??999;return ra-rb;});
   const _riskPil=_riesgosHora(mias);
-  _pilRenderMapa(mias);
+  _pilRenderMapa(mias,misParadas);
   const docNum=d=>d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
   const tipoCorto={cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'};
-  if(!mias.length){
+  if(!mias.length&&!misParadas.length){
     $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-body"><div class="empty">${esPil?'No tenés entregas asignadas en este momento.':'Este piloto no tiene entregas asignadas.'}</div></div></div>`;
     return;
   }
-  // Tarjetas tipo lista de entregas
-  const nNav=mias.filter(d=>estadoEntrega(d)!=='entregado').length;
-  $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-head"><h3>Mis entregas de hoy</h3><div style="display:flex;align-items:center;gap:10px;margin-left:auto"><span style="font-size:12px;color:var(--muted)">${mias.length} en total · ordenadas por ruta</span>${nNav?`<button class="btn btn-primary btn-sm" onclick="abrirRutaMisEntregas()" title="Abrir toda la ruta en Google Maps para navegar">🗺️ Navegar mi ruta</button>`:''}</div></div><div class="panel-body" style="display:flex;flex-direction:column;gap:11px">`+
-    mias.map(d=>{
+  // Lista unificada: entregas + paradas manuales, ordenadas por nº de ruta.
+  const combinada=[
+    ...mias.map(d=>({ord:d.ordenRuta??999,tipo:'e',d})),
+    ...misParadas.map(p=>({ord:p.ordenRuta??999,tipo:'p',p}))
+  ].sort((a,b)=>a.ord-b.ord);
+  const nNav=mias.filter(d=>estadoEntrega(d)!=='entregado').length+misParadas.length;
+  // Tarjeta de una PARADA manual.
+  const paradaCard=p=>{
+    const eta=p.eta?`<span style="font-size:11px;color:var(--muted)">🕐 llega ~${p.eta}</span>`:'';
+    const hora=p.horaLimite?`<span style="font-size:11px;font-weight:700;color:var(--warn)">⏰ antes de ${p.horaLimite}</span>`:'';
+    const dir=p.direccion?`<div style="font-size:12.5px;color:var(--ink);margin-bottom:3px">📍 ${escHtml(p.direccion)}</div>`:'';
+    return `<div style="border:1.5px dashed #6A3FB5;border-radius:12px;padding:14px 16px;background:#F7F4FC">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            ${p.ordenRuta!=null?`<span style="background:#6A3FB5;color:#fff;font-weight:700;font-size:12px;width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center">${p.ordenRuta}</span>`:''}
+            <span style="font-weight:700;font-size:15px">📌 ${escHtml(p.titulo)}</span>
+            <span class="badge b-prep">Parada</span>
+          </div>
+          ${dir}
+          ${(hora||eta)?`<div style="margin-bottom:3px;display:flex;gap:10px;flex-wrap:wrap">${hora}${eta}</div>`:''}
+          ${p.nota?`<div style="font-size:11.5px;color:var(--muted-2);margin-top:6px">${escHtml(p.nota)}</div>`:''}
+        </div>
+      </div>
+      <div style="margin-top:11px"><button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Marcar hecha</button></div>
+    </div>`;
+  };
+  $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-head"><h3>Mi ruta de hoy</h3><div style="display:flex;align-items:center;gap:10px;margin-left:auto"><span style="font-size:12px;color:var(--muted)">${combinada.length} parada${combinada.length!==1?'s':''} · ordenadas por ruta</span>${nNav?`<button class="btn btn-primary btn-sm" onclick="abrirRutaMisEntregas()" title="Abrir toda la ruta en Google Maps para navegar">🗺️ Navegar mi ruta</button>`:''}</div></div><div class="panel-body" style="display:flex;flex-direction:column;gap:11px">`+
+    combinada.map(it=>{
+      if(it.tipo==='p')return paradaCard(it.p);
+      const d=it.d;
       const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];
       const cli=clientes.find(c=>c.id===d.clienteId);
       const tel=cli?.contactoCompras?.telefono||cli?.contactoPagos?.telefono||'';
@@ -1442,16 +1608,18 @@ window.renderMisEntregas=renderMisEntregas;
 let _pilMapaAbierto=false;
 function _pilToggleMapa(){_pilMapaAbierto=!_pilMapaAbierto;renderMisEntregas();}
 window._pilToggleMapa=_pilToggleMapa;
-function _pilRenderMapa(mias){
+function _pilRenderMapa(mias,paradas){
   const wrap=document.getElementById('pil-mapa-wrap'); if(!wrap)return;
-  const conLoc=(mias||[]).filter(d=>{const c=clientes.find(x=>x.id===d.clienteId);return c&&c.lat!=null&&c.lng!=null&&estadoEntrega(d)!=='entregado';});
-  if(!conLoc.length){wrap.innerHTML='';return;}
-  wrap.innerHTML=`<div class="panel" style="margin-bottom:14px"><div class="panel-head"><h3>Mapa de la ruta</h3><button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="_pilToggleMapa()">${_pilMapaAbierto?'Ocultar mapa':'🗺️ Ver mapa ('+conLoc.length+')'}</button></div>${_pilMapaAbierto?'<div id="pil-mapa" style="height:46vh;min-height:280px;border-top:1px solid var(--line);background:#eef1ea"></div>':''}</div>`;
-  if(_pilMapaAbierto)setTimeout(()=>_pilInitMapa(conLoc),0);
+  const dLoc=(mias||[]).filter(d=>{const c=clientes.find(x=>x.id===d.clienteId);return c&&c.lat!=null&&c.lng!=null&&estadoEntrega(d)!=='entregado';})
+    .map(d=>{const c=clientes.find(x=>x.id===d.clienteId);return {lat:Number(c.lat),lng:Number(c.lng),n:d.ordenRuta,nombre:d.clienteComercial||d.clienteNombre,parada:false};});
+  const pLoc=(paradas||[]).filter(p=>p.lat!=null&&p.lng!=null).map(p=>({lat:Number(p.lat),lng:Number(p.lng),n:p.ordenRuta,nombre:'📌 '+p.titulo,parada:true}));
+  const pts=[...dLoc,...pLoc].sort((a,b)=>(a.n??999)-(b.n??999));
+  if(!pts.length){wrap.innerHTML='';return;}
+  wrap.innerHTML=`<div class="panel" style="margin-bottom:14px"><div class="panel-head"><h3>Mapa de la ruta</h3><button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="_pilToggleMapa()">${_pilMapaAbierto?'Ocultar mapa':'🗺️ Ver mapa ('+pts.length+')'}</button></div>${_pilMapaAbierto?'<div id="pil-mapa" style="height:46vh;min-height:280px;border-top:1px solid var(--line);background:#eef1ea"></div>':''}</div>`;
+  if(_pilMapaAbierto)setTimeout(()=>_pilInitMapa(pts),0);
 }
-async function _pilInitMapa(docs){
-  const cont=document.getElementById('pil-mapa'); if(!cont)return;
-  const pts=docs.slice().sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999)).map(d=>{const c=clientes.find(x=>x.id===d.clienteId);return {lat:Number(c.lat),lng:Number(c.lng),n:d.ordenRuta,nombre:d.clienteComercial||d.clienteNombre};});
+async function _pilInitMapa(pts){
+  const cont=document.getElementById('pil-mapa'); if(!cont||!pts||!pts.length)return;
   try{
     if(typeof GOOGLE_MAPS_KEY!=='undefined'&&GOOGLE_MAPS_KEY&&typeof _cargarGoogleMaps==='function'&&!(typeof _gmapsAuthFail!=='undefined'&&_gmapsAuthFail)){
       const gm=await _cargarGoogleMaps(); if(!document.getElementById('pil-mapa'))return;
