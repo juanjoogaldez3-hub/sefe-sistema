@@ -11,6 +11,8 @@ const GOOGLE_MAPS_KEY = 'AIzaSyBWDjUmYyAfy-ZfvfRrSwYNDMbpmciZnpE';
 // de las rutas. Poner las coordenadas reales; si queda null, el sistema pide
 // configurarla antes de ordenar.
 const SEFE_BODEGA = { lat: 14.6383826, lng: -90.603583 };
+// Parámetros del reparto para calcular horas de llegada (ETA) y optimizar la ruta.
+const SEFE_REPARTO = { salida: '08:30', minPorEntrega: 20 };
 
 // ============================================================
 //  Funciones que se están probando

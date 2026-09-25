@@ -27,7 +27,8 @@ const docs = [
   { id: 104, clienteId: 9, estadoEntrega: 'asignado' },
 ];
 // Sin _cargarGoogleMaps → cae al método de línea recta (respaldo).
-const ctx = { SEFE_BODEGA: { lat: 0, lng: 0 }, clientes, Math, Number, Infinity, Promise,
+const ctx = { SEFE_BODEGA: { lat: 0, lng: 0 }, SEFE_REPARTO: { salida: '08:30', minPorEntrega: 20 },
+  clientes, Math, Number, Infinity, isFinite, Promise, Array,
   estadoEntrega: d => d.estadoEntrega || 'sin', guardarDocumento: () => {}, toast: () => {} };
 vm.createContext(ctx);
 vm.runInContext(src.slice(ini, fin) + ';globalThis.__ord=_ordenarPorCercania;globalThis.__dist=_distKm;', ctx);
