@@ -1324,6 +1324,7 @@ function _seguimientoClientes(opts){
   const out=[];
   base.forEach(c=>{
     if(c.sedesDe)return;
+    if(typeof esPrincipal==='function'&&esPrincipal(c))return; // el cliente paraguas no vende directo
     if(c.activo===false)return; // clientes dados de baja no entran al seguimiento
     const est=_segEstadoVentas(ventasDe[c.id]||[],hoy);
     const vend=(typeof vendedores!=='undefined'?vendedores:[]).find(x=>x.id===c.vendedorId);
