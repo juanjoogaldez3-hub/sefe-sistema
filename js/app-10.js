@@ -404,6 +404,7 @@ function openCli(id){
   </div></div>
   <div class="row"><div><label>Dirección</label><input id="c-dir" value="${c?(c.direccion||'Ciudad'):'Ciudad'}"></div></div>
   <div class="row"><div><label>Dirección de entrega <span style="font-weight:400;color:var(--muted-2)">(si es distinta a la de facturación)</span></label><input id="c-dirent" value="${c?(c.direccionEntrega||''):''}" placeholder="Dejar vacío si entrega en la misma dirección"></div></div>
+  <div class="row"><div><label>Hora límite de entrega <span style="font-weight:400;color:var(--muted-2)">(opcional — recibe hasta esta hora)</span></label><input id="c-horalim" type="time" value="${c?(c.horaLimiteEntrega||''):''}" style="max-width:160px"></div></div>
   <div class="row"><div><label>Ruta <span style="font-weight:400;color:var(--muted-2)">(elegí una existente o escribí una nueva)</span></label><input id="c-ruta" list="c-rutas-list" value="${c?(c.ruta||''):''}" placeholder="Ej. Ruta 1, Zona 11…"><datalist id="c-rutas-list">${[...new Set(clientes.map(x=>(x.ruta||'').trim()).filter(Boolean))].sort().map(r=>`<option value="${escHtml(r)}">`).join('')}</datalist></div></div>
   <div class="row"><div><label>Tiempo de crédito</label><select id="c-tc">
       <option value="0" ${tc===0?'selected':''}>Contado</option>
@@ -443,7 +444,7 @@ function openCli(id){
     const sedesDe=$('#c-sede').value?Number($('#c-sede').value):null;
     const _vendSel=vendedores.find(v=>v.id===vendedorId);
     const subVendedorNombre=esVendedorCanal(_vendSel?.nombre)?($('#c-subvend')?.value||null):null;
-    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:normalizarNit($('#c-nit').value)||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),ruta:$('#c-ruta').value.trim(),tiempoCredito,vendedorId,subVendedorNombre,sedesDe,nitsSecundarios:leerNitsSecundarios(),
+    const datos={nombre:nom,razonSocial:$('#c-rs').value.trim()||nom,nit:normalizarNit($('#c-nit').value)||'CF',email:$('#c-mail').value,direccion:$('#c-dir').value,direccionEntrega:$('#c-dirent').value.trim(),horaLimiteEntrega:($('#c-horalim')?.value||'').trim(),ruta:$('#c-ruta').value.trim(),tiempoCredito,vendedorId,subVendedorNombre,sedesDe,nitsSecundarios:leerNitsSecundarios(),
       contactoPagos:{nombre:$('#cp-nom').value,telefono:$('#cp-tel').value,correo:$('#cp-mail').value},
       contactoCompras:{nombre:$('#cc-nom').value,telefono:$('#cc-tel').value,correo:$('#cc-mail').value}};
     // Si se eligió una dirección del buscador de Google, guardar también el pin.
@@ -902,6 +903,32 @@ function abrirRutaDespachos(){
 }
 window.abrirRutaDespachos=abrirRutaDespachos;
 
+// ---- Horarios de entrega (hora límite por cliente) ----
+// Hora límite del cliente de un documento, en minutos desde medianoche (o Infinity).
+function _horaLimMinDoc(d){
+  const c=clientes.find(x=>x.id===d.clienteId);
+  const s=c&&c.horaLimiteEntrega;
+  if(!s||!/^\d{1,2}:\d{2}$/.test(s))return Infinity;
+  const [h,m]=s.split(':').map(Number); return h*60+m;
+}
+function _horaLimTxtDoc(d){const c=clientes.find(x=>x.id===d.clienteId);return (c&&c.horaLimiteEntrega)||'';}
+// Entregas EN RIESGO: una con hora límite que quedó después de otra con hora más
+// floja (o sea, la ruta la visita tarde). Devuelve un Set de ids en riesgo.
+function _riesgosHora(lista){
+  const risk=new Set(); let maxAntes=-1;
+  (lista||[]).slice().sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999)).forEach(d=>{
+    const hlm=_horaLimMinDoc(d);
+    if(hlm<Infinity){ if(hlm<maxAntes)risk.add(d.id); if(hlm>maxAntes)maxAntes=hlm; }
+  });
+  return risk;
+}
+// Etiqueta "⏰ antes de HH:MM" para una entrega (roja si está en riesgo).
+function _horaBadge(d,riskSet){
+  const t=_horaLimTxtDoc(d); if(!t)return '';
+  const enRiesgo=riskSet&&riskSet.has(d.id);
+  const col=enRiesgo?'var(--danger)':'var(--warn)';
+  return `<span title="${enRiesgo?'Quedó tarde en la ruta para su hora límite':'Hora límite de entrega'}" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:${col};white-space:nowrap">⏰ antes de ${t}${enRiesgo?' ⚠':''}</span>`;
+}
 // ---- Orden de ruta POR CERCANÍA (vecino más cercano desde la bodega) ----
 // Distancia aproximada en km entre dos puntos {lat,lng} (fórmula de Haversine).
 function _distKm(a,b){
@@ -923,11 +950,20 @@ function _ordenarPorCercania(docs){
     else sinPin.push(d);
   });
   if(!conPin.length){toast('Sin ubicaciones','Estas entregas no tienen pin para ordenar por cercanía. Ubicá a los clientes primero.',true);return 0;}
-  // Vecino más cercano: arranca en la bodega y va saltando al pin más próximo.
+  // Vecino más cercano, PERO respetando la hora límite: en cada paso, si quedan
+  // entregas con hora, se elige entre las de la hora MÁS TEMPRANA la más cercana;
+  // recién cuando no quedan con hora, se sigue por pura cercanía.
+  conPin.forEach(x=>{x.hlm=_horaLimMinDoc(x.d);});
   const rest=conPin.slice(); let actual=bod; let n=1;
   while(rest.length){
-    let mejor=0,md=Infinity;
-    for(let i=0;i<rest.length;i++){const dd=_distKm(actual,rest[i].pt);if(dd<md){md=dd;mejor=i;}}
+    const minHora=Math.min(...rest.map(x=>x.hlm));
+    let mejor=-1,md=Infinity;
+    for(let i=0;i<rest.length;i++){
+      if(rest[i].hlm!==minHora)continue; // sólo los de la hora más urgente que queda
+      const dd=_distKm(actual,rest[i].pt);
+      if(dd<md){md=dd;mejor=i;}
+    }
+    if(mejor<0)mejor=0;
     const elegido=rest.splice(mejor,1)[0];
     elegido.d.ordenRuta=n++; actual=elegido.pt;
     if(estadoEntrega(elegido.d)==='sin')elegido.d.estadoEntrega='asignado';
@@ -1030,6 +1066,10 @@ function renderDespachos(){
   $('#desp-empty').style.display=lista.length?'none':'block';
   const docNum=d=>d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
   const tipoCorto={cambiaria:'Factura',envio:'N. envío',prestamo:'N. préstamo'};
+  // Riesgo de hora: se calcula por piloto (dentro de la ruta de cada uno).
+  const _riskDesp=new Set();
+  {const porPil={};lista.forEach(d=>{const k=d.pilotoId||'_';(porPil[k]=porPil[k]||[]).push(d);});
+   Object.values(porPil).forEach(g=>_riesgosHora(g).forEach(id=>_riskDesp.add(id)));}
   $('#t-despachos').innerHTML=lista.map(d=>{
     const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];
     const piloto=pilotos.find(p=>p.id===d.pilotoId);
@@ -1042,7 +1082,7 @@ function renderDespachos(){
       <td style="text-align:center">${chk}</td>
       <td class="num" style="font-weight:700;color:var(--green)">${d.ordenRuta!=null?'#'+d.ordenRuta:'—'}</td>
       <td style="font-weight:600">${docNum(d)}<div style="font-size:10.5px;color:var(--muted)">${tipoCorto[d.tipoDoc]}</div></td>
-      <td>${d.clienteComercial||d.clienteNombre}</td>
+      <td>${d.clienteComercial||d.clienteNombre}${(()=>{const b=_horaBadge(d,_riskDesp);return b?`<div style="margin-top:2px">${b}</div>`:'';})()}</td>
       <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${dirEntrega(d)}</td>
       <td class="num" style="font-weight:600">${money(d.totales.total)}</td>
       <td>${piloto?piloto.nombre:'<span style="color:var(--muted-2)">—</span>'}</td>
@@ -1238,6 +1278,7 @@ function renderMisEntregas(){
   $('#pil-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
   // Ordenar por ruta
   mias.sort((a,b)=>{const ra=a.ordenRuta??999,rb=b.ordenRuta??999;return ra-rb;});
+  const _riskPil=_riesgosHora(mias);
   _pilRenderMapa(mias);
   const docNum=d=>d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
   const tipoCorto={cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'};
@@ -1268,6 +1309,7 @@ function renderMisEntregas(){
             </div>
             <div style="font-size:12px;color:var(--muted);margin-bottom:3px">${docNum(d)} · ${tipoCorto[d.tipoDoc]} · ${money(d.totales.total)}</div>
             <div style="font-size:12.5px;color:var(--ink);margin-bottom:3px">📍 ${dirEntrega(d)}</div>
+            ${(()=>{const b=_horaBadge(d,_riskPil);return b?`<div style="margin-bottom:3px">${b}</div>`:'';})()}
             ${tel?`<div style="font-size:12px"><a href="tel:${tel}" style="color:var(--blue);text-decoration:none">☎ ${tel}</a></div>`:''}
             <div style="font-size:11.5px;color:var(--muted-2);margin-top:6px">${items}</div>
           </div>
