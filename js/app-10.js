@@ -966,22 +966,27 @@ function asignarMasivo(){
   const docs=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(Boolean);
   if(!docs.length){toast('Nada seleccionado','Marcá una o más entregas en la lista',false);return;}
   const pilOpts=pilotos.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
-  const maxOrden=Math.max(0,...docsDespachables().filter(d=>d.ordenRuta!=null).map(d=>d.ordenRuta||0));
+  const hayBodega=(typeof SEFE_BODEGA!=='undefined'&&SEFE_BODEGA&&SEFE_BODEGA.lat!=null);
   openMod('Asignar '+docs.length+' entrega'+(docs.length!==1?'s':''),`
-    <div class="row"><div><label>Piloto</label><select id="am-piloto"><option value="">— Seleccioná —</option>${pilOpts}</select></div>
-      <div><label>Numerar ruta desde</label><input id="am-desde" type="number" min="1" value="${maxOrden+1}"></div></div>
-    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:8px;cursor:pointer"><input type="checkbox" id="am-autonum" checked style="width:auto"> Numerar la ruta automáticamente (en el orden actual de la lista)</label>
-    <div class="note n-ok" style="margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Se asignan las ${docs.length} entregas marcadas a ese piloto. Si numerás automáticamente, se ordenan según cómo están en la tabla ahora.</span></div>`,
+    <div class="row"><div style="flex:1"><label>Piloto</label><select id="am-piloto"><option value="">— Seleccioná —</option>${pilOpts}</select></div></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:10px;cursor:pointer${hayBodega?'':';opacity:.5'}"><input type="checkbox" id="am-cercania" ${hayBodega?'checked':'disabled'} style="width:auto"> 🧭 Ordenar la ruta por cercanía automáticamente</label>
+    <div class="note n-ok" style="margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Se asignan las ${docs.length} entregas a ese piloto. Con el orden por cercanía, el sistema numera <b>toda su ruta</b> de la entrega más cercana a la más lejana (saliendo de la bodega). Igual podés reordenar a mano después.</span></div>`,
     ()=>{
       const pid=$('#am-piloto').value?Number($('#am-piloto').value):null;
       if(!pid){toast('Seleccioná un piloto',null,true);return;}
-      const auto=$('#am-autonum').checked; let n=Number($('#am-desde').value)||1;
-      const ordenados=docs.slice().sort((a,b)=>((a.ordenRuta??999)-(b.ordenRuta??999))||((a.numeroDte||a.numero||0)-(b.numeroDte||b.numero||0)));
+      const porCercania=hayBodega&&$('#am-cercania').checked;
       const pil=pilotos.find(p=>p.id===pid);
-      ordenados.forEach(d=>{d.pilotoId=pid;if(auto)d.ordenRuta=n++;if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';if(typeof guardarDocumento==='function')guardarDocumento(d);});
-      logAudit('Entregas asignadas (masivo)',ordenados.length+' entregas · Piloto: '+(pil?.nombre||'—'));
+      docs.forEach(d=>{d.pilotoId=pid;if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';if(typeof guardarDocumento==='function')guardarDocumento(d);});
+      let extra='';
+      if(porCercania){
+        // Reordena TODA la ruta pendiente de ese piloto por cercanía (no solo las nuevas).
+        const rutaPiloto=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
+        const n=_ordenarPorCercania(rutaPiloto);
+        if(n)extra=' · ruta ordenada por cercanía';
+      }
+      logAudit('Entregas asignadas (masivo)',docs.length+' entregas · Piloto: '+(pil?.nombre||'—')+(porCercania?' · por cercanía':''));
       _despSel.clear();closeMod();renderDespachos();
-      toast('✓ '+ordenados.length+' entregas asignadas',(pil?.nombre||'')+(auto?' · ruta numerada':''));
+      toast('✓ '+docs.length+' entregas asignadas',(pil?.nombre||'')+extra);
     });
 }
 window.asignarMasivo=asignarMasivo;
