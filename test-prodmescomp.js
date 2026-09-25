@@ -26,6 +26,7 @@ ok('detecta si el mes está en curso (parcial)', /const esParcial = hayComp && u
 ok('acumula el mes anterior a los mismos días', /_cuentaPrev=esParcial&&mk===prevM&&_diaD<=_diaCortePM/.test(blk) && /_prevCmpGen\+=v/.test(blk));
 ok('usa la base justa en cliente, producto y total', /_baseCli\(g\)/.test(blk) && /_baseProd\(p\)/.test(blk) && /const baseGen=esParcial\?_prevCmpGen/.test(blk));
 ok('muestra "(al día X)" en el mes en curso y la nota', /\(al día \$\{_diaCortePM\}\)/.test(blk) && /los mismos días de/.test(blk));
+ok('la variación muestra (al pasar el mouse) contra qué compara', /const _tipCmp=\(u,pv\)=>esParcial/.test(blk) && /a los mismos días: /.test(blk) && /varTd\(dif,pv,600,false,_tipCmp\(u,pv\)\)/.test(blk));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

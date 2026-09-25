@@ -394,12 +394,13 @@ function renderReportes(){
     });
     const totalesGen={};meses.forEach(m=>totalesGen[m]=0);let granTotal=0;
     const expFilas=[];let cuerpo='';
-    const varTd=(dif,pv,peso)=>{
+    const varTd=(dif,pv,peso,tip)=>{
       const col=dif>0.005?'var(--green)':(dif<-0.005?'var(--danger)':'var(--muted)');
       const arr=dif>0.005?'▲':(dif<-0.005?'▼':'▬');
       const pct=pv?Math.abs(dif/pv*100):(Math.abs(dif)>0.005?100:0);
-      return `<td class="num" style="color:${col};font-weight:${peso};white-space:nowrap">${arr} ${money(Math.abs(dif))}${pv?` <span style="font-size:10.5px">(${dif>=0?'+':'-'}${pct.toFixed(0)}%)</span>`:''}</td>`;
+      return `<td class="num" style="color:${col};font-weight:${peso};white-space:nowrap"${tip?` title="${tip}"`:''}>${arr} ${money(Math.abs(dif))}${pv?` <span style="font-size:10.5px">(${dif>=0?'+':'-'}${pct.toFixed(0)}%)</span>`:''}</td>`;
     };
+    const _tipCmp=(u,pv)=>esParcial?(typeof _tipSafe==='function'?_tipSafe:String)(mesAbbr(ultM)+' al día '+_diaCorteCC+': '+money(u)+'  vs  '+mesAbbr(prevM)+' a los mismos días: '+money(pv)):'';
     filas.forEach(([key,info])=>{
       const cli=info.nombre;
       let celdas='';const filaExp={Cliente:cli};
@@ -412,7 +413,7 @@ function renderReportes(){
       let varCell='';
       if(hayComp){
         const u=info.meses[ultM]||0,pv=_baseComp(info),dif=u-pv;
-        varCell=varTd(dif,pv,600);
+        varCell=varTd(dif,pv,600,_tipCmp(u,pv));
         filaExp['Δ '+mesLbl(ultM)]=dif;filaExp['Var %']=pv?Number((dif/pv*100).toFixed(1)):'';
       }
       filaExp['Total']=info.total;expFilas.push(filaExp);
@@ -420,7 +421,7 @@ function renderReportes(){
     });
     let celdasGen='';meses.forEach(m=>{celdasGen+=`<td class="num" style="font-weight:800">${money(totalesGen[m])}</td>`;});
     let varGen='';
-    if(hayComp){const baseGen=esParcial?_prevCmpGen:(totalesGen[prevM]||0);const dif=(totalesGen[ultM]||0)-baseGen;varGen=varTd(dif,baseGen,800);}
+    if(hayComp){const baseGen=esParcial?_prevCmpGen:(totalesGen[prevM]||0);const dif=(totalesGen[ultM]||0)-baseGen;varGen=varTd(dif,baseGen,800,_tipCmp(totalesGen[ultM]||0,baseGen));}
     const filaGen={Cliente:'TOTAL GENERAL'};meses.forEach(m=>{filaGen[mesLbl(m)]=totalesGen[m];});
     if(hayComp){filaGen['Δ '+mesLbl(ultM)]=(totalesGen[ultM]||0)-(totalesGen[prevM]||0);filaGen['Var %']='';}
     filaGen['Total']=granTotal;expFilas.push(filaGen);
@@ -493,12 +494,14 @@ function renderReportes(){
     });
     const totalesGen={};meses.forEach(m=>totalesGen[m]=0);let granTotal=0;
     const expFilas=[];let cuerpo='';
-    const varTd=(dif,pv,peso,claro)=>{
+    const varTd=(dif,pv,peso,claro,tip)=>{
       const col=claro?'#fff':(dif>0.005?'var(--green)':(dif<-0.005?'var(--danger)':'var(--muted)'));
       const arr=dif>0.005?'▲':(dif<-0.005?'▼':'▬');
       const pct=pv?Math.abs(dif/pv*100):(Math.abs(dif)>0.005?100:0);
-      return `<td class="num" style="color:${col};font-weight:${peso};white-space:nowrap">${arr} ${fmt(Math.abs(dif))}${pv?` <span style="font-size:10.5px">(${dif>=0?'+':'-'}${pct.toFixed(0)}%)</span>`:''}</td>`;
+      return `<td class="num" style="color:${col};font-weight:${peso};white-space:nowrap"${tip?` title="${tip}"`:''}>${arr} ${fmt(Math.abs(dif))}${pv?` <span style="font-size:10.5px">(${dif>=0?'+':'-'}${pct.toFixed(0)}%)</span>`:''}</td>`;
     };
+    // Cuando el mes va en curso, explica contra qué se compara (mismos días del mes anterior).
+    const _tipCmp=(u,pv)=>esParcial?(typeof _tipSafe==='function'?_tipSafe:String)(mesAbbr(ultM)+' al día '+_diaCortePM+': '+fmt(u)+'  vs  '+mesAbbr(prevM)+' a los mismos días: '+fmt(pv)):'';
     const _ordPM=repFiltros.prodmescompOrden||'total';
     const _difCliPM=g=>((g.meses[ultM]||0)-_baseCli(g));
     const _pctCliPM=g=>{const u=g.meses[ultM]||0,pv=_baseCli(g),dif=u-pv;const mag=pv?Math.abs(dif/pv*100):(Math.abs(dif)>0.005?100:0);return dif>=0?mag:-mag;};
@@ -517,7 +520,7 @@ function renderReportes(){
       let celdasCli='';meses.forEach(m=>{const val=g.meses[m]||0;totalesGen[m]+=val;celdasCli+=`<td class="num" style="color:#fff;font-weight:700">${val?fmt(val):'—'}</td>`;});
       granTotal+=g.total;
       let varCli='';
-      if(hayComp){const u=g.meses[ultM]||0,pv=_baseCli(g);varCli=varTd(u-pv,pv,700,true);}
+      if(hayComp){const u=g.meses[ultM]||0,pv=_baseCli(g);varCli=varTd(u-pv,pv,700,true,_tipCmp(u,pv));}
       cuerpo+=`<tr data-grupo-key="${gk}" style="background:var(--green);cursor:pointer" onclick="toggleGrupo('${gk.replace(/'/g,"\\'")}')"><td style="color:#fff;font-weight:700;padding:8px 12px"><span class="flecha-grupo" style="display:inline-block;width:14px">▾</span>${g.nombre}</td>${celdasCli}${varCli}<td class="num" style="color:#fff;font-weight:800">${fmt(g.total)}</td></tr>`;
       const prods=Object.values(g.prods).sort((a,b)=>b.total-a.total);
       prods.forEach(p=>{
@@ -525,7 +528,7 @@ function renderReportes(){
         let celdas='';const filaExp={Cliente:g.nombre,'Código':p.codigo,Producto:p.nombre};
         meses.forEach(m=>{const val=p.meses[m]||0;celdas+=`<td class="num">${val?fmt(val):'<span style="color:var(--muted-2)">—</span>'}</td>`;filaExp[mesLbl(m)]=val;});
         let varCell='';
-        if(hayComp){const u=p.meses[ultM]||0,pv=_baseProd(p),dif=u-pv;varCell=varTd(dif,pv,600,false);filaExp['Δ '+mesLbl(ultM)]=dif;filaExp['Var %']=pv?Number((dif/pv*100).toFixed(1)):'';}
+        if(hayComp){const u=p.meses[ultM]||0,pv=_baseProd(p),dif=u-pv;varCell=varTd(dif,pv,600,false,_tipCmp(u,pv));filaExp['Δ '+mesLbl(ultM)]=dif;filaExp['Var %']=pv?Number((dif/pv*100).toFixed(1)):'';}
         filaExp['Total']=p.total;expFilas.push(filaExp);
         cuerpo+=`<tr data-pertenece="1" data-vend="${cliKey}" style="border-bottom:1px solid var(--line)"><td style="padding-left:26px">${nom}</td>${celdas}${varCell}<td class="num" style="font-weight:600;background:#fafdf5">${fmt(p.total)}</td></tr>`;
       });
@@ -533,7 +536,7 @@ function renderReportes(){
     gruposColapsados.__prodMesInit=true;
     let celdasGen='';meses.forEach(m=>{celdasGen+=`<td class="num" style="font-weight:800">${fmt(totalesGen[m])}</td>`;});
     let varGen='';
-    if(hayComp){const baseGen=esParcial?_prevCmpGen:(totalesGen[prevM]||0);const dif=(totalesGen[ultM]||0)-baseGen;varGen=varTd(dif,baseGen,800,false);}
+    if(hayComp){const baseGen=esParcial?_prevCmpGen:(totalesGen[prevM]||0);const dif=(totalesGen[ultM]||0)-baseGen;varGen=varTd(dif,baseGen,800,false,_tipCmp(totalesGen[ultM]||0,baseGen));}
     exportData=expFilas;
     const ths=meses.map(m=>`<th class="num">${mesLbl(m)}${(esParcial&&m===ultM)?` <span style="font-weight:400;color:var(--muted-2)">(al día ${_diaCortePM})</span>`:''}</th>`).join('');
     const _cliSel=repFiltros.cliente?((clientes.find(c=>String(c.id)===repFiltros.cliente)||{}).nombre||''):'';
