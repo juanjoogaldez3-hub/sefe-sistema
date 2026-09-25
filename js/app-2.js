@@ -250,39 +250,36 @@ function renderSeguimiento(){
   const cont=document.getElementById('panel-seguimiento');
   if(!cont)return;
   const lista=(typeof _seguimientoClientes==='function')?_seguimientoClientes():[];
-  const inpLim=document.getElementById('seg-limite');
-  if(inpLim&&document.activeElement!==inpLim)inpLim.value=_segLimiteDias;
-  const LBL={dejo:'Dejó de comprar',cayendo:'Cayendo',reponer:'Toca reponer'};
-  const atencion=lista.filter(c=>['dejo','cayendo','reponer'].includes(c.estado)); // ya viene por prioridad
-  const activos=atencion.filter(c=>c.diasSinComprar==null||c.diasSinComprar<=_segLimiteDias);
-  const perdidos=atencion.filter(c=>c.diasSinComprar!=null&&c.diasSinComprar>_segLimiteDias);
-  const filaHTML=c=>{
-    const badge=`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${c.color};white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:${c.color};flex:0 0 auto"></span>${LBL[c.estado]||c.estado}</span>`;
-    return `<tr>
-      <td style="font-weight:600">${escHtml(c.nombre)}${c.vendedorNombre?`<div style="font-size:11px;color:var(--muted)">${escHtml(c.vendedorNombre)}</div>`:''}</td>
-      <td>${badge}</td>
-      <td style="font-size:12px;color:var(--muted)">${escHtml(c.razon)}</td>
-      <td style="font-size:12px;color:var(--muted)">${c.ultimaCompra?fdate(c.ultimaCompra):'—'}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="crearSeguimiento(${c.clienteId})" title="Crear una tarea de seguimiento">📞 Seguimiento</button></td>
-    </tr>`;
+  const _q=n=>money(n||0);
+  const COLOR={dejo:'#c62828',cayendo:'#e65100',reponer:'#f9a825'};
+  const GRUPOS=[{k:'dejo',ic:'🔴',tit:'Se fueron'},{k:'cayendo',ic:'🟠',tit:'Están bajando'},{k:'reponer',ic:'🟡',tit:'Les toca pedido'}];
+  const frase=c=>{
+    if(c.estado==='dejo')return `hace ${c.diasSinComprar} días sin comprar`+(c.cadencia?` (solía cada ${c.cadencia})`:'');
+    if(c.estado==='reponer')return `compra cada ${c.cadencia} días · lleva ${c.diasSinComprar} sin comprar`;
+    if(c.estado==='cayendo')return `este mes ${_q(c.mtd)} vs ${_q(c.baseMismoDia)} (${Math.round((c.varPct||0)*100)}%)`;
+    return '';
   };
-  if(!atencion.length){
-    cont.innerHTML=`<tr><td colspan="5" class="empty">${lista.length?'🎉 Ningún cliente necesita seguimiento ahora mismo.':'Aún no hay facturas para mostrar seguimiento'}</td></tr>`;
+  const totalAt=lista.filter(c=>['dejo','cayendo','reponer'].includes(c.estado)).length;
+  if(!totalAt){
+    cont.innerHTML=`<div class="empty" style="padding:16px">${lista.length?'🎉 Ningún cliente necesita seguimiento ahora mismo.':'Aún no hay facturas para mostrar seguimiento.'}</div>`;
     return;
   }
-  const TOPE=12;
-  let htmlB=activos.slice(0,TOPE).map(filaHTML).join('');
-  if(!activos.length)htmlB=`<tr><td colspan="5" class="empty">Ningún cliente por seguir dentro de los ${_segLimiteDias} días. Los perdidos figuran abajo.</td></tr>`;
-  if(activos.length>TOPE){
-    htmlB+=`<tr><td colspan="5" style="text-align:center;padding:8px"><button class="btn btn-ghost btn-sm" onclick="abrirReporte('seguimiento')">Ver los ${activos.length} en el reporte completo →</button></td></tr>`;
-  }
-  if(perdidos.length){
-    htmlB+=`<tr><td colspan="5" style="background:#faf7f0;padding:8px 12px">
-      <button class="btn btn-ghost btn-sm" onclick="_segTogglePerdidos()">${_segVerPerdidos?'▾ Ocultar':'▸ Ver'} ${perdidos.length} cliente${perdidos.length!==1?'s':''} perdido${perdidos.length!==1?'s':''} <span style="color:var(--muted-2);font-weight:400">(+${_segLimiteDias} días sin comprar)</span></button>
-    </td></tr>`;
-    if(_segVerPerdidos)htmlB+=perdidos.map(filaHTML).join('');
-  }
-  cont.innerHTML=htmlB;
+  const TOPE=5;let h='';
+  GRUPOS.forEach(g=>{
+    const items=lista.filter(c=>c.estado===g.k).sort((a,b)=>(b.gastoTipico||0)-(a.gastoTipico||0));
+    if(!items.length)return;
+    h+=`<div style="padding:9px 12px 5px;font-size:12px;font-weight:700;color:${COLOR[g.k]};border-left:3px solid ${COLOR[g.k]}">${g.ic} ${g.tit} (${items.length})</div>`;
+    items.slice(0,TOPE).forEach(c=>{
+      h+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--line)">
+        <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12.5px">${escHtml(c.nombre)}${c.vendedorNombre?` <span style="font-weight:400;color:var(--muted);font-size:11px">· ${escHtml(c.vendedorNombre)}</span>`:''}</div><div style="font-size:11px;color:var(--muted)">${frase(c)}</div></div>
+        <div style="font-weight:700;font-size:12px;white-space:nowrap">${_q(c.gastoTipico)}</div>
+        <button class="btn btn-ghost btn-sm" onclick="crearSeguimiento(${c.clienteId})" title="Crear tarea de seguimiento">📞</button>
+      </div>`;
+    });
+    if(items.length>TOPE)h+=`<div style="padding:6px 12px;font-size:11.5px;color:var(--muted)">+${items.length-TOPE} más… <button class="btn btn-ghost btn-sm" onclick="abrirReporte('seguimiento')">ver todos</button></div>`;
+  });
+  h+=`<div style="text-align:center;padding:10px;border-top:1px solid var(--line)"><button class="btn btn-ghost btn-sm" onclick="abrirReporte('seguimiento')">Ver el reporte completo (${totalAt}) →</button></div>`;
+  cont.innerHTML=h;
 }
 
 // ══════════ AUTOCOMPLETADO PROPIO ══════════
