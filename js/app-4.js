@@ -665,6 +665,28 @@ function posponerRecordatorio(cliId,segId){
 }
 window.posponerRecordatorio=posponerRecordatorio;
 function abrirClienteDesdeRec(cliId){_recDismissed=true;$('#ov-rec')?.classList.remove('show');abrirCliente(cliId);setTimeout(()=>cliSetTab('seguimiento'),40);}
+// Dar de baja / reactivar un cliente. No lo borra: lo marca inactivo (fuera del
+// seguimiento) y conserva todo su historial. Reversible.
+function toggleBajaCliente(id){
+  const c=clientes.find(x=>x.id===id); if(!c)return;
+  if(!canCrearCliente()){toast('Sin permiso','Tu rol no puede dar de baja clientes.',true);return;}
+  if(c.activo===false){
+    c.activo=true;
+    if(typeof guardarCliente==='function')guardarCliente(c);
+    if(typeof logAudit==='function')logAudit('Cliente reactivado',c.nombre);
+    toast('↻ Cliente reactivado',c.nombre);
+    if(typeof renderCliDet==='function')renderCliDet();
+    return;
+  }
+  confirmar('Dar de baja al cliente','«'+c.nombre+'» quedará como INACTIVO: sale del seguimiento y queda separado. NO se borra — su historial se conserva y lo podés reactivar cuando quieras.','Dar de baja',()=>{
+    c.activo=false;
+    if(typeof guardarCliente==='function')guardarCliente(c);
+    if(typeof logAudit==='function')logAudit('Cliente dado de baja',c.nombre);
+    toast('⏸ Cliente dado de baja',c.nombre);
+    if(typeof renderCliDet==='function')renderCliDet();
+  });
+}
+window.toggleBajaCliente=toggleBajaCliente;
 window.abrirClienteDesdeRec=abrirClienteDesdeRec;
 function renderCliDet(){
   const c=clientes.find(x=>x.id===cliActual);if(!c)return;
@@ -923,7 +945,7 @@ function renderCliDet(){
     <button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="go('clientes')">← Volver a clientes</button>
     <div class="panel"><div class="panel-body">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
-        <div><div style="font-family:var(--disp);font-size:22px;font-weight:700;letter-spacing:-.4px">${c.nombre}</div>
+        <div><div style="font-family:var(--disp);font-size:22px;font-weight:700;letter-spacing:-.4px">${c.nombre}${c.activo===false?' <span class="badge b-muted" style="font-size:11px;vertical-align:middle">Inactivo</span>':''}</div>
         <div style="font-size:13px;color:var(--muted);margin-top:3px">${c.razonSocial||''} · NIT ${c.nit} · Crédito: ${tcLabel(c.tiempoCredito||0)}${c.vendedorId?` · Vendedor: ${vendedores.find(v=>v.id===c.vendedorId)?.nombre||'—'}`:''}
         </div>
         ${c.email?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">✉ ${c.email}</div>`:''}
@@ -936,6 +958,7 @@ function renderCliDet(){
           <button class="btn btn-ghost btn-sm" onclick="openRecordatorio(null,{tipo:'contrasena',refId:${c.id}})" title="Registrar contraseña de pago o entrega al crédito, ligada a la factura"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg>Contraseña / crédito</button>
           ${canCrearCliente()&&!c.sedesDe?`<button class="btn btn-ghost btn-sm" onclick="openCliSede(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar sede</button>`:''}
           ${canCrearCliente()?`<button class="btn btn-ghost btn-sm" onclick="openCli(${c.id})">Editar datos</button>`:''}
+          ${canCrearCliente()?`<button class="btn btn-ghost btn-sm" style="color:${c.activo===false?'var(--ok)':'var(--warn)'}" onclick="toggleBajaCliente(${c.id})" title="${c.activo===false?'Reactivar el cliente':'Dar de baja: lo saca del seguimiento sin borrarlo'}">${c.activo===false?'↻ Reactivar':'⏸ Dar de baja'}</button>`:''}
           ${currentRole==="admin"?`<button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:#f0d0d0" onclick="eliminarCliente(${c.id})" title="Eliminar cliente (solo admin)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>Eliminar</button>`:''}
         </div>
       </div>
@@ -1301,6 +1324,7 @@ function _seguimientoClientes(opts){
   const out=[];
   base.forEach(c=>{
     if(c.sedesDe)return;
+    if(c.activo===false)return; // clientes dados de baja no entran al seguimiento
     const est=_segEstadoVentas(ventasDe[c.id]||[],hoy);
     const vend=(typeof vendedores!=='undefined'?vendedores:[]).find(x=>x.id===c.vendedorId);
     out.push(Object.assign({clienteId:c.id,nombre:c.nombre,vendedorNombre:vend?vend.nombre:''},est));

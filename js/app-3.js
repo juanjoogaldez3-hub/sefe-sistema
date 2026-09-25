@@ -736,8 +736,8 @@ function renderCli(){
   const filasCli=listaBase.slice().reverse().map(c=>{const saldo=saldoCliente(c);
   const esSede=!!c.sedesDe;const padre=esSede?clientes.find(x=>x.id===c.sedesDe):null;
   const nSedes=clientes.filter(x=>x.sedesDe===c.id).length;
-  return `<tr style="cursor:pointer" onclick="abrirCliente(${c.id})">
-    <td style="font-weight:600">${esSede?`<span style="color:var(--muted-2);font-size:11px;margin-right:4px">↳</span>`:''}${c.nombre}${nSedes?`<div style="font-size:10.5px;color:var(--blue);margin-top:2px">${nSedes} sede${nSedes!==1?'s':''}</div>`:''}${esSede?`<div style="font-size:10.5px;color:var(--muted-2);margin-top:2px">Sede de ${padre?.nombre||'—'}</div>`:''}
+  return `<tr style="cursor:pointer${c.activo===false?';opacity:.55':''}" onclick="abrirCliente(${c.id})">
+    <td style="font-weight:600">${esSede?`<span style="color:var(--muted-2);font-size:11px;margin-right:4px">↳</span>`:''}${c.nombre}${c.activo===false?` <span class="badge b-muted" style="font-size:10px">Inactivo</span>`:''}${nSedes?`<div style="font-size:10.5px;color:var(--blue);margin-top:2px">${nSedes} sede${nSedes!==1?'s':''}</div>`:''}${esSede?`<div style="font-size:10.5px;color:var(--muted-2);margin-top:2px">Sede de ${padre?.nombre||'—'}</div>`:''}
     </td>
     <td style="color:var(--muted)">${c.razonSocial||'—'}</td>
     <td class="num">${c.nit}</td>
