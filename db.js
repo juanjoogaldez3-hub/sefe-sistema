@@ -285,7 +285,7 @@ function mapClienteFromDB(c){
     nitsSecundarios:c.nits_secundarios||[],
     contactoPagos:c.contacto_pagos||{}, contactoCompras:c.contacto_compras||{},
     precios:c.precios||{},
-    cobroInfo:c.cobro_info||{}, seguimientos:c.seguimientos||[],
+    cobroInfo:c.cobro_info||{}, seguimientos:c.seguimientos||[], activo:c.activo!==false,
     // Ubicación pineada (GPS o a mano en el mapa). Si la base todavía no tiene
     // las columnas, llegan 'undefined' y quedan en null — no rompe nada.
     lat:(c.lat!=null?Number(c.lat):null), lng:(c.lng!=null?Number(c.lng):null)
@@ -432,6 +432,7 @@ async function guardarCliente(cli){
     nits_secundarios:cli.nitsSecundarios,
     contacto_pagos:cli.contactoPagos, contacto_compras:cli.contactoCompras, precios:cli.precios,
     cobro_info:cli.cobroInfo||{}, seguimientos:cli.seguimientos||[],
+    activo:cli.activo!==false,
     lat:(cli.lat!=null?cli.lat:null), lng:(cli.lng!=null?cli.lng:null)
   };
   if (cli._nuevo) {
