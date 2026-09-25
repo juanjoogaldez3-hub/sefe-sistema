@@ -626,6 +626,21 @@
   //  registro de "qué me perdí".
   async function resincronizar(motivo) {
     if (resincronizando || typeof cargarTodo !== 'function') return;
+    // NO recargar encima de alguien que está trabajando: una cotización abierta,
+    // un recordatorio/seguimiento en un modal, o el cursor dentro de un campo.
+    // Recargar cierra el formulario y le borra lo que estaba haciendo. Si hay
+    // trabajo en curso, esperamos y reintentamos hasta que quede libre.
+    // ('oculta' = pestaña en segundo plano; ahí sí conviene recargar.)
+    const bloqueo = motivoBloqueo();
+    if (bloqueo && bloqueo !== 'oculta') {
+      console.log('[realtime] resync diferido: ' + bloqueo);
+      clearTimeout(temporizadorResync);
+      temporizadorResync = setTimeout(() => {
+        temporizadorResync = null;
+        if (activo && estadoConexion === 'vivo') resincronizar('reintento');
+      }, 5000);
+      return;
+    }
     resincronizando = true;
     console.log('[realtime] resincronizando (' + motivo + ')');
     try {
