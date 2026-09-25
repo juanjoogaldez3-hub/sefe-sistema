@@ -1081,7 +1081,39 @@ window.abrirRutaMisEntregas=abrirRutaMisEntregas;
 let _despSel=new Set();
 window.despToggleSel=function(id,checked){id=Number(id);if(checked)_despSel.add(id);else _despSel.delete(id);_despActualizarBulk();};
 window.despSelAll=function(checked){document.querySelectorAll('#t-despachos input.desp-chk').forEach(cb=>{const id=Number(cb.dataset.id);cb.checked=checked;if(checked)_despSel.add(id);else _despSel.delete(id);});_despActualizarBulk();};
-function _despActualizarBulk(){const btn=document.getElementById('desp-bulk-btn');if(btn){const n=_despSel.size;btn.style.display=n?'':'none';btn.textContent='Asignar '+n+' seleccionada'+(n!==1?'s':'');}}
+function _despActualizarBulk(){
+  const n=_despSel.size;
+  const btn=document.getElementById('desp-bulk-btn');
+  if(btn){btn.style.display=n?'':'none';btn.textContent='Asignar '+n+' seleccionada'+(n!==1?'s':'');}
+  // Botón "Quitar asignación": aparece si alguna de las marcadas tiene piloto.
+  const bd=document.getElementById('desp-bulk-desasig');
+  if(bd){const asig=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&d.pilotoId!=null).length;bd.style.display=asig?'':'none';bd.textContent='Quitar asignación ('+asig+')';}
+}
+// Desasignar (quitar piloto + ruta) las entregas marcadas — vuelven a "Sin asignar".
+function desasignarMasivo(){
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede desasignar entregas',true);return;}
+  const asignadas=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&d.pilotoId!=null);
+  if(!asignadas.length){toast('Nada que desasignar','Ninguna de las marcadas está asignada a un piloto.',false);return;}
+  confirmar('Desasignar entregas','Vas a quitar el piloto y la ruta de '+asignadas.length+' entrega(s). Vuelven a "Sin asignar" (no se borran).','Desasignar',()=>{
+    asignadas.forEach(d=>{d.pilotoId=null;d.estadoEntrega='sin';d.ordenRuta=null;d.etaEntrega=null;if(typeof guardarDocumento==='function')guardarDocumento(d);});
+    logAudit('Entregas desasignadas (masivo)',asignadas.length+' entregas');
+    _despSel.clear();renderDespachos();
+    toast('✓ '+asignadas.length+' desasignada'+(asignadas.length!==1?'s':''),'Volvieron a Sin asignar.');
+  });
+}
+window.desasignarMasivo=desasignarMasivo;
+// Desasignar una entrega (fila) — quita piloto y ruta, vuelve a "Sin asignar".
+function desasignarDespacho(id){
+  const d=documentos.find(x=>x.id===id); if(!d)return;
+  if(!canAsignarPiloto()){toast('Sin permiso',null,true);return;}
+  if(d.pilotoId==null){toast('No está asignada',null,false);return;}
+  d.pilotoId=null;d.estadoEntrega='sin';d.ordenRuta=null;d.etaEntrega=null;
+  if(typeof guardarDocumento==='function')guardarDocumento(d);
+  logAudit('Entrega desasignada',(d.serie?d.serie+'-'+d.numeroDte:('PED-'+padn(d.numero))));
+  renderDespachos();
+  toast('✓ Desasignada','Volvió a Sin asignar.');
+}
+window.desasignarDespacho=desasignarDespacho;
 function asignarMasivo(){
   if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede asignar entregas',true);return;}
   const docs=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(Boolean);
@@ -1161,6 +1193,7 @@ function renderDespachos(){
     let acts='';
     acts+=`<button class="btn btn-ghost btn-sm" onclick="verDoc(${d.id})">Ver</button>`;
     if(canAsignarPiloto()&&est!=='sin')acts+=`<button class="btn btn-ghost btn-sm" onclick="regresarEntrega(${d.id})" title="Regresar a Asignado y reiniciar el avance">↩ Regresar</button>`;
+    if(canAsignarPiloto()&&d.pilotoId!=null)acts+=`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="desasignarDespacho(${d.id})" title="Quitar el piloto y la ruta (vuelve a Sin asignar)">✕ Desasignar</button>`;
     if(est!=='entregado')acts=`<button class="btn btn-primary btn-sm" onclick="asignarDespacho(${d.id})">${d.pilotoId?'Reasignar':'Asignar'}</button>`+acts;
     const chk=(canAsignarPiloto()&&est!=='entregado')?`<input type="checkbox" class="desp-chk" data-id="${d.id}" ${_despSel.has(d.id)?'checked':''} onclick="despToggleSel(${d.id},this.checked)">`:'';
     return `<tr>
