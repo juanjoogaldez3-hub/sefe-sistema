@@ -80,6 +80,7 @@ ok('el reporte agrupa por acción (Se fueron / Bajando / Toca pedido / Creciendo
 ok('dentro de cada grupo ordena por cuánto compra (gasto mensual)', /\.sort\(\(a,b\)=>\(b\.gastoTipico\|\|0\)-\(a\.gastoTipico\|\|0\)\)/.test(src) && /al mes aprox\./.test(src));
 ok('muestra frases claras (sin jerga) por estado', /const _frase=c=>/.test(src) && /a esta altura del mes pasado/.test(src) && /ya lleva <b>\$\{c\.diasSinComprar\} sin comprar/.test(src));
 ok('_segEstadoVentas expone el gasto típico mensual', /const gastoTipico=Math\.round\(prom>0\?prom:/.test(src) && /gastoTipico,varPct/.test(src));
+ok('el seguimiento excluye a los clientes paraguas y a las sedes', /if\(c\.sedesDe\)return;/.test(src) && /esPrincipal\(c\)\)return;.*paraguas/.test(src));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
