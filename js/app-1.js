@@ -516,7 +516,7 @@ const FISCAL={cambiaria:1};
 
 // Módulos desactivados temporalmente (no pulidos para producción). Reactivar = quitar de esta lista.
 // Cotizaciones y Recordatorios se sacan del menú por pedido; se reactivan quitándolos de acá.
-const MODULOS_DESACTIVADOS=['cotizaciones','recordatorios'];
+const MODULOS_DESACTIVADOS=['cotizaciones'];
 // Módulos en fase de prueba: sólo el Administrador los ve, aunque el rol los tenga en sus vistas.
 // (Despachos se está afinando; se abre a Logística/Gerencia quitándolo de esta lista.)
 const MODULOS_SOLO_ADMIN=['despachos'];
