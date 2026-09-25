@@ -47,7 +47,7 @@ ok('sale desde la ubicación actual (origen vacío) y deja 22 paradas', /slice\(
 console.log('\n═══ 2 · Asignación masiva ═══');
 ok('casillas de selección + "seleccionar todo"', /class="desp-chk"/.test(src) && /id="desp-selall"/.test(html) && /window\.despSelAll=/.test(src));
 ok('botón "Asignar seleccionadas" y su contador', /id="desp-bulk-btn"/.test(html) && /function _despActualizarBulk\(/.test(src) && /Asignar '\+n\+' seleccionada/.test(src));
-ok('asignarMasivo asigna todas al piloto y numera la ruta', /function asignarMasivo\(/.test(src) && /d\.pilotoId=pid;if\(auto\)d\.ordenRuta=n\+\+/.test(src) && /Entregas asignadas \(masivo\)/.test(src));
+ok('asignarMasivo asigna al piloto y ordena la ruta por cercanía', /function asignarMasivo\(/.test(src) && /docs\.forEach\(d=>\{d\.pilotoId=pid;/.test(src) && /_ordenarPorCercania\(rutaPiloto\)/.test(src) && /Entregas asignadas \(masivo\)/.test(src));
 ok('limpia la selección de entregas ya entregadas', /const _asignables=new Set\(todos\.filter\(d=>estadoEntrega\(d\)!=='entregado'\)/.test(src));
 
 console.log('\n═══ 3 · Mapa para el piloto ═══');
