@@ -6,11 +6,11 @@
 <title>SEFE · Pedidos y Facturación</title>
 <!-- Versión de la app (se sube en cada publicación junto con los ?v=). Sirve para
      avisar a quien tenga la pantalla abierta que hay una versión nueva. -->
-<script>window.APP_VERSION='v=20260925m';</script>
+<script>window.APP_VERSION='v=20260925n';</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/estilos.css?v=20260925m">
+<link rel="stylesheet" href="css/estilos.css?v=20260925n">
 <!-- PWA: instalable como app (ícono propio, pantalla completa) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#173916">
@@ -33,11 +33,11 @@
 <!-- Librería de Supabase (conexión a la base de datos) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tus credenciales (editás este archivo una sola vez) -->
-<script src="config.js?v=20260925m"></script>
+<script src="config.js?v=20260925n"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
-<script src="db.js?v=20260925m"></script>
+<script src="db.js?v=20260925n"></script>
 <!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
-<script src="realtime.js?v=20260925m"></script>
+<script src="realtime.js?v=20260925n"></script>
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
@@ -532,6 +532,7 @@
             <label style="margin:0;font-size:11.5px">Piloto</label>
             <select id="desp-piloto" style="max-width:160px" onchange="renderDespachos()"><option value="">Todos</option></select>
             <button class="btn btn-primary btn-sm" id="desp-bulk-btn" style="display:none" onclick="asignarMasivo()">Asignar seleccionadas</button>
+            <button class="btn btn-ghost btn-sm" id="desp-bulk-desasig" style="display:none;color:var(--danger)" onclick="desasignarMasivo()">Quitar asignación</button>
             <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="ordenarCercaniaDespachos()" title="Elegí un piloto y numerá su ruta automáticamente, de la entrega más cercana a la más lejana (desde la bodega)">🧭 Ordenar por cercanía</button>
             <button class="btn btn-ghost btn-sm" onclick="abrirRutaDespachos()" title="Elegí un piloto y abrí su ruta en Google Maps para navegar">🗺️ Navegar ruta del piloto</button>
           </div>
@@ -841,18 +842,18 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app-1.js?v=20260925m"></script>
-<script src="js/app-2.js?v=20260925m"></script>
-<script src="js/app-3.js?v=20260925m"></script>
-<script src="js/app-4.js?v=20260925m"></script>
-<script src="js/app-5.js?v=20260925m"></script>
-<script src="js/app-6.js?v=20260925m"></script>
-<script src="js/app-7.js?v=20260925m"></script>
-<script src="js/app-8.js?v=20260925m"></script>
-<script src="js/app-9.js?v=20260925m"></script>
-<script src="js/app-10.js?v=20260925m"></script>
-<script src="js/app-11.js?v=20260925m"></script>
-<script src="js/app-12.js?v=20260925m"></script>
-<script src="js/app-13.js?v=20260925m"></script>
+<script src="js/app-1.js?v=20260925n"></script>
+<script src="js/app-2.js?v=20260925n"></script>
+<script src="js/app-3.js?v=20260925n"></script>
+<script src="js/app-4.js?v=20260925n"></script>
+<script src="js/app-5.js?v=20260925n"></script>
+<script src="js/app-6.js?v=20260925n"></script>
+<script src="js/app-7.js?v=20260925n"></script>
+<script src="js/app-8.js?v=20260925n"></script>
+<script src="js/app-9.js?v=20260925n"></script>
+<script src="js/app-10.js?v=20260925n"></script>
+<script src="js/app-11.js?v=20260925n"></script>
+<script src="js/app-12.js?v=20260925n"></script>
+<script src="js/app-13.js?v=20260925n"></script>
 </body>
 </html>
