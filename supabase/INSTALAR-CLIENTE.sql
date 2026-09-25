@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 24 migraciones una por una.
+-- secuencias. Reemplaza correr las 25 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 24 migraciones, en este orden:
+-- Incluye 25 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -41,6 +41,7 @@
 --   22. 20260902120000_conciliado_ref.sql
 --   23. 20260908120000_movimiento_beneficiario.sql
 --   24. 20260909120000_cliente_ubicacion.sql
+--   25. 20260925120000_paradas_ruta.sql
 -- ============================================================
 
 
@@ -2025,4 +2026,60 @@ alter table public.movimientos_banco
 alter table public.clientes
   add column if not exists lat double precision,
   add column if not exists lng double precision;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260925120000_paradas_ruta.sql                         ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Despachos — Paradas manuales de ruta
+-- ============================================================
+-- Paradas que NO son entregas de documentos (ir al banco, recolectar
+-- producto en un proveedor, cargar combustible, etc.) y que se suman a
+-- la ruta de un piloto. Si llevan dirección, se ubican en el mapa y
+-- entran al orden por cercanía/horarios junto con las entregas.
+--
+-- Incluye SUS políticas RLS desde el inicio (el proyecto tiene RLS
+-- activo: una tabla sin políticas queda cerrada al navegador).
+-- Seguro de correr de más: usa 'if not exists' / 'drop policy if exists'.
+-- ============================================================
+
+create table if not exists public.paradas_ruta (
+  id           bigserial primary key,
+  piloto_id    bigint,
+  titulo       text not null,
+  nota         text,
+  direccion    text,
+  lat          double precision,
+  lng          double precision,
+  hora_limite  text,
+  orden_ruta   integer,
+  hecha        boolean not null default false,
+  hecha_fecha  timestamptz,
+  creada       timestamptz not null default now(),
+  creada_por   text
+);
+
+alter table public.paradas_ruta enable row level security;
+
+drop policy if exists sefe_leer   on public.paradas_ruta;
+create policy sefe_leer   on public.paradas_ruta for select to authenticated
+  using ((select public.sefe_activo()));
+
+drop policy if exists sefe_crear  on public.paradas_ruta;
+create policy sefe_crear  on public.paradas_ruta for insert to authenticated
+  with check ((select public.sefe_puede_escribir()));
+
+drop policy if exists sefe_editar on public.paradas_ruta;
+create policy sefe_editar on public.paradas_ruta for update to authenticated
+  using ((select public.sefe_puede_escribir()))
+  with check ((select public.sefe_puede_escribir()));
+
+drop policy if exists sefe_borrar on public.paradas_ruta;
+create policy sefe_borrar on public.paradas_ruta for delete to authenticated
+  using ((select public.sefe_es_admin()));
+
+grant select, insert, update, delete on public.paradas_ruta to authenticated;
+grant usage, select on sequence public.paradas_ruta_id_seq to authenticated;
 

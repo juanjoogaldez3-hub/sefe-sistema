@@ -360,6 +360,7 @@ let vendN=1;
 // {id, docId, monto, modo:'efectivo'|'cheque', noBoleta, noRecibo, cheque, banco, piloto, fecha,
 //  estado:'depositado'|'recibido'|'procesado', recibidoPor, recibidoFecha, procesadoPor, procesadoFecha}
 let cobrosRuta=[];
+let paradasRuta=[]; // paradas manuales de ruta (banco, recolección, etc.)
 let cobroRutaN=1;
 
 // ---- Usuarios y roles ----
