@@ -901,6 +901,52 @@ function abrirRutaDespachos(){
   abrirRutaMaps(lista);
 }
 window.abrirRutaDespachos=abrirRutaDespachos;
+
+// ---- Orden de ruta POR CERCANÍA (vecino más cercano desde la bodega) ----
+// Distancia aproximada en km entre dos puntos {lat,lng} (fórmula de Haversine).
+function _distKm(a,b){
+  if(!a||!b||a.lat==null||b.lat==null)return Infinity;
+  const R=6371, rad=Math.PI/180;
+  const dLat=(b.lat-a.lat)*rad, dLng=(b.lng-a.lng)*rad;
+  const s=Math.sin(dLat/2)**2+Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));
+}
+// Numera las entregas de la más cercana a la más lejana, saliendo de la bodega.
+// Devuelve el nº de paradas ordenadas. Las que no tienen pin quedan al final.
+function _ordenarPorCercania(docs){
+  const bod=(typeof SEFE_BODEGA!=='undefined')?SEFE_BODEGA:null;
+  if(!bod||bod.lat==null){toast('Falta la bodega','Configurá el punto de la bodega para ordenar por cercanía.',true);return 0;}
+  const conPin=[],sinPin=[];
+  (docs||[]).forEach(d=>{
+    const c=clientes.find(x=>x.id===d.clienteId);
+    if(c&&c.lat!=null&&c.lng!=null)conPin.push({d,pt:{lat:Number(c.lat),lng:Number(c.lng)}});
+    else sinPin.push(d);
+  });
+  if(!conPin.length){toast('Sin ubicaciones','Estas entregas no tienen pin para ordenar por cercanía. Ubicá a los clientes primero.',true);return 0;}
+  // Vecino más cercano: arranca en la bodega y va saltando al pin más próximo.
+  const rest=conPin.slice(); let actual=bod; let n=1;
+  while(rest.length){
+    let mejor=0,md=Infinity;
+    for(let i=0;i<rest.length;i++){const dd=_distKm(actual,rest[i].pt);if(dd<md){md=dd;mejor=i;}}
+    const elegido=rest.splice(mejor,1)[0];
+    elegido.d.ordenRuta=n++; actual=elegido.pt;
+    if(estadoEntrega(elegido.d)==='sin')elegido.d.estadoEntrega='asignado';
+    if(typeof guardarDocumento==='function')guardarDocumento(elegido.d);
+  }
+  // Las que no tienen pin van al final, sin número (o al final de la lista).
+  sinPin.forEach(d=>{d.ordenRuta=n++;if(typeof guardarDocumento==='function')guardarDocumento(d);});
+  return conPin.length;
+}
+// Desde Despachos: ordena por cercanía la ruta del piloto elegido en el filtro.
+function ordenarCercaniaDespachos(){
+  const fPiloto=($('#desp-piloto')||{}).value||'';
+  if(!fPiloto){toast('Elegí un piloto','Seleccioná un piloto en el filtro para ordenar su ruta.',false);return;}
+  const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
+  if(!lista.length){toast('Sin entregas','Ese piloto no tiene entregas pendientes.',false);return;}
+  const n=_ordenarPorCercania(lista);
+  if(n){logAudit('Ruta ordenada por cercanía',n+' paradas');renderDespachos();toast('🧭 Ruta ordenada','Se numeraron '+n+' paradas de la más cercana a la más lejana. Podés reordenar a mano.');}
+}
+window.ordenarCercaniaDespachos=ordenarCercaniaDespachos;
 // Desde Mis entregas: navega la ruta del piloto que se está viendo (sin entregados).
 function abrirRutaMisEntregas(){
   const pid=esPiloto()?miPilotoId():(_verPilotoId!==''?Number(_verPilotoId):null);

@@ -532,7 +532,8 @@
             <label style="margin:0;font-size:11.5px">Piloto</label>
             <select id="desp-piloto" style="max-width:160px" onchange="renderDespachos()"><option value="">Todos</option></select>
             <button class="btn btn-primary btn-sm" id="desp-bulk-btn" style="display:none" onclick="asignarMasivo()">Asignar seleccionadas</button>
-            <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="abrirRutaDespachos()" title="Elegí un piloto y abrí su ruta en Google Maps para navegar">🗺️ Navegar ruta del piloto</button>
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="ordenarCercaniaDespachos()" title="Elegí un piloto y numerá su ruta automáticamente, de la entrega más cercana a la más lejana (desde la bodega)">🧭 Ordenar por cercanía</button>
+            <button class="btn btn-ghost btn-sm" onclick="abrirRutaDespachos()" title="Elegí un piloto y abrí su ruta en Google Maps para navegar">🗺️ Navegar ruta del piloto</button>
           </div>
           <table><thead><tr><th style="width:30px" data-nosort><input type="checkbox" id="desp-selall" onclick="despSelAll(this.checked)" title="Seleccionar todo"></th><th>Ruta</th><th>Documento</th><th>Cliente</th><th>Dirección</th><th>Total</th><th>Piloto</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="t-despachos"></tbody></table>
           <div class="empty" id="desp-empty">No hay documentos para despachar.</div>

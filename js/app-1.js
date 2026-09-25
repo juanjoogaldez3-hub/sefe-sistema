@@ -7,6 +7,10 @@ const FEL_BACKEND_URL = 'https://sefe-backend.onrender.com';
 // restringida por dominio en Google Cloud (sistema.se-fe.com), por eso puede ir
 // acá. Si queda vacía, el sistema usa OpenStreetMap como respaldo.
 const GOOGLE_MAPS_KEY = 'AIzaSyBWDjUmYyAfy-ZfvfRrSwYNDMbpmciZnpE';
+// Punto de salida del reparto (la bodega): de acá arranca el "orden por cercanía"
+// de las rutas. Poner las coordenadas reales; si queda null, el sistema pide
+// configurarla antes de ordenar.
+const SEFE_BODEGA = null; // ej. { lat: 14.5586, lng: -90.7295 }
 
 // ============================================================
 //  Funciones que se están probando
