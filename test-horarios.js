@@ -10,7 +10,7 @@ let fallos = 0, pruebas = 0;
 const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t + (c ? '' : '  → ' + (e || ''))); if (!c) fallos++; };
 
 const ini = src.indexOf('function _horaLimMinDoc(d)');
-const fin = src.indexOf('// Desde Despachos: ordena por cercan');
+const fin = src.indexOf('// Paradas manuales pendientes de un piloto.');
 let clientes = [];
 const ctx = { SEFE_BODEGA: { lat: 0, lng: 0 }, SEFE_REPARTO: { salida: '08:30', minPorEntrega: 20 },
   Math, Number, Infinity, isFinite, Promise, Array,

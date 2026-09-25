@@ -13,7 +13,7 @@ let fallos = 0, pruebas = 0;
 const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t + (c ? '' : '  → ' + (e || ''))); if (!c) fallos++; };
 
 const ini = src.indexOf('function _horaLimMinDoc(d)');
-const fin = src.indexOf('// Desde Despachos: ordena por cercan');
+const fin = src.indexOf('// Paradas manuales pendientes de un piloto.');
 
 // Matriz de tiempos (min) indexada por punto: 0=bodega, 1=s1, 2=s2, 3=s3.
 const D = [

@@ -13,7 +13,7 @@ let fallos = 0, pruebas = 0;
 const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t + (c ? '' : '  → ' + (e || ''))); if (!c) fallos++; };
 
 const ini = src.indexOf('function _horaLimMinDoc(d)');
-const fin = src.indexOf('// Desde Despachos: ordena por cercan');
+const fin = src.indexOf('// Paradas manuales pendientes de un piloto.');
 const clientes = [
   { id: 1, lat: 0.30, lng: 0 },   // lejos
   { id: 2, lat: 0.10, lng: 0 },   // cerca
@@ -31,12 +31,12 @@ const ctx = { SEFE_BODEGA: { lat: 0, lng: 0 }, SEFE_REPARTO: { salida: '08:30', 
   clientes, Math, Number, Infinity, isFinite, Promise, Array,
   estadoEntrega: d => d.estadoEntrega || 'sin', guardarDocumento: () => {}, toast: () => {} };
 vm.createContext(ctx);
-vm.runInContext(src.slice(ini, fin) + ';globalThis.__ord=_ordenarPorCercania;globalThis.__dist=_distKm;', ctx);
+vm.runInContext(src.slice(ini, fin) + ';globalThis.__ord=_ordenarCercaniaPura;globalThis.__dist=_distKm;', ctx);
 
 (async () => {
-  console.log('\n═══ Vecino más cercano (respaldo línea recta) ═══');
+  console.log('\n═══ Cercanía pura: vecino más cercano desde la bodega ═══');
   const r = await ctx.__ord(docs);
-  ok('numera 3 paradas con pin y usa el respaldo (recta)', r.n === 3 && r.motor === 'recta', JSON.stringify(r));
+  ok('numera 3 paradas con pin (motor cercanía)', r.n === 3 && r.motor === 'cercania', JSON.stringify(r));
   const byId = id => docs.find(d => d.id === id).ordenRuta;
   ok('el más cercano (cliente 2) queda #1', byId(102) === 1, byId(102));
   ok('el del medio (cliente 3) queda #2', byId(103) === 2, byId(103));
