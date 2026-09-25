@@ -156,6 +156,16 @@ function renderPanel(){
     const urgente=diasFinMes<=5;
     alertas.push({tipo:urgente?'danger':'warn',msg:`${espPend.length} compra${espPend.length!==1?'s':''} especial${espPend.length!==1?'es':''} pendiente${espPend.length!==1?'s':''} de oficializar · quedan ${diasFinMes} día${diasFinMes!==1?'s':''} para fin de mes`,view:'compras'});
   }
+  // Ambientales: recargas vencidas o por vencer (solo si el usuario ve Controles).
+  if(typeof ambServicios!=='undefined' && typeof tienePermiso==='function' && tienePermiso('controles')){
+    const hoyA=fechaHoyGT();
+    const finde7=(()=>{const d=new Date(hoyA+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+7);return d.toISOString().slice(0,10);})();
+    const ambVenc=ambServicios.filter(s=>s.proximo&&String(s.proximo).slice(0,10)<hoyA);
+    const ambPronto=ambServicios.filter(s=>{const p=s.proximo&&String(s.proximo).slice(0,10);return p&&p>=hoyA&&p<=finde7;});
+    const nomCliAmb=id=>{const c=clientes.find(x=>x.id===id);return c?c.nombre:('Cliente '+id);};
+    if(ambVenc.length)alertas.push({tipo:'danger',msg:`${ambVenc.length} ambiental${ambVenc.length!==1?'es':''} con recarga vencida: ${ambVenc.slice(0,4).map(s=>nomCliAmb(s.clienteId)).join(', ')}${ambVenc.length>4?'…':''}`,view:'controles'});
+    else if(ambPronto.length)alertas.push({tipo:'warn',msg:`${ambPronto.length} ambiental${ambPronto.length!==1?'es':''} por recargar en los próximos 7 días`,view:'controles'});
+  }
   $('#panel-alertas').innerHTML=alertas.map(a=>`<div class="alert-bar alert-${a.tipo}" onclick="go('${a.view}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${a.tipo==='info'?'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>':'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>'}</svg>${a.msg}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-left:auto;opacity:.5"><path d="M9 18l6-6-6-6"/></svg></div>`).join('');
 
   // ── Panel 1: Documentos / Cobros vencidos ────────────────

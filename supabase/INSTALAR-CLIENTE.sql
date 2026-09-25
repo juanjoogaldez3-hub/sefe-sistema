@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 25 migraciones una por una.
+-- secuencias. Reemplaza correr las 26 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 25 migraciones, en este orden:
+-- Incluye 26 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -42,6 +42,7 @@
 --   23. 20260908120000_movimiento_beneficiario.sql
 --   24. 20260909120000_cliente_ubicacion.sql
 --   25. 20260925120000_paradas_ruta.sql
+--   26. 20260925140000_amb_recurrencia_historial.sql
 -- ============================================================
 
 
@@ -2082,4 +2083,28 @@ create policy sefe_borrar on public.paradas_ruta for delete to authenticated
 
 grant select, insert, update, delete on public.paradas_ruta to authenticated;
 grant usage, select on sequence public.paradas_ruta_id_seq to authenticated;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260925140000_amb_recurrencia_historial.sql            ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Controles — Ambientales: recurrencia + historial
+-- ============================================================
+-- Agrega a los servicios de ambientales:
+--   · frecuencia_valor  + frecuencia_unidad ('mes'|'semana'|'dia') para
+--     reprogramar solo el próximo servicio (fecha + frecuencia).
+--   · historial (jsonb): lista de recargas ya hechas [{fecha, por}].
+--
+-- La tabla ctrl_ambientales ya tiene RLS y grants (ver
+-- 20260830100000_ctrl_ambientales.sql); las políticas son a nivel de tabla,
+-- así que las columnas nuevas quedan cubiertas sin cambios extra.
+-- Seguro de correr de más: usa 'add column if not exists'.
+-- ============================================================
+
+alter table public.ctrl_ambientales
+  add column if not exists frecuencia_valor  integer,
+  add column if not exists frecuencia_unidad text,
+  add column if not exists historial         jsonb not null default '[]'::jsonb;
 
