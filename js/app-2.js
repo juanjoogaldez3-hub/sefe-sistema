@@ -393,7 +393,14 @@ function setupAutocomplete(){
         (p.codigo||'').toLowerCase().includes(ql)||
         (p.nombre||'').toLowerCase().includes(ql)||
         (p.skuProveedor||'').toLowerCase().includes(ql)
-      ).map(p=>({texto:`${p.codigo} — ${p.nombre}`, sub:p.marca||'', valor:p.id}));
+      ).map(p=>{
+        const cu=p.tipoEmpaque==='caja_unidad';
+        const st=cu?`${p.stockCajas||0} cajas + ${p.stock||0} und`:`${p.stock||0} und`;
+        const tot=cu?((p.stockCajas||0)*(p.unidadesPorCaja||0)+(p.stock||0)):(p.stock||0);
+        const col=tot<=0?'var(--danger)':(tot<=5?'var(--warn)':'var(--muted)');
+        const stockHtml=`<b style="color:${col}">${tot<=0?'Sin stock':('Stock: '+st)}</b>`;
+        return {texto:`${p.codigo} — ${p.nombre}`, sub:(p.marca?p.marca+' · ':'')+stockHtml, valor:p.id};
+      });
     },
     (item)=>{ if(item){agregarProductoPorId(item.valor);$('#f-add').value='';} });
 }
