@@ -929,6 +929,13 @@ function _horaBadge(d,riskSet){
   const col=enRiesgo?'var(--danger)':'var(--warn)';
   return `<span title="${enRiesgo?'Quedó tarde en la ruta para su hora límite':'Hora límite de entrega'}" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:${col};white-space:nowrap">⏰ antes de ${t}${enRiesgo?' ⚠':''}</span>`;
 }
+// Etiqueta "🕐 llega ~HH:MM" (hora estimada de llegada). Roja si se pasa de la hora límite.
+function _etaBadge(d){
+  const eta=d.etaEntrega; if(!eta)return '';
+  const dlm=_horaLimMinDoc(d), em=_parseMinHora(eta);
+  const tarde=dlm<Infinity&&em!=null&&em>dlm+0.001;
+  return `<span title="Hora estimada de llegada" style="font-size:11px;color:${tarde?'var(--danger)':'var(--muted)'};white-space:nowrap">🕐 llega ~${eta}${tarde?' (tarde)':''}</span>`;
+}
 // ---- Orden de ruta POR CERCANÍA (vecino más cercano desde la bodega) ----
 // Distancia aproximada en km entre dos puntos {lat,lng} (fórmula de Haversine).
 function _distKm(a,b){
@@ -938,70 +945,113 @@ function _distKm(a,b){
   const s=Math.sin(dLat/2)**2+Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(dLng/2)**2;
   return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));
 }
-// Vecino más cercano (línea recta) desde un punto, respetando la hora límite:
-// en cada paso, entre las de la hora más temprana que quedan, elige la más cercana.
-function _nnRespetaHora(from, items){
-  const rest=items.slice(); let actual=from; const out=[];
-  while(rest.length){
-    const minHora=Math.min(...rest.map(x=>x.hlm));
-    let mejor=-1,md=Infinity;
-    for(let i=0;i<rest.length;i++){ if(rest[i].hlm!==minHora)continue; const dd=_distKm(actual,rest[i].pt); if(dd<md){md=dd;mejor=i;} }
-    if(mejor<0)mejor=0;
-    const el=rest.splice(mejor,1)[0]; out.push(el); actual=el.pt;
-  }
-  return out;
+// Hora "HH:MM" ↔ minutos desde medianoche.
+function _parseMinHora(s){ if(!s||!/^\d{1,2}:\d{2}$/.test(s))return null; const [h,m]=s.split(':').map(Number); return h*60+m; }
+function _minToHora(m){ if(m==null||!isFinite(m))return ''; m=Math.round(m); const h=Math.floor(m/60)%24, mm=((m%60)+60)%60; return String(h).padStart(2,'0')+':'+String(mm).padStart(2,'0'); }
+// Velocidad urbana promedio para estimar minutos cuando no hay datos de Google.
+const _VEL_CIUDAD_KMH=22;
+// Matriz de tiempos (minutos) por LÍNEA RECTA — respaldo si Google no está.
+function _matrizTiemposRecta(puntos){
+  const N=puntos.length, M=Array.from({length:N},()=>new Array(N).fill(0));
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++)M[i][j]= i===j?0:(_distKm(puntos[i],puntos[j])/_VEL_CIUDAD_KMH*60);
+  return M;
 }
-// Optimización REAL por calles con Google (viaje redondo desde 'from'). Devuelve
-// los items reordenados según Google, o null si no se pudo (sin internet, límite,
-// llave inválida, etc.) para caer al método de línea recta.
-async function _googleOptimOrden(from, items){
-  if(!items||items.length<2||items.length>23)return null;
+// Matriz de tiempos REALES de manejo (minutos) con Google Distance Matrix.
+// Devuelve NxN o null si no se pudo. Trocea para respetar el límite de elementos.
+async function _matrizTiemposGoogle(puntos){
+  const N=puntos.length;
+  if(N<2||N>25)return null;
   if(typeof _cargarGoogleMaps!=='function')return null;
   if(typeof _gmapsAuthFail!=='undefined'&&_gmapsAuthFail)return null;
   let gm; try{ gm=await _cargarGoogleMaps(); }catch(e){ return null; }
-  if(!gm||!gm.DirectionsService)return null;
+  if(!gm||!gm.DistanceMatrixService)return null;
+  const dest=puntos.map(p=>({lat:p.lat,lng:p.lng}));
+  const perReq=Math.max(1,Math.floor(100/N)); // ≤100 elementos por consulta
+  const M=Array.from({length:N},()=>new Array(N).fill(null));
+  const svc=new gm.DistanceMatrixService();
   try{
-    const svc=new gm.DirectionsService();
-    const origin={lat:Number(from.lat),lng:Number(from.lng)};
-    const waypoints=items.map(x=>({location:{lat:x.pt.lat,lng:x.pt.lng},stopover:true}));
-    const res=await new Promise(resolve=>{
-      svc.route({origin,destination:origin,waypoints,optimizeWaypoints:true,travelMode:gm.TravelMode.DRIVING},
-        (r,st)=>resolve(st==='OK'?r:null));
-    });
-    const order=res&&res.routes&&res.routes[0]&&res.routes[0].waypoint_order;
-    if(!order||order.length!==items.length)return null;
-    return order.map(i=>items[i]);
+    for(let start=0;start<N;start+=perReq){
+      const idx=[],origins=[];
+      for(let i=start;i<Math.min(start+perReq,N);i++){idx.push(i);origins.push({lat:puntos[i].lat,lng:puntos[i].lng});}
+      const res=await new Promise(resolve=>{
+        svc.getDistanceMatrix({origins,destinations:dest,travelMode:gm.TravelMode.DRIVING},(r,st)=>resolve(st==='OK'?r:null));
+      });
+      if(!res||!res.rows)return null;
+      res.rows.forEach((row,ri)=>{const i=idx[ri];(row.elements||[]).forEach((el,j)=>{
+        M[i][j]=(el&&el.status==='OK'&&el.duration)?(el.duration.value/60):(_distKm(puntos[i],puntos[j])/_VEL_CIUDAD_KMH*60);
+      });});
+    }
   }catch(e){ return null; }
+  return M;
 }
-// Numera las entregas por cercanía: las de HORA LÍMITE primero (por hora), y el
-// RESTO optimizado por CALLES con Google (respaldo: línea recta). Es async.
-// Devuelve {n, motor:'google'|'recta'} — n = paradas con pin ordenadas.
+// Tiempo total de manejo de un orden (índices de parada 0..N-1; matriz incluye bodega=0).
+function _tiempoTotalRuta(orden,M){ let t=0,cur=0; for(const j of orden){t+=M[cur][j+1];cur=j+1;} return t; }
+// ¿El orden respeta todas las horas límite? cuenta las tardías.
+function _tardiosRuta(orden,M,dl,salida,serv){
+  let t=salida,cur=0,tarde=0;
+  for(const j of orden){const arr=t+M[cur][j+1]; if(dl[j]<Infinity&&arr>dl[j]+0.001)tarde++; t=arr+serv; cur=j+1;}
+  return tarde;
+}
+// Numera las entregas armando el MEJOR orden posible considerando los HORARIOS y
+// los tiempos de manejo reales (Google, con respaldo de línea recta). Calcula la
+// hora estimada de llegada (ETA) a cada parada = salida + manejo + minutos/entrega.
+// Heurística: inserción por urgencia + mejora 2-opt (respetando las horas límite).
+// Devuelve {n, motor:'google'|'recta', tarde}.
 async function _ordenarPorCercania(docs){
   const bod=(typeof SEFE_BODEGA!=='undefined')?SEFE_BODEGA:null;
-  if(!bod||bod.lat==null){toast('Falta la bodega','Configurá el punto de la bodega para ordenar por cercanía.',true);return {n:0};}
+  if(!bod||bod.lat==null){toast('Falta la bodega','Configurá el punto de la bodega para ordenar la ruta.',true);return {n:0};}
   const conPin=[],sinPin=[];
   (docs||[]).forEach(d=>{
     const c=clientes.find(x=>x.id===d.clienteId);
     if(c&&c.lat!=null&&c.lng!=null)conPin.push({d,pt:{lat:Number(c.lat),lng:Number(c.lng)},hlm:_horaLimMinDoc(d)});
     else sinPin.push(d);
   });
-  if(!conPin.length){toast('Sin ubicaciones','Estas entregas no tienen pin para ordenar por cercanía. Ubicá a los clientes primero.',true);return {n:0};}
-  // 1) Con hora límite: primero, en orden de hora (cercanía como desempate).
-  const conHoraOrd=_nnRespetaHora(bod, conPin.filter(x=>x.hlm<Infinity));
-  // 2) Sin hora: optimizado por calles con Google; si no se puede, línea recta.
-  const sinHora=conPin.filter(x=>x.hlm===Infinity);
-  const desde=conHoraOrd.length?conHoraOrd[conHoraOrd.length-1].pt:bod;
-  let motor='recta', sinHoraOrd=await _googleOptimOrden(desde, sinHora);
-  if(sinHoraOrd)motor='google'; else sinHoraOrd=_nnRespetaHora(desde, sinHora);
-  // 3) Numerar todo (con hora + resto) y, al final, las que no tienen pin.
-  let n=1;
-  [...conHoraOrd, ...sinHoraOrd].forEach(x=>{
-    x.d.ordenRuta=n++;
+  if(!conPin.length){toast('Sin ubicaciones','Estas entregas no tienen pin para ordenar la ruta. Ubicá a los clientes primero.',true);return {n:0};}
+  const N=conPin.length;
+  const puntos=[{lat:bod.lat,lng:bod.lng},...conPin.map(x=>x.pt)]; // 0 = bodega
+  let M=await _matrizTiemposGoogle(puntos), motor='google';
+  if(!M){ M=_matrizTiemposRecta(puntos); motor='recta'; }
+  const salida=_parseMinHora((typeof SEFE_REPARTO!=='undefined'&&SEFE_REPARTO.salida))||510;
+  const serv=(typeof SEFE_REPARTO!=='undefined'&&SEFE_REPARTO.minPorEntrega)||20;
+  const URGENTE=45; // min de holgura por debajo de los cuales se rushea el horario
+  const dl=conPin.map(x=>x.hlm);
+  // 1) Construcción golosa: en cada paso, si alguien está por vencer su hora, ir a
+  //    ese; si todos van holgados, ir al más cercano en tiempo.
+  const usados=new Array(N).fill(false); let cur=0,t=salida; const orden=[];
+  for(let k=0;k<N;k++){
+    const cand=[];
+    for(let j=0;j<N;j++){ if(usados[j])continue; const arr=t+M[cur][j+1]; cand.push({j,arr,slack:dl[j]-arr}); }
+    // Si ALGUIEN está por vencer su hora (holgura chica o ya en riesgo), se atiende
+    // al más urgente (menor holgura). Si todos van holgados, se va al más cercano.
+    const minSlack=Math.min(...cand.map(c=>c.slack));
+    let pick;
+    if(minSlack<URGENTE){ cand.sort((a,b)=>a.slack-b.slack||a.arr-b.arr); pick=cand[0]; }
+    else { cand.sort((a,b)=>a.arr-b.arr); pick=cand[0]; }
+    usados[pick.j]=true; orden.push(pick.j); t=pick.arr+serv; cur=pick.j+1;
+  }
+  // 2) Mejora 2-opt: reversa segmentos si baja el tiempo total y NO agrega tardíos.
+  let mejor=orden.slice(), mejorTardios=_tardiosRuta(mejor,M,dl,salida,serv), mejorT=_tiempoTotalRuta(mejor,M);
+  let cambió=true, vueltas=0;
+  while(cambió && vueltas<30){
+    cambió=false; vueltas++;
+    for(let i=0;i<N-1;i++)for(let k=i+1;k<N;k++){
+      const cand=mejor.slice(0,i).concat(mejor.slice(i,k+1).reverse(),mejor.slice(k+1));
+      const ct=_tiempoTotalRuta(cand,M), ctar=_tardiosRuta(cand,M,dl,salida,serv);
+      if(ctar<mejorTardios || (ctar===mejorTardios && ct<mejorT-0.001)){ mejor=cand; mejorT=ct; mejorTardios=ctar; cambió=true; }
+    }
+  }
+  // 3) Recalcular ETAs del orden final y numerar.
+  let tt=salida, c2=0, n=1, tarde=0;
+  mejor.forEach(j=>{
+    const arr=tt+M[c2][j+1]; const x=conPin[j];
+    const esTarde=x.hlm<Infinity&&arr>x.hlm+0.001; if(esTarde)tarde++;
+    x.d.ordenRuta=n++; x.d.etaEntrega=_minToHora(arr);
     if(estadoEntrega(x.d)==='sin')x.d.estadoEntrega='asignado';
     if(typeof guardarDocumento==='function')guardarDocumento(x.d);
+    tt=arr+serv; c2=j+1;
   });
-  sinPin.forEach(d=>{d.ordenRuta=n++;if(typeof guardarDocumento==='function')guardarDocumento(d);});
-  return {n:conPin.length, motor};
+  sinPin.forEach(d=>{d.ordenRuta=n++; d.etaEntrega=null; if(typeof guardarDocumento==='function')guardarDocumento(d);});
+  return {n:N, motor, tarde};
 }
 // Desde Despachos: ordena por cercanía la ruta del piloto elegido en el filtro.
 async function ordenarCercaniaDespachos(){
@@ -1009,12 +1059,12 @@ async function ordenarCercaniaDespachos(){
   if(!fPiloto){toast('Elegí un piloto','Seleccioná un piloto en el filtro para ordenar su ruta.',false);return;}
   const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
   if(!lista.length){toast('Sin entregas','Ese piloto no tiene entregas pendientes.',false);return;}
-  toast('🧭 Ordenando ruta…','Calculando el mejor recorrido…',false);
-  const {n,motor}=await _ordenarPorCercania(lista);
+  toast('🧭 Optimizando ruta…','Calculando horas de llegada y el mejor recorrido…',false);
+  const {n,motor,tarde}=await _ordenarPorCercania(lista);
   if(n){
-    logAudit('Ruta ordenada por cercanía',n+' paradas ('+(motor||'recta')+')');
+    logAudit('Ruta optimizada',n+' paradas ('+(motor||'recta')+')'+(tarde?' · '+tarde+' fuera de hora':''));
     renderDespachos();
-    toast('🧭 Ruta ordenada',(motor==='google'?'Optimizada por calles (Google Maps) · ':'')+n+' paradas numeradas. Podés reordenar a mano.');
+    toast('🧭 Ruta optimizada',(motor==='google'?'Con tiempos reales de Google · ':'')+n+' paradas con hora de llegada.'+(tarde?' ⚠ '+tarde+' no llega'+(tarde!==1?'n':'')+' a tiempo — revisá.':''));
   }
 }
 window.ordenarCercaniaDespachos=ordenarCercaniaDespachos;
@@ -1040,8 +1090,8 @@ function asignarMasivo(){
   const hayBodega=(typeof SEFE_BODEGA!=='undefined'&&SEFE_BODEGA&&SEFE_BODEGA.lat!=null);
   openMod('Asignar '+docs.length+' entrega'+(docs.length!==1?'s':''),`
     <div class="row"><div style="flex:1"><label>Piloto</label><select id="am-piloto"><option value="">— Seleccioná —</option>${pilOpts}</select></div></div>
-    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:10px;cursor:pointer${hayBodega?'':';opacity:.5'}"><input type="checkbox" id="am-cercania" ${hayBodega?'checked':'disabled'} style="width:auto"> 🧭 Ordenar la ruta por cercanía automáticamente</label>
-    <div class="note n-ok" style="margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Se asignan las ${docs.length} entregas a ese piloto. Con el orden por cercanía, el sistema numera <b>toda su ruta</b> de la entrega más cercana a la más lejana (saliendo de la bodega). Igual podés reordenar a mano después.</span></div>`,
+    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:10px;cursor:pointer${hayBodega?'':';opacity:.5'}"><input type="checkbox" id="am-cercania" ${hayBodega?'checked':'disabled'} style="width:auto"> 🧭 Optimizar la ruta automáticamente (cercanía + horarios)</label>
+    <div class="note n-ok" style="margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Se asignan las ${docs.length} entregas a ese piloto. Al optimizar, el sistema arma <b>toda su ruta</b> con los tiempos reales de Google, calcula la <b>hora de llegada</b> a cada parada y respeta las <b>horas límite</b>. Igual podés reordenar a mano.</span></div>`,
     ()=>{
       const pid=$('#am-piloto').value?Number($('#am-piloto').value):null;
       if(!pid){toast('Seleccioná un piloto',null,true);return;}
@@ -1054,8 +1104,8 @@ function asignarMasivo(){
       if(porCercania){
         // Reordena TODA la ruta pendiente de ese piloto (async: Google + respaldo).
         const rutaPiloto=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
-        _ordenarPorCercania(rutaPiloto).then(({n,motor})=>{
-          if(n){renderDespachos();toast('🧭 Ruta ordenada',(motor==='google'?'Optimizada por calles (Google Maps) · ':'')+n+' paradas.');}
+        _ordenarPorCercania(rutaPiloto).then(({n,motor,tarde})=>{
+          if(n){renderDespachos();toast('🧭 Ruta optimizada',(motor==='google'?'Con tiempos reales de Google · ':'')+n+' paradas con hora de llegada.'+(tarde?' ⚠ '+tarde+' fuera de hora.':''));}
         });
       }
     });
@@ -1117,7 +1167,7 @@ function renderDespachos(){
       <td style="text-align:center">${chk}</td>
       <td class="num" style="font-weight:700;color:var(--green)">${d.ordenRuta!=null?'#'+d.ordenRuta:'—'}</td>
       <td style="font-weight:600">${docNum(d)}<div style="font-size:10.5px;color:var(--muted)">${tipoCorto[d.tipoDoc]}</div></td>
-      <td>${d.clienteComercial||d.clienteNombre}${(()=>{const b=_horaBadge(d,_riskDesp);return b?`<div style="margin-top:2px">${b}</div>`:'';})()}</td>
+      <td>${d.clienteComercial||d.clienteNombre}${(()=>{const b=_horaBadge(d,_riskDesp),e=_etaBadge(d);return (b||e)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${b}${e}</div>`:'';})()}</td>
       <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${dirEntrega(d)}</td>
       <td class="num" style="font-weight:600">${money(d.totales.total)}</td>
       <td>${piloto?piloto.nombre:'<span style="color:var(--muted-2)">—</span>'}</td>
@@ -1344,7 +1394,7 @@ function renderMisEntregas(){
             </div>
             <div style="font-size:12px;color:var(--muted);margin-bottom:3px">${docNum(d)} · ${tipoCorto[d.tipoDoc]} · ${money(d.totales.total)}</div>
             <div style="font-size:12.5px;color:var(--ink);margin-bottom:3px">📍 ${dirEntrega(d)}</div>
-            ${(()=>{const b=_horaBadge(d,_riskPil);return b?`<div style="margin-bottom:3px">${b}</div>`:'';})()}
+            ${(()=>{const b=_horaBadge(d,_riskPil),e=_etaBadge(d);return (b||e)?`<div style="margin-bottom:3px;display:flex;gap:10px;flex-wrap:wrap">${b}${e}</div>`:'';})()}
             ${tel?`<div style="font-size:12px"><a href="tel:${tel}" style="color:var(--blue);text-decoration:none">☎ ${tel}</a></div>`:''}
             <div style="font-size:11.5px;color:var(--muted-2);margin-top:6px">${items}</div>
           </div>

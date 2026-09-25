@@ -12,7 +12,8 @@ const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t +
 const ini = src.indexOf('function _horaLimMinDoc(d)');
 const fin = src.indexOf('// Desde Despachos: ordena por cercan');
 let clientes = [];
-const ctx = { SEFE_BODEGA: { lat: 0, lng: 0 }, Math, Number, Infinity, Promise,
+const ctx = { SEFE_BODEGA: { lat: 0, lng: 0 }, SEFE_REPARTO: { salida: '08:30', minPorEntrega: 20 },
+  Math, Number, Infinity, isFinite, Promise, Array,
   estadoEntrega: d => d.estadoEntrega || 'sin', guardarDocumento: () => {}, toast: () => {} };
 Object.defineProperty(ctx, 'clientes', { get: () => clientes, set: v => { clientes = v; } });
 vm.createContext(ctx);
@@ -25,11 +26,13 @@ vm.runInContext(src.slice(ini, fin) +
   ok('"12:00" → 720 minutos', ctx.__min({ clienteId: 1 }) === 720, ctx.__min({ clienteId: 1 }));
   ok('sin hora → Infinity', ctx.__min({ clienteId: 2 }) === Infinity);
 
-  console.log('\n═══ Prioriza la hora temprana al ordenar ═══');
+  console.log('\n═══ La urgencia (hora ajustada) vence a la cercanía ═══');
+  // Salida 8:30. A tiene hora 9:10 (ajustada). B está MÁS CERCA pero sin hora.
+  // Debe ir A primero (urgente), aunque B esté más cerca.
   clientes = [
-    { id: 1, lat: 0.30, lng: 0, horaLimiteEntrega: '10:00' }, // lejos pero urgente
-    { id: 2, lat: 0.10, lng: 0 },                              // cerca, sin hora
-    { id: 3, lat: 0.20, lng: 0, horaLimiteEntrega: '12:00' }, // medio, hora más floja
+    { id: 1, lat: 0.10, lng: 0, horaLimiteEntrega: '09:10' }, // ~30 min, hora ajustada
+    { id: 2, lat: 0.05, lng: 0 },                              // ~15 min, sin hora (más cerca)
+    { id: 3, lat: 0.30, lng: 0 },                              // lejos, sin hora
   ];
   const docs = [
     { id: 101, clienteId: 1, estadoEntrega: 'asignado' },
@@ -38,9 +41,9 @@ vm.runInContext(src.slice(ini, fin) +
   ];
   await ctx.__ord(docs);
   const ord = id => docs.find(d => d.id === id).ordenRuta;
-  ok('el de 10:00 (lejos) va #1 igual', ord(101) === 1, ord(101));
-  ok('el de 12:00 va #2', ord(103) === 2, ord(103));
-  ok('el sin hora va al final (#3)', ord(102) === 3, ord(102));
+  ok('el de hora ajustada (9:10) va #1 aunque no sea el más cercano', ord(101) === 1, ord(101));
+  ok('los sin hora van después, por cercanía (2 antes que 3)', ord(102) === 2 && ord(103) === 3, `102=${ord(102)} 103=${ord(103)}`);
+  ok('calcula la ETA de la parada urgente', /^\d{2}:\d{2}$/.test(docs.find(d => d.id === 101).etaEntrega), docs.find(d => d.id === 101).etaEntrega);
 
   console.log('\n═══ Avisa si una hora ajustada quedó tarde ═══');
   clientes = [{ id: 1, horaLimiteEntrega: '15:00' }, { id: 2, horaLimiteEntrega: '10:00' }];
