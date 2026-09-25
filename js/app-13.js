@@ -42,6 +42,38 @@ function _siguienteHabil(fecha){
 }
 window._siguienteHabil=_siguienteHabil;
 
+// Suma una frecuencia a una fecha (YYYY-MM-DD). unidad: 'mes' | 'semana' | 'dia'.
+// Los meses se suman como calendario (si el día no existe, cae al último del mes).
+function _ambSumar(fecha,val,uni){
+  const f=String(fecha||'').slice(0,10); if(!/^\d{4}-\d{2}-\d{2}$/.test(f))return '';
+  val=Number(val); if(!(val>0))return '';
+  const [Y,M,D]=f.split('-').map(Number);
+  let d;
+  if(uni==='dia')d=new Date(Date.UTC(Y,M-1,D+val));
+  else if(uni==='semana')d=new Date(Date.UTC(Y,M-1,D+val*7));
+  else { // mes
+    const total=(M-1)+val, ny=Y+Math.floor(total/12), nm=((total%12)+12)%12;
+    d=new Date(Date.UTC(ny,nm,D));
+    if(d.getUTCMonth()!==nm)d=new Date(Date.UTC(ny,nm+1,0)); // el día no existe → último del mes
+  }
+  return isNaN(d)?'':d.toISOString().slice(0,10);
+}
+window._ambSumar=_ambSumar;
+// Etiqueta de unidad de frecuencia (singular/plural).
+function _ambUniLbl(uni,n){
+  const u={mes:['mes','meses'],semana:['semana','semanas'],dia:['día','días']}[uni||'mes']||['mes','meses'];
+  return Number(n)===1?u[0]:u[1];
+}
+// Recalcula el "próximo servicio" del formulario = fecha + frecuencia (y lo corre
+// al lunes si cae fin de semana). Se llama al cambiar fecha o frecuencia.
+function _ambCalcProx(){
+  const f=($('#amb-fecha')||{}).value, val=($('#amb-frec-val')||{}).value, uni=($('#amb-frec-uni')||{}).value||'mes';
+  if(!f||!(Number(val)>0))return;
+  let p=_ambSumar(f,val,uni); if(p)p=_siguienteHabil(p);
+  const el=$('#amb-prox'); if(el&&p)el.value=p;
+}
+window._ambCalcProx=_ambCalcProx;
+
 // Cambiar entre Lista y Calendario.
 function ambVista(v){
   _ambVista=v;
@@ -111,11 +143,11 @@ function renderAmbServicios(){
     .sort((a,b)=>String(b.proximo||b.fecha||'').localeCompare(String(a.proximo||a.fecha||'')));
   const empty=$('#amb-empty'); if(empty)empty.style.display=lista.length?'none':'block';
   tb.innerHTML=lista.map(s=>`<tr>
-      <td style="font-weight:600">${escHtml(_ctrlNombreCliente(s.clienteId))}${s.ubicacion?`<div style="font-size:11px;color:var(--muted-2)">${escHtml(s.ubicacion)}</div>`:''}</td>
+      <td style="font-weight:600">${escHtml(_ctrlNombreCliente(s.clienteId))}${s.nota?`<div style="font-size:11px;color:var(--muted-2)">${escHtml(s.nota)}</div>`:''}</td>
       <td>${escHtml(s.aroma||'—')}</td>
       <td>${s.fecha?fdate(s.fecha):'—'}</td>
-      <td>${s.proximo?fdate(s.proximo)+_ctrlVenceBadge(s.proximo):'<span style="color:var(--muted-2)">—</span>'}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="openAmbServicio(${s.id})">Editar</button></td>
+      <td>${s.proximo?fdate(s.proximo)+_ctrlVenceBadge(s.proximo):'<span style="color:var(--muted-2)">—</span>'}${s.frecuenciaValor?`<div style="font-size:10.5px;color:var(--muted-2)">cada ${s.frecuenciaValor} ${_ambUniLbl(s.frecuenciaUnidad,s.frecuenciaValor)}${s.historial&&s.historial.length?` · ${s.historial.length} recarga${s.historial.length!==1?'s':''}`:''}</div>`:''}</td>
+      <td><div class="acts"><button class="btn btn-primary btn-sm" onclick="ambRegistrarRecarga(${s.id})" title="Registrar que se hizo la recarga y reprogramar la próxima">✓ Recarga</button><button class="btn btn-ghost btn-sm" onclick="openAmbServicio(${s.id})">Editar</button></div></td>
     </tr>`).join('');
   if(typeof enhanceTable==='function')enhanceTable('t-amb');
 }
@@ -125,9 +157,10 @@ function openAmbServicio(id){
   const s=id?ambServicios.find(x=>String(x.id)===String(id)):null;
   const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():'';
   openMod(s?'Editar servicio de ambiental':'Nuevo servicio de ambiental',
-    `<div class="row"><div><label>Cliente</label>${_ctrlCampoCliente('amb-cli-search','amb-cli',s?s.clienteId:null)}</div><div><label>Ubicación <span style="font-weight:400;color:var(--muted-2)">(dónde)</span></label><input id="amb-ubi" value="${s?escHtml(s.ubicacion||''):''}" placeholder="Ej. Baño hombres, Recepción"></div></div>
-     <div class="row"><div><label>Aroma / fragancia</label><input id="amb-aroma" value="${s?escHtml(s.aroma||''):''}" placeholder="Ej. Lavanda"></div><div><label>Nota</label><input id="amb-nota" value="${s?escHtml(s.nota||''):''}"></div></div>
-     <div class="row"><div><label>Fecha del servicio</label><input id="amb-fecha" type="date" value="${s&&s.fecha?String(s.fecha).slice(0,10):hoy}"></div><div><label>Próximo servicio <span style="font-weight:400;color:var(--muted-2)">(si cae fin de semana pasa al lunes)</span></label><input id="amb-prox" type="date" onchange="this.value=_siguienteHabil(this.value)" value="${s&&s.proximo?String(s.proximo).slice(0,10):''}"></div></div>
+    `<div class="row"><div><label>Cliente</label>${_ctrlCampoCliente('amb-cli-search','amb-cli',s?s.clienteId:null)}</div><div><label>Nota <span style="font-weight:400;color:var(--muted-2)">(detalle)</span></label><input id="amb-nota" value="${s?escHtml(s.nota||''):''}" placeholder="Ej. Baño hombres, Recepción"></div></div>
+     <div class="row"><div><label>Aroma / fragancia</label><input id="amb-aroma" value="${s?escHtml(s.aroma||''):''}" placeholder="Ej. Lavanda"></div><div><label>Recarga cada <span style="font-weight:400;color:var(--muted-2)">(reprograma sola)</span></label><div style="display:flex;gap:6px"><input id="amb-frec-val" type="number" min="1" style="max-width:72px" value="${s&&s.frecuenciaValor?s.frecuenciaValor:1}" onchange="_ambCalcProx()"><select id="amb-frec-uni" onchange="_ambCalcProx()"><option value="mes" ${!s||!s.frecuenciaUnidad||s.frecuenciaUnidad==='mes'?'selected':''}>meses</option><option value="semana" ${s&&s.frecuenciaUnidad==='semana'?'selected':''}>semanas</option><option value="dia" ${s&&s.frecuenciaUnidad==='dia'?'selected':''}>días</option></select></div></div></div>
+     <div class="row"><div><label>Fecha del servicio</label><input id="amb-fecha" type="date" value="${s&&s.fecha?String(s.fecha).slice(0,10):hoy}" onchange="_ambCalcProx()"></div><div><label>Próximo servicio <span style="font-weight:400;color:var(--muted-2)">(se calcula solo; podés cambiarlo)</span></label><input id="amb-prox" type="date" onchange="this.value=_siguienteHabil(this.value)" value="${s&&s.proximo?String(s.proximo).slice(0,10):''}"></div></div>
+     ${s&&s.historial&&s.historial.length?`<div style="margin-top:6px"><label>Historial de recargas (${s.historial.length})</label><div style="max-height:120px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:12px">${s.historial.slice().reverse().map(h=>`<div style="padding:3px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px"><span>${h.fecha?fdate(h.fecha):'—'}</span>${h.por?`<span style="color:var(--muted-2)">${escHtml(h.por)}</span>`:''}</div>`).join('')}</div></div>`:''}
      ${s?`<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_ambBorrar(${s.id})">Eliminar servicio</button></div>`:''}
      <div class="note n-danger" id="amb-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     async ()=>{
@@ -136,14 +169,18 @@ function openAmbServicio(id){
       if(!clienteId){err('Elegí el cliente del buscador');return;}
       const rec=s||{_nuevo:true};
       rec.clienteId=clienteId;
-      rec.ubicacion=$('#amb-ubi').value.trim();
       rec.aroma=$('#amb-aroma').value.trim();
       rec.nota=$('#amb-nota').value.trim();
       rec.fecha=$('#amb-fecha').value||null;
       rec.proximo=$('#amb-prox').value||null;
+      rec.frecuenciaValor=Number($('#amb-frec-val').value)||null;
+      rec.frecuenciaUnidad=$('#amb-frec-uni').value||'mes';
       // Si el próximo servicio cae sábado/domingo, se corre al lunes.
       if(rec.proximo){const hab=_siguienteHabil(rec.proximo);if(hab!==rec.proximo){rec.proximo=hab;toast('Próximo servicio movido','Caía en fin de semana → '+fdate(hab));}}
       if(!rec.creadoPor&&typeof currentUser!=='undefined')rec.creadoPor=currentUser;
+      // Un servicio nuevo con fecha = su primera recarga → arranca el historial.
+      if(!s){rec.historial=rec.fecha?[{fecha:rec.fecha,por:rec.creadoPor||''}]:[];}
+      else if(!Array.isArray(rec.historial))rec.historial=[];
       const ok=await (typeof guardarAmbServicio==='function'?guardarAmbServicio(rec):Promise.resolve(false));
       if(!ok){err('No se pudo guardar. ¿Ya corriste el SQL de Controles?');if(!s)rec._nuevo=true;return;}
       if(!s)ambServicios.push(rec);
@@ -153,6 +190,30 @@ function openAmbServicio(id){
   setTimeout(()=>_ctrlWireCliAC('amb-cli-search','amb-cli'),0);
 }
 window.openAmbServicio=openAmbServicio;
+
+// Registrar que la recarga SE HIZO: guarda la fecha en el historial y reprograma
+// el próximo servicio (fecha + frecuencia, corrido a lunes si cae fin de semana).
+function ambRegistrarRecarga(id){
+  const s=(typeof ambServicios!=='undefined'?ambServicios:[]).find(x=>String(x.id)===String(id)); if(!s)return;
+  const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():new Date().toISOString().slice(0,10);
+  const freqTxt=s.frecuenciaValor>0?`cada ${s.frecuenciaValor} ${_ambUniLbl(s.frecuenciaUnidad,s.frecuenciaValor)}`:null;
+  openMod('Registrar recarga · '+_ctrlNombreCliente(s.clienteId),
+    `<div class="row"><div><label>Fecha de la recarga</label><input id="amb-rec-fecha" type="date" value="${hoy}"></div></div>
+     <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Se anota esta recarga en el historial${freqTxt?` y se reprograma el próximo servicio (<b>${freqTxt}</b>)`:'. <b>Ojo:</b> este servicio no tiene frecuencia, así que el próximo servicio no se recalcula — ponele una en "Editar"'}.</span></div>`,
+    async ()=>{
+      const D=($('#amb-rec-fecha').value||hoy);
+      if(!Array.isArray(s.historial))s.historial=[];
+      s.historial.push({fecha:D,por:(typeof currentUser!=='undefined'?currentUser:'')});
+      s.fecha=D;
+      if(s.frecuenciaValor>0){const p=_ambSumar(D,s.frecuenciaValor,s.frecuenciaUnidad||'mes');if(p)s.proximo=_siguienteHabil(p);}
+      const ok=await (typeof guardarAmbServicio==='function'?guardarAmbServicio(s):Promise.resolve(false));
+      if(!ok){toast('No se pudo guardar','Intentá de nuevo',true);return;}
+      if(typeof logAudit==='function')logAudit('Ambiental · recarga registrada',_ctrlNombreCliente(s.clienteId)+' · '+fdate(D));
+      closeMod();_ambRender();
+      toast('✓ Recarga registrada',s.proximo?('Próximo servicio: '+fdate(s.proximo)):_ctrlNombreCliente(s.clienteId));
+    });
+}
+window.ambRegistrarRecarga=ambRegistrarRecarga;
 
 function _ambBorrar(id){
   const s=(typeof ambServicios!=='undefined'?ambServicios:[]).find(x=>String(x.id)===String(id)); if(!s)return;
@@ -196,7 +257,7 @@ function renderAmbCalendario(){
     const items=porDia[d]||[];
     celdas.push(`<div class="amb-cal-cell${finde?' amb-cal-finde':''}${esHoy?' amb-cal-hoy':''}">
         <div class="amb-cal-num">${d}</div>
-        ${items.map(s=>`<div class="amb-cal-ev" onclick="openAmbServicio(${s.id})" title="${escHtml(_ctrlNombreCliente(s.clienteId))}${s.ubicacion?' · '+escHtml(s.ubicacion):''}${s.aroma?' · '+escHtml(s.aroma):''}">${escHtml(_ctrlNombreCliente(s.clienteId))}</div>`).join('')}
+        ${items.map(s=>`<div class="amb-cal-ev" onclick="openAmbServicio(${s.id})" title="${escHtml(_ctrlNombreCliente(s.clienteId))}${s.aroma?' · '+escHtml(s.aroma):''}${s.nota?' · '+escHtml(s.nota):''}">${escHtml(_ctrlNombreCliente(s.clienteId))}</div>`).join('')}
       </div>`);
   }
   const dowLbls=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];

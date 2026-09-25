@@ -995,13 +995,19 @@ function mapAmbServicioFromDB(a){
   return {
     id:a.id, clienteId:a.cliente_id, ubicacion:a.ubicacion||'', aroma:a.aroma||'',
     fecha:a.fecha||null, proximo:a.proximo||null, nota:a.nota||'',
+    frecuenciaValor:(a.frecuencia_valor!=null?a.frecuencia_valor:null),
+    frecuenciaUnidad:a.frecuencia_unidad||'mes',
+    historial:Array.isArray(a.historial)?a.historial:[],
     creadoPor:a.creado_por||'', creado:a.creado
   };
 }
 async function guardarAmbServicio(s){
   const row={
     cliente_id:s.clienteId||null, ubicacion:s.ubicacion||null, aroma:s.aroma||null,
-    fecha:s.fecha||null, proximo:s.proximo||null, nota:s.nota||null
+    fecha:s.fecha||null, proximo:s.proximo||null, nota:s.nota||null,
+    frecuencia_valor:(s.frecuenciaValor!=null?s.frecuenciaValor:null),
+    frecuencia_unidad:s.frecuenciaUnidad||null,
+    historial:Array.isArray(s.historial)?s.historial:[]
   };
   if(s._nuevo){
     delete s._nuevo;

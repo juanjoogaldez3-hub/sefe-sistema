@@ -74,6 +74,49 @@ const vm = require('vm');
   ok('vacío se queda vacío', !h('') && !h(null));
 })();
 
+console.log('\n═══ Ambientales · sin ubicación (nota toma su lugar) ═══');
+ok('el formulario ya NO pide ubicación (amb-ubi)', !/id="amb-ubi"/.test(src));
+ok('la nota ocupa el lugar de la ubicación (junto al cliente)', /Nota <span[^>]*>\(detalle\)/.test(src));
+ok('la lista muestra la nota bajo el cliente (no la ubicación)', /_ctrlNombreCliente\(s\.clienteId\)\)\}\$\{s\.nota\?/.test(src));
+
+console.log('\n═══ Ambientales · recurrencia automática ═══');
+ok('el formulario tiene "recarga cada" (valor + unidad)', /id="amb-frec-val"/.test(src) && /id="amb-frec-uni"/.test(src));
+ok('el próximo servicio se recalcula solo (_ambCalcProx)', /function _ambCalcProx\(/.test(src) && /onchange="_ambCalcProx\(\)"/.test(src));
+ok('existe la suma de fechas _ambSumar (y en window)', /function _ambSumar\(/.test(src) && /window\._ambSumar\s*=/.test(src));
+ok('db.js guarda frecuencia (valor + unidad)', /frecuencia_valor:/.test(dbjs) && /frecuencia_unidad:/.test(dbjs));
+ok('db.js mapea la frecuencia', /frecuenciaValor:/.test(dbjs) && /frecuenciaUnidad:a\.frecuencia_unidad/.test(dbjs));
+
+// Verificación REAL de la suma de fechas (meses de calendario, fin de mes, etc.)
+(() => {
+  const i = src.indexOf('function _ambSumar(');
+  const j = src.indexOf('\n}', i);
+  const fn = src.slice(i, j + 2);
+  const ctx = { Date, String, Number, isNaN };
+  vm.createContext(ctx);
+  vm.runInContext(fn + '\n;globalThis.__s=_ambSumar;', ctx);
+  const s = ctx.__s;
+  ok('+1 mes (2026-01-15 → 2026-02-15)', s('2026-01-15', 1, 'mes') === '2026-02-15', s('2026-01-15', 1, 'mes'));
+  ok('fin de mes (2026-01-31 +1 mes → 2026-02-28)', s('2026-01-31', 1, 'mes') === '2026-02-28', s('2026-01-31', 1, 'mes'));
+  ok('cruza de año (2026-12-10 +2 meses → 2027-02-10)', s('2026-12-10', 2, 'mes') === '2027-02-10', s('2026-12-10', 2, 'mes'));
+  ok('+2 semanas (2026-03-02 → 2026-03-16)', s('2026-03-02', 2, 'semana') === '2026-03-16', s('2026-03-02', 2, 'semana'));
+  ok('+10 días (2026-03-02 → 2026-03-12)', s('2026-03-02', 10, 'dia') === '2026-03-12', s('2026-03-02', 10, 'dia'));
+  ok('sin valor → vacío', !s('2026-01-15', 0, 'mes'));
+})();
+
+console.log('\n═══ Ambientales · historial de recargas ═══');
+ok('existe ambRegistrarRecarga (y en window)', /function ambRegistrarRecarga\(/.test(src) && /window\.ambRegistrarRecarga\s*=/.test(src));
+ok('la lista tiene el botón "✓ Recarga"', /ambRegistrarRecarga\(\$\{s\.id\}\)/.test(src));
+ok('registrar recarga anota en historial y reprograma', /s\.historial\.push\(\{fecha:D/.test(src) && /_ambSumar\(D,s\.frecuenciaValor/.test(src));
+ok('un servicio nuevo arranca su historial con la primera fecha', /rec\.historial=rec\.fecha\?\[\{fecha:rec\.fecha/.test(src));
+ok('el modal de edición muestra el historial', /Historial de recargas/.test(src));
+ok('db.js guarda y mapea el historial (jsonb)', /historial:Array\.isArray\(s\.historial\)/.test(dbjs) && /historial:Array\.isArray\(a\.historial\)/.test(dbjs));
+ok('existe la migración de recurrencia + historial', migs.some(n => /amb_recurrencia_historial/.test(n)));
+
+console.log('\n═══ Ambientales · aviso de vencidos en el dashboard ═══');
+ok('el dashboard arma la alerta de ambientales vencidos', /recarga vencida/.test(src) && /view:'controles'/.test(src));
+ok('la alerta respeta el permiso de Controles', /tienePermiso\('controles'\)/.test(src));
+ok('distingue vencidos de "por vencer en 7 días"', /por recargar en los próximos 7 días/.test(src));
+
 console.log('\n═══ Baterías (parte 2) ═══');
 ok('index.html tiene la tabla de existencias (#t-bat-stock)', /id="t-bat-stock"/.test(html));
 ok('index.html tiene la tabla de cambios (#t-bat-cambios)', /id="t-bat-cambios"/.test(html));
