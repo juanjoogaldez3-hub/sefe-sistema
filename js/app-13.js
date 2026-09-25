@@ -215,6 +215,80 @@ function ambRegistrarRecarga(id){
 }
 window.ambRegistrarRecarga=ambRegistrarRecarga;
 
+// ── Reporte de ambientales por cliente (PDF / Excel) ───────
+function _ambEstadoTxt(prox){
+  if(!prox)return '—';
+  const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():new Date().toISOString().slice(0,10);
+  const f=String(prox).slice(0,10);
+  if(f<hoy)return 'Vencido';
+  return ((new Date(f)-new Date(hoy))/86400000)<=7?'Pronto':'Al día';
+}
+function _ambFrecTxt(s){ return s.frecuenciaValor>0?('cada '+s.frecuenciaValor+' '+_ambUniLbl(s.frecuenciaUnidad,s.frecuenciaValor)):'—'; }
+function _ambServiciosOrdenados(){
+  return (typeof ambServicios!=='undefined'?ambServicios:[]).slice().sort((a,b)=>
+    _ctrlNombreCliente(a.clienteId).localeCompare(_ctrlNombreCliente(b.clienteId))||
+    String(a.proximo||'9999').localeCompare(String(b.proximo||'9999')));
+}
+function reporteAmbientalesPDF(){
+  const servicios=(typeof ambServicios!=='undefined'?ambServicios:[]).slice();
+  if(!servicios.length){toast('Sin datos','No hay servicios de ambientales registrados',true);return;}
+  const porCli={};
+  servicios.forEach(s=>{const k=(s.clienteId==null?'—':s.clienteId);(porCli[k]=porCli[k]||[]).push(s);});
+  const claves=Object.keys(porCli).sort((a,b)=>_ctrlNombreCliente(a).localeCompare(_ctrlNombreCliente(b)));
+  let venc=0,pronto=0,recargas=0;
+  const bloques=claves.map(cid=>{
+    const rows=porCli[cid].slice().sort((a,b)=>String(a.proximo||'9999').localeCompare(String(b.proximo||'9999')));
+    const filas=rows.map(s=>{
+      const est=_ambEstadoTxt(s.proximo); if(est==='Vencido')venc++; else if(est==='Pronto')pronto++;
+      const nrec=(s.historial&&s.historial.length)||0; recargas+=nrec;
+      const color=est==='Vencido'?'#b03535':(est==='Pronto'?'#B45309':'#2e7d32');
+      return `<tr>
+        <td style="padding:4px 6px;font-size:11px;border-bottom:1px solid #ECEFE3">${escHtml(s.nota||'—')}</td>
+        <td style="padding:4px 6px;font-size:11px;border-bottom:1px solid #ECEFE3">${escHtml(s.aroma||'—')}</td>
+        <td style="padding:4px 6px;font-size:11px;border-bottom:1px solid #ECEFE3">${escHtml(_ambFrecTxt(s))}</td>
+        <td style="padding:4px 6px;font-size:11px;border-bottom:1px solid #ECEFE3">${s.fecha?fdate(s.fecha):'—'}</td>
+        <td style="padding:4px 6px;font-size:11px;border-bottom:1px solid #ECEFE3">${s.proximo?fdate(s.proximo):'—'}</td>
+        <td style="padding:4px 6px;font-size:11px;text-align:right;border-bottom:1px solid #ECEFE3">${nrec}</td>
+        <td style="padding:4px 6px;font-size:11px;font-weight:700;color:${color};border-bottom:1px solid #ECEFE3">${est}</td>
+      </tr>`;
+    }).join('');
+    return `<div style="margin-top:12px">
+      <div style="font-size:13px;font-weight:700;color:#173916;border-bottom:2px solid #A8C038;padding-bottom:3px;margin-bottom:2px">${escHtml(_ctrlNombreCliente(cid))}</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>${['Detalle / nota','Aroma','Frecuencia','Últ. servicio','Próximo','Recargas','Estado'].map((h,i)=>`<th style="padding:4px 6px;font-size:9.5px;text-align:${i===5?'right':'left'};color:#909584;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid #D6DCC9">${h}</th>`).join('')}</tr></thead>
+        <tbody>${filas}</tbody></table></div>`;
+  }).join('');
+  const kpi=(l,v)=>`<div style="flex:1;border:1px solid #D6DCC9;border-radius:8px;padding:7px 12px"><div style="font-size:9.5px;color:#909584;text-transform:uppercase;letter-spacing:.5px;font-weight:700">${l}</div><div style="font-size:19px;font-weight:800;color:#173916">${v}</div></div>`;
+  const resumen=`<div style="display:flex;gap:10px;margin-bottom:4px">${kpi('Clientes',claves.length)}${kpi('Servicios',servicios.length)}${kpi('Vencidos',venc)}${kpi('Próximos (7 días)',pronto)}${kpi('Recargas hechas',recargas)}</div>`;
+  _abrirPDF(_pdfShell({titulo:'AMBIENTALES POR CLIENTE',subtitulo:'Servicios de recarga y próximas fechas',orientacion:'portrait',body:resumen+bloques}));
+}
+window.reporteAmbientalesPDF=reporteAmbientalesPDF;
+
+async function reporteAmbientalesExcel(){
+  const servicios=_ambServiciosOrdenados();
+  if(!servicios.length){toast('Sin datos','No hay servicios de ambientales registrados',true);return;}
+  try{
+    const {XLSX,styled}=await _cargarXLSX();
+    const marca=(typeof SEFE_MARCA!=='undefined'&&SEFE_MARCA.membrete)||'SEFE, S.A.';
+    const aoa=[
+      [marca],
+      ['AMBIENTALES POR CLIENTE'],
+      ['Generado el '+fdate(new Date())],
+      [],
+      ['Cliente','Detalle / nota','Aroma','Frecuencia','Último servicio','Próximo servicio','Recargas','Estado'],
+    ];
+    servicios.forEach(s=>aoa.push([
+      _ctrlNombreCliente(s.clienteId), s.nota||'', s.aroma||'', _ambFrecTxt(s),
+      s.fecha?fdate(s.fecha):'', s.proximo?fdate(s.proximo):'', (s.historial&&s.historial.length)||0, _ambEstadoTxt(s.proximo)
+    ]));
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    _estiloExcelHoja(XLSX,ws,{styled,nCols:8,headerRow:4,dataRows:servicios.length,brandRow:0,titleRow:1,metaRows:[2]});
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Ambientales');
+    await descargarXlsx(XLSX,wb,'SEFE-Ambientales-por-cliente.xlsx');
+  }catch(e){console.error('Excel ambientales',e);toast('No se pudo exportar','Revisá la conexión',true);}
+}
+window.reporteAmbientalesExcel=reporteAmbientalesExcel;
+
 function _ambBorrar(id){
   const s=(typeof ambServicios!=='undefined'?ambServicios:[]).find(x=>String(x.id)===String(id)); if(!s)return;
   const _do=async()=>{
