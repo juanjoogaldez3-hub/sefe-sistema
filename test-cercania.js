@@ -12,7 +12,7 @@ const src = require('./test-fuente');
 let fallos = 0, pruebas = 0;
 const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t + (c ? '' : '  → ' + (e || ''))); if (!c) fallos++; };
 
-const ini = src.indexOf('function _distKm(a,b)');
+const ini = src.indexOf('function _horaLimMinDoc(d)');
 const fin = src.indexOf('function ordenarCercaniaDespachos()');
 // Bodega en (0,0). Clientes a distinta distancia, en desorden.
 const clientes = [
