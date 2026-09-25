@@ -967,19 +967,11 @@ function _matrizTiemposRecta(puntos){
   for(let i=0;i<N;i++)for(let j=0;j<N;j++)M[i][j]= i===j?0:(_distKm(puntos[i],puntos[j])/_VEL_CIUDAD_KMH*60);
   return M;
 }
-// Próxima fecha/hora de salida (hoy a la hora de reparto, o mañana si ya pasó).
-// Google exige que departureTime sea a futuro para calcular tráfico proyectado.
-function _proximaSalida(){
-  const hhmm=(typeof SEFE_REPARTO!=='undefined'&&SEFE_REPARTO.salida)||'08:30';
-  const salMin=_parseMinHora(hhmm); if(salMin==null)return null;
-  const now=new Date();
-  const d=new Date(now.getFullYear(),now.getMonth(),now.getDate(),Math.floor(salMin/60),salMin%60,0,0);
-  if(d.getTime()<=now.getTime()+60000)d.setDate(d.getDate()+1); // si ya pasó, la de mañana
-  return d;
-}
 // Matriz de tiempos REALES de manejo (minutos) con Google Distance Matrix.
-// Usa el TRÁFICO PROYECTADO a la hora de salida (8:30), no el de ahora mismo:
-// pide duration_in_traffic con departureTime = próxima salida y trafficModel bestguess.
+// Usa el tiempo TÍPICO por calles (SIN tráfico), a propósito: así factura en el
+// tier "Essentials" de la Distance Matrix (10,000 gratis/mes, $5/1,000) en vez
+// del "Advanced" con tráfico (5,000 gratis, $10/1,000). La diferencia real para
+// un reparto en ciudad es de pocos minutos y el ahorro es grande.
 // Devuelve NxN o null si no se pudo. Trocea para respetar el límite de elementos.
 async function _matrizTiemposGoogle(puntos){
   const N=puntos.length;
@@ -992,20 +984,17 @@ async function _matrizTiemposGoogle(puntos){
   const perReq=Math.max(1,Math.floor(100/N)); // ≤100 elementos por consulta
   const M=Array.from({length:N},()=>new Array(N).fill(null));
   const svc=new gm.DistanceMatrixService();
-  const salida=_proximaSalida();
-  const opts={travelMode:gm.TravelMode.DRIVING};
-  if(salida)opts.drivingOptions={departureTime:salida,trafficModel:(gm.TrafficModel&&gm.TrafficModel.BEST_GUESS)||'bestguess'};
   try{
     for(let start=0;start<N;start+=perReq){
       const idx=[],origins=[];
       for(let i=start;i<Math.min(start+perReq,N);i++){idx.push(i);origins.push({lat:puntos[i].lat,lng:puntos[i].lng});}
       const res=await new Promise(resolve=>{
-        svc.getDistanceMatrix(Object.assign({origins,destinations:dest},opts),(r,st)=>resolve(st==='OK'?r:null));
+        svc.getDistanceMatrix({origins,destinations:dest,travelMode:gm.TravelMode.DRIVING},(r,st)=>resolve(st==='OK'?r:null));
       });
       if(!res||!res.rows)return null;
       res.rows.forEach((row,ri)=>{const i=idx[ri];(row.elements||[]).forEach((el,j)=>{
-        // Preferir el tiempo CON tráfico proyectado; si no vino, el típico; si nada, recta.
-        const dur=el&&el.status==='OK'?(el.duration_in_traffic||el.duration):null;
+        // Tiempo típico de manejo; si no vino, se estima por línea recta.
+        const dur=el&&el.status==='OK'?el.duration:null;
         M[i][j]=dur?(dur.value/60):(_distKm(puntos[i],puntos[j])/_VEL_CIUDAD_KMH*60);
       });});
     }
