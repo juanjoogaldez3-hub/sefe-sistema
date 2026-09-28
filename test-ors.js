@@ -66,6 +66,13 @@ console.log('\n═══ Cableado ═══');
 ok('_ordenarPorCercania usa ORS primero, Google y recta de respaldo',
   /_matrizTiemposORS\(puntos\), motor='ors'/.test(src) && /_matrizTiemposGoogle\(puntos\); motor='google'/.test(src) && /_matrizTiemposRecta\(puntos\); motor='recta'/.test(src));
 ok('existe la llave ORS_API_KEY en la config', /const ORS_API_KEY\s*=/.test(src));
+ok('el aviso y la auditoría nombran el motor usado (_motorLbl)', /function _motorLbl\(/.test(src) && /Motor: '\+_motorLbl\(motor\)/.test(src));
+ok('_motorLbl distingue ORS / Google / recta', (() => {
+  const i = src.indexOf('function _motorLbl('); const j = src.indexOf('\n}', i);
+  const ctx = {}; vm.createContext(ctx);
+  vm.runInContext(src.slice(i, j + 2) + ';globalThis.__m=_motorLbl;', ctx);
+  return ctx.__m('ors').includes('OpenRouteService') && ctx.__m('google') === 'Google' && /recta/.test(ctx.__m('recta'));
+})());
 
 setTimeout(() => {
   console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
