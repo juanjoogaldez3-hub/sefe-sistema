@@ -59,6 +59,90 @@ let dashboardConfig={
 };
 function dbConf(key){return dashboardConfig[currentRole]?.[key]??false;}
 
+// ── Dashboard personalizable (cada usuario reordena / oculta sus paneles) ──
+// Paneles movibles, en su orden por defecto (= orden del HTML).
+const DASH_PANELS=[
+  {id:'panel-bloque-docs', lbl:'Documentos recientes'},
+  {id:'panel-bloque-venc', lbl:'Cobros / vencimientos'},
+  {id:'panel-bloque-stock', lbl:'Stock bajo'},
+  {id:'panel-bloque-ped', lbl:'Pedidos / resumen'},
+  {id:'panel-bloque-seguimiento', lbl:'Seguimiento de clientes'},
+  {id:'panel-bloque-miscobros', lbl:'Mis clientes con vencido'},
+  {id:'panel-bloque-amb', lbl:'Ambientales próximos'},
+];
+let _dashEdit=false;
+function _dashLay(){ if(typeof currentDashLayout!=='object'||!currentDashLayout)currentDashLayout={order:[],hidden:[]}; if(!Array.isArray(currentDashLayout.order))currentDashLayout.order=[]; if(!Array.isArray(currentDashLayout.hidden))currentDashLayout.hidden=[]; return currentDashLayout; }
+// Aplica el acomodo guardado: reordena los paneles y oculta los que el usuario
+// escondió (respetando el gating por rol, que ya fijó display al renderizar).
+function _aplicarLayoutDashboard(){
+  const grid=document.getElementById('dash-grid'); if(!grid)return;
+  const lay=_dashLay();
+  // 1) reordenar
+  lay.order.forEach(id=>{const el=document.getElementById(id); if(el&&el.parentNode===grid)grid.appendChild(el);});
+  // 2) capturar qué ocultó el ROL (display none puesto por renderPanel) antes de tocar
+  const roleHidden={};
+  DASH_PANELS.forEach(p=>{const el=document.getElementById(p.id); if(el)roleHidden[p.id]=(el.style.display==='none');});
+  // 3) aplicar el ocultado del USUARIO
+  DASH_PANELS.forEach(p=>{
+    const el=document.getElementById(p.id); if(!el)return;
+    const oculto=lay.hidden.includes(p.id);
+    if(_dashEdit){ if(!roleHidden[p.id])el.style.display=''; el.classList.toggle('dash-userhidden',oculto); }
+    else { el.classList.remove('dash-userhidden'); if(oculto&&!roleHidden[p.id])el.style.display='none'; }
+  });
+}
+function _dashPersist(){ if(typeof guardarDashboardLayout==='function'&&typeof currentUserId!=='undefined'&&currentUserId!=null)guardarDashboardLayout(currentUserId,_dashLay()); }
+// Chrome de edición: mango para arrastrar + botón ocultar/mostrar en cada panel.
+function _dashEditUI(){
+  const grid=document.getElementById('dash-grid'); if(!grid)return;
+  grid.classList.toggle('editando',_dashEdit);
+  const lay=_dashLay();
+  DASH_PANELS.forEach(p=>{
+    const el=document.getElementById(p.id); if(!el)return;
+    el.querySelector('.dash-ctrl')?.remove();
+    el.setAttribute('draggable',_dashEdit?'true':'false');
+    if(_dashEdit){
+      const oculto=lay.hidden.includes(p.id);
+      const c=document.createElement('div'); c.className='dash-ctrl';
+      c.innerHTML=`<span class="dash-grip" title="Arrastrá para mover">⠿ ${p.lbl}</span><button class="dash-eye" onclick="dashToggleOcultar('${p.id}')">${oculto?'🙈 Mostrar':'👁 Ocultar'}</button>`;
+      el.prepend(c);
+    }
+  });
+  const b=document.getElementById('dash-tools-btn'); if(b)b.textContent=_dashEdit?'✓ Listo':'✎ Personalizar';
+  const r=document.getElementById('dash-reset'); if(r)r.style.display=_dashEdit?'':'none';
+  _dashWireDrag();
+}
+function _dashWireDrag(){
+  const grid=document.getElementById('dash-grid'); if(!grid||grid._dragWired)return; grid._dragWired=true;
+  let dragEl=null;
+  grid.addEventListener('dragstart',e=>{const el=e.target.closest('.dash-panel'); if(!el||!_dashEdit){return;} dragEl=el; el.classList.add('dash-dragging'); try{e.dataTransfer.effectAllowed='move';}catch(_){}});
+  grid.addEventListener('dragend',()=>{ if(dragEl)dragEl.classList.remove('dash-dragging'); dragEl=null; _dashGuardarOrden(); });
+  grid.addEventListener('dragover',e=>{ if(!_dashEdit||!dragEl)return; e.preventDefault(); const over=e.target.closest('.dash-panel'); if(!over||over===dragEl)return; const r=over.getBoundingClientRect(); const despues=(e.clientY-r.top)/r.height>0.5; grid.insertBefore(dragEl,despues?over.nextSibling:over); });
+}
+function _dashGuardarOrden(){
+  const grid=document.getElementById('dash-grid'); if(!grid)return;
+  _dashLay().order=[...grid.querySelectorAll('.dash-panel')].map(el=>el.id);
+  _dashPersist();
+}
+function dashToggleOcultar(id){
+  const lay=_dashLay(); const i=lay.hidden.indexOf(id);
+  if(i>=0)lay.hidden.splice(i,1); else lay.hidden.push(id);
+  _dashPersist(); _aplicarLayoutDashboard(); _dashEditUI();
+}
+window.dashToggleOcultar=dashToggleOcultar;
+function toggleDashEdit(){
+  _dashEdit=!_dashEdit;
+  _aplicarLayoutDashboard(); _dashEditUI();
+  if(!_dashEdit)toast('✓ Dashboard guardado','Tu acomodo quedó guardado en tu cuenta.');
+  else toast('✎ Modo personalizar','Arrastrá los paneles para moverlos y usá 👁 para ocultarlos.');
+}
+window.toggleDashEdit=toggleDashEdit;
+function dashReset(){
+  currentDashLayout={order:DASH_PANELS.map(p=>p.id),hidden:[]};
+  _dashPersist(); _aplicarLayoutDashboard(); _dashEditUI();
+  toast('↺ Restablecido','El dashboard volvió al orden por defecto.');
+}
+window.dashReset=dashReset;
+
 function renderPanel(){
   const hoy=new Date();hoy.setHours(0,0,0,0);
   const semana=new Date(hoy);semana.setDate(semana.getDate()+7);
@@ -268,6 +352,9 @@ function renderPanel(){
   }else document.getElementById('panel-bloque-ped').style.display='none';
 
   renderSeguimiento();
+  // Aplicar el acomodo personal (orden + ocultos) y, si está activo, el modo edición.
+  _aplicarLayoutDashboard();
+  _dashEditUI();
 }
 
 // Días sin comprar a partir de los cuales un cliente se considera "perdido" y

@@ -396,6 +396,9 @@ ROLES.cobros=ROLES.contabilidad;
 let usuarios=[];
 let usrN=11;
 let currentUser='Juanjo',currentRole='admin';
+// Id del usuario logueado y su acomodo personal del dashboard (orden + ocultos).
+let currentUserId=null;
+let currentDashLayout={order:[],hidden:[]};
 function iniciales(n){return n.split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');}
 function canAnular(){return (currentRole==="admin"||ROLES[currentRole]?.anular===true)&&!soloLectura();}
 function canFacturar(){return (currentRole==="admin"||ROLES[currentRole]?.facturar===true)&&!soloLectura();}
@@ -709,6 +712,8 @@ async function doLoginAuth(){
       return;
     }
     currentUser=u.nombre;currentRole=u.rol;
+    currentUserId=u.id!=null?u.id:null;
+    currentDashLayout=(u.dashboardLayout&&typeof u.dashboardLayout==='object')?u.dashboardLayout:{order:[],hidden:[]};
     $('#login-pass').value='';
     // Mostrar pantalla de carga mientras preparamos los datos frescos
     mostrarLoader();
@@ -803,7 +808,7 @@ async function logoutAuth(){
   // dejar el websocket abierto ni seguir recibiendo datos sin usuario.
   if(typeof detenerRealtime==='function')detenerRealtime();
   try{ if(typeof sb!=='undefined'&&sb.auth)await sb.auth.signOut(); }catch(e){}
-  currentUser=null;currentRole=null;
+  currentUser=null;currentRole=null;currentUserId=null;currentDashLayout={order:[],hidden:[]};
   const _b=document.getElementById('bell-rec');if(_b)_b.style.display='none';
   const _o=document.getElementById('ov-rec');if(_o)_o.classList.remove('show');
   $('#app-layout').style.display='none';$('#login-screen').style.display='flex';

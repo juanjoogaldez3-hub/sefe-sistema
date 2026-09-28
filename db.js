@@ -372,9 +372,18 @@ function mapCompraFromDB(c, todosPagos){
 function mapUsuarioFromDB(u){
   return {
     id:u.id, nombre:u.nombre, correo:u.correo, rol:u.rol, activo:u.activo,
-    vendedorId:u.vendedor_id, pilotoId:u.piloto_id, authId:u.auth_id
+    vendedorId:u.vendedor_id, pilotoId:u.piloto_id, authId:u.auth_id,
+    dashboardLayout:(u.dashboard_layout&&typeof u.dashboard_layout==='object')?u.dashboard_layout:null
   };
 }
+// Guarda el acomodo personal del dashboard (orden + ocultos) de un usuario.
+async function guardarDashboardLayout(userId, layout){
+  if(userId==null)return false;
+  const {error}=await sb.from('usuarios').update({dashboard_layout:layout||{}}).eq('id',userId);
+  if(error){console.error('Error guardando dashboard_layout:',error);return false;}
+  return true;
+}
+if(typeof window!=='undefined')window.guardarDashboardLayout=guardarDashboardLayout;
 function mapTalonarioFromDB(t){
   return {
     id:t.id, numeroInicial:t.numero_inicial, numeroFinal:t.numero_final,
