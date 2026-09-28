@@ -10,7 +10,7 @@ const GOOGLE_MAPS_KEY = 'AIzaSyBWDjUmYyAfy-ZfvfRrSwYNDMbpmciZnpE';
 // Llave de OpenRouteService (openrouteservice.org): motor GRATIS del "Optimizar"
 // de rutas (matriz de tiempos por calles reales). Si queda vacía, el sistema usa
 // Google y, si tampoco, la línea recta. La key va restringida por dominio.
-const ORS_API_KEY = '';
+const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImM1YzY2ZDUwYmViMDQ0ZjNhODY3MjVmMjQ3MzNmMjNiIiwiaCI6Im11cm11cjY0In0=';
 // Punto de salida del reparto (la bodega): de acá arranca el "orden por cercanía"
 // de las rutas. Poner las coordenadas reales; si queda null, el sistema pide
 // configurarla antes de ordenar.
