@@ -399,6 +399,11 @@ let currentUser='Juanjo',currentRole='admin';
 // Id del usuario logueado y su acomodo personal del dashboard (orden + ocultos).
 let currentUserId=null;
 let currentDashLayout={order:[],hidden:[]};
+// Ajustes generales (clave→valor) que vienen de la tabla `ajustes`.
+let ajustes={};
+// Meta de ventas del mes (número) configurada en el dashboard; 0 si no hay.
+function metaVentasMes(){ const v=Number(ajustes&&ajustes.meta_ventas_mes); return v>0?v:0; }
+window.metaVentasMes=metaVentasMes;
 function iniciales(n){return n.split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');}
 function canAnular(){return (currentRole==="admin"||ROLES[currentRole]?.anular===true)&&!soloLectura();}
 function canFacturar(){return (currentRole==="admin"||ROLES[currentRole]?.facturar===true)&&!soloLectura();}
