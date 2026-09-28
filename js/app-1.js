@@ -7,6 +7,10 @@ const FEL_BACKEND_URL = 'https://sefe-backend.onrender.com';
 // restringida por dominio en Google Cloud (sistema.se-fe.com), por eso puede ir
 // acá. Si queda vacía, el sistema usa OpenStreetMap como respaldo.
 const GOOGLE_MAPS_KEY = 'AIzaSyBWDjUmYyAfy-ZfvfRrSwYNDMbpmciZnpE';
+// Llave de OpenRouteService (openrouteservice.org): motor GRATIS del "Optimizar"
+// de rutas (matriz de tiempos por calles reales). Si queda vacía, el sistema usa
+// Google y, si tampoco, la línea recta. La key va restringida por dominio.
+const ORS_API_KEY = '';
 // Punto de salida del reparto (la bodega): de acá arranca el "orden por cercanía"
 // de las rutas. Poner las coordenadas reales; si queda null, el sistema pide
 // configurarla antes de ordenar.

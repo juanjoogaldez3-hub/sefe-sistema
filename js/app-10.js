@@ -967,6 +967,32 @@ function _matrizTiemposRecta(puntos){
   for(let i=0;i<N;i++)for(let j=0;j<N;j++)M[i][j]= i===j?0:(_distKm(puntos[i],puntos[j])/_VEL_CIUDAD_KMH*60);
   return M;
 }
+// Matriz de tiempos REALES de manejo (minutos) con OpenRouteService (GRATIS).
+// Un solo POST devuelve la matriz NxN completa (calles reales, OpenStreetMap).
+// Devuelve NxN o null si no se pudo (sin key, error de red, respuesta inválida).
+async function _matrizTiemposORS(puntos){
+  const N=puntos.length;
+  if(N<2||N>50)return null; // el plan gratis admite hasta 50 puntos por matriz
+  if(typeof ORS_API_KEY==='undefined'||!ORS_API_KEY)return null;
+  const locations=puntos.map(p=>[Number(p.lng),Number(p.lat)]); // ORS usa [lng,lat]
+  try{
+    const res=await fetch('https://api.openrouteservice.org/v2/matrix/driving-car',{
+      method:'POST',
+      headers:{'Authorization':ORS_API_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({locations,metrics:['duration']})
+    });
+    if(!res.ok)return null;
+    const data=await res.json();
+    const dur=data&&data.durations;
+    if(!Array.isArray(dur)||dur.length!==N)return null;
+    const M=Array.from({length:N},()=>new Array(N).fill(null));
+    for(let i=0;i<N;i++)for(let j=0;j<N;j++){
+      const v=dur[i]&&dur[i][j];
+      M[i][j]=(v!=null)?(v/60):(_distKm(puntos[i],puntos[j])/_VEL_CIUDAD_KMH*60);
+    }
+    return M;
+  }catch(e){ return null; }
+}
 // Matriz de tiempos REALES de manejo (minutos) con Google Distance Matrix.
 // Usa el tiempo TÍPICO por calles (SIN tráfico), a propósito: así factura en el
 // tier "Essentials" de la Distance Matrix (10,000 gratis/mes, $5/1,000) en vez
@@ -1060,7 +1086,7 @@ function _ordenarCercaniaPura(docs,paradas){
 // los tiempos de manejo reales (Google, con respaldo de línea recta). Calcula la
 // hora estimada de llegada (ETA) a cada parada = salida + manejo + minutos/entrega.
 // Heurística: inserción por urgencia + mejora 2-opt (respetando las horas límite).
-// Devuelve {n, motor:'google'|'recta', tarde}.
+// Devuelve {n, motor:'ors'|'google'|'recta', tarde}.
 async function _ordenarPorCercania(docs,paradas){
   const bod=(typeof SEFE_BODEGA!=='undefined')?SEFE_BODEGA:null;
   if(!bod||bod.lat==null){toast('Falta la bodega','Configurá el punto de la bodega para ordenar la ruta.',true);return {n:0};}
@@ -1071,7 +1097,9 @@ async function _ordenarPorCercania(docs,paradas){
   }
   const N=conPin.length;
   const puntos=[{lat:bod.lat,lng:bod.lng},...conPin.map(x=>x.pt)]; // 0 = bodega
-  let M=await _matrizTiemposGoogle(puntos), motor='google';
+  // Motor de tiempos: ORS (gratis) primero, luego Google, y por último línea recta.
+  let M=await _matrizTiemposORS(puntos), motor='ors';
+  if(!M){ M=await _matrizTiemposGoogle(puntos); motor='google'; }
   if(!M){ M=_matrizTiemposRecta(puntos); motor='recta'; }
   const salida=_parseMinHora((typeof SEFE_REPARTO!=='undefined'&&SEFE_REPARTO.salida))||510;
   const serv=(typeof SEFE_REPARTO!=='undefined'&&SEFE_REPARTO.minPorEntrega)||20;
@@ -1267,7 +1295,7 @@ function asignarMasivo(){
         // Reordena TODA la ruta pendiente de ese piloto (async: Google + respaldo).
         const rutaPiloto=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
         _ordenarPorCercania(rutaPiloto,_paradasPiloto(pid)).then(({n,motor,tarde})=>{
-          if(n){renderDespachos();toast('🧭 Ruta optimizada',(motor==='google'?'Con tiempos reales de Google · ':'')+n+' paradas con hora de llegada.'+(tarde?' ⚠ '+tarde+' fuera de hora.':''));}
+          if(n){renderDespachos();toast('🧭 Ruta optimizada',((motor==='ors'||motor==='google')?'Con tiempos reales por calles · ':'')+n+' paradas con hora de llegada.'+(tarde?' ⚠ '+tarde+' fuera de hora.':''));}
         });
       }
     });

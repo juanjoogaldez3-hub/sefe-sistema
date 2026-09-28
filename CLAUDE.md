@@ -89,25 +89,19 @@ no existe no rompe nada) y encender la función con el SQL después.
   última fila, y los documentos sin los PDF/XML). Lo que queda para más
   adelante es no bajar *todos* los documentos/abonos/movimientos cuando
   el negocio crezca mucho (paginar o cargar bajo demanda). No urge.
-- **TAREA PENDIENTE — Optimizador con OpenRouteService (gratis)**: hoy el
-  botón "Optimizar" de Despachos usa la Distance Matrix de Google
-  (`_matrizTiemposGoogle` en `js/app-10.js`), tier Essentials: 10.000
-  elementos gratis/mes y $5/1.000 después. Con uso diario de 2 rutas de 20
-  serían ~$47/mes al terminar la prueba de $300 de Google (10 dic 2026).
-  Juanjo pidió cambiar el motor a **OpenRouteService (ORS)** — mismo
-  trabajo (matriz de tiempos por calles reales, OpenStreetMap) pero
-  **gratis** (~cientos de pedidos/día en su plan free). Plan:
-  1. Juanjo saca una API key gratis en openrouteservice.org (pasos
-     numerados en el chat cuando se retome).
-  2. Guardar la key donde van las credenciales.
-  3. Nuevo `_matrizTiemposORS(puntos)`: POST a
-     `https://api.openrouteservice.org/v2/matrix/driving-car` con
-     `locations` en `[lng,lat]` y `metrics:['duration']`; devuelve NxN en
-     minutos. Se usa **primero** en `_ordenarPorCercania`; Google queda de
-     respaldo (o se saca) y la línea recta como último respaldo.
-  4. No tocar los botones gratis (Ordenar por cercanía / Armar por zona).
-  Opcional: botón "Abrir en Waze" junto al de Google Maps (navegación,
-  también gratis). Nota: Waze NO tiene API de matriz, solo navegación.
+- **Optimizador con OpenRouteService (gratis) — CÓDIGO LISTO, falta la key**:
+  el "Optimizar" de Despachos ya usa ORS primero (gratis, calles reales),
+  con Google de respaldo y línea recta como último recurso.
+  `_matrizTiemposORS(puntos)` en `js/app-10.js` pega a
+  `https://api.openrouteservice.org/v2/matrix/driving-car` (locations en
+  `[lng,lat]`, `metrics:['duration']`) y está cableado primero en
+  `_ordenarPorCercania`. **Solo falta que Juanjo saque la API key gratis en
+  openrouteservice.org y se pegue en `ORS_API_KEY` (js/app-1.js).** Con la
+  key vacía el sistema usa Google (tier Essentials: 10.000 elementos
+  gratis/mes, $5/1.000 después; prueba de $300 de Google hasta 10 dic 2026).
+  Los botones "Ordenar por cercanía" y "Armar por zona" siguen gratis.
+  Opcional pendiente: botón "Abrir en Waze" por entrega (navegación, gratis;
+  Waze NO tiene API de matriz, solo navegación).
 
 ## Idioma
 
