@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 26 migraciones una por una.
+-- secuencias. Reemplaza correr las 27 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 26 migraciones, en este orden:
+-- Incluye 27 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -43,6 +43,7 @@
 --   24. 20260909120000_cliente_ubicacion.sql
 --   25. 20260925120000_paradas_ruta.sql
 --   26. 20260925140000_amb_recurrencia_historial.sql
+--   27. 20260928120000_usuarios_dashboard_layout.sql
 -- ============================================================
 
 
@@ -2107,4 +2108,23 @@ alter table public.ctrl_ambientales
   add column if not exists frecuencia_valor  integer,
   add column if not exists frecuencia_unidad text,
   add column if not exists historial         jsonb not null default '[]'::jsonb;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260928120000_usuarios_dashboard_layout.sql            ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Usuarios — Acomodo personal del dashboard
+-- ============================================================
+-- Guarda por usuario el orden de los paneles del dashboard y cuáles ocultó,
+-- así cada quien lo acomoda a su gusto y lo ve igual en cualquier dispositivo.
+-- Formato: { "order": ["panel-bloque-docs", ...], "hidden": ["panel-bloque-stock", ...] }
+--
+-- La tabla usuarios ya tiene RLS; es una columna nueva, las políticas de la
+-- tabla la cubren. Seguro de correr de más: usa 'add column if not exists'.
+-- ============================================================
+
+alter table public.usuarios
+  add column if not exists dashboard_layout jsonb;
 

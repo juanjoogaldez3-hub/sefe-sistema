@@ -462,3 +462,15 @@
 /* Número dentro del pin en los mapas de ruta (respaldo OSM/Leaflet) */
 .rd-num{background:transparent;border:0;box-shadow:none;color:#fff;font-weight:700;font-size:11px;margin-top:-30px}
 .rd-num::before{display:none}
+
+/* ── Dashboard personalizable (reordenar + ocultar paneles) ── */
+#dash-tools{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px}
+#dash-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start}
+#dash-grid .dash-wide{grid-column:1/-1}
+@media(max-width:820px){#dash-grid{grid-template-columns:1fr}#dash-grid .dash-wide{grid-column:auto}}
+#dash-grid.editando .dash-panel{outline:2px dashed var(--lime);border-radius:12px;cursor:grab}
+#dash-grid.editando .dash-panel.dash-dragging{opacity:.45}
+#dash-grid.editando .dash-panel.dash-userhidden{opacity:.5}
+.dash-ctrl{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 10px;background:var(--surface-2);border-bottom:1px solid var(--line);border-radius:12px 12px 0 0}
+.dash-ctrl .dash-grip{cursor:grab;font-size:16px;color:var(--muted);letter-spacing:2px}
+.dash-ctrl .dash-eye{background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:13px;padding:2px 8px}

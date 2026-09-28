@@ -730,6 +730,8 @@ async function verificarSesion(){
       const u=await buscarMiUsuario(data.session.user, email);
       if(u){
         currentUser=u.nombre;currentRole=u.rol;
+        currentUserId=u.id!=null?u.id:null;
+        currentDashLayout=(u.dashboardLayout&&typeof u.dashboardLayout==='object')?u.dashboardLayout:{order:[],hidden:[]};
         $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
         aplicarPermisosUI();
         entrarVistaInicial();
