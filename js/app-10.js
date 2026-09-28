@@ -1035,6 +1035,10 @@ function _tardiosRuta(orden,M,dl,salida,serv){
   for(const j of orden){const arr=t+M[cur][j+1]; if(dl[j]<Infinity&&arr>dl[j]+0.001)tarde++; t=arr+serv; cur=j+1;}
   return tarde;
 }
+// Nombre legible del motor de tiempos usado para optimizar (para avisar al usuario).
+function _motorLbl(motor){
+  return motor==='ors'?'OpenRouteService (gratis)':motor==='google'?'Google':'estimación en línea recta';
+}
 // "Stops" genéricos: entregas (por la ubicación de su cliente) y paradas
 // manuales, unificados. Cada uno trae su punto (o null si no tiene ubicación),
 // su hora límite y un callback aplicar(orden,eta) que graba el resultado.
@@ -1295,7 +1299,11 @@ function asignarMasivo(){
         // Reordena TODA la ruta pendiente de ese piloto (async: Google + respaldo).
         const rutaPiloto=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
         _ordenarPorCercania(rutaPiloto,_paradasPiloto(pid)).then(({n,motor,tarde})=>{
-          if(n){renderDespachos();toast('🧭 Ruta optimizada',((motor==='ors'||motor==='google')?'Con tiempos reales por calles · ':'')+n+' paradas con hora de llegada.'+(tarde?' ⚠ '+tarde+' fuera de hora.':''));}
+          if(n){
+            renderDespachos();
+            if(typeof logAudit==='function')logAudit('Ruta optimizada','Motor: '+_motorLbl(motor)+' · '+n+' paradas'+(tarde?' · '+tarde+' fuera de hora':''));
+            toast('🧭 Ruta optimizada','Motor: '+_motorLbl(motor)+' · '+n+' paradas con hora de llegada.'+(tarde?' ⚠ '+tarde+' fuera de hora.':''));
+          }
         });
       }
     });
