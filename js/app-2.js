@@ -41,6 +41,7 @@ const DB_WIDGETS=[
   {key:'panel_stocktbl',lbl:'Panel — Stock bajo',             grp:'Paneles'},
   {key:'panel_ped',     lbl:'Panel — Pedidos / resumen',      grp:'Paneles'},
   {key:'panel_miscobros',lbl:'Panel — Mis clientes con vencido (Ventas)', grp:'Paneles'},
+  {key:'panel_ambientales',lbl:'Panel — Ambientales próximos',    grp:'Paneles'},
   {key:'alerta_venc',   lbl:'Alerta — Facturas vencidas',     grp:'Alertas'},
   {key:'alerta_stock',  lbl:'Alerta — Stock bajo / sin stock',grp:'Alertas'},
   {key:'alerta_oc',     lbl:'Alerta — OC sin recibir',        grp:'Alertas'},
@@ -210,6 +211,32 @@ function renderPanel(){
         :'<tr><td colspan="3" class="empty" style="font-size:12px">Ningún cliente tuyo con saldo vencido 🎉</td></tr>';
       bloqueMisCob.style.display='';
     }else bloqueMisCob.style.display='none';
+  }
+
+  // ── Panel: Ambientales próximos (recargas que tocan) ────────
+  const bloqueAmb=document.getElementById('panel-bloque-amb');
+  if(bloqueAmb){
+    // Encendido por defecto para quien ve Controles; se puede apagar por rol
+    // en la config del dashboard (widget panel_ambientales).
+    const ambCfg=dashboardConfig[currentRole]?.panel_ambientales;
+    const ambOn=(ambCfg===undefined)?true:ambCfg;
+    if(ambOn && typeof tienePermiso==='function' && tienePermiso('controles') && typeof ambServicios!=='undefined'){
+      const hoyA=fechaHoyGT();
+      const nomA=id=>{const c=clientes.find(x=>x.id===id);return c?c.nombre:('Cliente '+id);};
+      // Con próximo servicio, del más urgente (vencido/pronto) al menos.
+      const lista=ambServicios.filter(s=>s.proximo).slice()
+        .sort((a,b)=>String(a.proximo).localeCompare(String(b.proximo))).slice(0,8);
+      $('#panel-amb').innerHTML=lista.length?lista.map(s=>{
+        const p=String(s.proximo).slice(0,10);
+        const dias=Math.ceil((new Date(p)-new Date(hoyA))/86400000);
+        const color=dias<0?'var(--danger)':dias<=7?'var(--warn)':'var(--muted)';
+        const cuando=dias<0?`Vencido ${Math.abs(dias)}d`:dias===0?'Hoy':`en ${dias}d`;
+        const badge=dias<0?'b-danger':dias<=7?'b-warn':'b-ok';
+        const estLbl=dias<0?'Vencido':dias<=7?'Pronto':'Al día';
+        return `<tr style="cursor:pointer" onclick="go('controles')"><td style="font-weight:600;font-size:12.5px">${escHtml(nomA(s.clienteId))}</td><td style="font-size:12px;color:var(--muted)">${escHtml(s.nota||s.aroma||'—')}</td><td style="font-size:12px;color:${color};font-weight:600">${fdate(p)} · ${cuando}</td><td><span class="badge ${badge}">${estLbl}</span></td></tr>`;
+      }).join(''):'<tr><td colspan="4" class="empty" style="font-size:12px">Sin ambientales programados</td></tr>';
+      bloqueAmb.style.display='';
+    }else bloqueAmb.style.display='none';
   }
 
   // ── Panel 3: Stock bajo ──────────────────────────────────

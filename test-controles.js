@@ -117,6 +117,13 @@ ok('el dashboard arma la alerta de ambientales vencidos', /recarga vencida/.test
 ok('la alerta respeta el permiso de Controles', /tienePermiso\('controles'\)/.test(src));
 ok('distingue vencidos de "por vencer en 7 días"', /por recargar en los próximos 7 días/.test(src));
 
+console.log('\n═══ Ambientales · panel en el dashboard ═══');
+ok('el widget está registrado (DB_WIDGETS panel_ambientales)', /key:'panel_ambientales'/.test(src));
+ok('index.html tiene el panel (#panel-bloque-amb / #panel-amb)', /id="panel-bloque-amb"/.test(html) && /id="panel-amb"/.test(html));
+ok('renderPanel arma el panel gated por Controles', /panel-bloque-amb/.test(src) && /tienePermiso\('controles'\)[\s\S]{0,200}ambServicios/.test(src));
+ok('el panel muestra próximo + cuánto falta y va a Controles', /Vencido \$\{Math\.abs\(dias\)\}d/.test(src) && /onclick="go\('controles'\)"/.test(src));
+ok('el panel viene encendido por defecto (se puede apagar por rol)', /const ambOn=\(ambCfg===undefined\)\?true:ambCfg/.test(src));
+
 console.log('\n═══ Ambientales · reporte PDF / Excel ═══');
 ok('existe el reporte PDF (reporteAmbientalesPDF)', /function reporteAmbientalesPDF\(/.test(src) && /window\.reporteAmbientalesPDF\s*=/.test(src));
 ok('existe el reporte Excel (reporteAmbientalesExcel)', /async function reporteAmbientalesExcel\(/.test(src) && /window\.reporteAmbientalesExcel\s*=/.test(src));
