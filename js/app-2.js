@@ -42,6 +42,8 @@ const DB_WIDGETS=[
   {key:'panel_ped',     lbl:'Panel — Pedidos / resumen',      grp:'Paneles'},
   {key:'panel_miscobros',lbl:'Panel — Mis clientes con vencido (Ventas)', grp:'Paneles'},
   {key:'panel_ambientales',lbl:'Panel — Ambientales próximos',    grp:'Paneles'},
+  {key:'panel_ventas6',  lbl:'Panel — Ventas últimos 6 meses',    grp:'Paneles'},
+  {key:'panel_desphoy',  lbl:'Panel — Despachos de hoy',          grp:'Paneles'},
   {key:'alerta_venc',   lbl:'Alerta — Facturas vencidas',     grp:'Alertas'},
   {key:'alerta_stock',  lbl:'Alerta — Stock bajo / sin stock',grp:'Alertas'},
   {key:'alerta_oc',     lbl:'Alerta — OC sin recibir',        grp:'Alertas'},
@@ -69,6 +71,8 @@ const DASH_PANELS=[
   {id:'panel-bloque-seguimiento', lbl:'Seguimiento de clientes'},
   {id:'panel-bloque-miscobros', lbl:'Mis clientes con vencido'},
   {id:'panel-bloque-amb', lbl:'Ambientales próximos'},
+  {id:'panel-bloque-ventas6', lbl:'Ventas últimos 6 meses'},
+  {id:'panel-bloque-desphoy', lbl:'Despachos de hoy'},
 ];
 let _dashEdit=false;
 function _dashLay(){ if(typeof currentDashLayout!=='object'||!currentDashLayout)currentDashLayout={order:[],hidden:[]}; if(!Array.isArray(currentDashLayout.order))currentDashLayout.order=[]; if(!Array.isArray(currentDashLayout.hidden))currentDashLayout.hidden=[]; return currentDashLayout; }
@@ -147,6 +151,9 @@ function renderPanel(){
   const hoy=new Date();hoy.setHours(0,0,0,0);
   const semana=new Date(hoy);semana.setDate(semana.getDate()+7);
   const mes=new Date(hoy.getFullYear(),hoy.getMonth(),1);
+  // Mes pasado HASTA EL MISMO DÍA (comparativo justo, no mes completo).
+  const mesAntIni=new Date(hoy.getFullYear(),hoy.getMonth()-1,1);
+  const mesAntFin=new Date(hoy.getFullYear(),hoy.getMonth()-1,hoy.getDate(),23,59,59,999);
   const rol=currentRole;
   const esVentasRol=rol==='ventas';
   const esBodega=rol==='bodega';
@@ -157,6 +164,8 @@ function renderPanel(){
   const misDocsBase=esVentasRol&&miVendedorId()?documentos.filter(d=>d.vendedorId===miVendedorId()):documentos;
   const facturasMes=misDocsBase.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc==='cambiaria'&&new Date(d.creada)>=mes);
   const ventasMes=facturasMes.reduce((s,d)=>s+d.totales.total,0);
+  // Ventas del mes pasado al mismo día (para el comparativo del KPI).
+  const ventasMesAnt=misDocsBase.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc==='cambiaria'&&(()=>{const f=new Date(d.creada);return f>=mesAntIni&&f<=mesAntFin;})()).reduce((s,d)=>s+d.totales.total,0);
   const porCobrar=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+arInfo(d).saldo,0);
   const vencidos=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&arInfo(d).vencido);
   const pedAbiertos=misDocsBase.filter(d=>d.tipoDoc==='pedido'&&d.estado==='abierto');
@@ -182,6 +191,7 @@ function renderPanel(){
   const vencidosMis=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&arInfo(d).vencido);
   // Cobrado en el mes actual (todos los abonos no anulados con fecha dentro del mes)
   let cobradoMes=0;documentos.forEach(d=>(d.abonos||[]).forEach(a=>{if(!a.anulado&&a.fecha&&new Date(a.fecha)>=mes)cobradoMes+=Number(a.monto);}));
+  let cobradoMesAnt=0;documentos.forEach(d=>(d.abonos||[]).forEach(a=>{if(a.anulado||!a.fecha)return;const f=new Date(a.fecha);if(f>=mesAntIni&&f<=mesAntFin)cobradoMesAnt+=Number(a.monto);}));
   // Monto que vence en los próximos 7 días (porVencer ya está calculado arriba)
   const porVencerMonto=porVencer.reduce((s,d)=>s+arInfo(d).saldo,0);
 
@@ -209,22 +219,29 @@ function renderPanel(){
   </div>`;
 
   // ── KPIs ──────────────────────────────────────────────────
+  // Comparativo vs el mismo día del mes pasado (flechita ▲▼ %).
+  const _cmp=(act,ant)=>{
+    if(!(ant>0))return act>0?'<span class="kpi-cmp up" title="sin ventas el mes pasado a esta fecha">▲ nuevo</span>':'';
+    const pct=Math.round((act-ant)/ant*100);
+    if(pct===0)return '<span class="kpi-cmp flat" title="igual que el mes pasado a esta fecha">= 0%</span>';
+    return `<span class="kpi-cmp ${pct>0?'up':'down'}" title="vs el mismo día del mes pasado (${money(ant)})">${pct>0?'▲':'▼'} ${Math.abs(pct)}%</span>`;
+  };
   const kpis=[];
-  if(dbConf('kpi_ventas'))kpis.push({ic:'i-green',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:esVentasRol?'Mis ventas del mes':'Ventas del mes',val:money(ventasMes),sub:facturasMes.length+' facturas certificadas'});
-  if(dbConf('kpi_cobrar'))kpis.push({ic:vencidos.length?'i-danger':'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9.5a2.5 2.5 0 0 0-2.5-2h-1a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 1 0 5h-1A2.5 2.5 0 0 1 9 14.5"/>',lbl:'Por cobrar',val:money(porCobrar),sub:vencidos.length?vencidos.length+' vencida'+(vencidos.length!==1?'s':''):'al día'});
-  if(dbConf('kpi_pedidos'))kpis.push({ic:pedAbiertos.length?'i-warn':'i-blue',svg:'<path d="M5 7h14M5 12h14M5 17h9"/><circle cx="19" cy="17" r="2.5"/>',lbl:esVentasRol?'Mis pedidos abiertos':'Pedidos abiertos',val:pedAbiertos.length,sub:'sin facturar'});
-  if(dbConf('kpi_stock'))kpis.push({ic:sinStock.length?'i-danger':stockBajo.length?'i-warn':'i-lime',svg:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',lbl:'Stock bajo',val:stockBajo.length+sinStock.length,sub:sinStock.length?sinStock.length+' sin stock':'por reabastecer'});
-  if(dbConf('kpi_clientes'))kpis.push({ic:'i-lime',svg:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',lbl:'Mis clientes',val:misClis.length,sub:'asignados a mí'});
-  if(dbConf('kpi_facturar'))kpis.push({ic:'i-warn',svg:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',lbl:esConta?'Facturas del mes':'Por facturar',val:esConta?facturasMes.length:docsFacturar.length,sub:esConta?money(ventasMes)+' certificados':'documentos abiertos'});
-  if(dbConf('kpi_ocpend'))kpis.push({ic:ocPend.length?'i-warn':'i-lime',svg:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',lbl:'OC pendientes',val:ocPend.length,sub:'de recibir'});
+  if(dbConf('kpi_ventas'))kpis.push({ic:'i-green',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:esVentasRol?'Mis ventas del mes':'Ventas del mes',val:money(ventasMes),sub:facturasMes.length+' facturas certificadas',view:'documentos',cmp:_cmp(ventasMes,ventasMesAnt)});
+  if(dbConf('kpi_cobrar'))kpis.push({ic:vencidos.length?'i-danger':'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9.5a2.5 2.5 0 0 0-2.5-2h-1a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 1 0 5h-1A2.5 2.5 0 0 1 9 14.5"/>',lbl:'Por cobrar',val:money(porCobrar),sub:vencidos.length?vencidos.length+' vencida'+(vencidos.length!==1?'s':''):'al día',view:'cobros'});
+  if(dbConf('kpi_pedidos'))kpis.push({ic:pedAbiertos.length?'i-warn':'i-blue',svg:'<path d="M5 7h14M5 12h14M5 17h9"/><circle cx="19" cy="17" r="2.5"/>',lbl:esVentasRol?'Mis pedidos abiertos':'Pedidos abiertos',val:pedAbiertos.length,sub:'sin facturar',view:'documentos'});
+  if(dbConf('kpi_stock'))kpis.push({ic:sinStock.length?'i-danger':stockBajo.length?'i-warn':'i-lime',svg:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',lbl:'Stock bajo',val:stockBajo.length+sinStock.length,sub:sinStock.length?sinStock.length+' sin stock':'por reabastecer',view:'inventario'});
+  if(dbConf('kpi_clientes'))kpis.push({ic:'i-lime',svg:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',lbl:'Mis clientes',val:misClis.length,sub:'asignados a mí',view:'clientes'});
+  if(dbConf('kpi_facturar'))kpis.push({ic:'i-warn',svg:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',lbl:esConta?'Facturas del mes':'Por facturar',val:esConta?facturasMes.length:docsFacturar.length,sub:esConta?money(ventasMes)+' certificados':'documentos abiertos',view:'documentos'});
+  if(dbConf('kpi_ocpend'))kpis.push({ic:ocPend.length?'i-warn':'i-lime',svg:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',lbl:'OC pendientes',val:ocPend.length,sub:'de recibir',view:'compras'});
   // KPI: Por cobrar de mis clientes (Ventas)
-  if(dbConf('kpi_cobrarmis')||esVentasRol)kpis.push({ic:vencidosMis.length?'i-danger':'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9.5a2.5 2.5 0 0 0-2.5-2h-1a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 1 0 5h-1A2.5 2.5 0 0 1 9 14.5"/>',lbl:'Por cobrar (mis clientes)',val:money(porCobrarMis),sub:vencidosMis.length?vencidosMis.length+' vencida'+(vencidosMis.length!==1?'s':''):'al día'});
+  if(dbConf('kpi_cobrarmis')||esVentasRol)kpis.push({ic:vencidosMis.length?'i-danger':'i-warn',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9.5a2.5 2.5 0 0 0-2.5-2h-1a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 1 0 5h-1A2.5 2.5 0 0 1 9 14.5"/>',lbl:'Por cobrar (mis clientes)',val:money(porCobrarMis),sub:vencidosMis.length?vencidosMis.length+' vencida'+(vencidosMis.length!==1?'s':''):'al día',view:'cobros'});
   // KPI: Cobrado este mes (Cobros, Contabilidad, Admin, Gerencia)
-  if(dbConf('kpi_cobradomes')||['cobros','contabilidad','admin','gerencia'].includes(rol))kpis.push({ic:'i-green',svg:'<path d="M20 6 9 17l-5-5"/>',lbl:'Cobrado este mes',val:money(cobradoMes),sub:'abonos recibidos'});
+  if(dbConf('kpi_cobradomes')||['cobros','contabilidad','admin','gerencia'].includes(rol))kpis.push({ic:'i-green',svg:'<path d="M20 6 9 17l-5-5"/>',lbl:'Cobrado este mes',val:money(cobradoMes),sub:'abonos recibidos',view:'cobros',cmp:_cmp(cobradoMes,cobradoMesAnt)});
   // KPI: Por vencer en los próximos 7 días (Cobros, Contabilidad, Admin, Gerencia)
-  if(dbConf('kpi_porvencer')||['cobros','contabilidad','admin','gerencia'].includes(rol))kpis.push({ic:porVencer.length?'i-warn':'i-lime',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'Por vencer (7 días)',val:money(porVencerMonto),sub:porVencer.length?porVencer.length+' factura'+(porVencer.length!==1?'s':''):'ninguna'});
+  if(dbConf('kpi_porvencer')||['cobros','contabilidad','admin','gerencia'].includes(rol))kpis.push({ic:porVencer.length?'i-warn':'i-lime',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'Por vencer (7 días)',val:money(porVencerMonto),sub:porVencer.length?porVencer.length+' factura'+(porVencer.length!==1?'s':''):'ninguna',view:'cobros'});
   if(!kpis.length)kpis.push({ic:'i-blue',svg:'<path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/>',lbl:'Bienvenido',val:'—',sub:'Dashboard de SEFE'});
-  $('#kpis').innerHTML=kpis.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-body"><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div></div>`).join('');
+  $('#kpis').innerHTML=kpis.map(x=>`<div class="kpi${x.view?' kpi-click':''}"${x.view?` onclick="go('${x.view}')" title="Ir a ${x.lbl}"`:''}><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-body"><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.cmp?x.cmp+' · ':''}${x.sub}</div></div></div>`).join('');
 
   // ── Alertas ──────────────────────────────────────────────
   const alertas=[];
@@ -352,10 +369,48 @@ function renderPanel(){
   }else document.getElementById('panel-bloque-ped').style.display='none';
 
   renderSeguimiento();
+
+  // ── Panel: Ventas últimos 6 meses (mini-gráfico de barras) ──
+  const bqV6=document.getElementById('panel-bloque-ventas6');
+  if(bqV6){
+    const cfgV6=dashboardConfig[currentRole]?.panel_ventas6;
+    const onV6=(cfgV6===undefined)?(dbConf('kpi_ventas')||['admin','gerencia','auditoria','contabilidad','cobros','ventas'].includes(rol)):cfgV6;
+    if(onV6){
+      const MES3=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      const meses6=[]; for(let k=5;k>=0;k--){const d=new Date(hoy.getFullYear(),hoy.getMonth()-k,1);meses6.push({y:d.getFullYear(),m:d.getMonth()});}
+      const tot6=meses6.map(mm=>{const ini=new Date(mm.y,mm.m,1),fin=new Date(mm.y,mm.m+1,1);return misDocsBase.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc==='cambiaria'&&(()=>{const f=new Date(d.creada);return f>=ini&&f<fin;})()).reduce((s,d)=>s+d.totales.total,0);});
+      const max6=Math.max(1,...tot6);
+      const barras6=meses6.map((mm,i)=>{const h=Math.max(2,Math.round(tot6[i]/max6*100));const act=i===meses6.length-1;return `<div class="v6-col" title="${MES3[mm.m]} ${mm.y}: ${money(tot6[i])}"><div class="v6-val">${_kMoney(tot6[i])}</div><div class="v6-bar-wrap"><div class="v6-bar${act?' act':''}" style="height:${h}%"></div></div><div class="v6-lbl">${MES3[mm.m]}</div></div>`;}).join('');
+      $('#panel-ventas6').innerHTML=`<div class="v6-chart">${barras6}</div>`;
+      bqV6.style.display='';
+    }else bqV6.style.display='none';
+  }
+
+  // ── Panel: Despachos de hoy (para logística) ──
+  const bqDH=document.getElementById('panel-bloque-desphoy');
+  if(bqDH){
+    const cfgDH=dashboardConfig[currentRole]?.panel_desphoy;
+    const onDH=(cfgDH===undefined)?(typeof tienePermiso==='function'&&tienePermiso('despachos')):cfgDH;
+    if(onDH && typeof docsDespachables==='function' && typeof estadoEntrega==='function'){
+      const tdos=docsDespachables();
+      const _est=d=>estadoEntrega(d);
+      const sinA=tdos.filter(d=>_est(d)==='sin').length;
+      const prep=tdos.filter(d=>_est(d)==='asignado'||_est(d)==='preparado').length;
+      const ruta=tdos.filter(d=>_est(d)==='ruta').length;
+      const hoyGT=(typeof fechaHoyGT==='function')?fechaHoyGT():new Date().toISOString().slice(0,10);
+      const entHoy=tdos.filter(d=>{if(_est(d)!=='entregado')return false;const f=d.entregaInfo&&d.entregaInfo.fecha;const fl=(typeof fechaLocalDe==='function')?fechaLocalDe(f):String(f||'').slice(0,10);return fl===hoyGT;}).length;
+      const st=(lbl,val,col)=>`<div class="dh-stat" onclick="go('despachos')"><div class="dh-val" style="color:${col}">${val}</div><div class="dh-lbl">${lbl}</div></div>`;
+      $('#panel-desphoy').innerHTML=`<div class="dh-row">${st('Sin asignar',sinA,sinA?'var(--warn)':'var(--muted)')}${st('Asignadas / prep.',prep,'var(--muted)')}${st('En ruta',ruta,ruta?'var(--warn)':'var(--muted)')}${st('Entregadas hoy',entHoy,'var(--green)')}</div>`;
+      bqDH.style.display='';
+    }else bqDH.style.display='none';
+  }
+
   // Aplicar el acomodo personal (orden + ocultos) y, si está activo, el modo edición.
   _aplicarLayoutDashboard();
   _dashEditUI();
 }
+// Monto compacto para el mini-gráfico: Q80k, Q1.2k, Q950…
+function _kMoney(n){ n=Number(n)||0; if(n>=1000)return 'Q'+(n/1000).toFixed(n>=10000?0:1)+'k'; return 'Q'+Math.round(n); }
 
 // Días sin comprar a partir de los cuales un cliente se considera "perdido" y
 // se separa del seguimiento (default 180, editable y recordado en el navegador).

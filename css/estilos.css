@@ -474,3 +474,28 @@
 .dash-ctrl{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 10px;background:var(--surface-2);border-bottom:1px solid var(--line);border-radius:12px 12px 0 0}
 .dash-ctrl .dash-grip{cursor:grab;font-size:16px;color:var(--muted);letter-spacing:2px}
 .dash-ctrl .dash-eye{background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:13px;padding:2px 8px}
+
+/* ── KPIs clicables + comparativo (▲▼ vs mes pasado) ── */
+.kpi.kpi-click{cursor:pointer;transition:transform .08s ease,box-shadow .12s ease}
+.kpi.kpi-click:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.10)}
+.kpi-cmp{font-weight:700}
+.kpi-cmp.up{color:#2e7d32}
+.kpi-cmp.down{color:#b03535}
+.kpi-cmp.flat{color:var(--muted-2)}
+
+/* ── Mini-gráfico de ventas (últimos 6 meses) ── */
+.v6-chart{display:flex;align-items:flex-end;gap:10px;height:160px;padding:6px 4px 0}
+.v6-col{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;gap:4px}
+.v6-col .v6-bar-wrap{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center}
+.v6-bar{width:70%;max-width:46px;background:var(--lime);border-radius:6px 6px 0 0;min-height:2px;transition:height .2s ease}
+.v6-bar.act{background:var(--green)}
+.v6-col .v6-lbl{font-size:11px;color:var(--muted);font-weight:600}
+.v6-col .v6-val{font-size:10.5px;color:var(--muted-2);font-weight:700}
+
+/* ── Despachos de hoy (stats) ── */
+.dh-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:520px){.dh-row{grid-template-columns:repeat(2,1fr)}}
+.dh-stat{border:1px solid var(--line);border-radius:10px;padding:10px 6px;text-align:center;cursor:pointer;transition:background .1s ease}
+.dh-stat:hover{background:var(--surface-2)}
+.dh-stat .dh-val{font-size:24px;font-weight:800;line-height:1}
+.dh-stat .dh-lbl{font-size:11px;color:var(--muted);margin-top:4px}
