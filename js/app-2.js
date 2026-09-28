@@ -703,10 +703,15 @@ window.updLive=(i,k,v)=>{
 };
 window.rm=i=>{cart.splice(i,1);render();};
 
+let _guardandoPedido=false; // traba anti doble-clic: evita pedidos duplicados
 $('#f-go').onclick=async()=>{
+  if(_guardandoPedido)return; // ya se está guardando este pedido; ignorar el 2º clic
   const cli=clientes.find(c=>c.id===Number($('#f-cli').value));
   if(!cli){toast('Seleccioná un cliente','Buscá por nombre o NIT en el campo de cliente',true);return;}
   if(esVentas()&&cli.vendedorId!==miVendedorId()){toast('Cliente no asignado','Solo podés crear pedidos para tus clientes',true);return;}
+  _guardandoPedido=true;
+  const _btnGo=document.getElementById('f-go'); if(_btnGo)_btnGo.disabled=true;
+  try{
   const total=_cent(cart.reduce((s,it)=>s+_impLin(it),0));
   const totales={total,baseSinIva:total/1.12,iva:total-total/1.12};
   // Guardar los precios redondeados a centavos (como SAT), para que el detalle
@@ -750,6 +755,7 @@ $('#f-go').onclick=async()=>{
     else toast('✓ Pedido ingresado','PED-'+padn(doc.numero)+' · inventario rebajado. Facturalo o convertilo en Documentos.');
   }
   cart=[];if($('#f-cli'))$('#f-cli').value='';if($('#f-cli-search'))$('#f-cli-search').value='';if(typeof actualizarVendedorInfo==='function')actualizarVendedorInfo(null);$('#f-oc').value='';$('#f-obs').value='';if($('#f-nota'))$('#f-nota').value='';if($('#f-subvend'))$('#f-subvend').value='';if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';if($('#f-nit-wrap'))$('#f-nit-wrap').style.display='none';limpiarBorrador();initForm();render();go('documentos');
+  }finally{ _guardandoPedido=false; if(_btnGo)_btnGo.disabled=false; }
 };
 
 function rowDoc(withActions){
