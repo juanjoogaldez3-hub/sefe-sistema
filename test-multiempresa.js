@@ -13,6 +13,7 @@ const fs  = require('fs');
 const src = require('./test-fuente');                 // app-1..13.js concatenados
 const dbjs = fs.readFileSync(__dirname + '/db.js', 'utf8');
 const mig  = fs.readFileSync(__dirname + '/supabase/migrations/20260929190000_multiempresa_base.sql', 'utf8');
+const migBat = fs.readFileSync(__dirname + '/supabase/migrations/20260929210000_baterias_compartidas.sql', 'utf8');
 
 let fallos = 0, pruebas = 0;
 const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t + (c ? '' : '  → ' + (e || ''))); if (!c) fallos++; };
@@ -30,10 +31,15 @@ ok('sólo admin crea/edita/borra empresas', (mig.match(/sefe_es_admin\(\)/g)||[]
 ok('grant a authenticated', /grant select, insert, update, delete on public\.empresas to authenticated/.test(mig));
 
 console.log('\n═══ Migración: etiqueta empresa en tablas separadas ═══');
-const separadas = ['clientes','productos','documentos','abonos','cotizaciones','proveedores','compras','pagos_proveedor','cuentas_banco','movimientos_banco','creditos_cliente','cobros_ruta','ctrl_ambientales','ctrl_bat_tipos','ctrl_bat_cambios','ctrl_bat_entregas'];
-ok('lista las 16 tablas separadas', separadas.every(t => new RegExp("'"+t+"'").test(mig)), 'falta alguna en el array');
+const separadas = ['clientes','productos','documentos','abonos','cotizaciones','proveedores','compras','pagos_proveedor','cuentas_banco','movimientos_banco','creditos_cliente','cobros_ruta','ctrl_ambientales'];
+ok('lista las 13 tablas separadas', separadas.every(t => new RegExp("'"+t+"'").test(mig)), 'falta alguna en el array');
 ok('agrega la columna con DEFAULT SEFE (seguro de correr)', /add column if not exists empresa text not null default ''SEFE''/.test(mig));
 ok('normaliza NULLs viejos a SEFE', /update public\.%I set empresa=''SEFE'' where empresa is null/.test(mig));
+
+console.log('\n═══ Baterías es COMPARTIDO (corrección) ═══');
+ok('la migración correctiva quita empresa de las 3 tablas de baterías',
+   /ctrl_bat_tipos','ctrl_bat_cambios','ctrl_bat_entregas/.test(migBat) && /drop column if exists empresa/.test(migBat));
+ok('baterías NO cuenta como separada', !separadas.some(t => t.startsWith('ctrl_bat_')));
 
 console.log('\n═══ Migración: índices para el filtrado ═══');
 ok('índice en documentos(empresa)', /create index if not exists idx_documentos_empresa\s+on public\.documentos\(empresa\)/.test(mig));
@@ -60,9 +66,6 @@ console.log('\n═══ db.js: cada entidad separada lee su empresa ═══')
   ['cotización',   /function mapCotizacionFromDB[\s\S]*?empresa:c\.empresa\|\|'SEFE'/],
   ['crédito',      /function mapCreditoFromDB[\s\S]*?empresa:c\.empresa\|\|'SEFE'/],
   ['ambiental',    /function mapAmbServicioFromDB[\s\S]*?empresa:a\.empresa\|\|'SEFE'/],
-  ['batería tipo', /function mapBatTipoFromDB[\s\S]*?empresa:t\.empresa\|\|'SEFE'/],
-  ['batería cambio',/function mapBatCambioFromDB[\s\S]*?empresa:c\.empresa\|\|'SEFE'/],
-  ['batería entrega',/function mapBatEntregaFromDB[\s\S]*?empresa:e\.empresa\|\|'SEFE'/],
 ].forEach(([n,re]) => ok('map'+n+' incluye empresa', re.test(dbjs)));
 
 console.log('\n═══ app-*.js: globales multiempresa ═══');

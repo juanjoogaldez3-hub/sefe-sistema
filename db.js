@@ -1104,7 +1104,7 @@ if(typeof window!=='undefined'){window.guardarAmbServicio=guardarAmbServicio;win
 
 // ── Controles · Baterías (tipos/stock) ─────────────────────
 function mapBatTipoFromDB(t){
-  return { id:t.id, nombre:t.nombre||'', stock:Number(t.stock)||0, creado:t.creado, empresa:t.empresa||'SEFE' };
+  return { id:t.id, nombre:t.nombre||'', stock:Number(t.stock)||0, creado:t.creado };
 }
 async function guardarBatTipo(t){
   const row={ nombre:t.nombre, stock:Number(t.stock)||0 };
@@ -1130,8 +1130,7 @@ function mapBatCambioFromDB(c){
   return {
     id:c.id, clienteId:c.cliente_id, equipo:c.equipo||'', tipoId:c.tipo_id, pilotoId:c.piloto_id||null,
     cantidad:Number(c.cantidad)||0, fecha:c.fecha||null, proximo:c.proximo||null,
-    nota:c.nota||'', creadoPor:c.creado_por||'', creado:c.creado,
-    empresa:c.empresa||'SEFE'
+    nota:c.nota||'', creadoPor:c.creado_por||'', creado:c.creado
   };
 }
 async function guardarBatCambio(c){
@@ -1165,8 +1164,7 @@ if(typeof window!=='undefined'){
 function mapBatEntregaFromDB(e){
   return {
     id:e.id, pilotoId:e.piloto_id||null, tipoId:e.tipo_id, cantidad:Number(e.cantidad)||0,
-    fecha:e.fecha||null, nota:e.nota||'', creadoPor:e.creado_por||'', creado:e.creado,
-    empresa:e.empresa||'SEFE'
+    fecha:e.fecha||null, nota:e.nota||'', creadoPor:e.creado_por||'', creado:e.creado
   };
 }
 async function guardarBatEntrega(e){

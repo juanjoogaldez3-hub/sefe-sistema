@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 29 migraciones una por una.
+-- secuencias. Reemplaza correr las 30 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 29 migraciones, en este orden:
+-- Incluye 30 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -46,6 +46,7 @@
 --   27. 20260928120000_usuarios_dashboard_layout.sql
 --   28. 20260928140000_ajustes.sql
 --   29. 20260929190000_multiempresa_base.sql
+--   30. 20260929210000_baterias_compartidas.sql
 -- ============================================================
 
 
@@ -2310,4 +2311,34 @@ create index if not exists idx_productos_empresa         on public.productos(emp
 create index if not exists idx_abonos_empresa            on public.abonos(empresa);
 create index if not exists idx_movimientos_banco_empresa on public.movimientos_banco(empresa);
 create index if not exists idx_cotizaciones_empresa      on public.cotizaciones(empresa);
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260929210000_baterias_compartidas.sql                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Multiempresa — Baterías es COMPARTIDO (corrección)
+-- ============================================================
+-- En la Fase 0 (20260929190000) se separó baterías por empresa por
+-- corazonada. Se corrige: el control de baterías va MEZCLADO entre
+-- las dos empresas (stock, cambios y entregas se comparten), igual
+-- que la ruta. Se le quita la etiqueta `empresa` que no va a usar.
+--
+-- No se edita la migración anterior (ya aplicada): esta la corrige.
+-- Seguro de correr de más: 'if exists' / 'drop column if exists'.
+-- ============================================================
+
+do $$
+declare
+  t text;
+  tablas text[] := array['ctrl_bat_tipos','ctrl_bat_cambios','ctrl_bat_entregas'];
+begin
+  foreach t in array tablas loop
+    if exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+               where n.nspname='public' and c.relname=t and c.relkind='r') then
+      execute format('alter table public.%I drop column if exists empresa', t);
+    end if;
+  end loop;
+end $$;
 
