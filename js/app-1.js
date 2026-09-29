@@ -404,6 +404,9 @@ let ajustes={};
 // Meta de ventas del mes (número) configurada en el dashboard; 0 si no hay.
 function metaVentasMes(){ const v=Number(ajustes&&ajustes.meta_ventas_mes); return v>0?v:0; }
 window.metaVentasMes=metaVentasMes;
+// Meta del mes de un vendedor (0 si no tiene). Se guardan en ajustes.metas_vendedores {id:monto}.
+function metaVentasVend(id){ const m=(ajustes&&ajustes.metas_vendedores)||{}; const v=Number(m[id]); return v>0?v:0; }
+window.metaVentasVend=metaVentasVend;
 function iniciales(n){return n.split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');}
 function canAnular(){return (currentRole==="admin"||ROLES[currentRole]?.anular===true)&&!soloLectura();}
 function canFacturar(){return (currentRole==="admin"||ROLES[currentRole]?.facturar===true)&&!soloLectura();}

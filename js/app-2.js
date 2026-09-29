@@ -416,21 +416,15 @@ function renderPanel(){
     const cfgM=dashboardConfig[currentRole]?.panel_meta;
     const onM=(cfgM===undefined)?(dbConf('kpi_ventas')||['admin','gerencia','auditoria','ventas'].includes(rol)):cfgM;
     if(onM){
-      const meta=(typeof metaVentasMes==='function')?metaVentasMes():0;
-      const puedeEditar=['admin','gerencia'].includes(rol);
-      const eb=document.getElementById('meta-edit-btn'); if(eb)eb.style.display=puedeEditar?'':'none';
-      if(meta>0){
-        const pct=Math.round(ventasMes/meta*100);
-        const pctBar=Math.max(0,Math.min(100,pct));
-        // Ritmo esperado a esta altura del mes (día actual / días del mes).
+      // Barra de progreso reutilizable (vendido vs meta, con marca de ritmo).
+      const _barMeta=(vendido,meta)=>{
+        const pct=Math.round(vendido/meta*100), pctBar=Math.max(0,Math.min(100,pct));
         const diasMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
-        const ritmo=Math.round(hoy.getDate()/diasMes*100);
-        const alDia=pct>=ritmo;
+        const ritmo=Math.round(hoy.getDate()/diasMes*100), alDia=pct>=ritmo;
         const col=pct>=100?'var(--green)':alDia?'var(--lime)':'var(--warn)';
-        const falta=Math.max(0,meta-ventasMes);
-        $('#panel-meta').innerHTML=`
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-            <span style="font-size:20px;font-weight:800">${money(ventasMes)}</span>
+        const falta=Math.max(0,meta-vendido);
+        return `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <span style="font-size:20px;font-weight:800">${money(vendido)}</span>
             <span style="font-size:12.5px;color:var(--muted)">de ${money(meta)} · <b style="color:${col}">${pct}%</b></span>
           </div>
           <div style="height:14px;background:var(--surface-2);border-radius:8px;overflow:hidden;position:relative">
@@ -438,8 +432,32 @@ function renderPanel(){
             <div style="position:absolute;top:-2px;bottom:-2px;left:${Math.min(100,ritmo)}%;width:2px;background:var(--muted-2)" title="Ritmo esperado a hoy: ${ritmo}%"></div>
           </div>
           <div style="font-size:12px;color:var(--muted);margin-top:7px">${pct>=100?'🎉 ¡Meta alcanzada!':(falta>0?('Faltan '+money(falta)+' · '+(alDia?'vas al día':'vas por debajo del ritmo'))+' (línea gris = ritmo esperado hoy)':'')}</div>`;
+      };
+      const eb=document.getElementById('meta-edit-btn');
+      if(esVentasRol&&miVendedorId()){
+        // Vendedor: su propia meta vs sus ventas (ventasMes ya es lo suyo).
+        const miMeta=(typeof metaVentasVend==='function')?metaVentasVend(miVendedorId()):0;
+        if(eb){eb.style.display='';eb.textContent=miMeta>0?'Cambiar mi meta':'Definir mi meta';eb.onclick=()=>editarMetaVendedor(miVendedorId());}
+        $('#panel-meta').innerHTML=miMeta>0?_barMeta(ventasMes,miMeta):`<div class="empty" style="font-size:12.5px">No definiste tu meta del mes. Ponela con el botón de arriba.</div>`;
       }else{
-        $('#panel-meta').innerHTML=`<div class="empty" style="font-size:12.5px">Sin meta definida.${puedeEditar?' Definila con el botón de arriba.':''}</div>`;
+        // Admin/Gerencia (y otros con acceso): meta de la empresa + tabla por vendedor.
+        const puedeEmpresa=['admin','gerencia'].includes(rol);
+        const meta=(typeof metaVentasMes==='function')?metaVentasMes():0;
+        if(eb){eb.style.display=puedeEmpresa?'':'none';eb.textContent='Meta de la empresa';eb.onclick=()=>editarMetaVentas();}
+        const metasVend=(typeof ajustes!=='undefined'&&ajustes.metas_vendedores)||{};
+        const ventasVend={};
+        documentos.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc==='cambiaria'&&new Date(d.creada)>=mes).forEach(d=>{const v=d.vendedorId||0;ventasVend[v]=(ventasVend[v]||0)+d.totales.total;});
+        let html='<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Empresa</div>';
+        html+=meta>0?_barMeta(ventasMes,meta):`<div class="empty" style="font-size:12px">Sin meta de empresa.${puedeEmpresa?' Definila con el botón de arriba.':''}</div>`;
+        const filas=(typeof vendedores!=='undefined'?vendedores:[]).map(v=>{
+          const mv=Number(metasVend[v.id])||0, vv=ventasVend[v.id]||0;
+          if(mv<=0&&vv<=0)return '';
+          const p=mv>0?Math.round(vv/mv*100):null;
+          const col=p==null?'var(--muted-2)':p>=100?'var(--green)':(p>=Math.round(hoy.getDate()/new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate()*100)?'var(--ink)':'var(--warn)');
+          return `<tr${puedeEmpresa?` style="cursor:pointer" onclick="editarMetaVendedor(${v.id})"`:''}><td style="font-weight:600;font-size:12.5px">${escHtml(v.nombre)}</td><td class="num" style="font-size:12px;color:var(--muted)">${mv>0?money(mv):'—'}</td><td class="num" style="font-size:12px">${money(vv)}</td><td class="num" style="font-weight:700;font-size:12px;color:${col}">${p==null?'—':p+'%'}</td></tr>`;
+        }).filter(Boolean).join('');
+        if(filas)html+=`<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 4px">Por vendedor</div><table><thead><tr><th>Vendedor</th><th class="num">Meta</th><th class="num">Vendido</th><th class="num">%</th></tr></thead><tbody>${filas}</tbody></table>${puedeEmpresa?'<div style="font-size:11px;color:var(--muted-2);margin-top:6px">Tocá un vendedor para ajustar su meta.</div>':''}`;
+        $('#panel-meta').innerHTML=html;
       }
       bqMeta.style.display='';
     }else bqMeta.style.display='none';
@@ -465,6 +483,27 @@ function editarMetaVentas(){
     });
 }
 window.editarMetaVentas=editarMetaVentas;
+// Definir la meta de un vendedor. Cada vendedor la suya; Admin/Gerencia cualquiera.
+function editarMetaVendedor(vendId){
+  vendId=Number(vendId);
+  const esMia=(typeof miVendedorId==='function'&&miVendedorId()===vendId);
+  if(!(esMia||['admin','gerencia'].includes(currentRole))){toast('Sin permiso','Solo el propio vendedor o Admin/Gerencia',true);return;}
+  const v=(typeof vendedores!=='undefined'?vendedores:[]).find(x=>x.id===vendId);
+  const metasVend=(typeof ajustes!=='undefined'&&ajustes.metas_vendedores)||{};
+  const actual=Number(metasVend[vendId])||0;
+  openMod('🎯 Meta de '+(v?v.nombre:'vendedor'),
+    `<div class="row"><div><label>Meta mensual (Q)</label><input id="mv-val" type="number" min="0" step="100" value="${actual||''}" placeholder="Ej. 40000"></div></div>
+     <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Meta de ventas certificadas del mes${esMia?' (la tuya)':' de '+(v?escHtml(v.nombre):'este vendedor')}. La barra mide el avance contra este número.</span></div>`,
+    async ()=>{
+      const n=Number($('#mv-val').value)||0;
+      const nuevo=Object.assign({},metasVend); if(n>0)nuevo[vendId]=n; else delete nuevo[vendId];
+      const ok=await (typeof guardarAjuste==='function'?guardarAjuste('metas_vendedores',nuevo):Promise.resolve(false));
+      if(!ok){toast('No se pudo guardar','Revisá la conexión (¿corriste el SQL de ajustes?)',true);return;}
+      if(typeof logAudit==='function')logAudit('Meta de vendedor definida',(v?v.nombre:vendId)+' · '+money(n));
+      closeMod();renderPanel();toast('✓ Meta guardada',(v?v.nombre+' · ':'')+money(n));
+    });
+}
+window.editarMetaVendedor=editarMetaVendedor;
 // Monto compacto para el mini-gráfico: Q80k, Q1.2k, Q950…
 function _kMoney(n){ n=Number(n)||0; if(n>=1000)return 'Q'+(n/1000).toFixed(n>=10000?0:1)+'k'; return 'Q'+Math.round(n); }
 
