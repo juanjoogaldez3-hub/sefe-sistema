@@ -384,7 +384,7 @@ function confirmarEntrega(id){
     _cobroNuevo={
       id:cobroRutaN++,docId:d.id,docNum,cliente:d.clienteComercial||d.clienteNombre,
       monto,modo:tipo,noBoleta:'',noRecibo:recibo,
-      cheque,banco,piloto:currentUser,fecha,estado:'cobrado',_nuevo:true
+      cheque,banco,piloto:currentUser,fecha,estado:'cobrado',empresa:d.empresa||empresaParaNuevo(),_nuevo:true
     };
     cobrosRuta.push(_cobroNuevo);
   }else if(tipo==='contrasena'){
@@ -634,6 +634,9 @@ function irAHash(){
 window.addEventListener('hashchange',irAHash);
 // Al entrar al sistema: si la dirección trae una sección válida y con permiso, ir ahí; si no, al panel.
 function entrarVistaInicial(){
+  // Multiempresa: fijar la empresa activa y dibujar el selector antes de la
+  // primera vista (con una sola empresa, no hace nada visible).
+  try{ if(typeof iniciarEmpresaActiva==='function')iniciarEmpresaActiva(); if(typeof renderSelectorEmpresa==='function')renderSelectorEmpresa(); }catch(e){}
   const v=(location.hash||'').replace('#','');
   if(v && VISTAS_VALIDAS.includes(v) && tienePermiso(v)){
     window.go(v);

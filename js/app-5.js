@@ -329,7 +329,7 @@ window.renderLlamarHoy=renderLlamarHoy;
 function renderCobros(){
   const btnPG=$('#btn-pago-global');
   if(btnPG)btnPG.style.display=canRegistrarAbono()?'':'none';
-  const ars=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada');
+  const ars=deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'); // multiempresa
   // ── Panel "A quién llamar hoy" ──
   renderLlamarHoy(ars);
   const selCli=$('#cb-cliente');
@@ -490,7 +490,7 @@ function openAbono(id){
       if(aplicado>0.001){
         f.abonos=f.abonos||[];
         const _ab={fecha:_fecha,monto:aplicado,metodo:_met,referencia:_ref,
-          noRecibo:_rec,comprobante:_compFoto,cuentaBancoId:_cta,
+          noRecibo:_rec,comprobante:_compFoto,cuentaBancoId:_cta,empresa:f.empresa||empresaParaNuevo(),
           registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
         f.abonos.push(_ab);
         f.estadoPago=arInfo(f).estado;
@@ -500,7 +500,7 @@ function openAbono(id){
       // 2) Excedente → saldo a favor del cliente
       if(exceso>0.001){
         const _cr={clienteId:f.clienteId,tipo:'ingreso',monto:exceso,fecha:_fecha,documentoId:f.id,
-          noRecibo:_rec,metodo:_met,referencia:_ref,cuentaBancoId:_cta,
+          noRecibo:_rec,metodo:_met,referencia:_ref,cuentaBancoId:_cta,empresa:f.empresa||empresaParaNuevo(),
           concepto:'Sobrepago recibo '+(_rec||'—')+' · '+(f.clienteComercial||f.clienteNombre),
           registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
         creditosCliente=creditosCliente||[];creditosCliente.push(_cr);
@@ -726,7 +726,7 @@ function guardarPagoGlobal(){
     const docId=Number(inp.dataset.id);const monto=Number(inp.value);
     const f=documentos.find(d=>d.id===docId);if(!f)return;
     f.abonos=f.abonos||[];
-    const _ab={fecha,monto,metodo,referencia,noRecibo:recibo,cuentaBancoId,
+    const _ab={fecha,monto,metodo,referencia,noRecibo:recibo,cuentaBancoId,empresa:f.empresa||empresaParaNuevo(),
       registradoPor:currentUser,registradoEl:hoy,anulado:false};
     f.abonos.push(_ab);
     const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
@@ -1002,7 +1002,7 @@ function renderCompras(){
     selProv.onchange=renderCompras;$('#cmp-rec').onchange=renderCompras;$('#cmp-desde').onchange=renderCompras;$('#cmp-hasta').onchange=renderCompras;
   }
   const fProv=$('#cmp-prov')?.value,fRec=$('#cmp-rec')?.value,fDesde=$('#cmp-desde')?.value,fHasta=$('#cmp-hasta')?.value;
-  const filtradas=compras.filter(c=>{
+  const filtradas=deEmpresa(compras).filter(c=>{ // multiempresa: solo la empresa activa
     if(c.anulado)return false; // ocultar anuladas por defecto
     if(fProv&&String(c.proveedorId)!==fProv)return false;
     if(fRec&&c.estadoRecepcion!==fRec)return false;

@@ -163,13 +163,16 @@ function renderPanel(){
   const esFacturador=rol==='facturador';
 
   // ── Datos base ──────────────────────────────────────────────
-  const misDocsBase=esVentasRol&&miVendedorId()?documentos.filter(d=>d.vendedorId===miVendedorId()):documentos;
+  // Multiempresa: el dashboard resume SOLO la empresa activa. Las búsquedas
+  // por id (clientes.find(...)) siguen usando el array completo.
+  const _docs=deEmpresa(documentos), _prods=deEmpresa(productos), _comps=deEmpresa(compras), _clis=deEmpresa(clientes);
+  const misDocsBase=esVentasRol&&miVendedorId()?_docs.filter(d=>d.vendedorId===miVendedorId()):_docs;
   const facturasMes=misDocsBase.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc==='cambiaria'&&new Date(d.creada)>=mes);
   const ventasMes=facturasMes.reduce((s,d)=>s+d.totales.total,0);
   // Ventas del mes pasado al mismo día (para el comparativo del KPI).
   const ventasMesAnt=misDocsBase.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc==='cambiaria'&&(()=>{const f=new Date(d.creada);return f>=mesAntIni&&f<=mesAntFin;})()).reduce((s,d)=>s+d.totales.total,0);
-  const porCobrar=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+arInfo(d).saldo,0);
-  const vencidos=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&arInfo(d).vencido);
+  const porCobrar=_docs.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+arInfo(d).saldo,0);
+  const vencidos=_docs.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&arInfo(d).vencido);
   const pedAbiertos=misDocsBase.filter(d=>d.tipoDoc==='pedido'&&d.estado==='abierto');
   // Stock efectivo: para caja_unidad cuenta las unidades sueltas + las que hay en cajas cerradas
   const stockEfectivo=p=>{
@@ -177,23 +180,23 @@ function renderPanel(){
     if(p.tipoEmpaque==='caja')return Number(p.stockCajas)||Number(p.stock)||0;
     return Number(p.stock)||0;
   };
-  const activos=productos.filter(p=>p.activo!==false);
+  const activos=_prods.filter(p=>p.activo!==false);
   const stockBajo=activos.filter(p=>!esServicio(p)&&(()=>{const s=stockEfectivo(p);return s<=umbralStock(p)&&s>0;})());
   const sinStock=activos.filter(p=>!esServicio(p)&&stockEfectivo(p)===0);
-  const ocPend=compras.filter(c=>!c.anulado&&c.estadoRecepcion!=='recibida');
-  const espPend=compras.filter(c=>c.especial&&!c.oficializada&&!c.anulado);
-  const porVencer=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&!arInfo(d).vencido&&new Date(d.vencimiento)<=semana&&arInfo(d).saldo>0);
+  const ocPend=_comps.filter(c=>!c.anulado&&c.estadoRecepcion!=='recibida');
+  const espPend=_comps.filter(c=>c.especial&&!c.oficializada&&!c.anulado);
+  const porVencer=_docs.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&!arInfo(d).vencido&&new Date(d.vencimiento)<=semana&&arInfo(d).saldo>0);
   const diasFinMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate()-hoy.getDate();
-  const docsFacturar=documentos.filter(d=>['pedido','envio','prestamo'].includes(d.tipoDoc)&&d.estado==='abierto');
-  const misClis=esVentasRol&&miVendedorId()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  const docsFacturar=_docs.filter(d=>['pedido','envio','prestamo'].includes(d.tipoDoc)&&d.estado==='abierto');
+  const misClis=esVentasRol&&miVendedorId()?_clis.filter(c=>c.vendedorId===miVendedorId()):_clis;
 
   // ── Datos para KPIs nuevos ──────────────────────────────────
   // Por cobrar de mis clientes (Ventas): usa misDocsBase, que ya filtra por vendedor
   const porCobrarMis=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+arInfo(d).saldo,0);
   const vencidosMis=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&arInfo(d).vencido);
   // Cobrado en el mes actual (todos los abonos no anulados con fecha dentro del mes)
-  let cobradoMes=0;documentos.forEach(d=>(d.abonos||[]).forEach(a=>{if(!a.anulado&&a.fecha&&new Date(a.fecha)>=mes)cobradoMes+=Number(a.monto);}));
-  let cobradoMesAnt=0;documentos.forEach(d=>(d.abonos||[]).forEach(a=>{if(a.anulado||!a.fecha)return;const f=new Date(a.fecha);if(f>=mesAntIni&&f<=mesAntFin)cobradoMesAnt+=Number(a.monto);}));
+  let cobradoMes=0;_docs.forEach(d=>(d.abonos||[]).forEach(a=>{if(!a.anulado&&a.fecha&&new Date(a.fecha)>=mes)cobradoMes+=Number(a.monto);}));
+  let cobradoMesAnt=0;_docs.forEach(d=>(d.abonos||[]).forEach(a=>{if(a.anulado||!a.fecha)return;const f=new Date(a.fecha);if(f>=mesAntIni&&f<=mesAntFin)cobradoMesAnt+=Number(a.monto);}));
   // Monto que vence en los próximos 7 días (porVencer ya está calculado arriba)
   const porVencerMonto=porVencer.reduce((s,d)=>s+arInfo(d).saldo,0);
 
@@ -267,8 +270,8 @@ function renderPanel(){
   if(typeof ambServicios!=='undefined' && typeof tienePermiso==='function' && tienePermiso('controles')){
     const hoyA=fechaHoyGT();
     const finde7=(()=>{const d=new Date(hoyA+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+7);return d.toISOString().slice(0,10);})();
-    const ambVenc=ambServicios.filter(s=>s.proximo&&String(s.proximo).slice(0,10)<hoyA);
-    const ambPronto=ambServicios.filter(s=>{const p=s.proximo&&String(s.proximo).slice(0,10);return p&&p>=hoyA&&p<=finde7;});
+    const ambVenc=deEmpresa(ambServicios).filter(s=>s.proximo&&String(s.proximo).slice(0,10)<hoyA); // multiempresa
+    const ambPronto=deEmpresa(ambServicios).filter(s=>{const p=s.proximo&&String(s.proximo).slice(0,10);return p&&p>=hoyA&&p<=finde7;});
     const nomCliAmb=id=>{const c=clientes.find(x=>x.id===id);return c?c.nombre:('Cliente '+id);};
     if(ambVenc.length)alertas.push({tipo:'danger',msg:`${ambVenc.length} ambiental${ambVenc.length!==1?'es':''} con recarga vencida: ${_listaCorta(ambVenc.map(s=>nomCliAmb(s.clienteId)),3)}`,view:'controles'});
     else if(ambPronto.length)alertas.push({tipo:'warn',msg:`${ambPronto.length} ambiental${ambPronto.length!==1?'es':''} por recargar en los próximos 7 días`,view:'controles'});
@@ -292,7 +295,7 @@ function renderPanel(){
     if(usaOC){
       $('#panel-vencimientos').innerHTML=ocPend.slice(0,6).map(c=>`<tr onclick="go('compras')" style="cursor:pointer"><td style="font-weight:600;font-size:12px">CMP-${padn(c.id)}</td><td style="font-size:12px;color:var(--muted)">${c.proveedorNombre}</td><td style="font-size:12px;color:var(--muted)">${fdate(c.fecha)}</td><td class="num" style="font-weight:700;font-size:12px">${money(c.total)}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">Sin órdenes pendientes</td></tr>';
     }else{
-      const prox=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&arInfo(d).saldo>0).sort((a,b)=>new Date(a.vencimiento)-new Date(b.vencimiento)).slice(0,6);
+      const prox=_docs.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&arInfo(d).saldo>0).sort((a,b)=>new Date(a.vencimiento)-new Date(b.vencimiento)).slice(0,6);
       $('#panel-vencimientos').innerHTML=prox.length?prox.map(d=>{const ai=arInfo(d);const dias=Math.ceil((new Date(d.vencimiento)-new Date())/(86400000));const color=dias<0?'var(--danger)':dias<=3?'var(--warn)':'var(--muted)';return `<tr><td style="font-weight:600;font-size:12px">${d.serie}-${d.numeroDte}</td><td style="font-size:12px;color:var(--muted)">${d.clienteComercial||d.clienteNombre}</td><td style="color:${color};font-size:12px;font-weight:600">${dias<0?`Vencido ${Math.abs(dias)}d`:dias===0?'Hoy':`${dias}d`}</td><td class="num" style="font-weight:700;font-size:12px">${money(ai.saldo)}</td></tr>`;}).join(''):'<tr><td colspan="4" class="empty">Sin vencimientos próximos</td></tr>';
     }
     document.getElementById('panel-bloque-venc').style.display='';
@@ -330,7 +333,7 @@ function renderPanel(){
       const hoyA=fechaHoyGT();
       const nomA=id=>{const c=clientes.find(x=>x.id===id);return c?c.nombre:('Cliente '+id);};
       // Con próximo servicio, del más urgente (vencido/pronto) al menos.
-      const lista=ambServicios.filter(s=>s.proximo).slice()
+      const lista=deEmpresa(ambServicios).filter(s=>s.proximo).slice() // multiempresa
         .sort((a,b)=>String(a.proximo).localeCompare(String(b.proximo))).slice(0,8);
       $('#panel-amb').innerHTML=lista.length?lista.map(s=>{
         const p=String(s.proximo).slice(0,10);
@@ -363,7 +366,7 @@ function renderPanel(){
       rows=espPend.slice(0,5).map(c=>`<tr onclick="go('compras')" style="cursor:pointer"><td style="font-weight:600;font-size:12px">CMP-${padn(c.id)}</td><td style="font-size:12px;color:var(--muted)">${c.proveedorNombre}</td><td class="num" style="font-weight:700;font-size:12px">${money(c.total)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty" style="font-size:12px">Sin compras especiales activas</td></tr>';
     }else if(esConta){
       titulo='Clientes con mayor saldo';
-      rows=clientes.map(c=>({c,saldo:saldoCliente(c)})).filter(x=>x.saldo>0).sort((a,b)=>b.saldo-a.saldo).slice(0,5).map(({c,saldo})=>`<tr onclick="go('cobros')" style="cursor:pointer"><td style="font-weight:600;font-size:12px">${c.nombre}</td><td style="font-size:12px;color:var(--muted)">${c.nit}</td><td class="num" style="font-weight:700;font-size:12px;color:var(--warn)">${money(saldo)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty" style="font-size:12px">Sin saldos pendientes</td></tr>';
+      rows=_clis.map(c=>({c,saldo:saldoCliente(c)})).filter(x=>x.saldo>0).sort((a,b)=>b.saldo-a.saldo).slice(0,5).map(({c,saldo})=>`<tr onclick="go('cobros')" style="cursor:pointer"><td style="font-weight:600;font-size:12px">${c.nombre}</td><td style="font-size:12px;color:var(--muted)">${c.nit}</td><td class="num" style="font-weight:700;font-size:12px;color:var(--warn)">${money(saldo)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty" style="font-size:12px">Sin saldos pendientes</td></tr>';
     }else if(esFacturador){
       titulo='Documentos sin facturar';
       rows=docsFacturar.slice(0,5).map(d=>`<tr style="cursor:pointer" onclick="verDoc(${d.id})"><td style="font-weight:600;font-size:12px">${refPed(d)}</td><td style="font-size:12px;color:var(--muted)">${d.clienteComercial||d.clienteNombre}</td><td class="num" style="font-weight:700;font-size:12px">${money(d.totales.total)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty" style="font-size:12px">Sin documentos pendientes</td></tr>';
@@ -397,7 +400,7 @@ function renderPanel(){
     const cfgDH=dashboardConfig[currentRole]?.panel_desphoy;
     const onDH=(cfgDH===undefined)?(typeof tienePermiso==='function'&&tienePermiso('despachos')):cfgDH;
     if(onDH && typeof docsDespachables==='function' && typeof estadoEntrega==='function'){
-      const tdos=docsDespachables();
+      const tdos=deEmpresa(docsDespachables()); // multiempresa: despachos de la empresa activa
       const _est=d=>estadoEntrega(d);
       const sinA=tdos.filter(d=>_est(d)==='sin').length;
       const prep=tdos.filter(d=>_est(d)==='asignado'||_est(d)==='preparado').length;
@@ -446,7 +449,7 @@ function renderPanel(){
         if(eb){eb.style.display=puedeEmpresa?'':'none';eb.textContent='Meta de la empresa';eb.onclick=()=>editarMetaVentas();}
         const metasVend=(typeof ajustes!=='undefined'&&ajustes.metas_vendedores)||{};
         const ventasVend={};
-        documentos.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc==='cambiaria'&&new Date(d.creada)>=mes).forEach(d=>{const v=d.vendedorId||0;ventasVend[v]=(ventasVend[v]||0)+d.totales.total;});
+        _docs.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc==='cambiaria'&&new Date(d.creada)>=mes).forEach(d=>{const v=d.vendedorId||0;ventasVend[v]=(ventasVend[v]||0)+d.totales.total;});
         let html='<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Empresa</div>';
         html+=meta>0?_barMeta(ventasMes,meta):`<div class="empty" style="font-size:12px">Sin meta de empresa.${puedeEmpresa?' Definila con el botón de arriba.':''}</div>`;
         const filas=(typeof vendedores!=='undefined'?vendedores:[]).map(v=>{
@@ -982,7 +985,7 @@ $('#f-go').onclick=async()=>{
     // temporal nunca puede coincidir con otro documento (evita facturar el equivocado).
     const nuevoId=-Date.now();
     const doc={id:nuevoId,numero:corr,tipoDoc:'pedido',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend?.id,vendedorNombre:vend?.nombre,subVendedorNombre:subVend,
-      items:itemsPed,totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre,_nuevo:true};
+      items:itemsPed,totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre,empresa:empresaParaNuevo(),_nuevo:true};
     documentos.push(doc);corr++;
     logAudit('Pedido creado','PED-'+padn(doc.numero)+' · '+cli.nombre+' · '+money(totales.total));
     // Esperamos el id real de la base ANTES de dibujar la lista, para que los
@@ -1109,7 +1112,7 @@ function fechaDoc(d){
   return t;
 }
 function renderDocs(){
-  let filtrados=documentos.filter(docsEnRango);
+  let filtrados=deEmpresa(documentos).filter(docsEnRango); // multiempresa: solo la empresa activa
   if(esVentas()&&miVendedorId())filtrados=filtrados.filter(d=>d.vendedorId===miVendedorId());
   $('#docs-empty').style.display=filtrados.length?'none':'block';
   // Orden por ÚLTIMA ACTIVIDAD: lo recién facturado/cobrado/creado sube arriba (id como desempate).

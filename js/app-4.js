@@ -258,7 +258,7 @@ function renderCotizaciones(){
   const listBox=document.getElementById('cot-list'),edBox=document.getElementById('cot-editor');
   if(listBox)listBox.style.display='';if(edBox)edBox.style.display='none';
   if(typeof _cotRenderAviso==='function')_cotRenderAviso();
-  const base=cotVisibles().slice().sort((a,b)=>(b.numero||0)-(a.numero||0));
+  const base=deEmpresa(cotVisibles()).slice().sort((a,b)=>(b.numero||0)-(a.numero||0)); // multiempresa
   let lista=base;
   if(cotFiltro==='activas')lista=base.filter(c=>['borrador','enviada'].includes(c.estado));
   else if(cotFiltro==='aceptada')lista=base.filter(c=>c.estado==='aceptada');
@@ -481,7 +481,7 @@ async function guardarCotizacionUI(){
     cot=cotizaciones.find(c=>c.id===cotEditId);if(!cot){toast('No encontrada',null,true);return;}
     Object.assign(cot,{clienteId,clienteNombre,clienteComercial,clienteNit,clienteContacto,clienteTel,clienteEmail,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado});
   }else{
-    cot={id:-Date.now(),numero:cotN,clienteId,clienteNombre,clienteComercial,clienteNit,clienteContacto,clienteTel,clienteEmail,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,_nuevo:true};
+    cot={id:-Date.now(),numero:cotN,clienteId,clienteNombre,clienteComercial,clienteNit,clienteContacto,clienteTel,clienteEmail,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,empresa:empresaParaNuevo(),_nuevo:true};
     cotizaciones.push(cot);cotN++;
   }
   const ok=(typeof guardarCotizacion==='function')?await guardarCotizacion(cot):true;

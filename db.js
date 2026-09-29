@@ -506,7 +506,8 @@ async function guardarCliente(cli){
     contacto_pagos:cli.contactoPagos, contacto_compras:cli.contactoCompras, precios:cli.precios,
     cobro_info:cli.cobroInfo||{}, seguimientos:cli.seguimientos||[],
     activo:cli.activo!==false,
-    lat:(cli.lat!=null?cli.lat:null), lng:(cli.lng!=null?cli.lng:null)
+    lat:(cli.lat!=null?cli.lat:null), lng:(cli.lng!=null?cli.lng:null),
+    empresa:cli.empresa||'SEFE'
   };
   if (cli._nuevo) {
     delete cli._nuevo;
@@ -541,7 +542,8 @@ async function guardarDocumento(d){
     pdf_base64:d.pdfBase64, xml_base64:d.xmlBase64, fecha_certificacion:d.fechaCertificacion,
     factura_origen_id:d.facturaOrigenId||null, nit_facturado:d.nitFacturado||null, nombre_facturado:d.nombreFacturado||null,
     sede:d.sede||null,
-    creada:d.creada
+    creada:d.creada,
+    empresa:d.empresa||'SEFE'
   };
   if (d._nuevo) {
     delete d._nuevo;
@@ -567,7 +569,8 @@ async function guardarAbono(documentoId, ab){
     referencia:ab.referencia, no_recibo:ab.noRecibo, comprobante:ab.comprobante,
     registrado_por:ab.registradoPor, registrado_el:ab.registradoEl,
     anulado:ab.anulado, motivo_anulacion:ab.motivoAnulacion, origen_cobro_ruta:ab.origenCobroRuta,
-    cuenta_banco_id:ab.cuentaBancoId||null
+    cuenta_banco_id:ab.cuentaBancoId||null,
+    empresa:ab.empresa||'SEFE'
   };
   const {data,error} = await sb.from('abonos').insert(row).select().single();
   if(error)console.error(error); else ab._id = data.id;
@@ -606,7 +609,8 @@ async function guardarCobroRuta(c){
     modo:c.modo, no_boleta:c.noBoleta, no_recibo:c.noRecibo, cheque:c.cheque,
     banco:c.banco, piloto:c.piloto, fecha:c.fecha, estado:c.estado,
     recibido_por:c.recibidoPor, recibido_fecha:c.recibidoFecha,
-    procesado_por:c.procesadoPor, procesado_fecha:c.procesadoFecha
+    procesado_por:c.procesadoPor, procesado_fecha:c.procesadoFecha,
+    empresa:c.empresa||'SEFE'
   };
   if (c._nuevo) {
     delete c._nuevo;
@@ -625,7 +629,8 @@ async function guardarCompra(c){
     items:c.items, total:c.total, fecha:c.fecha, estado_recepcion:c.estadoRecepcion,
     facturada:c.facturada, doc_prov:c.docProv, tipo_pago:c.tipoPago,
     dias_credito:c.diasCredito, vencimiento:c.vencimiento, especial:c.especial,
-    oficializada:c.oficializada, mes:c.mes, anulado:c.anulado, motivo_anulacion:c.motivoAnulacion
+    oficializada:c.oficializada, mes:c.mes, anulado:c.anulado, motivo_anulacion:c.motivoAnulacion,
+    empresa:c.empresa||'SEFE'
   };
   if (c._nuevo) {
     delete c._nuevo;
@@ -665,7 +670,8 @@ async function guardarProducto(p){
     sku_proveedor:p.skuProveedor, nombre_proveedor:p.nombreProveedor,
     marca:p.marca||null, activo:p.activo!==false,
     tipo_empaque:p.tipoEmpaque||'unidad', unidades_por_caja:p.unidadesPorCaja, stock_cajas:p.stockCajas||0,
-    precio_unidad:p.precioUnidad||0, conversiones:p.conversiones||[], categoria:p.categoria||null
+    precio_unidad:p.precioUnidad||0, conversiones:p.conversiones||[], categoria:p.categoria||null,
+    empresa:p.empresa||'SEFE'
   };
   if (p._nuevo) {
     // Producto nuevo: INSERT, y Supabase genera el id real
@@ -745,7 +751,8 @@ async function guardarCotizacion(cot){
     items:cot.items||[], totales:cot.totales||{},
     observaciones:cot.observaciones||null, validez_dias:cot.validezDias||15, fecha_vence:cot.fechaVence||null,
     estado:cot.estado||'borrador', creado_por:cot.creadoPor||null, creada:cot.creada||null,
-    convertido_pedido_id:cot.convertidoPedidoId||null
+    convertido_pedido_id:cot.convertidoPedidoId||null,
+    empresa:cot.empresa||'SEFE'
   };
   if(cot._nuevo){
     delete cot._nuevo;
@@ -784,7 +791,8 @@ async function guardarCredito(cr){
     cliente_id:cr.clienteId, tipo:cr.tipo||'ingreso', monto:cr.monto, fecha:cr.fecha||null,
     documento_id:cr.documentoId||null, no_recibo:cr.noRecibo||null, metodo:cr.metodo||null,
     referencia:cr.referencia||null, cuenta_banco_id:cr.cuentaBancoId||null, concepto:cr.concepto||null,
-    registrado_por:cr.registradoPor||null, registrado_el:cr.registradoEl||null, anulado:cr.anulado===true
+    registrado_por:cr.registradoPor||null, registrado_el:cr.registradoEl||null, anulado:cr.anulado===true,
+    empresa:cr.empresa||'SEFE'
   };
   const {data,error}=await sb.from('creditos_cliente').insert(row).select().single();
   if(error){console.error('Error guardando saldo a favor:',error);return false;}
@@ -898,7 +906,7 @@ async function guardarPiloto(p){
 
 // Guardar/actualizar un proveedor
 async function guardarProveedor(pr){
-  const row = {nombre:pr.nombre, razon_social:pr.razonSocial, nit:pr.nit, telefono:pr.telefono, correo:pr.correo, dias_credito:pr.diasCredito};
+  const row = {nombre:pr.nombre, razon_social:pr.razonSocial, nit:pr.nit, telefono:pr.telefono, correo:pr.correo, dias_credito:pr.diasCredito, empresa:pr.empresa||'SEFE'};
   if (pr._nuevo) {
     delete pr._nuevo;
     const {data,error} = await sb.from('proveedores').insert(row).select().single();
@@ -914,7 +922,7 @@ if(typeof window!=='undefined')window.guardarProveedor=guardarProveedor;
 // ── Cuentas de banco ──────────────────────────────────────
 async function guardarCuentaBanco(c){
   const row = {nombre:c.nombre, banco:c.banco||null, numero:c.numero||null, tipo:c.tipo||'monetaria',
-    moneda:c.moneda||'GTQ', saldo_inicial:Number(c.saldoInicial)||0, activo:c.activo!==false};
+    moneda:c.moneda||'GTQ', saldo_inicial:Number(c.saldoInicial)||0, activo:c.activo!==false, empresa:c.empresa||'SEFE'};
   if (c._nuevo) {
     delete c._nuevo;
     const {data,error} = await sb.from('cuentas_banco').insert(row).select().single();
@@ -935,7 +943,7 @@ async function guardarMovimientoBanco(m){
     concepto:m.concepto||null, categoria:m.categoria||null, origen:m.origen||'manual', origen_id:m.origenId||null,
     cuenta_destino_id:m.cuentaDestinoId||null, referencia:m.referencia||null, poliza:m.poliza||null,
     beneficiario:m.beneficiario||null,
-    registrado_por:m.registradoPor||null, anulado:m.anulado===true};
+    registrado_por:m.registradoPor||null, anulado:m.anulado===true, empresa:m.empresa||'SEFE'};
   if (m._nuevo) {
     delete m._nuevo;
     const {data,error} = await sb.from('movimientos_banco').insert(row).select().single();
@@ -1081,7 +1089,8 @@ async function guardarAmbServicio(s){
     fecha:s.fecha||null, proximo:s.proximo||null, nota:s.nota||null,
     frecuencia_valor:(s.frecuenciaValor!=null?s.frecuenciaValor:null),
     frecuencia_unidad:s.frecuenciaUnidad||null,
-    historial:Array.isArray(s.historial)?s.historial:[]
+    historial:Array.isArray(s.historial)?s.historial:[],
+    empresa:s.empresa||'SEFE'
   };
   if(s._nuevo){
     delete s._nuevo;

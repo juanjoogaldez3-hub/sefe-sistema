@@ -75,7 +75,7 @@ function ppEnPeriodo(fecha){
 }
 function renderPorPagar(){
   // Excluye compras anuladas (antes aparecían como deuda)
-  const todas=compras.map(c=>({c,...apInfo(c)})).filter(x=>x.c.facturada&&x.c.tipoPago==='credito'&&!x.c.anulado);
+  const todas=deEmpresa(compras).map(c=>({c,...apInfo(c)})).filter(x=>x.c.facturada&&x.c.tipoPago==='credito'&&!x.c.anulado); // multiempresa
   // Filtro por proveedor
   const provIds=[...new Set(todas.map(x=>x.c.proveedorId))];
   const opts=provIds.map(id=>{const p=proveedores.find(v=>v.id===id);return {v:String(id),l:(p&&p.nombre)||'Sin proveedor'};}).sort((a,b)=>a.l.localeCompare(b.l,'es'));
@@ -174,9 +174,11 @@ function selectorCuentaBancoHTML(idSel,label,sel){
 // Registra un movimiento de banco (entrada/salida) ligado a un origen (cobro, pago, gasto)
 function registrarMovimientoBanco({cuentaId,tipo,monto,concepto,categoria,origen,origenId,referencia,fecha,beneficiario,sinPoliza}){
   if(!cuentaId||!(monto>0))return null;
+  // Multiempresa: el movimiento hereda la empresa de su cuenta de banco.
+  const _ctaMov=cuentasBanco.find(x=>x.id===Number(cuentaId));
   const mov={cuentaId:Number(cuentaId),fecha:fecha||fechaHoyGT(),tipo,monto:Number(monto),
     concepto:concepto||'',categoria:categoria||'otro',origen:origen||'manual',origenId:origenId||null,
-    referencia:referencia||null,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,_nuevo:true};
+    referencia:referencia||null,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,empresa:(_ctaMov&&_ctaMov.empresa)||empresaParaNuevo(),_nuevo:true};
   // Correlativo global de póliza de cheque para toda SALIDA (las reversas no llevan póliza)
   if(tipo==='salida'&&!sinPoliza){
     const maxPol=(movimientosBanco.reduce((m,x)=>Math.max(m,x.poliza||0),0)||0);
@@ -225,7 +227,7 @@ const CAT_MOV_LBL={cobro:'Cobro',proveedor:'Proveedor',pagos:'Pagos',pago_presta
 const CAT_MOV_OPCIONES=['cobro','proveedor','pagos','pago_prestamo','pago_intereses','planilla','servicios','alquiler','impuestos','combustible','transporte','mantenimiento','papeleria','publicidad','honorarios','comisiones_banco','viaticos','seguros','transferencia','ajuste','otro'];
 function renderBancos(){
   if(typeof renderSinCuenta==='function')renderSinCuenta();
-  const lista=cuentasBanco.filter(c=>c.activo!==false);
+  const lista=deEmpresa(cuentasBanco).filter(c=>c.activo!==false); // multiempresa
   $('#bancos-empty').style.display=lista.length?'none':'block';
   const saldoTotal=lista.reduce((s,c)=>s+saldoCuenta(c.id),0);
   const hoyStr=fechaHoyGT(), mesStr=hoyStr.slice(0,7);
@@ -236,7 +238,7 @@ function renderBancos(){
   const pDesde=hayFecha?(fDesde||'0000-01-01'):(mesStr+'-01');
   const pHasta=hayFecha?(fHasta||'9999-12-31'):hoyStr;
   let entPer=0,salPer=0,entHoy=0,salHoy=0;
-  movimientosBanco.forEach(m=>{if(m.anulado)return;if(fCta&&String(m.cuentaId)!==String(fCta))return;const f=(m.fecha||'').slice(0,10);const mo=Number(m.monto||0);
+  deEmpresa(movimientosBanco).forEach(m=>{if(m.anulado)return;if(fCta&&String(m.cuentaId)!==String(fCta))return;const f=(m.fecha||'').slice(0,10);const mo=Number(m.monto||0); // multiempresa
     if(f>=pDesde&&f<=pHasta){if(m.tipo==='entrada')entPer+=mo;else salPer+=mo;}
     if(f===hoyStr){if(m.tipo==='entrada')entHoy+=mo;else salHoy+=mo;}});
   const perLbl=hayFecha?((fDesde===hoyStr&&fHasta===hoyStr)?'de hoy':'del período'):'del mes';
@@ -263,11 +265,11 @@ function renderBancos(){
   const selCta=document.getElementById('mov-filtro-cuenta');
   if(selCta){
     const valPrev=selCta.value;
-    selCta.innerHTML='<option value="">Todas las cuentas</option>'+cuentasBanco.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+    selCta.innerHTML='<option value="">Todas las cuentas</option>'+deEmpresa(cuentasBanco).map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
     selCta.value=valPrev;
   }
   const fTipo=document.getElementById('mov-filtro-tipo')?.value||'';
-  let movs=movimientosBanco.filter(m=>!m.anulado);
+  let movs=deEmpresa(movimientosBanco).filter(m=>!m.anulado); // multiempresa
   if(fCta)movs=movs.filter(m=>String(m.cuentaId)===String(fCta));
   if(fTipo)movs=movs.filter(m=>m.tipo===fTipo);
   if(fDesde)movs=movs.filter(m=>(m.fecha||'').slice(0,10)>=fDesde);
@@ -304,7 +306,7 @@ function openCuentaBanco(id){
       if(c){
         Object.assign(c,{nombre:nom,banco:$('#cb-banco').value.trim(),numero:$('#cb-num').value.trim(),tipo:$('#cb-tipo').value,moneda:$('#cb-moneda').value||'GTQ',saldoInicial:Number($('#cb-saldo').value)||0});
       }else{
-        const nueva={nombre:nom,banco:$('#cb-banco').value.trim(),numero:$('#cb-num').value.trim(),tipo:$('#cb-tipo').value,moneda:$('#cb-moneda').value||'GTQ',saldoInicial:Number($('#cb-saldo').value)||0,activo:true,_nuevo:true};
+        const nueva={nombre:nom,banco:$('#cb-banco').value.trim(),numero:$('#cb-num').value.trim(),tipo:$('#cb-tipo').value,moneda:$('#cb-moneda').value||'GTQ',saldoInicial:Number($('#cb-saldo').value)||0,activo:true,empresa:empresaParaNuevo(),_nuevo:true};
         cuentasBanco.push(nueva);
       }
       if(typeof guardarCuentaBanco==='function')guardarCuentaBanco(c||cuentasBanco[cuentasBanco.length-1]);
@@ -1422,7 +1424,7 @@ $('#co-go').onclick=()=>{
     total,fecha,referencia:$('#co-doc').value,
     estadoRecepcion:esEspecial?'recibida':'pendiente',
     facturada:false,docProv:'',tipoPago:null,diasCredito:0,vencimiento:null,abonos:[],
-    especial:esEspecial,mes:esEspecial?mes:null,oficializada:false,_nuevo:true};
+    especial:esEspecial,mes:esEspecial?mes:null,oficializada:false,empresa:empresaParaNuevo(),_nuevo:true};
 
   // Compra especial: subir inventario de inmediato
   if(esEspecial){

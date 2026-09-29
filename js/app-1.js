@@ -413,7 +413,70 @@ let empresaActiva=null;
 function empresaActivaObj(){ return (empresas||[]).find(e=>e.codigo===empresaActiva)||null; }
 // ¿Hay de verdad más de una empresa activa? (interruptor del selector)
 function haymultiempresa(){ return (empresas||[]).filter(e=>e.activo).length>1; }
-if(typeof window!=='undefined'){ window.empresaActivaObj=empresaActivaObj; window.haymultiempresa=haymultiempresa; }
+// Clave en el navegador donde se recuerda la empresa activa (por navegador).
+const EMPRESA_KEY='sefe_empresa_activa';
+// Código de empresa a usar al CREAR un registro nuevo. Si no hay filtro
+// (una sola empresa), cae en 'SEFE' — igual que siempre.
+function empresaParaNuevo(){ return empresaActiva||'SEFE'; }
+// Filtra un array de registros a la empresa activa. Si no hay empresa activa
+// (una sola empresa, u otro cliente del producto), devuelve el array tal cual.
+// Ojo: sólo se usa para LISTAR/agregar; las búsquedas por id siguen usando el
+// array completo (un documento de una empresa puede referir a su cliente igual).
+function deEmpresa(arr){
+  if(!empresaActiva) return arr||[];
+  return (arr||[]).filter(x=> (x&&x.empresa||'SEFE')===empresaActiva );
+}
+// Arranca la empresa activa al entrar: si hay más de una empresa, toma la
+// recordada en el navegador (o SEFE por defecto). Con una sola, queda null.
+function iniciarEmpresaActiva(){
+  if(!haymultiempresa()){ empresaActiva=null; return; }
+  let g=null; try{ g=localStorage.getItem(EMPRESA_KEY); }catch(e){}
+  const existe = g && (empresas||[]).some(e=>e.codigo===g && e.activo);
+  empresaActiva = existe ? g : ((empresas.find(e=>e.activo)||{}).codigo||'SEFE');
+}
+// Cambia la empresa activa: recuerda la elección, refresca el selector y la
+// marca, y vuelve a dibujar la vista actual con el nuevo filtro.
+function cambiarEmpresa(codigo){
+  if(!codigo||codigo===empresaActiva) return;
+  empresaActiva=codigo;
+  try{ localStorage.setItem(EMPRESA_KEY,codigo); }catch(e){}
+  // Forzar que los filtros con dropdown cacheado (proveedores, clientes, cuentas)
+  // se reconstruyan con los datos de la nueva empresa.
+  try{ document.querySelectorAll('[data-built]').forEach(el=>{el.dataset.built='';}); }catch(e){}
+  renderSelectorEmpresa();
+  const v=(document.querySelector('.nav button.active')||{}).dataset
+        ? document.querySelector('.nav button.active').dataset.view
+        : (location.hash||'').replace('#','');
+  if(v && typeof go==='function') go(v);
+}
+// Dibuja (o esconde) el selector de empresa en la barra superior.
+function renderSelectorEmpresa(){
+  const cont=document.getElementById('sel-empresa-cont');
+  if(!cont) return;
+  if(!haymultiempresa()){ cont.innerHTML=''; cont.style.display='none'; return; }
+  cont.style.display='';
+  const act=empresaActivaObj();
+  const col=(act&&act.color)||'#173916';
+  const opts=(empresas||[]).filter(e=>e.activo)
+    .map(e=>`<option value="${e.codigo}"${e.codigo===empresaActiva?' selected':''}>${e.nombre}</option>`).join('');
+  cont.innerHTML=`<span class="emp-dot" style="background:${col}"></span>`+
+    `<select id="sel-empresa" class="sel-empresa" title="Empresa con la que estás trabajando" onchange="cambiarEmpresa(this.value)">${opts}</select>`;
+}
+// Etiqueta de empresa (pill de color) para las vistas COMPARTIDAS (ruta,
+// despachos), donde se ven las dos empresas juntas. Devuelve '' si hay una
+// sola empresa (no molesta al resto de los clientes del producto).
+function empTag(codigo){
+  if(!haymultiempresa()) return '';
+  const e=(empresas||[]).find(x=>x.codigo===(codigo||'SEFE'));
+  const nom=(e&&e.nombre)||codigo||'SEFE'; const col=(e&&e.color)||'#888';
+  return `<span class="emp-tag"><span class="emp-dot" style="background:${col}"></span>${nom}</span>`;
+}
+if(typeof window!=='undefined'){
+  window.empresaActivaObj=empresaActivaObj; window.haymultiempresa=haymultiempresa;
+  window.deEmpresa=deEmpresa; window.empresaParaNuevo=empresaParaNuevo;
+  window.cambiarEmpresa=cambiarEmpresa; window.renderSelectorEmpresa=renderSelectorEmpresa;
+  window.iniciarEmpresaActiva=iniciarEmpresaActiva; window.empTag=empTag;
+}
 // Meta de ventas del mes (número) configurada en el dashboard; 0 si no hay.
 function metaVentasMes(){ const v=Number(ajustes&&ajustes.meta_ventas_mes); return v>0?v:0; }
 window.metaVentasMes=metaVentasMes;
