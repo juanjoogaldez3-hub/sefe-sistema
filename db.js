@@ -76,7 +76,7 @@ async function cargarTodo() {
     const [
       rClientes, rProductos, rVendedores, rPilotos, rProveedores,
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
-      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios, rBatEntregas, rGas, rRecEsp, rParadas
+      rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios, rBatEntregas, rGas, rRecEsp, rParadas, rAjustes
     ] = await Promise.all([
       sb.from('clientes').select('*').order('id'),
       sb.from('productos').select('*').order('id'),
@@ -114,6 +114,8 @@ async function cargarTodo() {
       sb.from('recibos_especiales').select('*').order('id',{ascending:false}),
       // Paradas manuales de ruta (banco, recolección, etc.; tolera tabla ausente).
       sb.from('paradas_ruta').select('*').order('id'),
+      // Ajustes generales (clave/valor; meta de ventas, etc.; tolera tabla ausente).
+      sb.from('ajustes').select('*'),
     ]);
 
     // Mapear de snake_case (base) a camelCase (app)
@@ -125,6 +127,7 @@ async function cargarTodo() {
     documentos = (rDocumentos.data||[]).map(d=>mapDocumentoFromDB(d, rAbonos.data||[]));
     cobrosRuta = (rCobrosRuta.data||[]).map(mapCobroRutaFromDB);
     paradasRuta = (rParadas&&rParadas.data||[]).map(mapParadaRutaFromDB);
+    if(typeof ajustes!=='undefined'){ ajustes={}; ((rAjustes&&rAjustes.data)||[]).forEach(a=>{ let v=a.valor; if(typeof v==='string'){try{v=JSON.parse(v);}catch(e){}} ajustes[a.clave]=v; }); }
     compras = (rCompras.data||[]).map(c=>mapCompraFromDB(c, rPagos.data||[]));
     usuarios = (rUsuarios.data||[]).map(mapUsuarioFromDB);
     // Roles: reconstruir el objeto ROLES
@@ -384,6 +387,16 @@ async function guardarDashboardLayout(userId, layout){
   return true;
 }
 if(typeof window!=='undefined')window.guardarDashboardLayout=guardarDashboardLayout;
+// Guarda un ajuste general (clave/valor). Usado para la meta de ventas, etc.
+async function guardarAjuste(clave, valor){
+  if(!clave)return false;
+  const row={clave, valor, actualizado:new Date().toISOString(), actualizado_por:(typeof currentUser!=='undefined'?currentUser:null)};
+  const {error}=await sb.from('ajustes').upsert(row,{onConflict:'clave'});
+  if(error){console.error('Error guardando ajuste '+clave+':',error);return false;}
+  if(typeof ajustes!=='undefined')ajustes[clave]=valor;
+  return true;
+}
+if(typeof window!=='undefined')window.guardarAjuste=guardarAjuste;
 function mapTalonarioFromDB(t){
   return {
     id:t.id, numeroInicial:t.numero_inicial, numeroFinal:t.numero_final,

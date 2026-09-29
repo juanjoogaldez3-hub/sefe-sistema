@@ -44,6 +44,7 @@ const DB_WIDGETS=[
   {key:'panel_ambientales',lbl:'Panel — Ambientales próximos',    grp:'Paneles'},
   {key:'panel_ventas6',  lbl:'Panel — Ventas últimos 6 meses',    grp:'Paneles'},
   {key:'panel_desphoy',  lbl:'Panel — Despachos de hoy',          grp:'Paneles'},
+  {key:'panel_meta',     lbl:'Panel — Meta de ventas',            grp:'Paneles'},
   {key:'alerta_venc',   lbl:'Alerta — Facturas vencidas',     grp:'Alertas'},
   {key:'alerta_stock',  lbl:'Alerta — Stock bajo / sin stock',grp:'Alertas'},
   {key:'alerta_oc',     lbl:'Alerta — OC sin recibir',        grp:'Alertas'},
@@ -73,6 +74,7 @@ const DASH_PANELS=[
   {id:'panel-bloque-amb', lbl:'Ambientales próximos'},
   {id:'panel-bloque-ventas6', lbl:'Ventas últimos 6 meses'},
   {id:'panel-bloque-desphoy', lbl:'Despachos de hoy'},
+  {id:'panel-bloque-meta', lbl:'Meta de ventas'},
 ];
 let _dashEdit=false;
 function _dashLay(){ if(typeof currentDashLayout!=='object'||!currentDashLayout)currentDashLayout={order:[],hidden:[]}; if(!Array.isArray(currentDashLayout.order))currentDashLayout.order=[]; if(!Array.isArray(currentDashLayout.hidden))currentDashLayout.hidden=[]; return currentDashLayout; }
@@ -405,10 +407,61 @@ function renderPanel(){
     }else bqDH.style.display='none';
   }
 
+  // ── Panel: Meta de ventas (barra de progreso del mes) ──
+  const bqMeta=document.getElementById('panel-bloque-meta');
+  if(bqMeta){
+    const cfgM=dashboardConfig[currentRole]?.panel_meta;
+    const onM=(cfgM===undefined)?(dbConf('kpi_ventas')||['admin','gerencia','auditoria','ventas'].includes(rol)):cfgM;
+    if(onM){
+      const meta=(typeof metaVentasMes==='function')?metaVentasMes():0;
+      const puedeEditar=['admin','gerencia'].includes(rol);
+      const eb=document.getElementById('meta-edit-btn'); if(eb)eb.style.display=puedeEditar?'':'none';
+      if(meta>0){
+        const pct=Math.round(ventasMes/meta*100);
+        const pctBar=Math.max(0,Math.min(100,pct));
+        // Ritmo esperado a esta altura del mes (día actual / días del mes).
+        const diasMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
+        const ritmo=Math.round(hoy.getDate()/diasMes*100);
+        const alDia=pct>=ritmo;
+        const col=pct>=100?'var(--green)':alDia?'var(--lime)':'var(--warn)';
+        const falta=Math.max(0,meta-ventasMes);
+        $('#panel-meta').innerHTML=`
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <span style="font-size:20px;font-weight:800">${money(ventasMes)}</span>
+            <span style="font-size:12.5px;color:var(--muted)">de ${money(meta)} · <b style="color:${col}">${pct}%</b></span>
+          </div>
+          <div style="height:14px;background:var(--surface-2);border-radius:8px;overflow:hidden;position:relative">
+            <div style="height:100%;width:${pctBar}%;background:${col};transition:width .3s ease"></div>
+            <div style="position:absolute;top:-2px;bottom:-2px;left:${Math.min(100,ritmo)}%;width:2px;background:var(--muted-2)" title="Ritmo esperado a hoy: ${ritmo}%"></div>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:7px">${pct>=100?'🎉 ¡Meta alcanzada!':(falta>0?('Faltan '+money(falta)+' · '+(alDia?'vas al día':'vas por debajo del ritmo'))+' (línea gris = ritmo esperado hoy)':'')}</div>`;
+      }else{
+        $('#panel-meta').innerHTML=`<div class="empty" style="font-size:12.5px">Sin meta definida.${puedeEditar?' Definila con el botón de arriba.':''}</div>`;
+      }
+      bqMeta.style.display='';
+    }else bqMeta.style.display='none';
+  }
+
   // Aplicar el acomodo personal (orden + ocultos) y, si está activo, el modo edición.
   _aplicarLayoutDashboard();
   _dashEditUI();
 }
+// Definir / cambiar la meta de ventas del mes (admin/gerencia).
+function editarMetaVentas(){
+  if(!['admin','gerencia'].includes(currentRole)){toast('Sin permiso','Solo Admin o Gerencia define la meta',true);return;}
+  const actual=(typeof metaVentasMes==='function')?metaVentasMes():0;
+  openMod('🎯 Meta de ventas del mes',
+    `<div class="row"><div><label>Meta mensual (Q)</label><input id="meta-val" type="number" min="0" step="100" value="${actual||''}" placeholder="Ej. 100000"></div></div>
+     <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Es la meta de ventas certificadas del mes. La barra del dashboard mide el avance contra este número.</span></div>`,
+    async ()=>{
+      const n=Number($('#meta-val').value)||0;
+      const ok=await (typeof guardarAjuste==='function'?guardarAjuste('meta_ventas_mes',n):Promise.resolve(false));
+      if(!ok){toast('No se pudo guardar','Revisá la conexión (¿corriste el SQL de ajustes?)',true);return;}
+      if(typeof logAudit==='function')logAudit('Meta de ventas definida',money(n));
+      closeMod();renderPanel();toast('✓ Meta guardada',money(n)+' este mes');
+    });
+}
+window.editarMetaVentas=editarMetaVentas;
 // Monto compacto para el mini-gráfico: Q80k, Q1.2k, Q950…
 function _kMoney(n){ n=Number(n)||0; if(n>=1000)return 'Q'+(n/1000).toFixed(n>=10000?0:1)+'k'; return 'Q'+Math.round(n); }
 
