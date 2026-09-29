@@ -1,8 +1,8 @@
 function renderReportes(){
   bindRep();renderRepFilters();
   const r=repRange();
-  let ventas=documentos.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&enRango(d.creada,r));
-  let comprasR=compras.filter(c=>enRango(c.fecha,r));
+  let ventas=deEmpresa(documentos).filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&enRango(d.creada,r)); // multiempresa
+  let comprasR=deEmpresa(compras).filter(c=>enRango(c.fecha,r));
   // aplicar filtros comunes
   if(repFiltros.cliente)ventas=ventas.filter(d=>String(d.clienteId)===repFiltros.cliente);
   if(repFiltros.vendedor_simple)ventas=ventas.filter(d=>d.vendedorNombre===repFiltros.vendedor_simple);
@@ -11,7 +11,7 @@ function renderReportes(){
   const periodoLabel=repFiltros.cliente?clientes.find(c=>String(c.id)===repFiltros.cliente)?.nombre||'':repPeriod==='mes'?'Este mes':repPeriod==='3m'?'Últimos 3 meses':repPeriod==='anio'?'Este año':'Todo';
   if(repType==='resumen'){
     const total=ventas.reduce((s,d)=>s+d.totales.total,0);
-    const porCobrar=documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+arInfo(d).saldo,0);
+    const porCobrar=deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+arInfo(d).saldo,0);
     html+=`<div class="kpis stagger">${kpiHTML([
       {ic:'i-green',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Ventas del período',val:money(total),sub:ventas.length+' documentos'},
       {ic:'i-blue',svg:'<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/>',lbl:'Ticket promedio',val:money(ventas.length?total/ventas.length:0)},
@@ -305,7 +305,7 @@ function renderReportes(){
     // trayendo sus ventas— para que siempre haya con qué comparar mes vs mes.
     const _mkDate=dt=>dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
     const _filtrarVentas=rr=>{
-      let v=documentos.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&enRango(d.creada,rr));
+      let v=deEmpresa(documentos).filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&enRango(d.creada,rr)); // multiempresa
       if(repFiltros.cliente)v=v.filter(d=>String(d.clienteId)===repFiltros.cliente);
       if(repFiltros.vendedor_simple)v=v.filter(d=>d.vendedorNombre===repFiltros.vendedor_simple);
       return v;
@@ -453,7 +453,7 @@ function renderReportes(){
     const _finCurso=new Date(_ahora.getFullYear(),_ahora.getMonth()+1,0,23,59,59);
     const _iniPrev=new Date(_ahora.getFullYear(),_ahora.getMonth()-1,1);
     const _rComp={start:(r.start<_iniPrev?r.start:_iniPrev),end:(r.end>_finCurso?r.end:_finCurso)};
-    let ventasC=documentos.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&enRango(d.creada,_rComp));
+    let ventasC=deEmpresa(documentos).filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&enRango(d.creada,_rComp)); // multiempresa
     if(repFiltros.cliente)ventasC=ventasC.filter(d=>String(d.clienteId)===repFiltros.cliente);
     if(repFiltros.vendedor_simple)ventasC=ventasC.filter(d=>d.vendedorNombre===repFiltros.vendedor_simple);
     const _mkDate=dt=>dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
@@ -643,7 +643,7 @@ function renderReportes(){
     // LISTADO DE CLIENTES — directorio de contactos agrupado por vendedor
     const primeraVezDir=!gruposColapsados.__dirInit;
     // Filtrar clientes por vendedor si se eligió uno
-    let clientesDir=clientes.filter(c=>c.nit!=='CF'); // excluir Consumidor Final
+    let clientesDir=deEmpresa(clientes).filter(c=>c.nit!=='CF'); // excluir Consumidor Final · multiempresa
     if(repFiltros.vendedor_simple){
       const v=vendedores.find(x=>x.nombre===repFiltros.vendedor_simple);
       if(v)clientesDir=clientesDir.filter(c=>c.vendedorId===v.id);
@@ -750,7 +750,7 @@ function renderReportes(){
     // REPORTE GENERAL DE FACTURAS EMITIDAS
     // Columnas: Documento, Fecha, Cliente, Tipo (Contado/Crédito), Neto, IVA, Valor, Saldo
     // Filtra por rango de fechas (selector global) y por cliente
-    let facts=documentos.filter(d=>d.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(d.estado)&&enRango(d.creada,r));
+    let facts=deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(d.estado)&&enRango(d.creada,r)); // multiempresa
     if(repFiltros.cliente){
       facts=facts.filter(d=>String(d.clienteId)===String(repFiltros.cliente));
     }
@@ -803,7 +803,7 @@ function renderReportes(){
     // 1) Reunir todos los movimientos
     const movs=[];
     // SALIDAS: facturas certificadas/facturadas (no anuladas) que rebajaron stock
-    documentos.filter(d=>d.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(d.estado)&&enRango(d.creada,r)).forEach(f=>{
+    deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(d.estado)&&enRango(d.creada,r)).forEach(f=>{ // multiempresa
       (f.items||[]).forEach(it=>{
         if(prodSel&&it.id!==prodSel.id)return;
         movs.push({
@@ -819,7 +819,7 @@ function renderReportes(){
     // SALIDAS: pedidos abiertos, préstamos y envíos (todos rebajan stock al crearse; la factura ya
     // se cuenta arriba, y como al facturar el tipo pasa a 'cambiaria' no hay doble conteo).
     // Los préstamos/envíos devueltos suman su ingreso (neto 0).
-    documentos.filter(d=>['pedido','prestamo','envio'].includes(d.tipoDoc)&&d.estado!=='anulada'&&!d.anulado&&enRango(d.creada,r)).forEach(f=>{
+    deEmpresa(documentos).filter(d=>['pedido','prestamo','envio'].includes(d.tipoDoc)&&d.estado!=='anulada'&&!d.anulado&&enRango(d.creada,r)).forEach(f=>{ // multiempresa
       (f.items||[]).forEach(it=>{
         if(prodSel&&it.id!==prodSel.id)return;
         const lbl=(TIPO_LBL[f.tipoDoc]?TIPO_LBL[f.tipoDoc][0]:'Documento');
@@ -833,7 +833,7 @@ function renderReportes(){
       });
     });
     // INGRESOS: compras con recepciones registradas
-    compras.filter(c=>enRango(c.fecha,r)||( (c.items||[]).some(it=>(it.recepciones||[]).some(rc=>enRango(rc.fecha,r))))).forEach(c=>{
+    deEmpresa(compras).filter(c=>enRango(c.fecha,r)||( (c.items||[]).some(it=>(it.recepciones||[]).some(rc=>enRango(rc.fecha,r))))).forEach(c=>{ // multiempresa
       (c.items||[]).forEach(it=>{
         if(prodSel&&it.id!==prodSel.id)return;
         // Si hay historial de recepciones, usar cada una; si no, usar el recibido total con la fecha de compra
@@ -862,7 +862,7 @@ function renderReportes(){
       });
     });
     // CONVERSIONES: caja(s) abierta(s) a unidades sueltas. Neto cero en unidades (informativo, para trazabilidad).
-    productos.forEach(pp=>{
+    deEmpresa(productos).forEach(pp=>{ // multiempresa
       if(prodSel&&pp.id!==prodSel.id)return;
       (pp.conversiones||[]).forEach(cv=>{
         if(!enRango(cv.fecha,r))return;
@@ -939,7 +939,7 @@ function renderReportes(){
   else if(repType==='canalvend'){
     // VENTAS POR CANAL — desglosa las ventas de vendedores tipo canal (Whaticket)
     // por la persona que realmente vendió (subVendedorNombre)
-    const facts=documentos.filter(d=>d.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(d.estado)&&enRango(d.creada,r)&&esVendedorCanal(d.vendedorNombre));
+    const facts=deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&['certificada','facturado'].includes(d.estado)&&enRango(d.creada,r)&&esVendedorCanal(d.vendedorNombre)); // multiempresa
     // Agrupar por sub-vendedor
     const porPersona={};
     facts.forEach(f=>{
@@ -995,7 +995,7 @@ function renderReportes(){
   }
   else if(repType==='cxc'){
     const porCli={};
-    documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
+    deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
       if(repFiltros.cliente&&String(d.clienteId)!==repFiltros.cliente)return;
       if(repFiltros.tiempoCredito){const c=clientes.find(x=>x.id===d.clienteId);if(!c||String(c.tiempoCredito||0)!==repFiltros.tiempoCredito)return;}
       const inf=arInfo(d);if(inf.saldo<=0.001)return;
@@ -1020,7 +1020,7 @@ function renderReportes(){
   else if(repType==='estcta'){
     const hoy=new Date();
     const porCli={};
-    documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
+    deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
       if(repFiltros.cliente&&String(d.clienteId)!==repFiltros.cliente)return;
       const cliRec=clientes.find(x=>x.id===d.clienteId);
       if(repFiltros.tiempoCredito){if(!cliRec||String(cliRec.tiempoCredito||0)!==repFiltros.tiempoCredito)return;}
@@ -1139,7 +1139,7 @@ function renderReportes(){
   }
   else if(repType==='recibos'){
     const filas=[];
-    documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
+    deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
       if(repFiltros.cliente&&String(d.clienteId)!==repFiltros.cliente)return;
       (d.abonos||[]).filter(a=>!a.anulado).forEach(a=>{
         if(repFiltros.metodoRec&&a.metodo!==repFiltros.metodoRec)return;
@@ -1275,7 +1275,7 @@ function renderReportes(){
   else if(repType==='pagos'){
     // Reporte de Pagos agrupado por cliente
     const porCli={};
-    documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
+    deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').forEach(d=>{
       if(repFiltros.cliente&&String(d.clienteId)!==repFiltros.cliente)return;
       // Por cliente_id (estable), no por nombre: si no, el mismo cliente sale
       // en dos filas (nombre viejo sin comercial vs. nuevo con comercial).
@@ -1309,7 +1309,7 @@ function renderReportes(){
     const corte=repFiltros.invFecha||fechaHoyGT();const esHoy=corte>=fechaHoyGT();
     const movs=_movsInvDespuesDe(corte);
     const exDe=p=>{const mm=movs[p.codigo];return Math.max(0,_stk(p)-((mm&&mm.entra)||0)+((mm&&mm.sale)||0));};
-    let lista=productos.filter(p=>p.activo!==false);
+    let lista=deEmpresa(productos).filter(p=>p.activo!==false);
     if(repFiltros.marca_prod)lista=lista.filter(p=>(p.marca||'')===repFiltros.marca_prod);
     lista=lista.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
     // Cada producto es una fila; los caja_unidad se parten en 2 filas: caja (sufijo -C)
@@ -1347,7 +1347,7 @@ function renderReportes(){
     const _dz=new Date(r.start.getTime());_dz.setDate(_dz.getDate()-1);const desdeMenos1=_fmt(_dz);
     const movDesde=_movsInvDespuesDe(desdeMenos1); // movimientos del inicio del período en adelante
     const movHasta=_movsInvDespuesDe(hasta);       // sólo lo POSTERIOR al período
-    let lista=productos.filter(p=>p.activo!==false);
+    let lista=deEmpresa(productos).filter(p=>p.activo!==false);
     if(repFiltros.marca_prod)lista=lista.filter(p=>(p.marca||'')===repFiltros.marca_prod);
     lista=lista.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
     const _rd=n=>Math.round(n*100)/100;
@@ -1385,7 +1385,7 @@ function renderReportes(){
     const corte=repFiltros.invFecha||fechaHoyGT();const esHoy=corte>=fechaHoyGT();
     const movs=_movsInvDespuesDe(corte);
     const exDe=p=>{const mm=movs[p.codigo];return Math.max(0,_stk(p)-((mm&&mm.entra)||0)+((mm&&mm.sale)||0));};
-    let base=productos.filter(p=>p.activo!==false);
+    let base=deEmpresa(productos).filter(p=>p.activo!==false);
     if(repFiltros.marca_prod)base=base.filter(p=>(p.marca||'')===repFiltros.marca_prod);
     base=base.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
     // Cada caja/unidad se parte en 2 filas: cajas (código, costo por caja) y unidades sueltas (subcódigo -U, costo por unidad).
@@ -1411,7 +1411,7 @@ function renderReportes(){
     // RETENCIONES IVA/ISR — abonos con método 'Retención ...' en el período (por fecha del abono).
     const tipoDe=m=>{const s=String(m||'');return /ISR/i.test(s)?'ISR':(/IVA/i.test(s)?'IVA':'—');};
     const filas=[];
-    documentos.forEach(d=>{
+    deEmpresa(documentos).forEach(d=>{ // multiempresa
       if(d.tipoDoc!=='cambiaria')return;
       if(repFiltros.cliente&&String(d.clienteId)!==repFiltros.cliente)return;
       (d.abonos||[]).forEach(a=>{

@@ -226,12 +226,12 @@ function _ambEstadoTxt(prox){
 }
 function _ambFrecTxt(s){ return s.frecuenciaValor>0?('cada '+s.frecuenciaValor+' '+_ambUniLbl(s.frecuenciaUnidad,s.frecuenciaValor)):'—'; }
 function _ambServiciosOrdenados(){
-  return (typeof ambServicios!=='undefined'?ambServicios:[]).slice().sort((a,b)=>
+  return deEmpresa(typeof ambServicios!=='undefined'?ambServicios:[]).slice().sort((a,b)=> // multiempresa
     _ctrlNombreCliente(a.clienteId).localeCompare(_ctrlNombreCliente(b.clienteId))||
     String(a.proximo||'9999').localeCompare(String(b.proximo||'9999')));
 }
 function reporteAmbientalesPDF(){
-  const servicios=(typeof ambServicios!=='undefined'?ambServicios:[]).slice();
+  const servicios=deEmpresa(typeof ambServicios!=='undefined'?ambServicios:[]).slice(); // multiempresa
   if(!servicios.length){toast('Sin datos','No hay servicios de ambientales registrados',true);return;}
   const porCli={};
   servicios.forEach(s=>{const k=(s.clienteId==null?'—':s.clienteId);(porCli[k]=porCli[k]||[]).push(s);});
