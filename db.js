@@ -50,7 +50,7 @@ async function fetchAll(tabla, ordenCampo, cols){
 // del peso de la base. No se necesitan para ver listas, cobros ni dashboard;
 // sólo al abrir o imprimir UNA factura. Por eso la carga inicial los omite
 // (bajaba 24 MB en cada login) y se traen a pedido con asegurarPdfDoc().
-const DOC_COLS_SIN_BLOBS='id,numero,tipo_doc,cliente_id,cliente_nombre,cliente_comercial,cliente_nit,vendedor_id,vendedor_nombre,sub_vendedor_nombre,items,totales,estado,estado_pago,inventario_rebajado,autorizacion,serie,numero_dte,orden_compra,observaciones,nota_interna,dias_credito,vencimiento,exenta,escenario_exenta,piloto_id,orden_ruta,estado_entrega,entrega_info,para_despacho,preparacion,eta_entrega,anulado,motivo_anulacion,fecha_certificacion,factura_origen_id,nit_facturado,nombre_facturado,sede,creada,costo_historico';
+const DOC_COLS_SIN_BLOBS='id,numero,tipo_doc,cliente_id,cliente_nombre,cliente_comercial,cliente_nit,vendedor_id,vendedor_nombre,sub_vendedor_nombre,items,totales,estado,estado_pago,inventario_rebajado,autorizacion,serie,numero_dte,orden_compra,observaciones,nota_interna,dias_credito,vencimiento,exenta,escenario_exenta,piloto_id,orden_ruta,estado_entrega,entrega_info,para_despacho,preparacion,eta_entrega,anulado,motivo_anulacion,fecha_certificacion,factura_origen_id,nit_facturado,nombre_facturado,sede,creada,costo_historico,empresa';
 
 // Trae el PDF/XML de UNA factura sólo cuando se necesita (verla, imprimirla,
 // descargarla) y lo deja cacheado en el objeto en memoria. Si ya está, no
@@ -257,6 +257,19 @@ async function cargarTodo() {
       }
     } catch(e){ /* tabla aún no creada */ }
 
+    // Catálogo de empresas (multiempresa). Tolera que la tabla no exista
+    // todavía → queda una sola empresa por defecto (SEFE) y el sistema
+    // sigue igual. La marca _multiempresa es el "interruptor": el selector
+    // y el filtrado por empresa (Fase 1) sólo se encienden cuando la tabla
+    // existe de verdad y hay más de una empresa activa.
+    try {
+      const rEmp = await sb.from('empresas').select('*').order('orden');
+      if (!rEmp.error && typeof empresas !== 'undefined') {
+        empresas = (rEmp.data||[]).map(mapEmpresaFromDB);
+        if (typeof window !== 'undefined') window._multiempresa = empresas.filter(e=>e.activo).length > 1;
+      }
+    } catch(e){ /* tabla aún no creada */ }
+
     // (El costo histórico por factura ahora viene en la carga principal de
     // 'documentos' — es una columna más en DOC_COLS_SIN_BLOBS y la llena el
     // mapper. Antes se traía en una segunda recorrida completa de la tabla.)
@@ -294,7 +307,10 @@ function mapClienteFromDB(c){
     cobroInfo:c.cobro_info||{}, seguimientos:c.seguimientos||[], activo:c.activo!==false,
     // Ubicación pineada (GPS o a mano en el mapa). Si la base todavía no tiene
     // las columnas, llegan 'undefined' y quedan en null — no rompe nada.
-    lat:(c.lat!=null?Number(c.lat):null), lng:(c.lng!=null?Number(c.lng):null)
+    lat:(c.lat!=null?Number(c.lat):null), lng:(c.lng!=null?Number(c.lng):null),
+    // Empresa dueña del cliente (multiempresa). Si la base todavía no tiene
+    // la columna, llega 'undefined' y queda como SEFE — no rompe nada.
+    empresa:c.empresa||'SEFE'
   };
 }
 function mapProductoFromDB(p){
@@ -304,13 +320,15 @@ function mapProductoFromDB(p){
     proveedorIds:p.proveedor_ids||[], skuProveedor:p.sku_proveedor, nombreProveedor:p.nombre_proveedor,
     marca:p.marca||'', activo:p.activo!==false,
     tipoEmpaque:p.tipo_empaque||'unidad', unidadesPorCaja:p.unidades_por_caja, stockCajas:Number(p.stock_cajas||0),
-    precioUnidad:Number(p.precio_unidad)||0, conversiones:p.conversiones||[], categoria:p.categoria||''
+    precioUnidad:Number(p.precio_unidad)||0, conversiones:p.conversiones||[], categoria:p.categoria||'',
+    empresa:p.empresa||'SEFE'
   };
 }
 function mapProveedorFromDB(p){
   return {
     id:p.id, nombre:p.nombre, razonSocial:p.razon_social, nit:p.nit,
-    telefono:p.telefono, correo:p.correo, diasCredito:p.dias_credito
+    telefono:p.telefono, correo:p.correo, diasCredito:p.dias_credito,
+    empresa:p.empresa||'SEFE'
   };
 }
 // Un abono suelto (fila de la tabla 'abonos'). Se usa tanto al armar el
@@ -320,7 +338,8 @@ function mapAbonoFromDB(a){
     fecha:a.fecha, monto:Number(a.monto), metodo:a.metodo, referencia:a.referencia,
     noRecibo:a.no_recibo, comprobante:a.comprobante, registradoPor:a.registrado_por,
     registradoEl:a.registrado_el, anulado:a.anulado, motivoAnulacion:a.motivo_anulacion,
-    origenCobroRuta:a.origen_cobro_ruta, cuentaBancoId:a.cuenta_banco_id, _id:a.id
+    origenCobroRuta:a.origen_cobro_ruta, cuentaBancoId:a.cuenta_banco_id, _id:a.id,
+    empresa:a.empresa||'SEFE'
   };
 }
 function mapDocumentoFromDB(d, todosAbonos){
@@ -340,7 +359,7 @@ function mapDocumentoFromDB(d, todosAbonos){
     pdfBase64:d.pdf_base64, xmlBase64:d.xml_base64, fechaCertificacion:d.fecha_certificacion,
     facturaOrigenId:d.factura_origen_id, nitFacturado:d.nit_facturado, nombreFacturado:d.nombre_facturado,
     sede:d.sede, costoHistorico:(d.costo_historico!=null?Number(d.costo_historico):undefined),
-    creada:d.creada, abonos
+    creada:d.creada, empresa:d.empresa||'SEFE', abonos
   };
 }
 function mapCobroRutaFromDB(c){
@@ -349,7 +368,8 @@ function mapCobroRutaFromDB(c){
     monto:Number(c.monto), modo:c.modo, noBoleta:c.no_boleta, noRecibo:c.no_recibo,
     cheque:c.cheque, banco:c.banco, piloto:c.piloto, fecha:c.fecha, estado:c.estado,
     recibidoPor:c.recibido_por, recibidoFecha:c.recibido_fecha,
-    procesadoPor:c.procesado_por, procesadoFecha:c.procesado_fecha
+    procesadoPor:c.procesado_por, procesadoFecha:c.procesado_fecha,
+    empresa:c.empresa||'SEFE'
   };
 }
 // Un pago a proveedor suelto (fila de 'pagos_proveedor').
@@ -369,7 +389,7 @@ function mapCompraFromDB(c, todosPagos){
     estadoRecepcion:c.estado_recepcion, facturada:c.facturada, docProv:c.doc_prov,
     tipoPago:c.tipo_pago, diasCredito:c.dias_credito, vencimiento:c.vencimiento,
     especial:c.especial, oficializada:c.oficializada, mes:c.mes,
-    anulado:c.anulado, motivoAnulacion:c.motivo_anulacion, abonos
+    anulado:c.anulado, motivoAnulacion:c.motivo_anulacion, empresa:c.empresa||'SEFE', abonos
   };
 }
 function mapUsuarioFromDB(u){
@@ -397,6 +417,32 @@ async function guardarAjuste(clave, valor){
   return true;
 }
 if(typeof window!=='undefined')window.guardarAjuste=guardarAjuste;
+// ── Catálogo de empresas (multiempresa) ─────────────────────
+function mapEmpresaFromDB(e){
+  return {
+    id:e.id, codigo:e.codigo, nombre:e.nombre||e.codigo, razonSocial:e.razon_social||'',
+    nit:e.nit||'', membrete:e.membrete||'', color:e.color||'', orden:Number(e.orden)||0,
+    activo:e.activo!==false, creada:e.created_at
+  };
+}
+async function guardarEmpresa(emp){
+  const row={
+    codigo:emp.codigo, nombre:emp.nombre||emp.codigo, razon_social:emp.razonSocial||null,
+    nit:emp.nit||null, membrete:emp.membrete||null, color:emp.color||null,
+    orden:Number(emp.orden)||0, activo:emp.activo!==false
+  };
+  if(emp._nuevo){
+    delete emp._nuevo;
+    const {data,error}=await sb.from('empresas').insert(row).select().single();
+    if(error){console.error('Error guardando empresa:',error);emp._nuevo=true;return false;}
+    emp.id=data.id; return true;
+  }else{
+    const {error}=await sb.from('empresas').update(row).eq('id',emp.id);
+    if(error){console.error('Error actualizando empresa:',error);return false;}
+    return true;
+  }
+}
+if(typeof window!=='undefined')window.guardarEmpresa=guardarEmpresa;
 function mapTalonarioFromDB(t){
   return {
     id:t.id, numeroInicial:t.numero_inicial, numeroFinal:t.numero_final,
@@ -413,7 +459,8 @@ function mapReciboAnuladoFromDB(r){
 function mapCuentaBancoFromDB(c){
   return {
     id:c.id, nombre:c.nombre, banco:c.banco, numero:c.numero, tipo:c.tipo||'monetaria',
-    moneda:c.moneda||'GTQ', saldoInicial:Number(c.saldo_inicial)||0, activo:c.activo!==false, creada:c.creada
+    moneda:c.moneda||'GTQ', saldoInicial:Number(c.saldo_inicial)||0, activo:c.activo!==false, creada:c.creada,
+    empresa:c.empresa||'SEFE'
   };
 }
 function mapMovimientoBancoFromDB(m){
@@ -429,7 +476,8 @@ function mapMovimientoBancoFromDB(m){
     // llega 'undefined' y queda como false — no rompe nada.
     conciliado:m.conciliado===true, conciliadoEl:m.conciliado_el||null,
     // Llave de la línea del banco con la que se emparejó a mano (memoria).
-    conciliadoRef:m.conciliado_ref||null
+    conciliadoRef:m.conciliado_ref||null,
+    empresa:m.empresa||'SEFE'
   };
 }
 function mapCategoriaFromDB(c){
@@ -685,7 +733,8 @@ function mapCotizacionFromDB(c){
     items:c.items||[], totales:c.totales||{},
     observaciones:c.observaciones||'', validezDias:Number(c.validez_dias)||15, fechaVence:c.fecha_vence,
     estado:c.estado||'borrador', creadoPor:c.creado_por||'', creada:c.creada,
-    convertidoPedidoId:c.convertido_pedido_id||null
+    convertidoPedidoId:c.convertido_pedido_id||null,
+    empresa:c.empresa||'SEFE'
   };
 }
 async function guardarCotizacion(cot){
@@ -726,7 +775,8 @@ function mapCreditoFromDB(c){
     fecha:c.fecha, documentoId:c.documento_id, noRecibo:c.no_recibo, metodo:c.metodo,
     referencia:c.referencia, cuentaBancoId:c.cuenta_banco_id, concepto:c.concepto,
     registradoPor:c.registrado_por, registradoEl:c.registrado_el,
-    anulado:c.anulado===true, motivoAnulacion:c.motivo_anulacion, _id:c.id
+    anulado:c.anulado===true, motivoAnulacion:c.motivo_anulacion, _id:c.id,
+    empresa:c.empresa||'SEFE'
   };
 }
 async function guardarCredito(cr){
@@ -1021,7 +1071,8 @@ function mapAmbServicioFromDB(a){
     frecuenciaValor:(a.frecuencia_valor!=null?a.frecuencia_valor:null),
     frecuenciaUnidad:a.frecuencia_unidad||'mes',
     historial:Array.isArray(a.historial)?a.historial:[],
-    creadoPor:a.creado_por||'', creado:a.creado
+    creadoPor:a.creado_por||'', creado:a.creado,
+    empresa:a.empresa||'SEFE'
   };
 }
 async function guardarAmbServicio(s){
@@ -1053,7 +1104,7 @@ if(typeof window!=='undefined'){window.guardarAmbServicio=guardarAmbServicio;win
 
 // ── Controles · Baterías (tipos/stock) ─────────────────────
 function mapBatTipoFromDB(t){
-  return { id:t.id, nombre:t.nombre||'', stock:Number(t.stock)||0, creado:t.creado };
+  return { id:t.id, nombre:t.nombre||'', stock:Number(t.stock)||0, creado:t.creado, empresa:t.empresa||'SEFE' };
 }
 async function guardarBatTipo(t){
   const row={ nombre:t.nombre, stock:Number(t.stock)||0 };
@@ -1079,7 +1130,8 @@ function mapBatCambioFromDB(c){
   return {
     id:c.id, clienteId:c.cliente_id, equipo:c.equipo||'', tipoId:c.tipo_id, pilotoId:c.piloto_id||null,
     cantidad:Number(c.cantidad)||0, fecha:c.fecha||null, proximo:c.proximo||null,
-    nota:c.nota||'', creadoPor:c.creado_por||'', creado:c.creado
+    nota:c.nota||'', creadoPor:c.creado_por||'', creado:c.creado,
+    empresa:c.empresa||'SEFE'
   };
 }
 async function guardarBatCambio(c){
@@ -1113,7 +1165,8 @@ if(typeof window!=='undefined'){
 function mapBatEntregaFromDB(e){
   return {
     id:e.id, pilotoId:e.piloto_id||null, tipoId:e.tipo_id, cantidad:Number(e.cantidad)||0,
-    fecha:e.fecha||null, nota:e.nota||'', creadoPor:e.creado_por||'', creado:e.creado
+    fecha:e.fecha||null, nota:e.nota||'', creadoPor:e.creado_por||'', creado:e.creado,
+    empresa:e.empresa||'SEFE'
   };
 }
 async function guardarBatEntrega(e){

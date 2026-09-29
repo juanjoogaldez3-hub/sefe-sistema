@@ -401,6 +401,19 @@ let currentUserId=null;
 let currentDashLayout={order:[],hidden:[]};
 // Ajustes generales (clave→valor) que vienen de la tabla `ajustes`.
 let ajustes={};
+// ── Multiempresa ────────────────────────────────────────────
+// Catálogo de empresas (SEFE, LAML). Lo llena db.js al cargar. Si la
+// tabla `empresas` todavía no existe, queda vacío y el sistema trabaja
+// como una sola empresa (SEFE), igual que siempre.
+let empresas=[];
+// Empresa activa (código) con la que se está trabajando ahora. La setea
+// el selector en la Fase 1; hasta entonces null = sin filtro (todo SEFE).
+let empresaActiva=null;
+// Devuelve la empresa activa (objeto del catálogo), o null.
+function empresaActivaObj(){ return (empresas||[]).find(e=>e.codigo===empresaActiva)||null; }
+// ¿Hay de verdad más de una empresa activa? (interruptor del selector)
+function haymultiempresa(){ return (empresas||[]).filter(e=>e.activo).length>1; }
+if(typeof window!=='undefined'){ window.empresaActivaObj=empresaActivaObj; window.haymultiempresa=haymultiempresa; }
 // Meta de ventas del mes (número) configurada en el dashboard; 0 si no hay.
 function metaVentasMes(){ const v=Number(ajustes&&ajustes.meta_ventas_mes); return v>0?v:0; }
 window.metaVentasMes=metaVentasMes;
