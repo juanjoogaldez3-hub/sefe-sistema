@@ -577,7 +577,9 @@ function _pgTalonarioChange(){
   if(prox!=null&&$pg('#pg-recibo'))$pg('#pg-recibo').value=prox;
 }
 window._pgTalonarioChange=_pgTalonarioChange;
+let _guardandoPago=false; // traba anti doble-clic del pago global (evita cobros/abonos duplicados)
 function openPagoGlobal(){
+  _guardandoPago=false; const _pb=document.getElementById('pg-save'); if(_pb)_pb.disabled=false;
   // Poblar datalist de clientes
   const list=$pg('#pg-cli-list');
   if(list)list.innerHTML=clientes.map(c=>`<option value="${c.nombre} · ${c.nit}">`).join('');
@@ -693,6 +695,7 @@ function pgDistribuirFIFO(){
 }
 window.pgDistribuirFIFO=pgDistribuirFIFO;
 function guardarPagoGlobal(){
+  if(_guardandoPago)return; // ya se está registrando este pago; ignorar el 2º clic
   const cliId=pgGetCliId();
   if(!cliId){$pg('#pg-err').style.display='flex';$pg('#pg-err').querySelector('span').textContent='Seleccioná un cliente';return;}
   const recibo=$pg('#pg-recibo').value.trim();
@@ -716,6 +719,7 @@ function guardarPagoGlobal(){
   const cuentaBancoId=$pg('#pg-cuenta')?.value||null;
   // Todo cobro tiene que entrar a una cuenta (cualquier método).
   if(!cuentaBancoId){$pg('#pg-err').style.display='flex';$pg('#pg-err').querySelector('span').textContent='Elegí la cuenta de banco a la que entró el dinero';return;}
+  _guardandoPago=true; const _pgBtn=document.getElementById('pg-save'); if(_pgBtn)_pgBtn.disabled=true;
   const hoy=new Date().toISOString();
   let facturasAbonadas=0;
   inputs.forEach(inp=>{

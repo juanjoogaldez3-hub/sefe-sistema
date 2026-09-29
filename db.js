@@ -504,11 +504,12 @@ async function guardarDocumento(d){
     const _numBase = (typeof SEFE_CONFIG!=='undefined' && SEFE_CONFIG.funciones && SEFE_CONFIG.funciones.numeroPorBase===true);
     if(_numBase) delete row.numero;
     const {data,error} = await sb.from('documentos').insert(row).select().single();
-    if(error){console.error('Error guardando documento:',error); d._nuevo=true;}
-    else { d.id = data.id; if(_numBase && data.numero!=null) d.numero = data.numero; }
+    if(error){console.error('Error guardando documento:',error); d._nuevo=true; return false;}
+    d.id = data.id; if(_numBase && data.numero!=null) d.numero = data.numero; return true;
   } else {
     const {error} = await sb.from('documentos').update(row).eq('id', d.id);
-    if(error)console.error('Error actualizando documento:',error);
+    if(error){console.error('Error actualizando documento:',error); return false;}
+    return true;
   }
 }
 

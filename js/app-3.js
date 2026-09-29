@@ -96,7 +96,13 @@ async function facturarPedidoExento(id,dias,escenario){
       closeMod();renderDocs();
       toast('✓ Factura Exenta CERTIFICADA','Autorización SAT: '+data.uuid);
       logAudit('Factura Exenta emitida (FEL real)',f.serie+'-'+f.numeroDte+' · Esc.'+escenario+' · '+money(f.totales.total));
-      if(typeof guardarDocumento==='function')guardarDocumento(f);
+      // Igual que la cambiaria: asegurar el guardado tras certificar (evita re-facturar).
+      let _okGuardarEx=(typeof guardarDocumento==='function')?await guardarDocumento(f):true;
+      if(_okGuardarEx===false){ await new Promise(r=>setTimeout(r,1500)); _okGuardarEx=await guardarDocumento(f); }
+      if(_okGuardarEx===false){
+        logAudit('⚠ Factura exenta certificada NO guardada',f.serie+'-'+f.numeroDte);
+        toast('⚠ Certificada en SAT pero NO guardada','La factura '+f.serie+'-'+f.numeroDte+' se certificó, pero no se pudo guardar. NO la vuelvas a facturar. Recargá y verificá.',true);
+      }
       if(f.pdfBase64)descargarFacturaPDF(f.id);
     }else{
       const msg=data.mensaje||data.error||'Error desconocido';
