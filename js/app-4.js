@@ -140,22 +140,27 @@ function openRecordatorio(id,preset){
       closeMod();renderRecordatorios();actualizarBellRec();toast('✓ Recordatorio guardado',titulo);
       if(typeof _reRenderCliSiAbierto==='function')_reRenderCliSiAbierto(cliActual);
     });
+  // Los recordatorios son COMPARTIDOS: podés ligarlos a un registro de
+  // CUALQUIER empresa (de ser necesario). Se muestra la empresa entre
+  // paréntesis para que sepas de cuál es, y al abrirlo el sistema cambia
+  // solo a esa empresa.
+  const _empSuf=(cod)=>haymultiempresa()?(' ('+(((typeof empresas!=='undefined'?empresas:[]).find(e=>e.codigo===(cod||'SEFE'))||{}).nombre||cod||'SEFE')+')'):'';
   setTimeout(()=>{
     recTipoChange(curTipo);
     crearAutocomplete('rec-ref',
       (q)=>{
         const tipo=document.getElementById('rec-tipo')?.value||'tarea';const ql=q.toLowerCase();
-        if(tipo==='cliente'||tipo==='contrasena')return deEmpresa(clientes).filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:c.nombre,sub:c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:(c.nit||''),valor:c.id}));
-        if(tipo==='factura')return deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.serie).filter(d=>((d.serie+'-'+d.numeroDte).toLowerCase().includes(ql)||(d.clienteComercial||d.clienteNombre||'').toLowerCase().includes(ql))).slice(0,8).map(d=>({texto:d.serie+'-'+d.numeroDte,sub:d.clienteComercial||d.clienteNombre||'',valor:d.id}));
-        if(tipo==='producto')return deEmpresa(productos).filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:p.marca||'',valor:p.id}));
-        if(tipo==='compra')return deEmpresa(compras).filter(c=>('CMP-'+padn(c.id)).toLowerCase().includes(ql)||(c.proveedorNombre||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:'CMP-'+padn(c.id)+' · '+c.proveedorNombre,sub:money(c.total),valor:c.id}));
+        if(tipo==='cliente'||tipo==='contrasena')return (typeof clientes!=='undefined'?clientes:[]).filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:c.nombre,sub:(c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:(c.nit||''))+_empSuf(c.empresa),valor:c.id}));
+        if(tipo==='factura')return (typeof documentos!=='undefined'?documentos:[]).filter(d=>d.tipoDoc==='cambiaria'&&d.serie).filter(d=>((d.serie+'-'+d.numeroDte).toLowerCase().includes(ql)||(d.clienteComercial||d.clienteNombre||'').toLowerCase().includes(ql))).slice(0,8).map(d=>({texto:d.serie+'-'+d.numeroDte,sub:(d.clienteComercial||d.clienteNombre||'')+_empSuf(d.empresa),valor:d.id}));
+        if(tipo==='producto')return (typeof productos!=='undefined'?productos:[]).filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:(p.marca||'')+_empSuf(p.empresa),valor:p.id}));
+        if(tipo==='compra')return (typeof compras!=='undefined'?compras:[]).filter(c=>('CMP-'+padn(c.id)).toLowerCase().includes(ql)||(c.proveedorNombre||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:'CMP-'+padn(c.id)+' · '+c.proveedorNombre,sub:money(c.total)+_empSuf(c.empresa),valor:c.id}));
         return [];
       },
       (item)=>{ if(item){document.getElementById('rec-refid').value=item.valor;document.getElementById('rec-ref').value=item.texto;const rf=document.getElementById('rec-fact'),rfi=document.getElementById('rec-factid');if(rf)rf.value='';if(rfi)rfi.value='';} });
     crearAutocomplete('rec-fact',
       (q)=>{
         const cliId=Number(document.getElementById('rec-refid')?.value||0);const ql=q.toLowerCase();
-        return deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.serie&&d.estado!=='anulada'&&(!cliId||d.clienteId===cliId)).filter(d=>((d.serie+'-'+d.numeroDte).toLowerCase().includes(ql)||String(d.numeroDte||'').includes(ql)||(d.clienteComercial||d.clienteNombre||'').toLowerCase().includes(ql))).slice(0,10).map(d=>({texto:d.serie+'-'+d.numeroDte,sub:(d.clienteComercial||d.clienteNombre||'')+' · '+money((d.totales&&d.totales.total)||0),valor:d.id}));
+        return (typeof documentos!=='undefined'?documentos:[]).filter(d=>d.tipoDoc==='cambiaria'&&d.serie&&d.estado!=='anulada'&&(!cliId||d.clienteId===cliId)).filter(d=>((d.serie+'-'+d.numeroDte).toLowerCase().includes(ql)||String(d.numeroDte||'').includes(ql)||(d.clienteComercial||d.clienteNombre||'').toLowerCase().includes(ql))).slice(0,10).map(d=>({texto:d.serie+'-'+d.numeroDte,sub:(d.clienteComercial||d.clienteNombre||'')+' · '+money((d.totales&&d.totales.total)||0),valor:d.id}));
       },
       (item)=>{ if(item){document.getElementById('rec-factid').value=item.valor;document.getElementById('rec-fact').value=item.texto;} });
   },0);
@@ -698,7 +703,7 @@ function posponerRecordatorio(cliId,segId){
   _reRenderCliSiAbierto(cliId);_refrescarRec();
 }
 window.posponerRecordatorio=posponerRecordatorio;
-function abrirClienteDesdeRec(cliId){$('#recmod')?.classList.remove('show');abrirCliente(cliId);setTimeout(()=>cliSetTab('seguimiento'),40);}
+function abrirClienteDesdeRec(cliId){$('#recmod')?.classList.remove('show');const _c=(typeof clientes!=='undefined'?clientes:[]).find(x=>x.id===cliId);if(_c&&typeof irAEmpresaSiHaceFalta==='function')irAEmpresaSiHaceFalta(_c.empresa);abrirCliente(cliId);setTimeout(()=>cliSetTab('seguimiento'),40);}
 window.abrirClienteDesdeRec=abrirClienteDesdeRec;
 // Dar de baja / reactivar un cliente. No lo borra: lo marca inactivo (fuera del
 // seguimiento) y conserva todo su historial. Reversible.
@@ -1390,6 +1395,7 @@ window.crearSeguimiento=crearSeguimiento;
 // se pone próximo contacto, agenda otra tarea "Seguimiento: X". recId = tarea de origen.
 function openSegVenta(cliId, recId){
   const c=(typeof clientes!=='undefined'?clientes:[]).find(x=>x.id===cliId); if(!c){toast('Cliente no encontrado',null,true);return;}
+  if(typeof irAEmpresaSiHaceFalta==='function')irAEmpresaSiHaceFalta(c.empresa); // recordatorio → empresa del cliente
   const rec=recId?(recordatorios||[]).find(r=>r.id===recId):null;
   const opts=Object.entries(RESULT_SEG_VENTA).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');
   openMod('📝 Registrar seguimiento · '+c.nombre,

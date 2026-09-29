@@ -39,6 +39,22 @@ console.log('\n═══ Mapa y ubicación de clientes ═══');
 ok('_clientesConLoc filtra', /function _clientesConLoc\(\)\{[\s\S]*?deEmpresa\(clientes\)/.test(src));
 ok('_clientesUbicPendientes filtra', /function _clientesUbicPendientes\(\)\{[\s\S]*?deEmpresa\(clientes\)/.test(src));
 
+console.log('\n═══ Planilla separada por empresa ═══');
+ok('tabla de empleados filtra', /_renderEmpleadosTabla[\s\S]*?deEmpresa\(typeof empleados/.test(src));
+ok('tabla de planillas filtra', /_renderPlanillasTabla[\s\S]*?deEmpresa\(typeof planillas/.test(src));
+ok('prestaciones (recibos especiales) filtra', /renderRecibosEspeciales[\s\S]*?deEmpresa\(typeof recibosEspeciales/.test(src));
+ok('la planilla se arma con empleados de la empresa', /function _construirLineas[\s\S]*?deEmpresa\(typeof empleados/.test(src));
+ok('empleado nuevo nace con empresa', /if\(!e&&typeof empresaParaNuevo==='function'\)emp\.empresa=empresaParaNuevo\(\)/.test(src));
+ok('planilla nueva nace con empresa', /empresa:empresaParaNuevo\(\), \/\/ multiempresa\n\s*lineas:_construirLineas/.test(src));
+ok('comisión por empresa del empleado', /\(d\.empresa\|\|'SEFE'\)===\(emp\.empresa\|\|'SEFE'\)/.test(src));
+
+console.log('\n═══ Recordatorios: cross-empresa con redirección ═══');
+ok('irAEmpresaSiHaceFalta existe', /function irAEmpresaSiHaceFalta\(cod\)\{/.test(src));
+ok('el buscador del recordatorio ve todas las empresas', /if\(tipo==='cliente'\|\|tipo==='contrasena'\)return \(typeof clientes/.test(src));
+ok('muestra de qué empresa es cada opción', /const _empSuf=\(cod\)=>haymultiempresa\(\)/.test(src));
+ok('abrir seguimiento cambia a la empresa del cliente', /function openSegVenta[\s\S]*?irAEmpresaSiHaceFalta\(c\.empresa\)/.test(src));
+ok('abrir cliente desde recordatorio cambia de empresa', /function abrirClienteDesdeRec[\s\S]*?irAEmpresaSiHaceFalta\(_c\.empresa\)/.test(src));
+
 console.log('\n═══ Módulo de cotizaciones encendido ═══');
 ok('MODULOS_DESACTIVADOS vacío (cotizaciones visible)', /const MODULOS_DESACTIVADOS=\[\];/.test(src));
 

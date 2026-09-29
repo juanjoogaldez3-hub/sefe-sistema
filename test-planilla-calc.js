@@ -24,6 +24,7 @@ const block = src.slice(i, j);
 // Datos de prueba: ANA (vendedora) con 2 facturas en agosto.
 const ctx = {
   console, Number, String, Math, Date, Object,
+  deEmpresa: a => a || [],   // multiempresa: identidad en la prueba
   vendedores: [{ id: 7, nombre: 'ANA' }],
   documentos: [
     { estado: 'certificada', tipoDoc: 'factura', vendedorNombre: 'ANA', creada: '2026-08-05', totales: { total: 1120 } },

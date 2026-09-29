@@ -1001,7 +1001,8 @@ function mapEmpleadoFromDB(e){
     id:e.id, nombre:e.nombre||'', puesto:e.puesto||'', dpi:e.dpi||'', nit:e.nit||'',
     igss:e.igss_afiliacion||'', vendedorId:e.vendedor_id||null,
     sueldoBase:Number(e.sueldo_base)||0, bonifIncentivo:Number(e.bonif_incentivo)||0,
-    cuentaBancoId:e.cuenta_banco_id||null, activo:e.activo!==false, fechaIngreso:e.fecha_ingreso||null
+    cuentaBancoId:e.cuenta_banco_id||null, activo:e.activo!==false, fechaIngreso:e.fecha_ingreso||null,
+    empresa:e.empresa||'SEFE'
   };
 }
 async function guardarEmpleado(emp){
@@ -1009,7 +1010,8 @@ async function guardarEmpleado(emp){
     nombre:emp.nombre, puesto:emp.puesto||null, dpi:emp.dpi||null, nit:emp.nit||null,
     igss_afiliacion:emp.igss||null, vendedor_id:emp.vendedorId||null,
     sueldo_base:emp.sueldoBase||0, bonif_incentivo:emp.bonifIncentivo||0,
-    cuenta_banco_id:emp.cuentaBancoId||null, activo:emp.activo!==false, fecha_ingreso:emp.fechaIngreso||null
+    cuenta_banco_id:emp.cuentaBancoId||null, activo:emp.activo!==false, fecha_ingreso:emp.fechaIngreso||null,
+    empresa:emp.empresa||'SEFE'
   };
   if(emp._nuevo){
     delete emp._nuevo;
@@ -1036,7 +1038,8 @@ function mapPlanillaFromDB(p){
     totalIngresos:Number(p.total_ingresos)||0, totalDescuentos:Number(p.total_descuentos)||0,
     totalNeto:Number(p.total_neto)||0, nEmpleados:p.n_empleados||0,
     notas:p.notas||'', lineas:Array.isArray(lineas)?lineas:[],
-    creadoPor:p.creado_por||'', creadoEl:p.creado_el, actualizadoEl:p.actualizado_el
+    creadoPor:p.creado_por||'', creadoEl:p.creado_el, actualizadoEl:p.actualizado_el,
+    empresa:p.empresa||'SEFE'
   };
 }
 // Inserta (si _nuevo) o actualiza una planilla. Devuelve true/false.
@@ -1047,7 +1050,8 @@ async function guardarPlanilla(pl){
     total_ingresos:pl.totalIngresos||0, total_descuentos:pl.totalDescuentos||0,
     total_neto:pl.totalNeto||0, n_empleados:pl.nEmpleados||0,
     notas:pl.notas||null, lineas:pl.lineas||[],
-    actualizado_el:new Date().toISOString()
+    actualizado_el:new Date().toISOString(),
+    empresa:pl.empresa||'SEFE'
   };
   if(pl._nuevo){
     delete pl._nuevo;
@@ -1244,14 +1248,16 @@ function mapReciboEspecialFromDB(r){
     id:r.id, tipo:r.tipo||'otro', concepto:r.concepto||'', fecha:r.fecha||null,
     estado:r.estado||'borrador', totalNeto:Number(r.total_neto)||0, nEmpleados:r.n_empleados||0,
     notas:r.notas||'', lineas:Array.isArray(lineas)?lineas:[],
-    creadoPor:r.creado_por||'', creado:r.creado, actualizadoEl:r.actualizado_el
+    creadoPor:r.creado_por||'', creado:r.creado, actualizadoEl:r.actualizado_el,
+    empresa:r.empresa||'SEFE'
   };
 }
 async function guardarReciboEspecial(rec){
   const row={
     tipo:rec.tipo||'otro', concepto:rec.concepto||null, fecha:rec.fecha||null,
     estado:rec.estado||'borrador', total_neto:rec.totalNeto||0, n_empleados:rec.nEmpleados||0,
-    notas:rec.notas||null, lineas:rec.lineas||[], actualizado_el:new Date().toISOString()
+    notas:rec.notas||null, lineas:rec.lineas||[], actualizado_el:new Date().toISOString(),
+    empresa:rec.empresa||'SEFE'
   };
   if(rec._nuevo){
     delete rec._nuevo;
