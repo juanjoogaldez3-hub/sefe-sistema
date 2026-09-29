@@ -761,8 +761,7 @@ async function doLoginAuth(){
     // Chequeo de versión: si se publica una versión nueva, avisar a quien tenga
     // la pantalla abierta para que actualice (no depende de que haga Ctrl+F5).
     if(typeof _iniciarChequeoVersion==='function')_iniciarChequeoVersion();
-    _recDismissed=false;setTimeout(()=>{try{mostrarRecordatoriosHoy();}catch(e){console.error(e);}},700);
-    setTimeout(()=>{try{actualizarBellRec();mostrarRecordatoriosPopup();}catch(e){console.error(e);}},1100);
+    setTimeout(()=>{try{actualizarBellRec();mostrarRecordatoriosPopup();}catch(e){console.error(e);}},1000);
     ocultarLoader();
     btn.disabled=false;btn.textContent='Ingresar';
   }catch(e){
@@ -817,8 +816,8 @@ async function logoutAuth(){
   if(typeof detenerRealtime==='function')detenerRealtime();
   try{ if(typeof sb!=='undefined'&&sb.auth)await sb.auth.signOut(); }catch(e){}
   currentUser=null;currentRole=null;currentUserId=null;currentDashLayout={order:[],hidden:[]};
-  const _b=document.getElementById('bell-rec');if(_b)_b.style.display='none';
-  const _o=document.getElementById('ov-rec');if(_o)_o.classList.remove('show');
+  const _b=document.getElementById('bell-recmod');if(_b)_b.style.display='none';
+  const _o=document.getElementById('recmod');if(_o)_o.classList.remove('show');
   $('#app-layout').style.display='none';$('#login-screen').style.display='flex';
   const e=$('#login-email'),p=$('#login-pass');if(e)e.value='';if(p)p.value='';
 }

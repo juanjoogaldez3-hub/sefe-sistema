@@ -6,11 +6,11 @@
 <title>SEFE · Pedidos y Facturación</title>
 <!-- Versión de la app (se sube en cada publicación junto con los ?v=). Sirve para
      avisar a quien tenga la pantalla abierta que hay una versión nueva. -->
-<script>window.APP_VERSION='v=20260929b';</script>
+<script>window.APP_VERSION='v=20260929c';</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/estilos.css?v=20260929b">
+<link rel="stylesheet" href="css/estilos.css?v=20260929c">
 <!-- PWA: instalable como app (ícono propio, pantalla completa) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#173916">
@@ -33,11 +33,11 @@
 <!-- Librería de Supabase (conexión a la base de datos) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tus credenciales (editás este archivo una sola vez) -->
-<script src="config.js?v=20260929b"></script>
+<script src="config.js?v=20260929c"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
-<script src="db.js?v=20260929b"></script>
+<script src="db.js?v=20260929c"></script>
 <!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
-<script src="realtime.js?v=20260929b"></script>
+<script src="realtime.js?v=20260929c"></script>
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
@@ -469,6 +469,7 @@
             <button class="ct-tab" data-f="hoy" onclick="setRecFiltro('hoy')">Hoy / vencidos</button>
             <button class="ct-tab" data-f="hechos" onclick="setRecFiltro('hechos')">Hechos</button>
             <button class="ct-tab" data-f="todos" onclick="setRecFiltro('todos')">Todos</button>
+            <button class="ct-tab" data-f="cobros" id="rec-tab-cobros" onclick="setRecFiltro('cobros')" style="display:none">💰 Cobros / seguimientos</button>
           </div>
           <div class="panel-body">
             <table><thead><tr><th style="width:34px"></th><th>Recordatorio</th><th>Ligado a</th><th>Asignado</th><th>Vence</th><th>Prioridad</th><th></th></tr></thead><tbody id="t-recordatorios"></tbody></table>
@@ -830,21 +831,13 @@
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closePagoGlobal()">Cancelar</button><button class="btn btn-primary" id="pg-save" onclick="guardarPagoGlobal()">Registrar pago</button></div>
 </div></div>
 
-<!-- Pop-up de recordatorios de cobro (solo admin y cobros) -->
-<div class="overlay" id="ov-rec" style="align-items:flex-start;padding-top:40px"><div class="modal" style="max-width:560px">
-  <div class="modal-head"><h3>🔔 Recordatorios de cobro para hoy</h3><button class="x" onclick="cerrarRecordatorios()">×</button></div>
-  <div class="modal-body" id="rec-body" style="max-height:68vh;overflow:auto"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" onclick="cerrarRecordatorios()">Cerrar</button></div>
-</div></div>
-<button id="bell-rec" onclick="mostrarRecordatoriosHoy(true)" title="Recordatorios de cobro de hoy" style="display:none;position:fixed;bottom:22px;right:22px;z-index:80;align-items:center;gap:7px;background:var(--warn);color:#fff;border:none;border-radius:999px;padding:11px 16px;font-weight:700;font-size:13px;box-shadow:var(--shadow-lg);cursor:pointer">🔔 <span id="bell-rec-n"></span></button>
-
-<!-- Pop-up de recordatorios (módulo general, para todos) -->
+<!-- Pop-up ÚNICO de recordatorios (tareas + cobros de hoy, para todos) -->
 <div class="overlay" id="recmod" style="align-items:flex-start;padding-top:40px"><div class="modal" style="max-width:560px">
-  <div class="modal-head"><h3>🔔 Tus recordatorios de hoy</h3><button class="x" onclick="cerrarRecmod()">×</button></div>
+  <div class="modal-head"><h3>🔔 Recordatorios de hoy</h3><button class="x" onclick="cerrarRecmod()">×</button></div>
   <div class="modal-body" id="recmod-body" style="max-height:68vh;overflow:auto"></div>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="cerrarRecmod()">Cerrar</button><button class="btn btn-primary" onclick="cerrarRecmod();go('recordatorios')">Ver todos</button></div>
 </div></div>
-<button id="bell-recmod" onclick="mostrarRecordatoriosPopup(true)" title="Tus recordatorios de hoy" style="display:none;position:fixed;bottom:76px;right:22px;z-index:80;align-items:center;gap:7px;background:var(--green);color:#fff;border:none;border-radius:999px;padding:11px 16px;font-weight:700;font-size:13px;box-shadow:var(--shadow-lg);cursor:pointer">🔔 <span id="bell-recmod-n"></span></button>
+<button id="bell-recmod" onclick="mostrarRecordatoriosPopup(true)" title="Recordatorios de hoy" style="display:none;position:fixed;bottom:22px;right:22px;z-index:80;align-items:center;gap:7px;background:var(--green);color:#fff;border:none;border-radius:999px;padding:11px 16px;font-weight:700;font-size:13px;box-shadow:var(--shadow-lg);cursor:pointer">🔔 <span id="bell-recmod-n"></span></button>
 
 <div class="doc-overlay" id="docov">
   <div class="doc-wrap">
@@ -862,18 +855,18 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app-1.js?v=20260929b"></script>
-<script src="js/app-2.js?v=20260929b"></script>
-<script src="js/app-3.js?v=20260929b"></script>
-<script src="js/app-4.js?v=20260929b"></script>
-<script src="js/app-5.js?v=20260929b"></script>
-<script src="js/app-6.js?v=20260929b"></script>
-<script src="js/app-7.js?v=20260929b"></script>
-<script src="js/app-8.js?v=20260929b"></script>
-<script src="js/app-9.js?v=20260929b"></script>
-<script src="js/app-10.js?v=20260929b"></script>
-<script src="js/app-11.js?v=20260929b"></script>
-<script src="js/app-12.js?v=20260929b"></script>
-<script src="js/app-13.js?v=20260929b"></script>
+<script src="js/app-1.js?v=20260929c"></script>
+<script src="js/app-2.js?v=20260929c"></script>
+<script src="js/app-3.js?v=20260929c"></script>
+<script src="js/app-4.js?v=20260929c"></script>
+<script src="js/app-5.js?v=20260929c"></script>
+<script src="js/app-6.js?v=20260929c"></script>
+<script src="js/app-7.js?v=20260929c"></script>
+<script src="js/app-8.js?v=20260929c"></script>
+<script src="js/app-9.js?v=20260929c"></script>
+<script src="js/app-10.js?v=20260929c"></script>
+<script src="js/app-11.js?v=20260929c"></script>
+<script src="js/app-12.js?v=20260929c"></script>
+<script src="js/app-13.js?v=20260929c"></script>
 </body>
 </html>

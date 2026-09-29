@@ -1,5 +1,9 @@
 function renderRecordatorios(){
   const hoy=fechaHoyGT();
+  // La pestaña "Cobros" solo para quien ve los seguimientos de cobro.
+  const _puedeCobros=(typeof puedeVerRecordatorios==='function'&&puedeVerRecordatorios());
+  const _tc=document.getElementById('rec-tab-cobros'); if(_tc)_tc.style.display=_puedeCobros?'':'none';
+  if(recFiltro==='cobros'&&!_puedeCobros)recFiltro='pendientes';
   const base=recVisibles();
   const pend=base.filter(r=>!r.hecho);
   const venc=pend.filter(r=>r.fechaVencimiento&&r.fechaVencimiento<hoy);
@@ -22,6 +26,24 @@ function renderRecordatorios(){
   });
   const tipoIcon={tarea:'📌',cliente:'👤',contrasena:'🔑',factura:'🧾',producto:'📦',compra:'🛒'};
   const tb=$('#t-recordatorios');if(!tb)return;
+  // Pestaña "Cobros / seguimientos": muestra los seguimientos de cobro pendientes.
+  if(recFiltro==='cobros'){
+    const cob=_seguimientosPendientes();
+    tb.innerHTML=cob.length?cob.map(({cliente,seg})=>{
+      const rs=(typeof RESULT_SEG!=='undefined'&&RESULT_SEG[seg.resultado])||['—','b-muted'];
+      const vgd=seg.proximaFecha<hoy, esh=seg.proximaFecha===hoy;
+      return `<tr>
+        <td style="text-align:center"><input type="checkbox" onclick="marcarRecordatorioHecho(${cliente.id},${seg.id})" title="Marcar hecho" style="width:16px;height:16px;cursor:pointer"></td>
+        <td><div style="font-weight:600">💰 ${_escRec(cliente.nombre)}</div>${seg.nota?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(seg.nota)}</div>`:''}</td>
+        <td><span class="badge ${rs[1]}">${rs[0]}</span></td>
+        <td style="font-size:12px">${_escRec(seg.usuario||'—')}</td>
+        <td style="color:${vgd?'var(--danger)':(esh?'#9A6B07':'var(--muted)')};font-weight:${vgd||esh?'700':'400'}">${seg.proximaFecha?fdate(seg.proximaFecha)+(vgd?' · vencido':(esh?' · hoy':'')):'—'}</td>
+        <td></td>
+        <td><div class="acts"><button class="btn btn-ghost btn-sm" onclick="abrirClienteDesdeRec(${cliente.id})">Abrir</button><button class="btn btn-ghost btn-sm" onclick="posponerRecordatorio(${cliente.id},${seg.id})">Posponer</button></div></td>
+      </tr>`;
+    }).join(''):'<tr><td colspan="7" class="empty">Sin seguimientos de cobro pendientes 🎉</td></tr>';
+    return;
+  }
   tb.innerHTML=arr.length?arr.map(r=>{
     const vencido=!r.hecho&&r.fechaVencimiento&&r.fechaVencimiento<hoy;
     const esHoy=!r.hecho&&r.fechaVencimiento===hoy;
@@ -168,27 +190,52 @@ window.borrarRecordatorioUI=function(id){
     if(typeof _reRenderCliSiAbierto==='function')_reRenderCliSiAbierto(cliActual);
   });
 };
-// Campana de recordatorios (para todos los roles)
+// Campana ÚNICA de recordatorios: junta las TAREAS (recordatorios) del día y
+// los COBROS de hoy (seguimientos de cliente, para quien los ve).
 function actualizarBellRec(){
   const b=document.getElementById('bell-recmod');if(!b)return;
-  const n=recordatoriosPendientesHoy().length;
+  const n=recordatoriosPendientesHoy().length+((typeof puedeVerRecordatorios==='function'&&puedeVerRecordatorios())?recordatoriosDeHoy().length:0);
   b.style.display=n>0?'flex':'none';
   const s=document.getElementById('bell-recmod-n');if(s)s.textContent=n;
 }
 window.actualizarBellRec=actualizarBellRec;
+// Tarjeta de un cobro (seguimiento) para el popup unificado.
+function _cobroCardPopup(cliente,seg){
+  const rs=(typeof RESULT_SEG!=='undefined'&&RESULT_SEG[seg.resultado])||['—','b-muted'];
+  const tel=cliente.contactoPagos&&cliente.contactoPagos.telefono?cliente.contactoPagos.telefono:'';
+  const cont=cliente.contactoPagos&&cliente.contactoPagos.nombre?cliente.contactoPagos.nombre:'';
+  return `<div style="border-bottom:1px solid var(--line);padding:11px 4px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div style="font-weight:700;font-size:14px">💰 ${escHtml(cliente.nombre)}</div>
+      <span class="badge ${rs[1]}">${rs[0]}</span>
+    </div>
+    ${seg.nota?`<div style="font-size:12.5px;color:var(--muted);margin-top:4px">${escHtml(seg.nota)}</div>`:''}
+    ${tel?`<div style="font-size:12px;color:var(--muted-2);margin-top:3px">☎ ${escHtml(tel)}${cont?' · '+escHtml(cont):''}</div>`:''}
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">
+      <button class="btn btn-primary btn-sm" onclick="abrirClienteDesdeRec(${cliente.id})">Abrir cliente</button>
+      <button class="btn btn-ghost btn-sm" onclick="posponerRecordatorio(${cliente.id},${seg.id})">Posponer</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--ok)" onclick="marcarRecordatorioHecho(${cliente.id},${seg.id})">✓ Hecho</button>
+    </div>
+  </div>`;
+}
 function mostrarRecordatoriosPopup(forzar){
   actualizarBellRec();
-  const lista=recordatoriosPendientesHoy();
-  if(!lista.length){if(forzar)toast('Sin recordatorios','No tenés recordatorios para hoy ni vencidos');return;}
   const hoy=fechaHoyGT();
+  const tareas=recordatoriosPendientesHoy();
+  const cobros=(typeof puedeVerRecordatorios==='function'&&puedeVerRecordatorios())?recordatoriosDeHoy():[];
+  if(!tareas.length&&!cobros.length){if(forzar)toast('Sin recordatorios','No tenés recordatorios ni cobros para hoy');return;}
   const body=$('#recmod-body');
-  if(body)body.innerHTML=lista.map(r=>{
-    const vencido=r.fechaVencimiento<hoy;
-    return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid var(--line)">
-      <input type="checkbox" onclick="toggleHechoRecordatorio(${r.id});this.closest('div').style.opacity=.4" style="width:16px;height:16px;margin-top:2px;cursor:pointer">
-      <div style="flex:1"><div style="font-weight:600">${_escRec(r.titulo)}</div>${r.refLabel?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.refLabel)}</div>`:''}${r.nota?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.nota)}</div>`:''}<div style="font-size:11px;color:${vencido?'var(--danger)':'#9A6B07'};font-weight:700;margin-top:2px">${vencido?'Vencido · ':'Hoy · '}${fdate(r.fechaVencimiento)}</div></div>
-    </div>`;
-  }).join('');
+  if(body){
+    const fCobros=cobros.map(({cliente,seg})=>_cobroCardPopup(cliente,seg)).join('');
+    const fTareas=tareas.map(r=>{
+      const vencido=r.fechaVencimiento<hoy;
+      return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid var(--line)">
+        <input type="checkbox" onclick="toggleHechoRecordatorio(${r.id});this.closest('div').style.opacity=.4" style="width:16px;height:16px;margin-top:2px;cursor:pointer">
+        <div style="flex:1"><div style="font-weight:600">📌 ${_escRec(r.titulo)}</div>${r.refLabel?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.refLabel)}</div>`:''}${r.nota?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.nota)}</div>`:''}<div style="font-size:11px;color:${vencido?'var(--danger)':'#9A6B07'};font-weight:700;margin-top:2px">${vencido?'Vencido · ':'Hoy · '}${fdate(r.fechaVencimiento)}</div></div>
+      </div>`;
+    }).join('');
+    body.innerHTML=fCobros+fTareas;
+  }
   const ov=$('#recmod');if(ov)ov.classList.add('show');
 }
 window.mostrarRecordatoriosPopup=mostrarRecordatoriosPopup;
@@ -600,7 +647,6 @@ window.cerrarRecmod=function(){const ov=$('#recmod');if(ov)ov.classList.remove('
 // ---- Recordatorios de cobro: pop-up en la pantalla principal ----
 // Solo los ve el admin y el rol de cobros/contabilidad. Muestra los
 // "próximo seguimiento" cuya fecha es HOY y que aún no se atendieron.
-let _recDismissed=false;
 function puedeVerRecordatorios(){return currentRole==='admin'||['cobros','contabilidad'].includes(currentRole);}
 function sumarDiasFecha(fechaStr,n){const p=String(fechaStr||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!p)return fechaStr;const dt=new Date(+p[1],+p[2]-1,+p[3]+n);const z=x=>String(x).padStart(2,'0');return dt.getFullYear()+'-'+z(dt.getMonth()+1)+'-'+z(dt.getDate());}
 function recordatoriosDeHoy(){
@@ -608,45 +654,28 @@ function recordatoriosDeHoy(){
   clientes.forEach(c=>{(c.seguimientos||[]).forEach(s=>{if(s.proximaFecha===hoy&&!s.hecho)out.push({cliente:c,seg:s});});});
   return out;
 }
-function actualizarBellRecordatorios(){
-  const bell=document.getElementById('bell-rec');if(!bell)return;
-  const n=puedeVerRecordatorios()?recordatoriosDeHoy().length:0;
-  if(n>0){bell.style.display='inline-flex';const s=document.getElementById('bell-rec-n');if(s)s.textContent=n;}
-  else bell.style.display='none';
-}
+// Compatibilidad: estas dos ahora delegan en la campana/popup unificados.
+function actualizarBellRecordatorios(){ actualizarBellRec(); }
 window.actualizarBellRecordatorios=actualizarBellRecordatorios;
-function mostrarRecordatoriosHoy(forzar){
-  actualizarBellRecordatorios();
-  if(!puedeVerRecordatorios())return;
-  const lista=recordatoriosDeHoy();
-  if(!lista.length){$('#ov-rec')?.classList.remove('show');return;}
-  if(!forzar&&_recDismissed)return;
-  const body=$('#rec-body');if(!body)return;
-  body.innerHTML=lista.map(({cliente,seg})=>{
-    const r=RESULT_SEG[seg.resultado]||['—','b-muted'];
-    const tel=cliente.contactoPagos&&cliente.contactoPagos.telefono?cliente.contactoPagos.telefono:'';
-    const cont=cliente.contactoPagos&&cliente.contactoPagos.nombre?cliente.contactoPagos.nombre:'';
-    return `<div style="border:1px solid var(--line);border-radius:10px;padding:12px 13px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-        <div style="font-family:var(--disp);font-weight:700;font-size:15px">${escHtml(cliente.nombre)}</div>
-        <span class="badge ${r[1]}">${r[0]}</span>
-      </div>
-      ${seg.nota?`<div style="font-size:13px;color:var(--muted);margin-top:5px">${escHtml(seg.nota)}</div>`:''}
-      ${tel?`<div style="font-size:12.5px;color:var(--muted-2);margin-top:4px">☎ ${escHtml(tel)}${cont?' · '+escHtml(cont):''}</div>`:''}
-      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">
-        <button class="btn btn-primary btn-sm" onclick="abrirClienteDesdeRec(${cliente.id})">Abrir cliente</button>
-        <button class="btn btn-ghost btn-sm" onclick="posponerRecordatorio(${cliente.id},${seg.id})">Posponer a mañana</button>
-        <button class="btn btn-ghost btn-sm" style="color:var(--ok)" onclick="marcarRecordatorioHecho(${cliente.id},${seg.id})">✓ Hecho</button>
-      </div>
-    </div>`;
-  }).join('');
-  $('#ov-rec').classList.add('show');
-}
+function mostrarRecordatoriosHoy(forzar){ mostrarRecordatoriosPopup(forzar); }
 window.mostrarRecordatoriosHoy=mostrarRecordatoriosHoy;
-function cerrarRecordatorios(){_recDismissed=true;$('#ov-rec')?.classList.remove('show');}
+function cerrarRecordatorios(){$('#recmod')?.classList.remove('show');}
 window.cerrarRecordatorios=cerrarRecordatorios;
+// Todos los seguimientos de cobro pendientes (para la pestaña "Cobros" del módulo).
+function _seguimientosPendientes(){
+  const out=[];
+  (typeof clientes!=='undefined'?clientes:[]).forEach(c=>{(c.seguimientos||[]).forEach(s=>{if(!s.hecho&&s.proximaFecha)out.push({cliente:c,seg:s});});});
+  return out.sort((a,b)=>String(a.seg.proximaFecha).localeCompare(String(b.seg.proximaFecha)));
+}
 function _segDe(cliId,segId){const c=clientes.find(x=>x.id===cliId);if(!c)return null;const s=(c.seguimientos||[]).find(x=>x.id===segId);return s?{c,s}:null;}
-function _refrescarRec(){const l=recordatoriosDeHoy();actualizarBellRecordatorios();if($('#ov-rec')?.classList.contains('show')){if(!l.length)$('#ov-rec').classList.remove('show');else mostrarRecordatoriosHoy(true);}}
+function _refrescarRec(){
+  actualizarBellRec();
+  if($('#recmod')?.classList.contains('show')){
+    const hay=recordatoriosPendientesHoy().length+((typeof puedeVerRecordatorios==='function'&&puedeVerRecordatorios())?recordatoriosDeHoy().length:0);
+    if(!hay)$('#recmod').classList.remove('show'); else mostrarRecordatoriosPopup(false);
+  }
+  if($('#v-recordatorios')?.classList.contains('active')&&recFiltro==='cobros')renderRecordatorios();
+}
 function _reRenderCliSiAbierto(cliId){if(cliActual===cliId&&$('#v-clientedet')?.classList.contains('active'))renderCliDet();}
 function marcarRecordatorioHecho(cliId,segId){
   const r=_segDe(cliId,segId);if(!r)return;
@@ -664,7 +693,8 @@ function posponerRecordatorio(cliId,segId){
   _reRenderCliSiAbierto(cliId);_refrescarRec();
 }
 window.posponerRecordatorio=posponerRecordatorio;
-function abrirClienteDesdeRec(cliId){_recDismissed=true;$('#ov-rec')?.classList.remove('show');abrirCliente(cliId);setTimeout(()=>cliSetTab('seguimiento'),40);}
+function abrirClienteDesdeRec(cliId){$('#recmod')?.classList.remove('show');abrirCliente(cliId);setTimeout(()=>cliSetTab('seguimiento'),40);}
+window.abrirClienteDesdeRec=abrirClienteDesdeRec;
 // Dar de baja / reactivar un cliente. No lo borra: lo marca inactivo (fuera del
 // seguimiento) y conserva todo su historial. Reversible.
 function toggleBajaCliente(id){

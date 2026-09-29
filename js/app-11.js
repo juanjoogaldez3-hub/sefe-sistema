@@ -750,9 +750,8 @@ async function verificarSesion(){
         setTimeout(_redibujar, 1800);
         // Recuperar el borrador DESPUÉS de los redibujados, para que no lo borren
         setTimeout(recuperarBorrador, 2000);
-        // Recordatorios de cobro: mostrar el pop-up también al restaurar sesión (F5)
-        _recDismissed=false;setTimeout(()=>{try{mostrarRecordatoriosHoy();}catch(e){console.error(e);}},2200);
-        setTimeout(()=>{try{actualizarBellRec();mostrarRecordatoriosPopup();}catch(e){console.error(e);}},2600);
+        // Recordatorios (tareas + cobros): campana/popup unificado al restaurar sesión (F5)
+        setTimeout(()=>{try{actualizarBellRec();mostrarRecordatoriosPopup();}catch(e){console.error(e);}},2400);
       }
     }
   }catch(e){ /* si falla, se queda en el login normal */ }
