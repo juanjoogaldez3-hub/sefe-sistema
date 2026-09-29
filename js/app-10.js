@@ -348,7 +348,11 @@ window.exportarInventarioPDF=exportarInventarioPDF;
 
 
 let saveFn=null;
-function openMod(title,html,fn){$('#m-title').textContent=title;$('#m-body').innerHTML=html;saveFn=fn;$('#m-save').disabled=false;$('#m-save').textContent='Guardar';$('#m-save').style.display='';$('#m-save').style.background='';$('#m-save').style.color='';$('#m-save').onclick=()=>{if(saveFn)saveFn();};$('#ov').classList.add('show');}
+function openMod(title,html,fn){$('#m-title').textContent=title;$('#m-body').innerHTML=html;saveFn=fn;const _sv=$('#m-save');_sv.disabled=false;_sv._busy=false;_sv.textContent='Guardar';_sv.style.display='';_sv.style.background='';_sv.style.color='';
+  // Guardado con traba anti doble-clic: mientras corre el handler (aunque sea
+  // async), el botón queda deshabilitado. Evita duplicados por doble toque.
+  _sv.onclick=async()=>{const b=$('#m-save');if(!saveFn||(b&&b._busy))return;if(b){b._busy=true;b.disabled=true;}try{await saveFn();}catch(e){console.error(e);}finally{if(b){b._busy=false;b.disabled=false;}}};
+  $('#ov').classList.add('show');}
 function closeMod(){$('#ov').classList.remove('show');$('#ov').classList.remove('modal-wide');}
 window.closeMod=closeMod;
 $('#m-save').onclick=()=>{if(saveFn)saveFn();};
