@@ -247,12 +247,15 @@ function renderPanel(){
 
   // ── Alertas ──────────────────────────────────────────────
   const alertas=[];
+  // Muestra los primeros n nombres y resume el resto ("… y N más"), para que
+  // las alertas no se vuelvan un bloque gigante cuando hay muchos ítems.
+  const _listaCorta=(arr,n=3)=>{const v=arr.slice(0,n).join(', ');return arr.length>n?`${v} y ${arr.length-n} más`:v;};
   if(dbConf('alerta_venc')){
     if(vencidos.length)alertas.push({tipo:'danger',msg:`${vencidos.length} factura${vencidos.length!==1?'s':''} vencida${vencidos.length!==1?'s':''} · ${money(vencidos.reduce((s,d)=>s+arInfo(d).saldo,0))} pendiente`,view:'cobros'});
     if(porVencer.length)alertas.push({tipo:'warn',msg:`${porVencer.length} factura${porVencer.length!==1?'s':''} vence${porVencer.length===1?'':'n'} en los próximos 7 días`,view:'cobros'});
   }
   if(dbConf('alerta_stock')){
-    if(sinStock.length)alertas.push({tipo:'danger',msg:`${sinStock.length} producto${sinStock.length!==1?'s':''} sin stock: ${sinStock.map(p=>p.nombre).join(', ')}`,view:'inventario'});
+    if(sinStock.length)alertas.push({tipo:'danger',msg:`${sinStock.length} producto${sinStock.length!==1?'s':''} sin stock: ${_listaCorta(sinStock.map(p=>p.nombre),3)}`,view:'inventario'});
     else if(stockBajo.length)alertas.push({tipo:'warn',msg:`${stockBajo.length} producto${stockBajo.length!==1?'s':''} con stock bajo (según el umbral de su categoría)`,view:'inventario'});
   }
   if(dbConf('alerta_oc')&&ocPend.length)alertas.push({tipo:'info',msg:`${ocPend.length} orden${ocPend.length!==1?'es':''} de compra pendiente${ocPend.length!==1?'s':''} de recibir`,view:'compras'});
@@ -267,10 +270,10 @@ function renderPanel(){
     const ambVenc=ambServicios.filter(s=>s.proximo&&String(s.proximo).slice(0,10)<hoyA);
     const ambPronto=ambServicios.filter(s=>{const p=s.proximo&&String(s.proximo).slice(0,10);return p&&p>=hoyA&&p<=finde7;});
     const nomCliAmb=id=>{const c=clientes.find(x=>x.id===id);return c?c.nombre:('Cliente '+id);};
-    if(ambVenc.length)alertas.push({tipo:'danger',msg:`${ambVenc.length} ambiental${ambVenc.length!==1?'es':''} con recarga vencida: ${ambVenc.slice(0,4).map(s=>nomCliAmb(s.clienteId)).join(', ')}${ambVenc.length>4?'…':''}`,view:'controles'});
+    if(ambVenc.length)alertas.push({tipo:'danger',msg:`${ambVenc.length} ambiental${ambVenc.length!==1?'es':''} con recarga vencida: ${_listaCorta(ambVenc.map(s=>nomCliAmb(s.clienteId)),3)}`,view:'controles'});
     else if(ambPronto.length)alertas.push({tipo:'warn',msg:`${ambPronto.length} ambiental${ambPronto.length!==1?'es':''} por recargar en los próximos 7 días`,view:'controles'});
   }
-  $('#panel-alertas').innerHTML=alertas.map(a=>`<div class="alert-bar alert-${a.tipo}" onclick="go('${a.view}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${a.tipo==='info'?'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>':'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>'}</svg>${a.msg}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-left:auto;opacity:.5"><path d="M9 18l6-6-6-6"/></svg></div>`).join('');
+  $('#panel-alertas').innerHTML=alertas.map(a=>`<div class="alert-bar alert-${a.tipo}" onclick="go('${a.view}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${a.tipo==='info'?'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>':'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>'}</svg><span class="alert-msg" title="${escHtml(a.msg)}">${a.msg}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-left:auto;opacity:.5;flex-shrink:0"><path d="M9 18l6-6-6-6"/></svg></div>`).join('');
 
   // ── Panel 1: Documentos / Cobros vencidos ────────────────
   if(dbConf('panel_docs')){

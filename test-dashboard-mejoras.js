@@ -29,6 +29,20 @@ ok('cuenta sin asignar / en ruta / entregadas hoy', /docsDespachables\(\)/.test(
 ok('gated por permiso de despachos', /tienePermiso\('despachos'\)/.test(src));
 ok('registrado como panel movible y widget', /id:'panel-bloque-desphoy'/.test(src) && /key:'panel_desphoy'/.test(src));
 
+console.log('\n═══ Alertas compactas (no abultadas) ═══');
+ok('la alerta de sin-stock resume con "y N más" (_listaCorta)', /_listaCorta\(sinStock\.map\(p=>p\.nombre\),3\)/.test(src) && /const _listaCorta=/.test(src));
+ok('cada alerta va en una sola línea (.alert-msg)', /<span class="alert-msg"/.test(src));
+(() => {
+  const i = src.indexOf('const _listaCorta=(arr,n=3)=>');
+  const j = src.indexOf('\n', i); // es una sola línea
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(src.slice(i, j) + ';globalThis.__l=_listaCorta;', ctx);
+  const l = ctx.__l;
+  ok('lista corta: 5 ítems → 3 + "y 2 más"', l(['A', 'B', 'C', 'D', 'E'], 3) === 'A, B, C y 2 más', l(['A', 'B', 'C', 'D', 'E'], 3));
+  ok('lista corta: 2 ítems → sin resumen', l(['A', 'B'], 3) === 'A, B', l(['A', 'B'], 3));
+})();
+
 console.log('\n═══ Formato compacto _kMoney ═══');
 (() => {
   const i = src.indexOf('function _kMoney(n){');
