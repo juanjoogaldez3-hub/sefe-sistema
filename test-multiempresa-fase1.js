@@ -99,6 +99,11 @@ console.log('\n═══ Escritura (db.js): la columna empresa viaja al guardar 
   ['guardarAmbServicio',    /function guardarAmbServicio[\s\S]*?empresa:s\.empresa\|\|'SEFE'/],
 ].forEach(([n,re]) => ok(n, re.test(dbjs)));
 
+console.log('\n═══ Candado: no facturar otra empresa antes de Fase 2 ═══');
+ok('empresaPuedeFacturar() solo permite SEFE por ahora', /function empresaPuedeFacturar\(codigo\)\{ return \(codigo\|\|'SEFE'\)==='SEFE'; \}/.test(src));
+ok('facturarPedido tiene el candado', /if\(!empresaPuedeFacturar\(f\.empresa\)\)\{[\s\S]*?Facturación no disponible/.test(src));
+ok('facturarPedidoExento tiene el candado', (src.match(/if\(!empresaPuedeFacturar\(f\.empresa\)\)/g)||[]).length>=2);
+
 console.log('\n═══ UI: contenedor del selector + estilos ═══');
 ok('index.html tiene el contenedor del selector', /id="sel-empresa-cont"/.test(html));
 ok('entrarVistaInicial inicializa el selector', /iniciarEmpresaActiva\(\); if\(typeof renderSelectorEmpresa==='function'\)renderSelectorEmpresa\(\)/.test(src));

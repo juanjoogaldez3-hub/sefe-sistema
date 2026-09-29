@@ -39,6 +39,9 @@ window.abrirFacturarExenta=abrirFacturarExenta;
 async function facturarPedidoExento(id,dias,escenario){
   const f=documentos.find(d=>d.id===id);
   if(!f){toast('Pedido no encontrado',null,true);return;}
+  // Candado multiempresa: no certificar un documento de una empresa cuya
+  // facturación electrónica (NIT propio) todavía no está conectada (Fase 2).
+  if(!empresaPuedeFacturar(f.empresa)){const _e=(empresas||[]).find(x=>x.codigo===f.empresa);toast('Facturación no disponible','La facturación electrónica de '+((_e&&_e.nombre)||f.empresa||'esta empresa')+' todavía no está lista (Fase 2 · NIT propio en EcoFactura).',true);return;}
   // EXENTA: el precio de lista incluye IVA, así que se factura la BASE (se le quita el 12%).
   // Se bajan también los precios de línea para que el detalle cuadre con el total ante SAT.
   const _IVA=1.12, _r2=n=>Math.round((Number(n)||0)*100)/100;

@@ -462,6 +462,12 @@ function renderSelectorEmpresa(){
   cont.innerHTML=`<span class="emp-dot" style="background:${col}"></span>`+
     `<select id="sel-empresa" class="sel-empresa" title="Empresa con la que estás trabajando" onchange="cambiarEmpresa(this.value)">${opts}</select>`;
 }
+// ¿La empresa tiene lista su facturación electrónica (NIT propio conectado
+// en EcoFactura)? Por ahora SOLO SEFE. La Fase 2 conecta el NIT de las demás
+// empresas en el backend y ahí se amplía esto. Candado de seguridad: evita
+// que un documento de otra empresa se certifique en SAT con el NIT de SEFE.
+function empresaPuedeFacturar(codigo){ return (codigo||'SEFE')==='SEFE'; }
+if(typeof window!=='undefined')window.empresaPuedeFacturar=empresaPuedeFacturar;
 // Etiqueta de empresa (pill de color) para las vistas COMPARTIDAS (ruta,
 // despachos), donde se ven las dos empresas juntas. Devuelve '' si hay una
 // sola empresa (no molesta al resto de los clientes del producto).

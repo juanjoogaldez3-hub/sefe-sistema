@@ -1231,6 +1231,9 @@ async function facturarPedido(id,dias){
   if(!canFacturar()){toast('Sin permiso','Tu rol no puede facturar',true);return;}
   const f=documentos.find(d=>d.id===id);
   if(!f){toast('✗ Pedido no encontrado',null,true);return;}
+  // Candado multiempresa: no certificar un documento de una empresa cuya
+  // facturación electrónica (NIT propio) todavía no está conectada (Fase 2).
+  if(!empresaPuedeFacturar(f.empresa)){const _e=(empresas||[]).find(x=>x.codigo===f.empresa);toast('Facturación no disponible','La facturación electrónica de '+((_e&&_e.nombre)||f.empresa||'esta empresa')+' todavía no está lista (Fase 2 · NIT propio en EcoFactura).',true);return;}
 
   // ¿Se marcó "entregar a domicilio"? → entra al módulo de Despachos
   const _facDesp=document.getElementById('fac-despacho');
