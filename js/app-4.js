@@ -656,7 +656,7 @@ function puedeVerRecordatorios(){return currentRole==='admin'||['cobros','contab
 function sumarDiasFecha(fechaStr,n){const p=String(fechaStr||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!p)return fechaStr;const dt=new Date(+p[1],+p[2]-1,+p[3]+n);const z=x=>String(x).padStart(2,'0');return dt.getFullYear()+'-'+z(dt.getMonth()+1)+'-'+z(dt.getDate());}
 function recordatoriosDeHoy(){
   const hoy=fechaHoyGT();const out=[];
-  clientes.forEach(c=>{(c.seguimientos||[]).forEach(s=>{if(s.proximaFecha===hoy&&!s.hecho)out.push({cliente:c,seg:s});});});
+  deEmpresa(clientes).forEach(c=>{(c.seguimientos||[]).forEach(s=>{if(s.proximaFecha===hoy&&!s.hecho)out.push({cliente:c,seg:s});});}); // multiempresa
   return out;
 }
 // Compatibilidad: estas dos ahora delegan en la campana/popup unificados.
@@ -669,7 +669,7 @@ window.cerrarRecordatorios=cerrarRecordatorios;
 // Todos los seguimientos de cobro pendientes (para la pestaña "Cobros" del módulo).
 function _seguimientosPendientes(){
   const out=[];
-  (typeof clientes!=='undefined'?clientes:[]).forEach(c=>{(c.seguimientos||[]).forEach(s=>{if(!s.hecho&&s.proximaFecha)out.push({cliente:c,seg:s});});});
+  deEmpresa(typeof clientes!=='undefined'?clientes:[]).forEach(c=>{(c.seguimientos||[]).forEach(s=>{if(!s.hecho&&s.proximaFecha)out.push({cliente:c,seg:s});});}); // multiempresa
   return out.sort((a,b)=>String(a.seg.proximaFecha).localeCompare(String(b.seg.proximaFecha)));
 }
 function _segDe(cliId,segId){const c=clientes.find(x=>x.id===cliId);if(!c)return null;const s=(c.seguimientos||[]).find(x=>x.id===segId);return s?{c,s}:null;}
@@ -1350,7 +1350,7 @@ window._segEstadoVentas=_segEstadoVentas;
 function _seguimientoClientes(opts){
   opts=opts||{};
   const hoy=new Date();
-  let base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  let base=(typeof esVentas==='function'&&esVentas())?deEmpresa(clientes).filter(c=>c.vendedorId===miVendedorId()):deEmpresa(clientes); // multiempresa
   if(opts.vendedorNombre){base=base.filter(c=>{const v=(typeof vendedores!=='undefined'?vendedores:[]).find(x=>x.id===c.vendedorId);return (v&&v.nombre)===opts.vendedorNombre;});}
   const ventasDe={};
   (typeof documentos!=='undefined'?documentos:[]).forEach(d=>{
