@@ -55,7 +55,7 @@ function registrarCompraDividida(facturas){
       items:fac.items.map(it=>({...it,recibido:0})),
       total,fecha,referencia:(ref?ref+' · ':'')+'parte '+(idx+1)+'/'+facturas.length,
       estadoRecepcion:'pendiente',facturada:false,docProv:'',tipoPago:null,diasCredito:0,vencimiento:null,abonos:[],
-      especial:false,mes:null,oficializada:false,_nuevo:true};
+      especial:false,mes:null,oficializada:false,empresa:empresaParaNuevo(),_nuevo:true};
     compras.push(c); if(typeof guardarCompra==='function')guardarCompra(c); creadas.push(c);
   });
   logAudit('Orden dividida en '+facturas.length+' compras',prov.nombre+' · '+creadas.map(c=>'CMP-'+padn(c.id)).join(', '));
@@ -326,7 +326,7 @@ function abrirAnularCompra(id){
   $('#m-save').textContent='Anular compra';$('#m-save').className='btn btn-primary';$('#m-save').style.background='var(--danger)';
 }
 window.abrirAnularCompra=abrirAnularCompra;
-function renderProveedores(){$('#t-prov').innerHTML=proveedores.slice().reverse().map(p=>{
+function renderProveedores(){$('#t-prov').innerHTML=deEmpresa(proveedores).slice().reverse().map(p=>{
   const n=productos.filter(pr=>(pr.proveedorIds||[]).includes(p.id)).length;
   return `<tr style="cursor:pointer" onclick="abrirProveedor(${p.id})"><td style="font-weight:600">${p.nombre}</td><td style="color:var(--muted)">${p.razonSocial||'—'}</td><td class="num">${p.nit||'—'}</td><td style="color:var(--muted)">${p.telefono||'—'}</td><td>${p.diasCredito>0?p.diasCredito+' días':'Contado'}</td><td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirProveedor(${p.id},'productos')">${n} producto${n===1?'':'s'}</button></td><td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openProveedor(${p.id})">Editar</button></td></tr>`;}).join('');enhanceTable('t-prov');}
 
@@ -449,7 +449,7 @@ function openProveedor(id){const p=id?proveedores.find(x=>x.id===id):null;
   <div class="row"><div><label>Teléfono</label><input id="pv-tel" value="${p?(p.telefono||''):''}"></div><div><label>Correo</label><input id="pv-mail" value="${p?(p.correo||''):''}"></div></div>`,()=>{
     const nom=$('#pv-nom').value.trim();if(!nom)return;
     const datos={nombre:nom,razonSocial:$('#pv-rs').value.trim()||nom,nit:$('#pv-nit').value,telefono:$('#pv-tel').value,correo:$('#pv-mail').value,diasCredito:Number($('#pv-dias').value)||0};
-    if(p){Object.assign(p,datos);if(typeof guardarProveedor==='function')guardarProveedor(p);toast('✓ Proveedor actualizado');}else{const nuevoProv={id:provN++,...datos,_nuevo:true};proveedores.push(nuevoProv);if(typeof guardarProveedor==='function')guardarProveedor(nuevoProv);toast('✓ Proveedor agregado');}
+    if(p){Object.assign(p,datos);if(typeof guardarProveedor==='function')guardarProveedor(p);toast('✓ Proveedor actualizado');}else{const nuevoProv={id:provN++,...datos,empresa:empresaParaNuevo(),_nuevo:true};proveedores.push(nuevoProv);if(typeof guardarProveedor==='function')guardarProveedor(nuevoProv);toast('✓ Proveedor agregado');}
     closeMod();renderProveedores();initCompra();});}
 window.openProveedor=openProveedor;
 
@@ -1083,7 +1083,8 @@ function renderProd(){
   if(acc)acc.innerHTML=(canEditInventario()?`<button class="btn btn-ghost btn-sm" onclick="openProd()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
     ` <button class="btn btn-ghost btn-sm" onclick="openCategorias()" title="Umbrales de stock por categoría"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Categorías</button>`+
     ` <button class="btn btn-ghost btn-sm" id="btn-ver-inactivos" onclick="toggleVerInactivos()" style="color:var(--muted)">${_verInactivos?'Ocultar inactivos':'Ver inactivos'}</button> `:'')+filtroMarcaInv();
-  let lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
+  const _prods=deEmpresa(productos); // multiempresa: solo la empresa activa
+  let lista=_verInactivos?_prods:_prods.filter(p=>p.activo!==false);
   // Filtrar por marca si está seleccionada
   if(_filtroMarca)lista=lista.filter(p=>(p.marca||'')===_filtroMarca);
   const filasProd=lista.slice().reverse().map(p=>{

@@ -39,6 +39,9 @@ window.abrirFacturarExenta=abrirFacturarExenta;
 async function facturarPedidoExento(id,dias,escenario){
   const f=documentos.find(d=>d.id===id);
   if(!f){toast('Pedido no encontrado',null,true);return;}
+  // Candado multiempresa: no certificar un documento de una empresa cuya
+  // facturación electrónica (NIT propio) todavía no está conectada (Fase 2).
+  if(!empresaPuedeFacturar(f.empresa)){const _e=(empresas||[]).find(x=>x.codigo===f.empresa);toast('Facturación no disponible','La facturación electrónica de '+((_e&&_e.nombre)||f.empresa||'esta empresa')+' todavía no está lista (Fase 2 · NIT propio en EcoFactura).',true);return;}
   // EXENTA: el precio de lista incluye IVA, así que se factura la BASE (se le quita el 12%).
   // Se bajan también los precios de línea para que el detalle cuadre con el total ante SAT.
   const _IVA=1.12, _r2=n=>Math.round((Number(n)||0)*100)/100;
@@ -79,6 +82,8 @@ async function facturarPedidoExento(id,dias,escenario){
     exenta:true, fraseTipo:4, escenario:escenario,
     // Campos comerciales extra (para TrnCampAd en el backend)
     condicionPago:condicionPago, vendedor:vendedorIniciales, vencimientoTexto:vencDDMMAAAA,
+    // Multiempresa: el backend elige credenciales/NIT emisor según esto.
+    empresa:f.empresa||'SEFE',
   };
 
   try{
@@ -172,7 +177,7 @@ async function anularFacturaReal(id,motivo,devolverAPedido){
     try{
       const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/anular',{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({uuid:f.autorizacion,motivo})
+        body:JSON.stringify({uuid:f.autorizacion,motivo,empresa:f.empresa||'SEFE'})
       });
       const data=await r.json();
       if(!(r.ok && data.ok)){
@@ -226,7 +231,7 @@ async function anularFacturaReal(id,motivo,devolverAPedido){
       vendedorId:f.vendedorId,vendedorNombre:f.vendedorNombre,subVendedorNombre:f.subVendedorNombre||null,
       items:f.items.map(it=>({...it})),totales:{...f.totales},estado:'abierto',inventarioRebajado:true,
       creada:new Date().toISOString(),ordenCompra:f.ordenCompra||'',observaciones:f.observaciones||'',notaInterna:f.notaInterna||'',
-      nitFacturado:f.nitFacturado,nombreFacturado:f.nombreFacturado,origenAnulacionId:f.id,_nuevo:true};
+      nitFacturado:f.nitFacturado,nombreFacturado:f.nombreFacturado,origenAnulacionId:f.id,empresa:f.empresa||empresaParaNuevo(),_nuevo:true};
     // la anulación reintegró el inventario; el pedido nuevo lo vuelve a reservar
     ped.items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,-it.cantidad,it.modoVenta);});
     documentos.push(ped);corr++;pedNum=ped.numero;
@@ -283,7 +288,7 @@ async function crearNotaCD(f,monto,motivo,fecha){
   const doc={id:nuevoIdNC,numero:corr,tipoDoc:'notaCredito',clienteId:f.clienteId,clienteNombre:f.clienteNombre,clienteComercial:f.clienteComercial,clienteNit:f.clienteNit,
     items:[],totales:{total:monto,baseSinIva:monto/1.12,iva:monto-monto/1.12},estado:'certificada',
     autorizacion:uuid,serie:uuid.slice(4),numeroDte:String(1000000000+corr),
-    creada:new Date(/^\d{4}-\d{2}-\d{2}$/.test(fecha)?fecha+'T12:00:00':fecha).toISOString(),facturaOrigenId:f.id,motivo,creadoPor:currentUser,_nuevo:true};
+    creada:new Date(/^\d{4}-\d{2}-\d{2}$/.test(fecha)?fecha+'T12:00:00':fecha).toISOString(),facturaOrigenId:f.id,motivo,creadoPor:currentUser,empresa:f.empresa||empresaParaNuevo(),_nuevo:true};
   documentos.push(doc);corr++;
   // Esperamos el id real antes de seguir, para que los botones no queden con el temporal
   if(typeof guardarDocumento==='function')await guardarDocumento(doc);
@@ -734,7 +739,8 @@ function renderCli(){
   if(acc)acc.innerHTML=filtroHTML+`<button class="btn btn-ghost btn-sm" onclick="openMapaClientes()" title="Ver todos los clientes en el mapa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M9 20l-6 2V5l6-2 6 2 6-2v13l-6 2-6-2z"/><path d="M9 3v15M15 5v15"/></svg>Mapa</button>`+btnUbicar+
     (canCrearCliente()?` <button class="btn btn-ghost btn-sm" id="btn-nuevo-cli" onclick="openCli()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>`+
     ` <button class="btn btn-ghost btn-sm" onclick="completarRazonSocial()" title="Consultar SAT y rellenar razón social de clientes que no la tienen" style="color:var(--blue)">Completar razón social</button>`:'');
-  let listaBase=esVentas()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  const _clis=deEmpresa(clientes); // multiempresa: solo la empresa activa
+  let listaBase=esVentas()?_clis.filter(c=>c.vendedorId===miVendedorId()):_clis;
   // Aplicar el filtro por vendedor (si se eligió uno).
   if(!esVentas()&&_cliFiltroVend){
     listaBase=(_cliFiltroVend==='none')?listaBase.filter(c=>c.vendedorId==null):listaBase.filter(c=>String(c.vendedorId)===String(_cliFiltroVend));

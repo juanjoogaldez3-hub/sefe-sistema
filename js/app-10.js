@@ -455,7 +455,7 @@ function openCli(id){
     if(_cliFormLatLng){datos.lat=Math.round(_cliFormLatLng.lat*1e6)/1e6;datos.lng=Math.round(_cliFormLatLng.lng*1e6)/1e6;}
     const creditoAnterior=c?(c.tiempoCredito||0):null;
     if(c){Object.assign(c,datos);logAudit('Cliente editado',nom+' · NIT '+datos.nit);toast('✓ Cliente actualizado');if(typeof guardarCliente==='function')guardarCliente(c);}
-    else{const nuevo={id:cliN++,...datos,fechaAlta:fechaHoyGT(),precios:{},_nuevo:true};clientes.push(nuevo);logAudit('Cliente creado',nom+' · NIT '+datos.nit);toast('✓ Cliente agregado');if(typeof guardarCliente==='function')guardarCliente(nuevo);}
+    else{const nuevo={id:cliN++,...datos,fechaAlta:fechaHoyGT(),precios:{},empresa:empresaParaNuevo(),_nuevo:true};clientes.push(nuevo);logAudit('Cliente creado',nom+' · NIT '+datos.nit);toast('✓ Cliente agregado');if(typeof guardarCliente==='function')guardarCliente(nuevo);}
     closeMod();initForm();renderCli();if(cliActual&&$('#v-clientedet').classList.contains('active'))renderCliDet();
     if(c&&creditoAnterior!==tiempoCredito)ofrecerRecalcVencimientos(c,tiempoCredito);});
   setTimeout(()=>{const s=$('#c-tc');if(s)s.onchange=()=>{$('#c-tc-custom-wrap').style.display=s.value==='custom'?'block':'none';};
@@ -689,7 +689,7 @@ function openCliSede(padreId){
   ()=>{
     const nom=$('#cs-nom').value.trim();if(!nom){toast('Ingresá el nombre de la sede',null,true);return;}
     const nuevaSede={id:cliN++,nombre:nom,razonSocial:padre.razonSocial||padre.nombre,nit:padre.nit,email:$('#cs-mail').value,direccion:$('#cs-dir').value||'Ciudad',direccionEntrega:$('#cs-dirent').value.trim(),fechaAlta:fechaHoyGT(),tiempoCredito:padre.tiempoCredito||0,vendedorId:padre.vendedorId,sedesDe:padreId,
-      contactoPagos:{...padre.contactoPagos},contactoCompras:{...padre.contactoCompras},precios:{...padre.precios},_nuevo:true};
+      contactoPagos:{...padre.contactoPagos},contactoCompras:{...padre.contactoCompras},precios:{...padre.precios},empresa:padre.empresa||empresaParaNuevo(),_nuevo:true};
     clientes.push(nuevaSede);
     logAudit('Sede creada',nom+' · sede de '+padre.nombre+' · NIT '+padre.nit);
     if(typeof guardarCliente==='function')guardarCliente(nuevaSede);
@@ -757,7 +757,7 @@ function openProd(id){
       }
       toast('✓ Producto actualizado');if(typeof guardarProducto==='function')guardarProducto(p);
     }
-    else{const nuevo={id:prodN++,...datos,stock:Number($('#p-stk').value)||0,stockCajas:Number($('#p-stkcaj').value)||0,activo:true,_nuevo:true};productos.push(nuevo);logAudit('Producto creado',nom+' · '+datos.codigo);toast('✓ Producto agregado');if(typeof guardarProducto==='function')guardarProducto(nuevo);}
+    else{const nuevo={id:prodN++,...datos,stock:Number($('#p-stk').value)||0,stockCajas:Number($('#p-stkcaj').value)||0,activo:true,empresa:empresaParaNuevo(),_nuevo:true};productos.push(nuevo);logAudit('Producto creado',nom+' · '+datos.codigo);toast('✓ Producto agregado');if(typeof guardarProducto==='function')guardarProducto(nuevo);}
     closeMod();initForm();renderProd();});
   setTimeout(renderProvChips,0);}
 window.openProd=openProd;
@@ -1473,7 +1473,7 @@ function renderDespachos(){
     return `<tr>
       <td style="text-align:center">${chk}</td>
       <td class="num" style="font-weight:700;color:var(--green)">${d.ordenRuta!=null?'#'+d.ordenRuta:'—'}</td>
-      <td style="font-weight:600">${docNum(d)}<div style="font-size:10.5px;color:var(--muted)">${tipoCorto[d.tipoDoc]}</div></td>
+      <td style="font-weight:600">${docNum(d)}<div style="font-size:10.5px;color:var(--muted)">${tipoCorto[d.tipoDoc]}</div>${empTag(d.empresa)}</td>
       <td>${d.clienteComercial||d.clienteNombre}${(()=>{const b=_horaBadge(d,_riskDesp),e=_etaBadge(d);return (b||e)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${b}${e}</div>`:'';})()}</td>
       <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${dirEntrega(d)}</td>
       <td class="num" style="font-weight:600">${money(d.totales.total)}</td>

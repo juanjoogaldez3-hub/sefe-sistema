@@ -139,7 +139,7 @@ function _ctrlCliId(searchId,hiddenId){
 }
 function renderAmbServicios(){
   const tb=$('#t-amb'); if(!tb)return;
-  const lista=(typeof ambServicios!=='undefined'?ambServicios:[]).slice()
+  const lista=deEmpresa(typeof ambServicios!=='undefined'?ambServicios:[]).slice() // multiempresa
     .sort((a,b)=>String(b.proximo||b.fecha||'').localeCompare(String(a.proximo||a.fecha||'')));
   const empty=$('#amb-empty'); if(empty)empty.style.display=lista.length?'none':'block';
   tb.innerHTML=lista.map(s=>`<tr>
@@ -178,6 +178,7 @@ function openAmbServicio(id){
       // Si el próximo servicio cae sábado/domingo, se corre al lunes.
       if(rec.proximo){const hab=_siguienteHabil(rec.proximo);if(hab!==rec.proximo){rec.proximo=hab;toast('Próximo servicio movido','Caía en fin de semana → '+fdate(hab));}}
       if(!rec.creadoPor&&typeof currentUser!=='undefined')rec.creadoPor=currentUser;
+      if(!s&&typeof empresaParaNuevo==='function')rec.empresa=empresaParaNuevo(); // multiempresa
       // Un servicio nuevo con fecha = su primera recarga → arranca el historial.
       if(!s){rec.historial=rec.fecha?[{fecha:rec.fecha,por:rec.creadoPor||''}]:[];}
       else if(!Array.isArray(rec.historial))rec.historial=[];
@@ -225,12 +226,12 @@ function _ambEstadoTxt(prox){
 }
 function _ambFrecTxt(s){ return s.frecuenciaValor>0?('cada '+s.frecuenciaValor+' '+_ambUniLbl(s.frecuenciaUnidad,s.frecuenciaValor)):'—'; }
 function _ambServiciosOrdenados(){
-  return (typeof ambServicios!=='undefined'?ambServicios:[]).slice().sort((a,b)=>
+  return deEmpresa(typeof ambServicios!=='undefined'?ambServicios:[]).slice().sort((a,b)=> // multiempresa
     _ctrlNombreCliente(a.clienteId).localeCompare(_ctrlNombreCliente(b.clienteId))||
     String(a.proximo||'9999').localeCompare(String(b.proximo||'9999')));
 }
 function reporteAmbientalesPDF(){
-  const servicios=(typeof ambServicios!=='undefined'?ambServicios:[]).slice();
+  const servicios=deEmpresa(typeof ambServicios!=='undefined'?ambServicios:[]).slice(); // multiempresa
   if(!servicios.length){toast('Sin datos','No hay servicios de ambientales registrados',true);return;}
   const porCli={};
   servicios.forEach(s=>{const k=(s.clienteId==null?'—':s.clienteId);(porCli[k]=porCli[k]||[]).push(s);});
@@ -317,7 +318,7 @@ function renderAmbCalendario(){
   const dowPrimero=(new Date(Date.UTC(anio,mes-1,1)).getUTCDay()+6)%7; // Lun=0 … Dom=6
   // Agrupar próximos servicios por día del mes visible
   const porDia={};
-  (typeof ambServicios!=='undefined'?ambServicios:[]).forEach(s=>{
+  deEmpresa(typeof ambServicios!=='undefined'?ambServicios:[]).forEach(s=>{ // multiempresa
     if(!s.proximo)return;
     const p=String(s.proximo).slice(0,10);
     if(p.slice(0,7)===`${anio}-${mm}`){const d=+p.slice(8,10);(porDia[d]=porDia[d]||[]).push(s);}
