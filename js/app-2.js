@@ -1306,7 +1306,15 @@ async function facturarPedido(id,dias){
       closeMod();renderDocs();
       toast('✓ Factura Cambiaria CERTIFICADA','Autorización SAT: '+data.uuid);
       logAudit('Factura emitida (FEL real)',f.serie+'-'+f.numeroDte+' · '+(f.clienteComercial||f.clienteNombre)+' · '+money(f.totales.total));
-      if(typeof guardarDocumento==='function')guardarDocumento(f);
+      // CRÍTICO: la factura YA quedó certificada en SAT. Hay que asegurar que se
+      // guarde en la base; si el guardado falla, avisar FUERTE y reintentar, para
+      // que nadie la vuelva a facturar (evita un 2º DTE en SAT por la misma venta).
+      let _okGuardar=(typeof guardarDocumento==='function')?await guardarDocumento(f):true;
+      if(_okGuardar===false){ await new Promise(r=>setTimeout(r,1500)); _okGuardar=await guardarDocumento(f); }
+      if(_okGuardar===false){
+        logAudit('⚠ Factura certificada NO guardada',f.serie+'-'+f.numeroDte+' · reintentar guardado');
+        toast('⚠ Certificada en SAT pero NO guardada','La factura '+f.serie+'-'+f.numeroDte+' se certificó, pero no se pudo guardar en el sistema. NO la vuelvas a facturar. Revisá tu conexión y recargá; si sigue, avisá a soporte.',true);
+      }
       // Descargar el PDF automáticamente a la carpeta de Descargas
       if(f.pdfBase64)descargarFacturaPDF(f.id);
     }else{

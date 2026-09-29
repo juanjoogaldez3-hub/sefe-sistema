@@ -471,29 +471,33 @@ async function _planPagarParte(i,parte){
   const l=pl.lineas[i]; if(!l)return;
   const yaPagado={q1:l.q1.pagado,q2:l.q2.pagado,com:l.comPagado}[parte];
   if(yaPagado)return;
+  l._pagando=l._pagando||{}; if(l._pagando[parte])return; // traba: bloquea el 2º clic de esta parte
   const monto={q1:_montoQ1(l),q2:_montoQ2(l),com:_comLinea(l)}[parte];
   const etq={q1:'1ª quincena',q2:'2ª quincena',com:'comisiones'}[parte];
   if(!(monto>0)){toast('Nada que pagar','El monto de '+etq+' para '+l.nombre+' es cero',true);return;}
   const cuentaId=l.cuentaBancoId||pl.cuentaPagoId;
   if(!cuentaId){toast('Elegí la cuenta','Seleccioná desde qué cuenta se paga',true);return;}
-  if(pl._nuevo){const ok=await _planGuardar(); if(!ok)return;}
-  const mov=_planRegistrarPago({cuentaId,monto,origenId:pl.id,beneficiario:l.nombre,
-    concepto:'Planilla '+pl.etiqueta+' · '+l.nombre+' · '+etq});
-  if(!mov){toast('No se registró el pago','Revisá la cuenta seleccionada',true);return;}
-  const ahora=new Date().toISOString();
-  if(parte==='q1'){l.q1.pagado=true;l.q1.poliza=mov.poliza;l.q1.el=ahora;}
-  else if(parte==='q2'){l.q2.pagado=true;l.q2.poliza=mov.poliza;l.q2.el=ahora;}
-  else{l.comPagado=true;l.comPoliza=mov.poliza;l.comEl=ahora;}
-  l.cuentaBancoId=cuentaId;
-  _planSyncTotales();
-  await (typeof guardarPlanilla==='function'?guardarPlanilla(pl):Promise.resolve());
-  const idx=planillas.findIndex(p=>String(p.id)===String(pl.id));
-  if(idx>=0){const c=JSON.parse(JSON.stringify(pl));delete c._nuevo;planillas[idx]=c;}
-  if(typeof logAudit==='function')logAudit('Pago de planilla',l.nombre+' · '+etq+' · '+money(monto)+' · '+pl.etiqueta);
-  _planPintar(); renderPlanilla();
-  // Mostrar la BOLETA de ESTE pago (lo del empleado); la póliza queda en su botón.
-  boletaPagoPDF(pl,l,parte);
-  toast('✓ Pago registrado',l.nombre+' · '+etq);
+  l._pagando[parte]=true;
+  try{
+    if(pl._nuevo){const ok=await _planGuardar(); if(!ok)return;}
+    const mov=_planRegistrarPago({cuentaId,monto,origenId:pl.id,beneficiario:l.nombre,
+      concepto:'Planilla '+pl.etiqueta+' · '+l.nombre+' · '+etq});
+    if(!mov){toast('No se registró el pago','Revisá la cuenta seleccionada',true);return;}
+    const ahora=new Date().toISOString();
+    if(parte==='q1'){l.q1.pagado=true;l.q1.poliza=mov.poliza;l.q1.el=ahora;}
+    else if(parte==='q2'){l.q2.pagado=true;l.q2.poliza=mov.poliza;l.q2.el=ahora;}
+    else{l.comPagado=true;l.comPoliza=mov.poliza;l.comEl=ahora;}
+    l.cuentaBancoId=cuentaId;
+    _planSyncTotales();
+    await (typeof guardarPlanilla==='function'?guardarPlanilla(pl):Promise.resolve());
+    const idx=planillas.findIndex(p=>String(p.id)===String(pl.id));
+    if(idx>=0){const c=JSON.parse(JSON.stringify(pl));delete c._nuevo;planillas[idx]=c;}
+    if(typeof logAudit==='function')logAudit('Pago de planilla',l.nombre+' · '+etq+' · '+money(monto)+' · '+pl.etiqueta);
+    _planPintar(); renderPlanilla();
+    // Mostrar la BOLETA de ESTE pago (lo del empleado); la póliza queda en su botón.
+    boletaPagoPDF(pl,l,parte);
+    toast('✓ Pago registrado',l.nombre+' · '+etq);
+  }finally{ l._pagando[parte]=false; }
 }
 window._planPagarParte=_planPagarParte;
 
@@ -868,22 +872,25 @@ function _reRegistrarPago(o){
   return mov;
 }
 async function _rePagar(i){
-  const r=_reActual; if(!r)return; const l=r.lineas[i]; if(!l||l.pagado)return;
+  const r=_reActual; if(!r)return; const l=r.lineas[i]; if(!l||l.pagado||l._pagando)return;
   const neto=_reNeto(l);
   if(neto<=0){toast('Neto en cero','No hay monto que pagar para '+l.nombre,true);return;}
   const cuentaId=l.cuentaBancoId||r.cuentaPagoId;
   if(!cuentaId){toast('Elegí la cuenta','Seleccioná desde qué cuenta se paga',true);return;}
-  if(r._nuevo){const ok=await _reGuardar(); if(!ok)return;}
-  const mov=_reRegistrarPago({cuentaId,monto:neto,origenId:r.id,beneficiario:l.nombre,
-    concepto:(r.concepto||'Recibo especial')+' · '+l.nombre});
-  if(!mov){toast('No se registró el pago','Revisá la cuenta',true);return;}
-  l.pagado=true; l.poliza=mov.poliza||null; l.pagadoEl=new Date().toISOString(); l.cuentaBancoId=cuentaId;
-  _reSync(); await (typeof guardarReciboEspecial==='function'?guardarReciboEspecial(r):Promise.resolve());
-  const idx=recibosEspeciales.findIndex(x=>String(x.id)===String(r.id));
-  if(idx>=0){const c=JSON.parse(JSON.stringify(r));delete c._nuevo;recibosEspeciales[idx]=c;}
-  if(typeof logAudit==='function')logAudit('Recibo especial · pago',l.nombre+' · '+money(neto)+' · '+(r.concepto||''));
-  _rePintar(); renderPlanilla(); boletaEspecialPDF(r,l);
-  toast('✓ Pago registrado',l.nombre);
+  l._pagando=true; // traba: bloquea el 2º clic durante el guardado (evita salida de banco duplicada)
+  try{
+    if(r._nuevo){const ok=await _reGuardar(); if(!ok)return;}
+    const mov=_reRegistrarPago({cuentaId,monto:neto,origenId:r.id,beneficiario:l.nombre,
+      concepto:(r.concepto||'Recibo especial')+' · '+l.nombre});
+    if(!mov){toast('No se registró el pago','Revisá la cuenta',true);return;}
+    l.pagado=true; l.poliza=mov.poliza||null; l.pagadoEl=new Date().toISOString(); l.cuentaBancoId=cuentaId;
+    _reSync(); await (typeof guardarReciboEspecial==='function'?guardarReciboEspecial(r):Promise.resolve());
+    const idx=recibosEspeciales.findIndex(x=>String(x.id)===String(r.id));
+    if(idx>=0){const c=JSON.parse(JSON.stringify(r));delete c._nuevo;recibosEspeciales[idx]=c;}
+    if(typeof logAudit==='function')logAudit('Recibo especial · pago',l.nombre+' · '+money(neto)+' · '+(r.concepto||''));
+    _rePintar(); renderPlanilla(); boletaEspecialPDF(r,l);
+    toast('✓ Pago registrado',l.nombre);
+  }finally{ l._pagando=false; }
 }
 window._rePagar=_rePagar;
 async function _reAnular(i){

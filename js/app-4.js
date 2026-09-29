@@ -447,7 +447,9 @@ function cotSet(i,campo,val){
 window.cotSet=cotSet;
 function cotRemove(i){cotCart.splice(i,1);cotRenderCart();}
 window.cotRemove=cotRemove;
+let _guardandoCot=false; // traba anti doble-clic (evita cotizaciones duplicadas)
 async function guardarCotizacionUI(){
+  if(_guardandoCot)return;
   if(!cotCart.length){toast('Agregá productos','La cotización no tiene productos',true);return;}
   const txt=((document.getElementById('cot-cli-search')||{}).value||'').trim();
   let cliObj=cotClienteSel;
@@ -472,6 +474,8 @@ async function guardarCotizacionUI(){
   const total=cotCalcTotal();
   const hoy=fechaHoyGT();
   const fechaVence=(()=>{const d=new Date(hoy+'T12:00:00');d.setDate(d.getDate()+validez);return d.toISOString().slice(0,10);})();
+  _guardandoCot=true;
+  try{
   let cot;
   if(cotEditId){
     cot=cotizaciones.find(c=>c.id===cotEditId);if(!cot){toast('No encontrada',null,true);return;}
@@ -486,6 +490,7 @@ async function guardarCotizacionUI(){
   else toast('✓ Cotización guardada','COT-'+padn(cot.numero));
   _cotLimpiarBorrador();
   cotEditId=null;renderCotizaciones();
+  }finally{ _guardandoCot=false; }
 }
 window.guardarCotizacionUI=guardarCotizacionUI;
 function borrarCotizacionUI(id){
@@ -538,7 +543,7 @@ function convertirCotizacionAPedido(id){
       return {id:it.id,codigo:it.codigo,nombre:it.nombre,precio:eff,unidad:it.unidad,cantidad:Number(it.cantidad),descuento:0,modoVenta:_modo,tipoEmpaque:_te,unidadesPorCaja:(_p&&_p.unidadesPorCaja)||it.unidadesPorCaja};
     });
     const total=items.reduce((s,it)=>s+it.precio*it.cantidad,0);
-    const doc={id:-Date.now(),numero:corr,tipoDoc:'pedido',clienteId:c.clienteId,clienteNombre:c.clienteNombre,clienteComercial:c.clienteComercial,clienteNit:c.clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',subVendedorNombre:null,items,totales:{total},estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:'',observaciones:'Generado desde COT-'+padn(c.numero),notaInterna:'',nitFacturado:(cli&&cli.nit)||c.clienteNit,nombreFacturado:(cli&&cli.nombre)||c.clienteComercial,_nuevo:true};
+    const doc={id:-Date.now(),numero:corr,tipoDoc:'pedido',clienteId:c.clienteId,clienteNombre:c.clienteNombre,clienteComercial:c.clienteComercial,clienteNit:c.clienteNit,vendedorId:vend?vend.id:null,vendedorNombre:vend?vend.nombre:'',subVendedorNombre:null,items,totales:{total,baseSinIva:total/1.12,iva:total-total/1.12},estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:'',observaciones:'Generado desde COT-'+padn(c.numero),notaInterna:'',nitFacturado:(cli&&cli.nit)||c.clienteNit,nombreFacturado:(cli&&cli.nombre)||c.clienteComercial,_nuevo:true};
     items.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p&&typeof aplicarStock==='function')aplicarStock(p,-it.cantidad,it.modoVenta);});
     documentos.push(doc);corr++;
     if(typeof guardarDocumento==='function')await guardarDocumento(doc);
