@@ -351,6 +351,29 @@ function aplicarMarca(){
 window.aplicarMarca=aplicarMarca;
 try{ aplicarMarca(); }catch(e){}
 
+// Ajusta el cuadrito + nombre de la barra lateral según la EMPRESA activa,
+// para que se vea de una en cuál estás parado. SEFE mantiene la marca del
+// producto (verde, 'SE', 'SEFE'); las demás empresas muestran su nombre, su
+// color y un monograma de 2 letras de su código. Con una sola empresa (u otro
+// cliente del producto) no cambia nada.
+function aplicarMarcaEmpresa(){
+  try{
+    const brand=document.querySelector('.brand'); if(!brand)return;
+    const mk=brand.querySelector('.mk'), h2=brand.querySelector('h2');
+    const e=(typeof haymultiempresa==='function'&&haymultiempresa())?empresaActivaObj():null;
+    if(!e || e.codigo==='SEFE'){
+      // Marca del producto (SEFE) tal cual.
+      if(mk){ if(SEFE_MARCA.monograma)mk.textContent=SEFE_MARCA.monograma; mk.style.background=''; mk.style.color=''; }
+      if(h2&&SEFE_MARCA.nombre)h2.textContent=SEFE_MARCA.nombre;
+      return;
+    }
+    const mono=String(e.codigo||'').slice(0,2).toUpperCase()||'··';
+    if(mk){ mk.textContent=mono; if(e.color){mk.style.background=e.color;mk.style.color='#fff';} }
+    if(h2)h2.textContent=e.nombre||e.codigo;
+  }catch(err){ console.error('aplicarMarcaEmpresa:',err); }
+}
+if(typeof window!=='undefined')window.aplicarMarcaEmpresa=aplicarMarcaEmpresa;
+
 let clientes=[
   {id:3,nit:'CF',nombre:'Consumidor Final',razonSocial:'Consumidor Final',direccion:'Ciudad',email:'',tiempoCredito:0,vendedorId:null,sedesDe:null,
    contactoPagos:{nombre:'',telefono:'',correo:''},contactoCompras:{nombre:'',telefono:'',correo:''},precios:{}},
@@ -444,6 +467,7 @@ function cambiarEmpresa(codigo){
   // se reconstruyan con los datos de la nueva empresa.
   try{ document.querySelectorAll('[data-built]').forEach(el=>{el.dataset.built='';}); }catch(e){}
   renderSelectorEmpresa();
+  aplicarMarcaEmpresa();
   const v=(document.querySelector('.nav button.active')||{}).dataset
         ? document.querySelector('.nav button.active').dataset.view
         : (location.hash||'').replace('#','');

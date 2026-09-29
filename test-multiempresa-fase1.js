@@ -111,6 +111,13 @@ console.log('\n═══ Fase 2: el frontend manda la empresa al backend ══�
 ok('certificar (cambiaria) manda empresa', (src.match(/empresa:f\.empresa\|\|'SEFE',\s*\n?\s*\};/g)||[]).length>=1 || /vencimientoTexto:vencDDMMAAAA,\s*\n\s*\/\/ Multiempresa[\s\S]*?empresa:f\.empresa\|\|'SEFE',/.test(src));
 ok('anular manda empresa', /uuid:f\.autorizacion,motivo,empresa:f\.empresa\|\|'SEFE'/.test(src));
 
+console.log('\n═══ Marca de la barra lateral por empresa ═══');
+ok('aplicarMarcaEmpresa() existe', /function aplicarMarcaEmpresa\(\)\{/.test(src));
+ok('SEFE mantiene la marca del producto', /if\(!e \|\| e\.codigo==='SEFE'\)\{[\s\S]*?SEFE_MARCA\.monograma/.test(src));
+ok('otra empresa usa su nombre y color', /if\(mk\)\{ mk\.textContent=mono; if\(e\.color\)\{mk\.style\.background=e\.color/.test(src));
+ok('se aplica al cambiar de empresa', /renderSelectorEmpresa\(\);\s*\n\s*aplicarMarcaEmpresa\(\);/.test(src));
+ok('se aplica al entrar', /if\(typeof aplicarMarcaEmpresa==='function'\)aplicarMarcaEmpresa\(\)/.test(src));
+
 console.log('\n═══ UI: contenedor del selector + estilos ═══');
 ok('index.html tiene el contenedor del selector', /id="sel-empresa-cont"/.test(html));
 ok('entrarVistaInicial inicializa el selector', /iniciarEmpresaActiva\(\); if\(typeof renderSelectorEmpresa==='function'\)renderSelectorEmpresa\(\)/.test(src));
