@@ -505,7 +505,16 @@ function toggleBrandMenu(e){
   if(abrir){ setTimeout(()=>document.addEventListener('click',_cerrarBrandMenu,{once:true}),0); }
 }
 function _cerrarBrandMenu(){ const menu=document.getElementById('brand-menu'); if(menu)menu.style.display='none'; }
-if(typeof window!=='undefined'){ window.toggleBrandMenu=toggleBrandMenu; }
+// Cambia a la empresa de un registro si es distinta a la activa. Sirve para
+// abrir algo de la OTRA empresa desde un recordatorio (que es compartido):
+// primero cambia de empresa y así el registro sí queda visible. Devuelve
+// true si hubo cambio.
+function irAEmpresaSiHaceFalta(cod){
+  cod=cod||'SEFE';
+  if(haymultiempresa() && empresaActiva && cod!==empresaActiva){ cambiarEmpresa(cod); return true; }
+  return false;
+}
+if(typeof window!=='undefined'){ window.toggleBrandMenu=toggleBrandMenu; window.irAEmpresaSiHaceFalta=irAEmpresaSiHaceFalta; }
 // Empresas cuya facturación electrónica (NIT propio) está conectada en el
 // backend (EcoFactura). El backend es la única fuente de verdad: lo dice el
 // endpoint /api/empresas-fel. Arranca en SEFE por seguridad; si el backend

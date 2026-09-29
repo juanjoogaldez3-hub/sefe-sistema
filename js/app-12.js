@@ -29,7 +29,7 @@ window.renderPlanilla=renderPlanilla;
 
 function _renderEmpleadosTabla(){
   const tb=$('#t-empleados'); if(!tb)return;
-  const lista=(typeof empleados!=='undefined'?empleados:[]).slice()
+  const lista=deEmpresa(typeof empleados!=='undefined'?empleados:[]).slice() // multiempresa
     .sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)));
   const empty=$('#empleados-empty'); if(empty)empty.style.display=lista.length?'none':'block';
   tb.innerHTML=lista.map(e=>`<tr>
@@ -50,7 +50,7 @@ function _planEstadoBadge(e){
 }
 function _renderPlanillasTabla(){
   const tb=$('#t-planillas'); if(!tb)return;
-  const lista=(typeof planillas!=='undefined'?planillas:[]).slice();
+  const lista=deEmpresa(typeof planillas!=='undefined'?planillas:[]).slice(); // multiempresa
   const empty=$('#planillas-empty'); if(empty)empty.style.display=lista.length?'none':'block';
   tb.innerHTML=lista.map(p=>`<tr>
       <td style="font-weight:600">${escHtml(p.etiqueta||'')}</td>
@@ -94,6 +94,7 @@ function openEmpleado(id){
       emp.igss=$('#emp-igss').value.trim();
       emp.nit=$('#emp-nit').value.trim();
       emp.fechaIngreso=$('#emp-ingreso').value||null;
+      if(!e&&typeof empresaParaNuevo==='function')emp.empresa=empresaParaNuevo(); // multiempresa
       if(e)emp.activo=$('#emp-activo').value==='1';
       const ok=await (typeof guardarEmpleado==='function'?guardarEmpleado(emp):Promise.resolve(false));
       if(!ok){err('No se pudo guardar. ¿Ya corriste el SQL de empleados?');if(!e)emp._nuevo=true;return;}
@@ -149,6 +150,7 @@ function _comisionEmpleado(emp,desde,hasta){
   if(!v)return 0;
   const total=(typeof documentos!=='undefined'?documentos:[]).filter(d=>
       ['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&
+      (d.empresa||'SEFE')===(emp.empresa||'SEFE')&& // multiempresa: comisión de la empresa del empleado
       d.vendedorNombre===v.nombre&&d.creada&&
       String(d.creada).slice(0,10)>=desde&&String(d.creada).slice(0,10)<=hasta
     ).reduce((s,d)=>s+((d.totales&&d.totales.total)||0),0);
@@ -192,7 +194,7 @@ function _polizasLinea(l){
 // entre las dos quincenas; los DESCUENTOS (IGSS) caen por defecto en la 2ª
 // quincena (cierre de mes) — todo editable después.
 function _construirLineas(desde,hasta){
-  return (typeof empleados!=='undefined'?empleados:[]).filter(e=>e.activo!==false)
+  return deEmpresa(typeof empleados!=='undefined'?empleados:[]).filter(e=>e.activo!==false) // multiempresa
     .sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
     .map(e=>{
       const com=_comisionEmpleado(e,desde,hasta);
@@ -244,12 +246,12 @@ function _planSyncTotales(){
 
 // Abrir una planilla nueva (mes actual por defecto).
 function nuevaPlanilla(){
-  if(!(typeof empleados!=='undefined'&&empleados.filter(e=>e.activo!==false).length)){
+  if(!(typeof empleados!=='undefined'&&deEmpresa(empleados).filter(e=>e.activo!==false).length)){
     toast('Sin empleados activos','Agregá empleados antes de armar la planilla',true);return;
   }
   const ms=_mesesRecientes(1)[0];
   _planActual={_nuevo:true,id:null,desde:ms.desde,hasta:ms.hasta,etiqueta:ms.etiqueta,
-    estado:'borrador',notas:'',cuentaPagoId:_cuentaPlanillaDefault(),
+    estado:'borrador',notas:'',cuentaPagoId:_cuentaPlanillaDefault(),empresa:empresaParaNuevo(), // multiempresa
     lineas:_construirLineas(ms.desde,ms.hasta),creadoPor:(typeof currentUser!=='undefined'?currentUser:'')};
   _abrirEditorPlanilla();
 }
@@ -684,7 +686,7 @@ let _reEdit=new Set();   // filas desbloqueadas para corregir
 
 function renderRecibosEspeciales(){
   const tb=$('#t-recesp'); if(!tb)return;
-  const lista=(typeof recibosEspeciales!=='undefined'?recibosEspeciales:[]).slice();
+  const lista=deEmpresa(typeof recibosEspeciales!=='undefined'?recibosEspeciales:[]).slice(); // multiempresa
   const empty=$('#recesp-empty'); if(empty)empty.style.display=lista.length?'none':'block';
   tb.innerHTML=lista.map(r=>`<tr>
       <td style="font-weight:600">${escHtml(r.concepto||_RE_TIPOS[r.tipo]||'Recibo')}</td>
@@ -720,7 +722,7 @@ function _reConcepto(tipo,fecha){
   return '';
 }
 function _reConstruirLineas(tipo,fecha){
-  return (typeof empleados!=='undefined'?empleados:[]).filter(e=>e.activo!==false)
+  return deEmpresa(typeof empleados!=='undefined'?empleados:[]).filter(e=>e.activo!==false) // multiempresa
     .sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
     .map(e=>({empleadoId:e.id,nombre:e.nombre,cuentaBancoId:e.cuentaBancoId||null,
       monto:_prestacionSugerida(tipo,e,fecha),isr:0,otrosDesc:0,
@@ -741,12 +743,12 @@ function _reSync(){
 }
 
 function nuevoReciboEspecial(){
-  if(!(typeof empleados!=='undefined'&&empleados.filter(e=>e.activo!==false).length)){
+  if(!(typeof empleados!=='undefined'&&deEmpresa(empleados).filter(e=>e.activo!==false).length)){
     toast('Sin empleados activos','Agregá empleados antes de armar el recibo',true);return;
   }
   const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():new Date().toISOString().slice(0,10);
   _reActual={_nuevo:true,id:null,tipo:'aguinaldo',concepto:_reConcepto('aguinaldo',hoy),fecha:hoy,
-    estado:'borrador',notas:'',cuentaPagoId:_cuentaPlanillaDefault(),
+    estado:'borrador',notas:'',cuentaPagoId:_cuentaPlanillaDefault(),empresa:empresaParaNuevo(), // multiempresa
     lineas:_reConstruirLineas('aguinaldo',hoy),creadoPor:(typeof currentUser!=='undefined'?currentUser:'')};
   _reAbrirEditor();
 }

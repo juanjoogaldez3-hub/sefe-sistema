@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 31 migraciones una por una.
+-- secuencias. Reemplaza correr las 32 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 31 migraciones, en este orden:
+-- Incluye 32 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -48,6 +48,7 @@
 --   29. 20260929190000_multiempresa_base.sql
 --   30. 20260929210000_baterias_compartidas.sql
 --   31. 20260929220000_laml_nombre.sql
+--   32. 20260929230000_empleados_planilla_empresa.sql
 -- ============================================================
 
 
@@ -2358,4 +2359,34 @@ end $$;
 -- ============================================================
 
 update public.empresas set nombre = 'Luis Menocal' where codigo = 'LAML';
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260929230000_empleados_planilla_empresa.sql           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Multiempresa — Planilla SEPARADA por empresa
+-- ============================================================
+-- Juanjo pidió que empleados y planillas (y las prestaciones /
+-- recibos especiales, que viven en el mismo módulo) vayan SEPARADOS
+-- por empresa, no compartidos. Se les agrega la etiqueta `empresa`.
+-- Todo lo existente queda como SEFE — no se mueve ni un dato.
+--
+-- Seguro de correr de más: 'if not exists' y default 'SEFE'.
+-- ============================================================
+
+do $$
+declare
+  t text;
+  tablas text[] := array['empleados','planillas','recibos_especiales'];
+begin
+  foreach t in array tablas loop
+    if exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+               where n.nspname='public' and c.relname=t and c.relkind='r') then
+      execute format('alter table public.%I add column if not exists empresa text not null default ''SEFE''', t);
+      execute format('update public.%I set empresa=''SEFE'' where empresa is null', t);
+    end if;
+  end loop;
+end $$;
 
