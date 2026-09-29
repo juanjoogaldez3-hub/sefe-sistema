@@ -947,6 +947,11 @@ function renderGrupoConsolidado(c){
 // ---- Cobros: configuración y seguimiento de cobro del cliente ----
 const DIAS_COBRO=[['lun','Lun'],['mar','Mar'],['mie','Mié'],['jue','Jue'],['vie','Vie'],['sab','Sáb'],['dom','Dom']];
 const RESULT_SEG={pago:['Pagó','b-ok'],parcial:['Abono parcial','b-info'],promesa:['Prometió pago','b-warn'],noestaba:['No estaba','b-muted'],sinrespuesta:['Sin respuesta','b-muted'],reprogramado:['Reprogramado','b-info'],otro:['Otro','b-muted']};
+// Resultados para el seguimiento de VENTA (cliente que dejó de comprar, etc.).
+const RESULT_SEG_VENTA={comprara:['Va a comprar','b-ok'],tiempo:['Pidió tiempo','b-warn'],pensando:['Lo está pensando','b-info'],nointeresa:['No le interesa','b-muted'],nocontesta:['No contestó','b-muted'],otro:['Otro','b-muted']};
+// Etiqueta [texto,badge] de un seguimiento, según sea de venta o de cobro.
+function _resultSeg(s){return (((s&&s.tipo)==='venta')?RESULT_SEG_VENTA:RESULT_SEG)[s&&s.resultado]||['—','b-muted'];}
+window._resultSeg=_resultSeg;
 function escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function guardarCobroInfo(cliId){
   const c=clientes.find(x=>x.id===cliId);if(!c)return;

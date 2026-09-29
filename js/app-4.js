@@ -55,7 +55,7 @@ function renderRecordatorios(){
       <td style="font-size:12px">${_escRec(r.asignadoA||'—')}</td>
       <td style="color:${vencido?'var(--danger)':(esHoy?'#9A6B07':'var(--muted)')};font-weight:${vencido||esHoy?'700':'400'}">${r.fechaVencimiento?fdate(r.fechaVencimiento)+(vencido?' · vencido':(esHoy?' · hoy':'')):'—'}</td>
       <td>${prioBadge}</td>
-      <td><div class="acts"><button class="btn btn-ghost btn-sm" onclick="openRecordatorio(${r.id})">Editar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarRecordatorioUI(${r.id})">✕</button></div></td>
+      <td><div class="acts">${r.tipo==='cliente'&&r.refId?`<button class="btn btn-ghost btn-sm" onclick="openSegVenta(${r.refId},${r.id})" title="Anotar qué dijo el cliente">📝 Registrar</button>`:''}<button class="btn btn-ghost btn-sm" onclick="openRecordatorio(${r.id})">Editar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarRecordatorioUI(${r.id})">✕</button></div></td>
     </tr>`;
   }).join(''):`<tr><td colspan="7" class="empty">Sin recordatorios ${recFiltro==='hechos'?'hechos':'en esta vista'}</td></tr>`;
 }
@@ -231,7 +231,7 @@ function mostrarRecordatoriosPopup(forzar){
       const vencido=r.fechaVencimiento<hoy;
       return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid var(--line)">
         <input type="checkbox" onclick="toggleHechoRecordatorio(${r.id});this.closest('div').style.opacity=.4" style="width:16px;height:16px;margin-top:2px;cursor:pointer">
-        <div style="flex:1"><div style="font-weight:600">📌 ${_escRec(r.titulo)}</div>${r.refLabel?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.refLabel)}</div>`:''}${r.nota?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.nota)}</div>`:''}<div style="font-size:11px;color:${vencido?'var(--danger)':'#9A6B07'};font-weight:700;margin-top:2px">${vencido?'Vencido · ':'Hoy · '}${fdate(r.fechaVencimiento)}</div></div>
+        <div style="flex:1"><div style="font-weight:600">📌 ${_escRec(r.titulo)}</div>${r.refLabel?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.refLabel)}</div>`:''}${r.nota?`<div style="font-size:11.5px;color:var(--muted)">${_escRec(r.nota)}</div>`:''}<div style="font-size:11px;color:${vencido?'var(--danger)':'#9A6B07'};font-weight:700;margin-top:2px">${vencido?'Vencido · ':'Hoy · '}${fdate(r.fechaVencimiento)}</div>${r.tipo==='cliente'&&r.refId?`<div style="margin-top:6px"><button class="btn btn-ghost btn-sm" onclick="openSegVenta(${r.refId},${r.id})">📝 Registrar</button></div>`:''}</div>
       </div>`;
     }).join('');
     body.innerHTML=fCobros+fTareas;
@@ -892,10 +892,11 @@ function renderCliDet(){
     const segs=Array.isArray(c.seguimientos)?c.seguimientos:[];
     const resultOpts=Object.entries(RESULT_SEG).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');
     const filas=segs.length?segs.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||((b.id||0)-(a.id||0))).map(s=>{
-      const r=RESULT_SEG[s.resultado]||['—','b-muted'];
+      const r=(typeof _resultSeg==='function')?_resultSeg(s):(RESULT_SEG[s.resultado]||['—','b-muted']);
+      const tag=s.tipo==='venta'?'<span class="badge b-info" style="font-size:9px;margin-left:5px">Venta</span>':'<span class="badge b-muted" style="font-size:9px;margin-left:5px">Cobro</span>';
       return `<tr>
         <td style="color:var(--muted);white-space:nowrap">${s.fecha?fdate(s.fecha):'—'}</td>
-        <td><span class="badge ${r[1]}">${r[0]}</span></td>
+        <td><span class="badge ${r[1]}">${r[0]}</span>${tag}</td>
         <td>${s.nota?escHtml(s.nota):'<span style="color:var(--muted-2)">—</span>'}</td>
         <td style="color:var(--muted);white-space:nowrap">${s.proximaFecha?fdate(s.proximaFecha)+(s.hecho?' <span style="color:var(--ok)" title="Atendido">✓</span>':(s.proximaFecha===fechaHoyGT()?' <span style="color:var(--warn)" title="Recordatorio para hoy">🔔</span>':'')):'—'}</td>
         <td style="color:var(--muted-2);font-size:11.5px">${escHtml(s.usuario)||'—'}</td>
@@ -903,7 +904,7 @@ function renderCliDet(){
       </tr>`;
     }).join(''):'<tr><td colspan="6" class="empty">Sin seguimientos registrados todavía</td></tr>';
     body=_recPanelCli+`<div class="panel">
-      <div class="panel-head"><h3>Seguimiento de cobro</h3><span style="font-size:12px;color:var(--muted)">${segs.length} anotación(es)</span></div>
+      <div class="panel-head"><h3>Seguimiento del cliente</h3><span style="font-size:12px;color:var(--muted)">${segs.length} anotación(es) · cobros y ventas</span></div>
       ${puedeEditar?`<div class="panel-body" style="border-bottom:1px solid var(--line)">
         <div style="display:grid;grid-template-columns:140px 1fr 160px;gap:11px;align-items:end">
           <div><label>Fecha</label><input type="date" id="sg-fecha" value="${fechaHoyGT()}"></div>
@@ -1379,6 +1380,42 @@ function crearSeguimiento(clienteId){
     asignadoA:(vend&&vend.nombre)||undefined});
 }
 window.crearSeguimiento=crearSeguimiento;
+// Registrar el resultado de un seguimiento de VENTA: qué dijo el cliente + próximo
+// contacto. Queda en el historial del cliente (c.seguimientos, tipo 'venta') y, si
+// se pone próximo contacto, agenda otra tarea "Seguimiento: X". recId = tarea de origen.
+function openSegVenta(cliId, recId){
+  const c=(typeof clientes!=='undefined'?clientes:[]).find(x=>x.id===cliId); if(!c){toast('Cliente no encontrado',null,true);return;}
+  const rec=recId?(recordatorios||[]).find(r=>r.id===recId):null;
+  const opts=Object.entries(RESULT_SEG_VENTA).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');
+  openMod('📝 Registrar seguimiento · '+c.nombre,
+    `<div class="row"><div><label>¿Qué pasó?</label><select id="sv-result">${opts}</select></div><div><label>Próximo contacto <span style="color:var(--muted-2);font-weight:400">(opcional)</span></label><input id="sv-prox" type="date"></div></div>
+     <div class="row"><div><label>¿Qué te dijo el cliente?</label><input id="sv-nota" placeholder="Anotá lo que dijo…" autocomplete="off"></div></div>
+     <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Queda en el historial del cliente. Si ponés un próximo contacto, se agenda otra tarea de seguimiento.</span></div>`,
+    ()=>{
+      const resultado=$('#sv-result').value||'otro';
+      const nota=($('#sv-nota').value||'').trim();
+      const prox=$('#sv-prox').value||'';
+      if(!nota&&!prox){toast('Falta información','Anotá qué te dijo el cliente o poné un próximo contacto',true);return;}
+      c.seguimientos=Array.isArray(c.seguimientos)?c.seguimientos:[];
+      const nid=c.seguimientos.reduce((m,s)=>Math.max(m,s.id||0),0)+1;
+      c.seguimientos.push({id:nid,tipo:'venta',fecha:fechaHoyGT(),resultado,nota,usuario:currentUser,registrado:new Date().toISOString()});
+      if(typeof guardarCliente==='function')guardarCliente(c);
+      if(rec){rec.hecho=true;rec.hechoPor=currentUser;rec.hechoFecha=new Date().toISOString();if(typeof guardarRecordatorio==='function')guardarRecordatorio(rec);}
+      if(prox){
+        const vend=(typeof vendedores!=='undefined'?vendedores:[]).find(x=>x.id===c.vendedorId);
+        const nuevo={id:(recordatorios.reduce((m,x)=>Math.max(m,x.id||0),0)+1),titulo:'Seguimiento: '+c.nombre,nota:nota||'',tipo:'cliente',refId:c.id,refLabel:c.nombre,fechaVencimiento:prox,asignadoA:(rec&&rec.asignadoA)||(vend&&vend.nombre)||'',prioridad:'normal',hecho:false,creadoPor:currentUser,creado:new Date().toISOString(),_nuevo:true};
+        recordatorios.push(nuevo); if(typeof guardarRecordatorio==='function')guardarRecordatorio(nuevo);
+      }
+      logAudit('Seguimiento de venta',c.nombre+' · '+((RESULT_SEG_VENTA[resultado]||[])[0]||resultado));
+      closeMod();
+      if(typeof renderRecordatorios==='function')renderRecordatorios();
+      actualizarBellRec();
+      if(typeof _reRenderCliSiAbierto==='function')_reRenderCliSiAbierto(cliId);
+      if($('#recmod')?.classList.contains('show'))mostrarRecordatoriosPopup(false);
+      toast('✓ Seguimiento registrado',c.nombre+(prox?' · próximo '+fdate(prox):''));
+    });
+}
+window.openSegVenta=openSegVenta;
 function _cliPedidosAbiertos(c){return (typeof documentos!=='undefined'?documentos:[]).filter(d=>d.clienteId===c.id&&d.tipoDoc==='pedido'&&d.estado==='abierto').length;}
 // Color del pin según el modo elegido
 function _mapaColor(c,modo){
