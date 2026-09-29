@@ -1295,6 +1295,8 @@ async function facturarPedido(id,dias){
     condicionPago:condicionPago,
     vendedor:vendedorIniciales,
     vencimientoTexto:vencDDMMAAAA,
+    // Multiempresa: el backend elige las credenciales/NIT emisor según esto.
+    empresa:f.empresa||'SEFE',
   };
 
   try{

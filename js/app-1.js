@@ -462,12 +462,25 @@ function renderSelectorEmpresa(){
   cont.innerHTML=`<span class="emp-dot" style="background:${col}"></span>`+
     `<select id="sel-empresa" class="sel-empresa" title="Empresa con la que estás trabajando" onchange="cambiarEmpresa(this.value)">${opts}</select>`;
 }
-// ¿La empresa tiene lista su facturación electrónica (NIT propio conectado
-// en EcoFactura)? Por ahora SOLO SEFE. La Fase 2 conecta el NIT de las demás
-// empresas en el backend y ahí se amplía esto. Candado de seguridad: evita
-// que un documento de otra empresa se certifique en SAT con el NIT de SEFE.
-function empresaPuedeFacturar(codigo){ return (codigo||'SEFE')==='SEFE'; }
-if(typeof window!=='undefined')window.empresaPuedeFacturar=empresaPuedeFacturar;
+// Empresas cuya facturación electrónica (NIT propio) está conectada en el
+// backend (EcoFactura). El backend es la única fuente de verdad: lo dice el
+// endpoint /api/empresas-fel. Arranca en SEFE por seguridad; si el backend
+// no responde o es viejo, queda solo SEFE (candado firme).
+let empresasFEL=['SEFE'];
+// ¿La empresa puede facturar de verdad ahora mismo? Candado que evita que un
+// documento de otra empresa se certifique en SAT con el NIT de SEFE.
+function empresaPuedeFacturar(codigo){ return empresasFEL.includes(codigo||'SEFE'); }
+// Consulta al backend qué empresas tienen FEL listo. Se llama al entrar.
+async function cargarEmpresasFEL(){
+  try{
+    if(typeof FEL_BACKEND_URL==='undefined'||FEL_BACKEND_URL.includes('TU-BACKEND'))return;
+    const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/empresas-fel');
+    if(!r.ok)return;
+    const d=await r.json();
+    if(d&&Array.isArray(d.empresas)&&d.empresas.length) empresasFEL=d.empresas;
+  }catch(e){ /* backend viejo o sin conexión → queda solo SEFE (seguro) */ }
+}
+if(typeof window!=='undefined'){ window.empresaPuedeFacturar=empresaPuedeFacturar; window.cargarEmpresasFEL=cargarEmpresasFEL; }
 // Etiqueta de empresa (pill de color) para las vistas COMPARTIDAS (ruta,
 // despachos), donde se ven las dos empresas juntas. Devuelve '' si hay una
 // sola empresa (no molesta al resto de los clientes del producto).

@@ -99,10 +99,17 @@ console.log('\n═══ Escritura (db.js): la columna empresa viaja al guardar 
   ['guardarAmbServicio',    /function guardarAmbServicio[\s\S]*?empresa:s\.empresa\|\|'SEFE'/],
 ].forEach(([n,re]) => ok(n, re.test(dbjs)));
 
-console.log('\n═══ Candado: no facturar otra empresa antes de Fase 2 ═══');
-ok('empresaPuedeFacturar() solo permite SEFE por ahora', /function empresaPuedeFacturar\(codigo\)\{ return \(codigo\|\|'SEFE'\)==='SEFE'; \}/.test(src));
+console.log('\n═══ Candado de facturación (según el backend) ═══');
+ok('empresasFEL arranca en SEFE (seguro)', /let empresasFEL=\['SEFE'\];/.test(src));
+ok('empresaPuedeFacturar() consulta empresasFEL', /function empresaPuedeFacturar\(codigo\)\{ return empresasFEL\.includes\(codigo\|\|'SEFE'\); \}/.test(src));
+ok('cargarEmpresasFEL() pregunta al backend', /function cargarEmpresasFEL\(\)\{[\s\S]*?\/api\/empresas-fel/.test(src));
+ok('se carga al entrar', /if\(typeof cargarEmpresasFEL==='function'\)cargarEmpresasFEL\(\)/.test(src));
 ok('facturarPedido tiene el candado', /if\(!empresaPuedeFacturar\(f\.empresa\)\)\{[\s\S]*?Facturación no disponible/.test(src));
 ok('facturarPedidoExento tiene el candado', (src.match(/if\(!empresaPuedeFacturar\(f\.empresa\)\)/g)||[]).length>=2);
+
+console.log('\n═══ Fase 2: el frontend manda la empresa al backend ═══');
+ok('certificar (cambiaria) manda empresa', (src.match(/empresa:f\.empresa\|\|'SEFE',\s*\n?\s*\};/g)||[]).length>=1 || /vencimientoTexto:vencDDMMAAAA,\s*\n\s*\/\/ Multiempresa[\s\S]*?empresa:f\.empresa\|\|'SEFE',/.test(src));
+ok('anular manda empresa', /uuid:f\.autorizacion,motivo,empresa:f\.empresa\|\|'SEFE'/.test(src));
 
 console.log('\n═══ UI: contenedor del selector + estilos ═══');
 ok('index.html tiene el contenedor del selector', /id="sel-empresa-cont"/.test(html));

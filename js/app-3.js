@@ -82,6 +82,8 @@ async function facturarPedidoExento(id,dias,escenario){
     exenta:true, fraseTipo:4, escenario:escenario,
     // Campos comerciales extra (para TrnCampAd en el backend)
     condicionPago:condicionPago, vendedor:vendedorIniciales, vencimientoTexto:vencDDMMAAAA,
+    // Multiempresa: el backend elige credenciales/NIT emisor según esto.
+    empresa:f.empresa||'SEFE',
   };
 
   try{
@@ -175,7 +177,7 @@ async function anularFacturaReal(id,motivo,devolverAPedido){
     try{
       const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/anular',{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({uuid:f.autorizacion,motivo})
+        body:JSON.stringify({uuid:f.autorizacion,motivo,empresa:f.empresa||'SEFE'})
       });
       const data=await r.json();
       if(!(r.ok && data.ok)){

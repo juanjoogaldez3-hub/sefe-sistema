@@ -636,7 +636,7 @@ window.addEventListener('hashchange',irAHash);
 function entrarVistaInicial(){
   // Multiempresa: fijar la empresa activa y dibujar el selector antes de la
   // primera vista (con una sola empresa, no hace nada visible).
-  try{ if(typeof iniciarEmpresaActiva==='function')iniciarEmpresaActiva(); if(typeof renderSelectorEmpresa==='function')renderSelectorEmpresa(); }catch(e){}
+  try{ if(typeof iniciarEmpresaActiva==='function')iniciarEmpresaActiva(); if(typeof renderSelectorEmpresa==='function')renderSelectorEmpresa(); if(typeof cargarEmpresasFEL==='function')cargarEmpresasFEL(); }catch(e){}
   const v=(location.hash||'').replace('#','');
   if(v && VISTAS_VALIDAS.includes(v) && tienePermiso(v)){
     window.go(v);
