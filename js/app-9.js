@@ -1095,13 +1095,13 @@ function renderReportes(){
   else if(repType==='banco'){
     const r=repRange();
     const enR=iso=>{if(!iso)return false;const t=new Date((iso+'').slice(0,10)+'T12:00:00');return t>=r.start&&t<=r.end;};
-    let movs=(typeof movimientosBanco!=='undefined'?movimientosBanco:[]).filter(m=>!m.anulado&&enR(m.fecha));
+    let movs=deEmpresa(typeof movimientosBanco!=='undefined'?movimientosBanco:[]).filter(m=>!m.anulado&&enR(m.fecha)); // multiempresa
     if(repFiltros.cuentaBanco)movs=movs.filter(m=>String(m.cuentaId)===String(repFiltros.cuentaBanco));
     if(repFiltros.categoria)movs=movs.filter(m=>(m.categoria||'otro')===repFiltros.categoria);
     let totEnt=0,totSal=0;
     movs.forEach(m=>{if(m.tipo==='entrada')totEnt+=Number(m.monto||0);else totSal+=Number(m.monto||0);});
     const neto=totEnt-totSal;
-    const saldoActualTotal=cuentasActivasBanco().filter(c=>!repFiltros.cuentaBanco||String(c.id)===String(repFiltros.cuentaBanco)).reduce((s,c)=>s+saldoCuenta(c.id),0);
+    const saldoActualTotal=deEmpresa(cuentasActivasBanco()).filter(c=>!repFiltros.cuentaBanco||String(c.id)===String(repFiltros.cuentaBanco)).reduce((s,c)=>s+saldoCuenta(c.id),0); // multiempresa
     // Por cuenta
     const porCta={};
     movs.forEach(m=>{const k=m.cuentaId;if(!porCta[k])porCta[k]={ent:0,sal:0};if(m.tipo==='entrada')porCta[k].ent+=Number(m.monto||0);else porCta[k].sal+=Number(m.monto||0);});
@@ -1174,7 +1174,7 @@ function renderReportes(){
     //
     // Cada factura, y debajo lo que se le aplicó (abonos y notas de
     // crédito), con el saldo bajando renglón por renglón.
-    const facts=documentos
+    const facts=deEmpresa(documentos) // multiempresa
       .filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&enRango(d.creada,r))
       .filter(d=>!repFiltros.cliente||String(d.clienteId)===repFiltros.cliente);
 

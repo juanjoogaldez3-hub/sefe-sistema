@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 30 migraciones una por una.
+-- secuencias. Reemplaza correr las 31 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 30 migraciones, en este orden:
+-- Incluye 31 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -47,6 +47,7 @@
 --   28. 20260928140000_ajustes.sql
 --   29. 20260929190000_multiempresa_base.sql
 --   30. 20260929210000_baterias_compartidas.sql
+--   31. 20260929220000_laml_nombre.sql
 -- ============================================================
 
 
@@ -2341,4 +2342,20 @@ begin
     end if;
   end loop;
 end $$;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20260929220000_laml_nombre.sql                          ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Multiempresa — nombre corto de LAML
+-- ============================================================
+-- Mostrar "Luis Menocal" (sin la "A.") en el selector, el cuadrito de
+-- la barra lateral y las etiquetas. La razón social completa para
+-- facturar sigue siendo "Luis Alfonso Menocal Lezana".
+-- Seguro de correr de más: solo actualiza esa fila.
+-- ============================================================
+
+update public.empresas set nombre = 'Luis Menocal' where codigo = 'LAML';
 

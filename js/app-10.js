@@ -311,7 +311,8 @@ window.exportarPDF=exportarPDF;
 
 // ── EXPORTAR INVENTARIO (Excel y PDF) ───────────────────────
 function _filasInventario(){
-  let lista=_verInactivos?productos:productos.filter(p=>p.activo!==false);
+  const _prodsE=deEmpresa(productos); // multiempresa: export de la empresa activa
+  let lista=_verInactivos?_prodsE:_prodsE.filter(p=>p.activo!==false);
   if(_filtroMarca)lista=lista.filter(p=>(p.marca||'')===_filtroMarca);
   return lista.map(p=>{
     const provs=(p.proveedorIds||[]).map(id=>{const x=proveedores.find(v=>v.id===id);return x?x.nombre:null;}).filter(Boolean);
@@ -409,7 +410,7 @@ function openCli(id){
   <div class="row"><div><label>Dirección</label><input id="c-dir" value="${c?(c.direccion||'Ciudad'):'Ciudad'}"></div></div>
   <div class="row"><div><label>Dirección de entrega <span style="font-weight:400;color:var(--muted-2)">(si es distinta a la de facturación)</span></label><input id="c-dirent" value="${c?(c.direccionEntrega||''):''}" placeholder="Dejar vacío si entrega en la misma dirección"></div></div>
   <div class="row"><div><label>Hora límite de entrega <span style="font-weight:400;color:var(--muted-2)">(opcional — recibe hasta esta hora)</span></label><input id="c-horalim" type="time" value="${c?(c.horaLimiteEntrega||''):''}" style="max-width:160px"></div></div>
-  <div class="row"><div><label>Ruta <span style="font-weight:400;color:var(--muted-2)">(elegí una existente o escribí una nueva)</span></label><input id="c-ruta" list="c-rutas-list" value="${c?(c.ruta||''):''}" placeholder="Ej. Ruta 1, Zona 11…"><datalist id="c-rutas-list">${[...new Set(clientes.map(x=>(x.ruta||'').trim()).filter(Boolean))].sort().map(r=>`<option value="${escHtml(r)}">`).join('')}</datalist></div></div>
+  <div class="row"><div><label>Ruta <span style="font-weight:400;color:var(--muted-2)">(elegí una existente o escribí una nueva)</span></label><input id="c-ruta" list="c-rutas-list" value="${c?(c.ruta||''):''}" placeholder="Ej. Ruta 1, Zona 11…"><datalist id="c-rutas-list">${[...new Set(deEmpresa(clientes).map(x=>(x.ruta||'').trim()).filter(Boolean))].sort().map(r=>`<option value="${escHtml(r)}">`).join('')}</datalist></div></div>
   <div class="row"><div><label>Tiempo de crédito</label><select id="c-tc">
       <option value="0" ${tc===0?'selected':''}>Contado</option>
       <option value="15" ${tc===15?'selected':''}>15 días</option>
@@ -432,7 +433,7 @@ function openCli(id){
   </div>
   <div class="row"><div><label>Esta es una sede de <span style="font-weight:400;color:var(--muted-2)">(opcional — mismo NIT, distinta ubicación)</span></label><select id="c-sede">
     <option value="">No es sede (cliente independiente)</option>
-    ${clientes.filter(x=>!x.sedesDe&&x.id!==(c?.id)).map(x=>`<option value="${x.id}" ${c&&c.sedesDe===x.id?'selected':''}>${x.nombre} — ${x.nit}</option>`).join('')}
+    ${deEmpresa(clientes).filter(x=>!x.sedesDe&&x.id!==(c?.id)).map(x=>`<option value="${x.id}" ${c&&c.sedesDe===x.id?'selected':''}>${x.nombre} — ${x.nit}</option>`).join('')}
     </select></div>
   </div>
   <div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin:6px 0 8px">Contacto de pagos</div>
@@ -601,7 +602,7 @@ async function completarRazonSocial(){
     toast('Backend no configurado','No se puede consultar la SAT sin el backend',true);return;
   }
   // Candidatos: NIT distinto de CF y sin razón social (o igual al nombre)
-  const pend=clientes.filter(c=>{
+  const pend=deEmpresa(clientes).filter(c=>{ // multiempresa
     const nit=(c.nit||'').toUpperCase().replace(/[-\s.]/g,'');
     if(!nit||nit==='CF')return false;
     const rs=(c.razonSocial||'').trim();
@@ -711,7 +712,7 @@ function openProd(id){
   <div class="row"><div style="flex:1"><label>Código de barras <span style="color:var(--muted);font-weight:400">(para escanear en despacho)</span></label>
     <div style="display:flex;gap:8px"><input id="p-barras" placeholder="Escaneá o escribí el código del empaque" value="${p?(p.codigoBarras||''):''}" style="flex:1">
     <button type="button" class="btn btn-ghost btn-sm" onclick="escanearBarrasProducto()" title="Escanear con la cámara">📷</button></div></div></div>
-  <div class="row"><div style="flex:1"><label>Marca</label><input id="p-marca" placeholder="Opcional" value="${p?(p.marca||''):''}"></div><div style="flex:1"><label>Categoría <span style="color:var(--muted);font-weight:400">(umbral de stock)</span></label><input id="p-categoria" list="p-cat-list" placeholder="Ej. Papel, Jabón…" value="${p?(p.categoria||''):''}"><datalist id="p-cat-list">${[...new Set([...categorias.map(c=>c.nombre),...productos.map(x=>x.categoria)].map(s=>(s||'').trim()).filter(Boolean))].sort().map(n=>`<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('')}</datalist></div></div>
+  <div class="row"><div style="flex:1"><label>Marca</label><input id="p-marca" placeholder="Opcional" value="${p?(p.marca||''):''}"></div><div style="flex:1"><label>Categoría <span style="color:var(--muted);font-weight:400">(umbral de stock)</span></label><input id="p-categoria" list="p-cat-list" placeholder="Ej. Papel, Jabón…" value="${p?(p.categoria||''):''}"><datalist id="p-cat-list">${[...new Set([...categorias.map(c=>c.nombre),...deEmpresa(productos).map(x=>x.categoria)].map(s=>(s||'').trim()).filter(Boolean))].sort().map(n=>`<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('')}</datalist></div></div>
   <div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin:2px 0 8px">Nomenclatura del proveedor</div>
   <div class="row"><div style="flex:2"><label>Nombre del proveedor</label><input id="p-nom-prov" placeholder="Opcional" value="${p?(p.nombreProveedor||''):''}"></div><div><label>SKU del proveedor</label><input id="p-sku-prov" placeholder="Ej. QV-DES-1GL" value="${p?(p.skuProveedor||''):''}"></div></div>
   <div class="row"><div><label id="p-pre-lbl">${(tipoEmp==='caja_unidad'||tipoEmp==='caja')?'Precio de venta CAJA (IVA incl.)':'Precio de venta (IVA incl.)'}</label><input id="p-pre" type="number" step="0.01" value="${p?p.precio:0}" oninput="recalcPrecioUnidad()"></div><div><label>Costo</label><input id="p-cos" type="number" step="0.01" value="${p?(p.costo||0):0}"></div></div>
@@ -841,7 +842,7 @@ function renderProvChips(){
   const wrap=$('#p-prov-chips');if(!wrap)return;
   wrap.innerHTML=prodProvSel.length?prodProvSel.map(id=>{const pv=proveedores.find(x=>x.id===id);if(!pv)return'';
     return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1.5px solid var(--line-strong);border-radius:20px;padding:5px 6px 5px 12px;font-size:12.5px;font-weight:600">${pv.nombre}<button class="x" style="width:20px;height:20px" onclick="quitarProvProd(${id})">×</button></span>`;}).join(''):'<span style="font-size:12.5px;color:var(--muted)">Ningún proveedor asignado todavía</span>';
-  const list=$('#p-prov-list');if(list)list.innerHTML=proveedores.filter(pv=>!prodProvSel.includes(pv.id)).map(pv=>`<option value="${pv.nombre}">`).join('');
+  const list=$('#p-prov-list');if(list)list.innerHTML=deEmpresa(proveedores).filter(pv=>!prodProvSel.includes(pv.id)).map(pv=>`<option value="${pv.nombre}">`).join('');
 }
 function addProvProd(){
   const inp=$('#p-prov-add');const v=(inp.value||'').trim();if(!v)return;

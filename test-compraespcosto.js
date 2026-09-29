@@ -30,6 +30,7 @@ function nuevoCtx() {
   const toasts = [], audits = [], guardadas = [];
   const ctx = {
     Math, Number, String, Date, console, window: {},
+    deEmpresa: a => a || [],   // multiempresa: identidad en la prueba
     compras: [compra], productos: [],
     money: n => 'Q' + (Number(n) || 0), padn: n => String(n),
     toast: (t, s, err) => toasts.push({ t, s, err }),

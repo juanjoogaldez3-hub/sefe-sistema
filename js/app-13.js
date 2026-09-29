@@ -115,7 +115,7 @@ function _ctrlWireCliAC(searchId,hiddenId){
   if(typeof crearAutocomplete!=='function')return;
   crearAutocomplete(searchId,
     (q)=>{const ql=q.toLowerCase();
-      return (typeof clientes!=='undefined'?clientes:[])
+      return deEmpresa(typeof clientes!=='undefined'?clientes:[]) // multiempresa
         .filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql))
         .slice(0,8)
         .map(c=>({texto:c.nombre,sub:[(c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:''),(c.nit?'NIT '+c.nit:'')].filter(Boolean).join(' · '),valor:c.id}));},

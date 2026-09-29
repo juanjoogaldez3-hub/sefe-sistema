@@ -582,7 +582,7 @@ function openPagoGlobal(){
   _guardandoPago=false; const _pb=document.getElementById('pg-save'); if(_pb)_pb.disabled=false;
   // Poblar datalist de clientes
   const list=$pg('#pg-cli-list');
-  if(list)list.innerHTML=clientes.map(c=>`<option value="${c.nombre} · ${c.nit}">`).join('');
+  if(list)list.innerHTML=deEmpresa(clientes).map(c=>`<option value="${c.nombre} · ${c.nit}">`).join(''); // multiempresa
   $pg('#pg-cli-search').value='';$pg('#pg-cli-id').value='';
   // Talonarios: llenar el selector y sugerir el próximo recibo libre
   const _tals=talonariosConLibres();
@@ -997,7 +997,7 @@ function renderCompras(){
   // poblar selector de proveedores
   const selProv=$('#cmp-prov');
   if(selProv&&selProv.dataset.built!=='1'){
-    selProv.innerHTML='<option value="">Todos</option>'+proveedores.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+    selProv.innerHTML='<option value="">Todos</option>'+deEmpresa(proveedores).map(p=>`<option value="${p.id}">${p.nombre}</option>`).join(''); // multiempresa
     selProv.dataset.built='1';
     selProv.onchange=renderCompras;$('#cmp-rec').onchange=renderCompras;$('#cmp-desde').onchange=renderCompras;$('#cmp-hasta').onchange=renderCompras;
   }

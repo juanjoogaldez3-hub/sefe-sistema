@@ -1,5 +1,5 @@
 function filtroMarcaInv(){
-  const marcas=[...new Set(productos.filter(p=>p.activo!==false||_verInactivos).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
+  const marcas=[...new Set(deEmpresa(productos).filter(p=>p.activo!==false||_verInactivos).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es')); // multiempresa
   if(!marcas.length)return '';
   const opts=['<option value="">Todas las marcas</option>']
     .concat(marcas.map(m=>`<option value="${m}"${_filtroMarca===m?' selected':''}>${m}</option>`))
@@ -22,7 +22,7 @@ function trazabilidadProducto(prod){
   const esCU=prod.tipoEmpaque==='caja_unidad', upc=Number(prod.unidadesPorCaja)||1;
   const enMedida=(cant,modo)=>(esCU&&(modo||'unidad')!=='caja')?cant/upc:cant;
   // SALIDAS: documentos (pedidos, facturas, notas) que contienen el producto
-  documentos.forEach(d=>{
+  deEmpresa(documentos).forEach(d=>{ // multiempresa
     if(d.estado==='anulada'||d.anulado)return;
     (d.items||[]).forEach(it=>{
       if(it.codigo!==cod)return;
@@ -46,7 +46,7 @@ function trazabilidadProducto(prod){
     });
   });
   // ENTRADAS: compras recibidas que contienen el producto
-  compras.forEach(c=>{
+  deEmpresa(compras).forEach(c=>{ // multiempresa
     if(c.anulado)return;
     (c.items||[]).forEach(it=>{
       if(it.codigo!==cod)return;
@@ -299,31 +299,31 @@ function renderRepFilters(){
     return `<div><label>${lbl}</label><input list="${id}-dl" id="${id}" style="margin-top:4px" placeholder="Todos — escribí para buscar" value="${cur?(cur.l||'').replace(/"/g,'&quot;'):''}" onchange="setRepFiltroBusca('${k}','${id}')"><datalist id="${id}-dl">${dl}</datalist></div>`;
   };
   if(repType==='resumen'||repType==='costos'||repType==='producto'){
-    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
     if(repType!=='producto')html+=sel('rf-cli','Cliente',cliOpts,repFiltros.cliente,'cliente');
     if(repType!=='producto')html+=sel('rf-vend','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple');
     if(repType==='producto'){
       // Filtros de cliente y marca para el reporte de ventas por producto
       html+=sel('rf-cli-prod','Cliente',cliOpts,repFiltros.cliente,'cliente');
-      const marcas=[...new Set(productos.map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
+      const marcas=[...new Set(deEmpresa(productos).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
       const marcaOpts=marcas.map(m=>({v:m,l:m}));
       html+=sel('rf-marca','Marca',marcaOpts,repFiltros.marca_prod,'marca_prod');
     }
     html=`<div class="rep-filter-bar">${html}</div>`;
   }
   else if(repType==='vendedor'){
-    const nombresV=[...new Set(documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').map(d=>d.vendedorNombre||'Sin asignar'))].sort((a,b)=>a.localeCompare(b,'es'));
+    const nombresV=[...new Set(deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').map(d=>d.vendedorNombre||'Sin asignar'))].sort((a,b)=>a.localeCompare(b,'es'));
     const checks=nombresV.map(n=>`<button class="vend-chk ${repFiltros.vendedores.includes(n)?'on':''}" onclick="toggleVend('${n.replace(/'/g,"\\'")}')">${n}</button>`).join('');
     html=`<div class="rep-filter-bar"><div style="width:100%"><label>Vendedores a comparar <span style="color:var(--muted-2);font-weight:400">(seleccioná uno o más — vacío muestra todos)</span></label><div class="vend-checks">${checks}</div></div></div>`;
   }
   else if(repType==='cprov'||repType==='cprod'){
-    const provOpts=proveedores.map(p=>({v:String(p.id),l:p.nombre}));
+    const provOpts=deEmpresa(proveedores).map(p=>({v:String(p.id),l:p.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-prov','Proveedor',provOpts,repFiltros.proveedor,'proveedor')}</div>`;
   }
   else if(repType==='cliprod'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
-    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     html=`<div class="rep-filter-bar">
       ${sel('rf-vend-cp','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}
       ${sel('rf-cli-cp','Cliente',cliOpts,repFiltros.cliente,'cliente')}
@@ -344,7 +344,7 @@ function renderRepFilters(){
   }
   else if(repType==='climescomp'||repType==='comision'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
-    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     // En la Comparativa cliente/mes se puede ordenar por Total (default) o por
     // la diferencia del último mes vs. el anterior: "Más creció" / "Más cayó".
     const ordCC=repType==='climescomp'?`<div><label>Ordenar por</label><select style="margin-top:4px;height:34px" onchange="setRepFiltro('climescompOrden',this.value)"><option value="total"${(repFiltros.climescompOrden||'total')==='total'?' selected':''}>Total</option><option value="crecio"${repFiltros.climescompOrden==='crecio'?' selected':''}>Más creció</option><option value="cayo"${repFiltros.climescompOrden==='cayo'?' selected':''}>Más cayó</option></select></div>`:'';
@@ -352,7 +352,7 @@ function renderRepFilters(){
   }
   else if(repType==='prodmescomp'){
     const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
-    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     // Mismo ordenamiento que la Comparativa cliente/mes: Total (default), Más creció, Más cayó.
     const ordPM=`<div><label>Ordenar por</label><select style="margin-top:4px;height:34px" onchange="setRepFiltro('prodmescompOrden',this.value)"><option value="total"${(repFiltros.prodmescompOrden||'total')==='total'?' selected':''}>Total</option><option value="crecio"${repFiltros.prodmescompOrden==='crecio'?' selected':''}>Más creció</option><option value="cayo"${repFiltros.prodmescompOrden==='cayo'?' selected':''}>Más cayó</option></select></div>`;
     html=`<div class="rep-filter-bar">${sel('rf-vend-pm','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}${sel('rf-cli-pm','Cliente',cliOpts,repFiltros.cliente,'cliente')}${ordPM}
@@ -363,7 +363,7 @@ function renderRepFilters(){
     </div>`;
   }
   else if(repType==='retenciones'){
-    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-cli-ret','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
   }
   else if(repType==='seguimiento'){
@@ -380,15 +380,15 @@ function renderRepFilters(){
     </div>`;
   }
   else if(repType==='factem'){
-    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-cli-fe','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
   }
   else if(repType==='cardex'){
-    const prodOpts=productos.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')).map(p=>({v:String(p.id),l:`${p.codigo} — ${p.nombre}`}));
+    const prodOpts=deEmpresa(productos).slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')).map(p=>({v:String(p.id),l:`${p.codigo} — ${p.nombre}`}));
     html=`<div class="rep-filter-bar">${sel('rf-prod-cx','Producto (dejá "Todos" para ver el listado general)',prodOpts,repFiltros.producto||'','producto')}</div>`;
   }
   else if(repType==='cxc'||repType==='estcta'){
-    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     const tcOpts=[{v:'0',l:'Contado'},{v:'15',l:'15 días'},{v:'30',l:'30 días'},{v:'45',l:'45 días'},{v:'60',l:'60 días'}];
     html=`<div class="rep-filter-bar">
       ${sel('rf-cli2','Cliente',cliOpts,repFiltros.cliente,'cliente')}
@@ -397,11 +397,11 @@ function renderRepFilters(){
     </div>`;
   }
   else if(repType==='factabo'){
-    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-cli-fa','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
   }
   else if(repType==='recibos'||repType==='pagos'){
-    const cliOpts=clientes.map(c=>({v:String(c.id),l:c.nombre}));
+    const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     const metOpts=[{v:'Efectivo',l:'Efectivo'},{v:'Transferencia',l:'Transferencia'},{v:'Cheque',l:'Cheque'},{v:'Depósito',l:'Depósito'},{v:'Tarjeta',l:'Tarjeta'}];
     html=`<div class="rep-filter-bar">
       ${sel('rf-cli-rec','Cliente',cliOpts,repFiltros.cliente,'cliente')}
@@ -409,7 +409,7 @@ function renderRepFilters(){
     </div>`;
   }
   else if(repType==='banco'){
-    const ctaOpts=(typeof cuentasBanco!=='undefined'?cuentasBanco:[]).map(c=>({v:String(c.id),l:c.nombre}));
+    const ctaOpts=deEmpresa(typeof cuentasBanco!=='undefined'?cuentasBanco:[]).map(c=>({v:String(c.id),l:c.nombre}));
     const catOpts=(typeof CAT_MOV_LBL!=='undefined'?Object.keys(CAT_MOV_LBL):[]).map(k=>({v:k,l:CAT_MOV_LBL[k]}));
     html=`<div class="rep-filter-bar">
       ${sel('rf-cta-bco','Cuenta',ctaOpts,repFiltros.cuentaBanco,'cuentaBanco')}
@@ -417,13 +417,13 @@ function renderRepFilters(){
     </div>`;
   }
   else if(repType==='invactual'||repType==='invcosto'){
-    const marcas=[...new Set(productos.filter(p=>p.activo!==false).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
+    const marcas=[...new Set(deEmpresa(productos).filter(p=>p.activo!==false).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
     const marcaOpts=marcas.map(m=>({v:m,l:m}));
     html=`<div class="rep-filter-bar">${sel('rf-marca-inv','Marca',marcaOpts,repFiltros.marca_prod,'marca_prod')}<div><label>Existencias al día</label><input type="date" style="margin-top:4px" value="${repFiltros.invFecha||fechaHoyGT()}" onchange="setRepFiltro('invFecha',this.value)"></div></div>`;
   }
   else if(repType==='invmov'){
     // Movimiento de inventario: usa la barra de período de arriba; acá sólo el filtro por marca.
-    const marcas=[...new Set(productos.filter(p=>p.activo!==false).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
+    const marcas=[...new Set(deEmpresa(productos).filter(p=>p.activo!==false).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
     const marcaOpts=marcas.map(m=>({v:m,l:m}));
     html=`<div class="rep-filter-bar">${sel('rf-marca-invmov','Marca',marcaOpts,repFiltros.marca_prod,'marca_prod')}</div>`;
   }
@@ -511,7 +511,7 @@ window.aplicarColapso=aplicarColapso;
 function _movsInvDespuesDe(corte){
   const m={};
   // Índice de productos por código, para saber el empaque de cada movimiento
-  const porCod={};productos.forEach(p=>{if(p.codigo)porCod[p.codigo]=p;});
+  const porCod={};deEmpresa(productos).forEach(p=>{if(p.codigo)porCod[p.codigo]=p;}); // multiempresa
   // Normaliza toda cantidad a UNIDADES. En caja_unidad, las compras (recibido)
   // y las ventas POR CAJA vienen en cajas; las ventas por unidad ya vienen en unidades.
   const aUnidades=(cod,cant,modo)=>{
@@ -520,8 +520,8 @@ function _movsInvDespuesDe(corte){
     return cant;
   };
   const add=(cod,campo,cant)=>{if(!cod)return;(m[cod]=m[cod]||{entra:0,sale:0})[campo]+=cant;};
-  documentos.forEach(d=>{if(d.estado==='anulada'||d.anulado)return;if((d.creada||'').slice(0,10)<=corte)return;(d.items||[]).forEach(it=>add(it.codigo,'sale',aUnidades(it.codigo,Number(it.cantidad)||0,it.modoVenta||'unidad')));});
-  compras.forEach(c=>{if(c.anulado)return;if((c.fecha||'').slice(0,10)<=corte)return;(c.items||[]).forEach(it=>{const r=Number(it.recibido||0);if(r>0)add(it.codigo,'entra',aUnidades(it.codigo,r,'caja'));});});
+  deEmpresa(documentos).forEach(d=>{if(d.estado==='anulada'||d.anulado)return;if((d.creada||'').slice(0,10)<=corte)return;(d.items||[]).forEach(it=>add(it.codigo,'sale',aUnidades(it.codigo,Number(it.cantidad)||0,it.modoVenta||'unidad')));}); // multiempresa
+  deEmpresa(compras).forEach(c=>{if(c.anulado)return;if((c.fecha||'').slice(0,10)<=corte)return;(c.items||[]).forEach(it=>{const r=Number(it.recibido||0);if(r>0)add(it.codigo,'entra',aUnidades(it.codigo,r,'caja'));});}); // multiempresa
   return m;
 }
 // Agrega un buscador ("Buscar en la tabla…") a cada tabla de reporte. Se omite en los

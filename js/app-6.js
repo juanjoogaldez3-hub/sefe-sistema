@@ -1345,12 +1345,12 @@ window.verCompra=verCompra;
 // Nueva compra
 let compraCart=[];
 function initCompra(){
-  $('#co-prov').innerHTML=proveedores.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+  $('#co-prov').innerHTML=deEmpresa(proveedores).map(p=>`<option value="${p.id}">${p.nombre}</option>`).join(''); // multiempresa
   // Buscador con dropdown propio (nombres completos), igual que en pedidos
   crearAutocomplete('co-add',
     (q)=>{
       const ql=q.toLowerCase();
-      return productos.filter(p=>p.activo!==false).filter(p=>
+      return deEmpresa(productos).filter(p=>p.activo!==false).filter(p=> // multiempresa
         (p.skuProveedor||'').toLowerCase().includes(ql)||
         (p.codigo||'').toLowerCase().includes(ql)||
         (p.nombreProveedor||'').toLowerCase().includes(ql)||
