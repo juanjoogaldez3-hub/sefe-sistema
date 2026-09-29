@@ -713,7 +713,7 @@ function _cliSetFiltroVend(v){_cliFiltroVend=v||'';renderCli();}
 // Clientes que faltan ubicar, respetando el mismo filtro por vendedor que la
 // lista (para que "Ubicar (N)" y el asistente muestren lo mismo que se ve).
 function _clientesUbicPendientes(){
-  let base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  let base=(typeof esVentas==='function'&&esVentas())?deEmpresa(clientes).filter(c=>c.vendedorId===miVendedorId()):deEmpresa(clientes); // multiempresa
   if((typeof esVentas!=='function'||!esVentas())&&_cliFiltroVend){
     base=(_cliFiltroVend==='none')?base.filter(c=>c.vendedorId==null):base.filter(c=>String(c.vendedorId)===String(_cliFiltroVend));
   }
@@ -727,10 +727,11 @@ function renderCli(){
   // clientes; el vendedor ya ve únicamente los suyos, así que no le hace falta.
   let filtroHTML='';
   if(!esVentas()){
-    const vendConCli=[...new Set(clientes.map(c=>c.vendedorId).filter(v=>v!=null))];
+    const _clisF=deEmpresa(clientes); // multiempresa: opciones de la empresa activa
+    const vendConCli=[...new Set(_clisF.map(c=>c.vendedorId).filter(v=>v!=null))];
     const opts='<option value="">Todos los vendedores</option>'+
       (typeof vendedores!=='undefined'?vendedores:[]).filter(v=>vendConCli.includes(v.id)).sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es')).map(v=>`<option value="${v.id}"${String(_cliFiltroVend)===String(v.id)?' selected':''}>${escHtml(v.nombre)}</option>`).join('')+
-      (clientes.some(c=>c.vendedorId==null)?`<option value="none"${_cliFiltroVend==='none'?' selected':''}>Sin vendedor asignado</option>`:'');
+      (_clisF.some(c=>c.vendedorId==null)?`<option value="none"${_cliFiltroVend==='none'?' selected':''}>Sin vendedor asignado</option>`:'');
     filtroHTML=`<select id="cli-filtro-vend" onchange="_cliSetFiltroVend(this.value)" title="Filtrar por vendedor" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:#fff;color:var(--ink)">${opts}</select> `;
   }
   // Cuántos clientes (no-sede) están sin ubicación, para el botón de asignar en tanda.

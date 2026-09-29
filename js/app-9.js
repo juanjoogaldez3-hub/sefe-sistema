@@ -1174,7 +1174,7 @@ function renderReportes(){
     //
     // Cada factura, y debajo lo que se le aplicó (abonos y notas de
     // crédito), con el saldo bajando renglón por renglón.
-    const facts=documentos
+    const facts=deEmpresa(documentos) // multiempresa
       .filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&enRango(d.creada,r))
       .filter(d=>!repFiltros.cliente||String(d.clienteId)===repFiltros.cliente);
 

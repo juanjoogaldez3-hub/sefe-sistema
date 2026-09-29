@@ -650,7 +650,7 @@ function setupAutocomplete(){
   crearAutocomplete('f-cli-search',
     (q)=>{
       const ql=q.toLowerCase();
-      let base=esVentas()?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+      let base=esVentas()?deEmpresa(clientes).filter(c=>c.vendedorId===miVendedorId()):deEmpresa(clientes); // multiempresa
       return base.filter(c=>
         (c.nombre||'').toLowerCase().includes(ql)||
         (c.razonSocial||'').toLowerCase().includes(ql)||
@@ -666,7 +666,7 @@ function setupAutocomplete(){
   crearAutocomplete('f-add',
     (q)=>{
       const ql=q.toLowerCase();
-      return productos.filter(p=>p.activo!==false).filter(p=>
+      return deEmpresa(productos).filter(p=>p.activo!==false).filter(p=> // multiempresa
         (p.codigo||'').toLowerCase().includes(ql)||
         (p.nombre||'').toLowerCase().includes(ql)||
         (p.skuProveedor||'').toLowerCase().includes(ql)

@@ -89,7 +89,7 @@ function editarCompraEspecial(id,mantenerMotivo){
   if(c.mes!==mesActual){toast('✗ Compra especial vencida','Solo se puede editar durante el mes de creación',true);return;}
   if(!mantenerMotivo)_motivoCompraEsp='';
 
-  const opts=productos.map(p=>`<option value="${p.skuProveedor||p.codigo} — ${p.nombreProveedor||p.nombre}">`).join('');
+  const opts=deEmpresa(productos).map(p=>`<option value="${p.skuProveedor||p.codigo} — ${p.nombreProveedor||p.nombre}">`).join(''); // multiempresa
   openMod('Editar compra especial · CMP-'+padn(c.id),`
     <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">${c.proveedorNombre} · Los cambios de cantidad ajustan el inventario en tiempo real; el costo alimenta la reportería de promedio.</p>
     <div style="margin-bottom:13px"><label style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.4px">Motivo del cambio (obligatorio)</label>
@@ -194,7 +194,7 @@ function editarCompraPendiente(id,mantenerMotivo){
   const c=compras.find(x=>x.id===id);
   if(!c||c.especial||c.anulado||c.estadoRecepcion!=='pendiente'){toast('No editable','Sólo se pueden editar órdenes pendientes (sin recibir). Una vez recibida es inamovible.',true);return;}
   if(!mantenerMotivo)_motivoCompraEsp='';
-  const opts=productos.map(p=>`<option value="${p.skuProveedor||p.codigo} — ${p.nombreProveedor||p.nombre}">`).join('');
+  const opts=deEmpresa(productos).map(p=>`<option value="${p.skuProveedor||p.codigo} — ${p.nombreProveedor||p.nombre}">`).join(''); // multiempresa
   openMod('Editar orden · CMP-'+padn(c.id),`
     <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">${c.proveedorNombre} · Orden <b>pendiente</b> (sin recibir). Editás cantidad y costo; no toca inventario hasta que la recibás.</p>
     <div style="margin-bottom:13px"><label style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.4px">Motivo del cambio (obligatorio)</label>
@@ -385,8 +385,8 @@ function renderProveedorDet(){
         return `<tr><td style="font-weight:600">CMP-${padn(c.id)}</td><td style="color:var(--muted)">${fdate(c.fecha)}</td><td style="color:${ai.vencido?'var(--danger)':'var(--muted)'}">${fdate(c.vencimiento)}</td><td class="num">${money(c.total)}</td><td class="num" style="color:var(--ok)">${money(ai.abon)}</td><td class="num" style="font-weight:700">${money(ai.saldo)}</td><td><span class="badge ${ec}">${en}</span></td><td>${ai.saldo>0.001?`<button class="btn btn-primary btn-sm" onclick="openAbonoProv(${c.id})">Pago</button>`:`<button class="btn btn-ghost btn-sm" onclick="verCompra(${c.id})">Ver</button>`}</td></tr>`;}).join(''):'<tr><td colspan="8" class="empty">Sin compras a crédito</td></tr>'}
       </tbody></table></div>`;
   }else if(provTab==='productos'){
-    const asignados=productos.filter(pr=>(pr.proveedorIds||[]).includes(p.id));
-    const opts=productos.filter(pr=>!(pr.proveedorIds||[]).includes(p.id)).map(pr=>`<option value="${pr.codigo} — ${pr.nombre}">`).join('');
+    const asignados=deEmpresa(productos).filter(pr=>(pr.proveedorIds||[]).includes(p.id)); // multiempresa
+    const opts=deEmpresa(productos).filter(pr=>!(pr.proveedorIds||[]).includes(p.id)).map(pr=>`<option value="${pr.codigo} — ${pr.nombre}">`).join('');
     body=`<div class="panel"><div class="panel-head"><h3>Productos comprados</h3></div><div class="panel-body">
       <div style="display:flex;gap:8px;margin-bottom:13px">
         <input id="pp-add" list="pp-prods" placeholder="Buscar por código o nombre…" style="flex:1" onkeydown="if(event.key==='Enter')addProveedorProd(${p.id})"><datalist id="pp-prods">${opts}</datalist>
@@ -1038,7 +1038,7 @@ function medidaProducto(p){return (p&&(p.tipoEmpaque==='caja_unidad'||p.tipoEmpa
 function openCategorias(){
   if(!canEditInventario()){toast('Sin permiso','Solo Admin, Gerencia y Bodega pueden configurar categorías',true);return;}
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const _nombresCat=[...new Set([...categorias.map(c=>c.nombre),...productos.map(p=>p.categoria)].map(s=>(s||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const _nombresCat=[...new Set([...categorias.map(c=>c.nombre),...deEmpresa(productos).map(p=>p.categoria)].map(s=>(s||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es')); // multiempresa
   const filas=_nombresCat.map(nom=>{
     const c=categorias.find(x=>x.nombre===nom);
     const umb=c?(Number(c.umbralStock)||0):0;

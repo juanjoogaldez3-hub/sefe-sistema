@@ -145,17 +145,17 @@ function openRecordatorio(id,preset){
     crearAutocomplete('rec-ref',
       (q)=>{
         const tipo=document.getElementById('rec-tipo')?.value||'tarea';const ql=q.toLowerCase();
-        if(tipo==='cliente'||tipo==='contrasena')return clientes.filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:c.nombre,sub:c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:(c.nit||''),valor:c.id}));
-        if(tipo==='factura')return documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.serie).filter(d=>((d.serie+'-'+d.numeroDte).toLowerCase().includes(ql)||(d.clienteComercial||d.clienteNombre||'').toLowerCase().includes(ql))).slice(0,8).map(d=>({texto:d.serie+'-'+d.numeroDte,sub:d.clienteComercial||d.clienteNombre||'',valor:d.id}));
-        if(tipo==='producto')return productos.filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:p.marca||'',valor:p.id}));
-        if(tipo==='compra')return compras.filter(c=>('CMP-'+padn(c.id)).toLowerCase().includes(ql)||(c.proveedorNombre||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:'CMP-'+padn(c.id)+' · '+c.proveedorNombre,sub:money(c.total),valor:c.id}));
+        if(tipo==='cliente'||tipo==='contrasena')return deEmpresa(clientes).filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:c.nombre,sub:c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:(c.nit||''),valor:c.id}));
+        if(tipo==='factura')return deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.serie).filter(d=>((d.serie+'-'+d.numeroDte).toLowerCase().includes(ql)||(d.clienteComercial||d.clienteNombre||'').toLowerCase().includes(ql))).slice(0,8).map(d=>({texto:d.serie+'-'+d.numeroDte,sub:d.clienteComercial||d.clienteNombre||'',valor:d.id}));
+        if(tipo==='producto')return deEmpresa(productos).filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:p.marca||'',valor:p.id}));
+        if(tipo==='compra')return deEmpresa(compras).filter(c=>('CMP-'+padn(c.id)).toLowerCase().includes(ql)||(c.proveedorNombre||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:'CMP-'+padn(c.id)+' · '+c.proveedorNombre,sub:money(c.total),valor:c.id}));
         return [];
       },
       (item)=>{ if(item){document.getElementById('rec-refid').value=item.valor;document.getElementById('rec-ref').value=item.texto;const rf=document.getElementById('rec-fact'),rfi=document.getElementById('rec-factid');if(rf)rf.value='';if(rfi)rfi.value='';} });
     crearAutocomplete('rec-fact',
       (q)=>{
         const cliId=Number(document.getElementById('rec-refid')?.value||0);const ql=q.toLowerCase();
-        return documentos.filter(d=>d.tipoDoc==='cambiaria'&&d.serie&&d.estado!=='anulada'&&(!cliId||d.clienteId===cliId)).filter(d=>((d.serie+'-'+d.numeroDte).toLowerCase().includes(ql)||String(d.numeroDte||'').includes(ql)||(d.clienteComercial||d.clienteNombre||'').toLowerCase().includes(ql))).slice(0,10).map(d=>({texto:d.serie+'-'+d.numeroDte,sub:(d.clienteComercial||d.clienteNombre||'')+' · '+money((d.totales&&d.totales.total)||0),valor:d.id}));
+        return deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.serie&&d.estado!=='anulada'&&(!cliId||d.clienteId===cliId)).filter(d=>((d.serie+'-'+d.numeroDte).toLowerCase().includes(ql)||String(d.numeroDte||'').includes(ql)||(d.clienteComercial||d.clienteNombre||'').toLowerCase().includes(ql))).slice(0,10).map(d=>({texto:d.serie+'-'+d.numeroDte,sub:(d.clienteComercial||d.clienteNombre||'')+' · '+money((d.totales&&d.totales.total)||0),valor:d.id}));
       },
       (item)=>{ if(item){document.getElementById('rec-factid').value=item.valor;document.getElementById('rec-fact').value=item.texto;} });
   },0);
@@ -303,12 +303,12 @@ function cotInfoCliente(){
 function cotWireAutocomplete(){
   if(typeof crearAutocomplete!=='function')return;
   crearAutocomplete('cot-cli-search',
-    (q)=>{const ql=q.toLowerCase();let base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+    (q)=>{const ql=q.toLowerCase();let base=(typeof esVentas==='function'&&esVentas())?deEmpresa(clientes).filter(c=>c.vendedorId===miVendedorId()):deEmpresa(clientes); // multiempresa
       return base.filter(c=>(c.nombre||'').toLowerCase().includes(ql)||(c.razonSocial||'').toLowerCase().includes(ql)||(c.nit||'').toLowerCase().includes(ql)).slice(0,8).map(c=>({texto:`${c.nombre} · ${c.nit||''}`,sub:c.razonSocial&&c.razonSocial!==c.nombre?c.razonSocial:'',valor:c.id}));},
     (item)=>{cotClienteSel=item?clientes.find(c=>c.id===item.valor):null;const n=document.getElementById('cot-cli-nit');if(n&&cotClienteSel)n.value='';if(cotClienteSel){const t=document.getElementById('cot-cli-tel');if(t)t.value=cotClienteSel.telefono||'';const m=document.getElementById('cot-cli-mail');if(m)m.value=cotClienteSel.correo||'';}cotInfoCliente();if(!cotEditId&&typeof _cotGuardarBorrador==='function')_cotGuardarBorrador();});
   crearAutocomplete('cot-add',
     (q)=>{const ql=q.toLowerCase();
-      return productos.filter(p=>p.activo!==false).filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)||(p.skuProveedor||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:p.marca||'',valor:p.id}));},
+      return deEmpresa(productos).filter(p=>p.activo!==false).filter(p=>(p.codigo||'').toLowerCase().includes(ql)||(p.nombre||'').toLowerCase().includes(ql)||(p.skuProveedor||'').toLowerCase().includes(ql)).slice(0,8).map(p=>({texto:`${p.codigo} — ${p.nombre}`,sub:p.marca||'',valor:p.id}));}, // multiempresa
     (item)=>{if(item){cotAddProducto(item.valor);const el=document.getElementById('cot-add');if(el)el.value='';}});
 }
 function abrirCotEditor(titulo){
@@ -735,7 +735,7 @@ function renderCliDet(){
   if(cliTab==='precios'){
     const esAdmin=currentRole==="admin";
     const ids=Object.keys(c.precios||{}).map(Number).filter(id=>productos.find(p=>p.id===id));
-    const opts=productos.filter(p=>!(c.precios&&c.precios[p.id]!=null)).map(p=>`<option value="${p.codigo} — ${p.nombre}">`).join('');
+    const opts=deEmpresa(productos).filter(p=>!(c.precios&&c.precios[p.id]!=null)).map(p=>`<option value="${p.codigo} — ${p.nombre}">`).join(''); // multiempresa
     const rows=ids.length?ids.map(pid=>{
       const p=productos.find(x=>x.id===pid);
       const precioCli=Number(c.precios[pid])||0;
@@ -1189,11 +1189,11 @@ window._cliUbicPegarLink=_cliUbicPegarLink;
 // filtrable por vendedor y ruta. Clic en un pin → botón para abrir la ficha.
 let _mapaTodos=null;
 function _clientesConLoc(){
-  const base=(typeof esVentas==='function'&&esVentas())?clientes.filter(c=>c.vendedorId===miVendedorId()):clientes;
+  const base=(typeof esVentas==='function'&&esVentas())?deEmpresa(clientes).filter(c=>c.vendedorId===miVendedorId()):deEmpresa(clientes); // multiempresa
   return base.filter(c=>c.lat!=null&&c.lng!=null); // solo los que tienen pin
 }
 function openMapaClientes(){
-  const rutas=[...new Set((typeof clientes!=='undefined'?clientes:[]).map(c=>(c.ruta||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const rutas=[...new Set(deEmpresa(typeof clientes!=='undefined'?clientes:[]).map(c=>(c.ruta||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es')); // multiempresa
   const optVend='<option value="">Todos los vendedores</option>'+(typeof vendedores!=='undefined'?vendedores:[]).map(v=>`<option value="${v.id}">${escHtml(v.nombre)}</option>`).join('');
   const optRuta='<option value="">Todas las rutas</option>'+rutas.map(r=>`<option value="${escHtml(r)}">${escHtml(r)}</option>`).join('');
   openMod('Mapa de clientes',
@@ -1474,7 +1474,7 @@ window._parseLatLngDeLink=_parseLatLngDeLink;
 // uno, buscás en Google o pegás un link (Maps/WhatsApp) y Guardás → siguiente.
 let _pendLista=[], _pendIdx=0, _pendLatLng=null, _pendMapaObj=null, _pendResultados=[];
 function openPendientesUbicacion(){
-  const base=(typeof _clientesUbicPendientes==='function')?_clientesUbicPendientes():clientes.filter(c=>!c.sedesDe&&(c.lat==null||c.lng==null));
+  const base=(typeof _clientesUbicPendientes==='function')?_clientesUbicPendientes():deEmpresa(clientes).filter(c=>!c.sedesDe&&(c.lat==null||c.lng==null)); // multiempresa
   _pendLista=base.slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es'));
   _pendIdx=0; _pendLatLng=null;
   if(!_pendLista.length){toast('¡Todo ubicado!','No hay clientes sin ubicación',false);return;}

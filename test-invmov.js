@@ -22,6 +22,7 @@ const fnSrc = src.slice(ini, fin + 2);
 
 const ctx = {
   Number, console,
+  deEmpresa: a => a || [],   // multiempresa: en la prueba, identidad (una sola empresa)
   productos: [
     { codigo: 'A', tipoEmpaque: 'unidad' },
     { codigo: 'B', tipoEmpaque: 'caja_unidad', unidadesPorCaja: 10 },
