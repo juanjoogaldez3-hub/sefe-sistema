@@ -26,6 +26,12 @@ ok('cambiarEmpresa() recuerda y re-dibuja', /function cambiarEmpresa\(codigo\)\{
 ok('renderSelectorEmpresa() se esconde con una sola empresa', /function renderSelectorEmpresa\(\)\{[\s\S]*?if\(!haymultiempresa\(\)\)\{[\s\S]*?display='none'/.test(src));
 ok('empTag() para vistas compartidas', /function empTag\(codigo\)\{[\s\S]*?if\(!haymultiempresa\(\)\) return '';/.test(src));
 
+console.log('\n═══ Cambiador de empresa en el cuadrito de la barra lateral ═══');
+ok('toggleBrandMenu() existe y respeta una sola empresa', /function toggleBrandMenu\(e\)\{[\s\S]*?if\(!haymultiempresa\(\)\) return;/.test(src));
+ok('el menú se arma con las empresas activas', /menu\.innerHTML=\(empresas\|\|\[\]\)\.filter\(e=>e\.activo\)\.map\(e=>\s*`<button type="button" onclick="cambiarEmpresa\('\$\{e\.codigo\}'\)"/.test(src));
+ok('brand-sw se vuelve clickeable solo con multiempresa', /brand\.classList\.add\('sw'\);/.test(src) && /brand\.classList\.remove\('sw'\);/.test(src));
+ok('cambiar empresa cierra el menú', /_cerrarBrandMenu\(\);\s*\n\s*renderSelectorEmpresa\(\);/.test(src));
+
 console.log('\n═══ deEmpresa: funciona de verdad ═══');
 (function(){
   // Extraer deEmpresa + empresaParaNuevo y correrlas con un empresaActiva controlado.
@@ -119,9 +125,9 @@ ok('se aplica al cambiar de empresa', /renderSelectorEmpresa\(\);\s*\n\s*aplicar
 ok('se aplica al entrar', /if\(typeof aplicarMarcaEmpresa==='function'\)aplicarMarcaEmpresa\(\)/.test(src));
 
 console.log('\n═══ UI: contenedor del selector + estilos ═══');
-ok('index.html tiene el contenedor del selector', /id="sel-empresa-cont"/.test(html));
-ok('entrarVistaInicial inicializa el selector', /iniciarEmpresaActiva\(\); if\(typeof renderSelectorEmpresa==='function'\)renderSelectorEmpresa\(\)/.test(src));
-ok('CSS del selector', /\.sel-empresa\{/.test(css));
+ok('index.html tiene el cuadrito cambiador + menú', /id="brand-sw"/.test(html) && /id="brand-menu"/.test(html) && /id="brand-chev"/.test(html));
+ok('entrarVistaInicial inicializa el cambiador', /iniciarEmpresaActiva\(\); if\(typeof renderSelectorEmpresa==='function'\)renderSelectorEmpresa\(\)/.test(src));
+ok('CSS del cambiador', /\.brand-menu\{/.test(css) && /\.brand\.sw\{/.test(css));
 ok('CSS de la etiqueta por fila', /\.emp-tag\{/.test(css));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');

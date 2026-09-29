@@ -466,6 +466,7 @@ function cambiarEmpresa(codigo){
   // Forzar que los filtros con dropdown cacheado (proveedores, clientes, cuentas)
   // se reconstruyan con los datos de la nueva empresa.
   try{ document.querySelectorAll('[data-built]').forEach(el=>{el.dataset.built='';}); }catch(e){}
+  _cerrarBrandMenu();
   renderSelectorEmpresa();
   aplicarMarcaEmpresa();
   const v=(document.querySelector('.nav button.active')||{}).dataset
@@ -473,19 +474,38 @@ function cambiarEmpresa(codigo){
         : (location.hash||'').replace('#','');
   if(v && typeof go==='function') go(v);
 }
-// Dibuja (o esconde) el selector de empresa en la barra superior.
+// Arma el cambiador de empresa DENTRO del cuadrito de la barra lateral:
+// muestra la flecha y llena el menú desplegable. Con una sola empresa, el
+// cuadrito no es clickeable (queda como marca normal).
 function renderSelectorEmpresa(){
-  const cont=document.getElementById('sel-empresa-cont');
-  if(!cont) return;
-  if(!haymultiempresa()){ cont.innerHTML=''; cont.style.display='none'; return; }
-  cont.style.display='';
-  const act=empresaActivaObj();
-  const col=(act&&act.color)||'#173916';
-  const opts=(empresas||[]).filter(e=>e.activo)
-    .map(e=>`<option value="${e.codigo}"${e.codigo===empresaActiva?' selected':''}>${e.nombre}</option>`).join('');
-  cont.innerHTML=`<span class="emp-dot" style="background:${col}"></span>`+
-    `<select id="sel-empresa" class="sel-empresa" title="Empresa con la que estás trabajando" onchange="cambiarEmpresa(this.value)">${opts}</select>`;
+  const brand=document.getElementById('brand-sw');
+  const chev=document.getElementById('brand-chev');
+  const menu=document.getElementById('brand-menu');
+  if(!brand) return;
+  if(!haymultiempresa()){
+    brand.classList.remove('sw');
+    if(chev)chev.style.display='none';
+    if(menu){ menu.style.display='none'; menu.innerHTML=''; }
+    return;
+  }
+  brand.classList.add('sw');
+  if(chev)chev.style.display='';
+  if(menu){
+    menu.innerHTML=(empresas||[]).filter(e=>e.activo).map(e=>
+      `<button type="button" onclick="cambiarEmpresa('${e.codigo}')" class="${e.codigo===empresaActiva?'on':''}"><span class="emp-dot" style="background:${e.color||'#888'}"></span>${e.nombre}</button>`).join('');
+  }
 }
+// Abre/cierra el menú del cuadrito. Con una sola empresa no hace nada.
+function toggleBrandMenu(e){
+  if(e){ e.stopPropagation(); }
+  if(!haymultiempresa()) return;
+  const menu=document.getElementById('brand-menu'); if(!menu) return;
+  const abrir=(menu.style.display==='none'||!menu.style.display);
+  menu.style.display=abrir?'block':'none';
+  if(abrir){ setTimeout(()=>document.addEventListener('click',_cerrarBrandMenu,{once:true}),0); }
+}
+function _cerrarBrandMenu(){ const menu=document.getElementById('brand-menu'); if(menu)menu.style.display='none'; }
+if(typeof window!=='undefined'){ window.toggleBrandMenu=toggleBrandMenu; }
 // Empresas cuya facturación electrónica (NIT propio) está conectada en el
 // backend (EcoFactura). El backend es la única fuente de verdad: lo dice el
 // endpoint /api/empresas-fel. Arranca en SEFE por seguridad; si el backend

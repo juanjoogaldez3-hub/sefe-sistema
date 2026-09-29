@@ -458,12 +458,17 @@
   .user-card .nm{color:#fff;font-weight:600;font-size:13.5px}
   .user-card .rl{color:#9FB394;font-size:11px;margin-top:2px}
   .role-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.12);color:#fff;margin-left:10px}
-  /* Selector de empresa (multiempresa) en la barra superior */
-  .sel-empresa-cont{display:inline-flex;align-items:center;gap:6px}
+  /* Cambiador de empresa (multiempresa) en el cuadrito de la barra lateral */
   .emp-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto;box-shadow:0 0 0 2px rgba(0,0,0,.05)}
-  .sel-empresa{appearance:none;-webkit-appearance:none;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center;color:#1a1a17;border:1.5px solid var(--line);border-radius:20px;font-size:12px;font-weight:600;padding:5px 26px 5px 12px;cursor:pointer;max-width:170px}
-  .sel-empresa:hover{border-color:var(--green)}
-  .sel-empresa option{color:#111}
+  .brand.sw{cursor:pointer;border-radius:10px;transition:background .15s}
+  .brand.sw:hover{background:rgba(255,255,255,.06)}
+  .brand .brand-txt{flex:1;min-width:0}
+  .brand-chev{width:15px;height:15px;color:#9FB394;flex:0 0 auto;margin-left:auto}
+  .brand-menu{margin:-6px 0 8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;overflow:hidden}
+  .brand-menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:10px 13px;background:none;border:0;color:#cfe0c8;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  .brand-menu button:hover{background:rgba(255,255,255,.10)}
+  .brand-menu button.on{color:#fff;background:rgba(255,255,255,.07)}
+  .brand-menu .emp-dot{width:10px;height:10px;box-shadow:none}
   /* Etiqueta de empresa por fila en vistas compartidas (ruta/despachos) */
   .emp-tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:rgba(0,0,0,.06);color:#333;vertical-align:middle}
   .emp-tag .emp-dot{width:7px;height:7px;box-shadow:none}
