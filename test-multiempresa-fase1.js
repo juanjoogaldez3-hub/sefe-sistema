@@ -39,7 +39,7 @@ console.log('\n═══ deEmpresa: funciona de verdad ═══');
   const finD = src.indexOf('\n}', iniD) + 2;
   const iniN = src.indexOf('function empresaParaNuevo(){');
   const finN = src.indexOf('\n', iniN);
-  const ctx = { empresaActiva:null };
+  const ctx = { empresaActiva:null, _consolidadoScope:false };
   vm.createContext(ctx);
   vm.runInContext(src.slice(iniD,finD) + '\n' + src.slice(iniN,finN) + '\nthis.deEmpresa=deEmpresa;this.empresaParaNuevo=empresaParaNuevo;', ctx);
   const datos = [{id:1,empresa:'SEFE'},{id:2,empresa:'LAML'},{id:3},{id:4,empresa:'SEFE'}];

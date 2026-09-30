@@ -55,6 +55,14 @@ ok('muestra de qué empresa es cada opción', /const _empSuf=\(cod\)=>haymultiem
 ok('abrir seguimiento cambia a la empresa del cliente', /function openSegVenta[\s\S]*?irAEmpresaSiHaceFalta\(c\.empresa\)/.test(src));
 ok('abrir cliente desde recordatorio cambia de empresa', /function abrirClienteDesdeRec[\s\S]*?irAEmpresaSiHaceFalta\(_c\.empresa\)/.test(src));
 
+console.log('\n═══ Vista consolidada (panel + reportes) ═══');
+ok('deEmpresa respeta el modo consolidado', /function deEmpresa\(arr\)\{\s*\n\s*if\(_consolidadoScope\|\|!empresaActiva\) return arr/.test(src));
+ok('toggleConsolidado existe y persiste', /function toggleConsolidado\(\)\{[\s\S]*?localStorage\.setItem\(CONSOLIDADO_KEY/.test(src));
+ok('el panel prende el consolidado al dibujar', /function renderPanel\(\)\{\s*\n\s*_consolidadoScope=esConsolidadoVista\(\);/.test(src));
+ok('los reportes prenden el consolidado al dibujar', /function renderReportes\(\)\{\s*\n\s*_consolidadoScope=esConsolidadoVista\(\);/.test(src));
+ok('go() apaga el consolidado por seguridad', /function go\(v,desdeHash\)\{\s*\n\s*_consolidadoScope=false;/.test(src));
+ok('el menú del cuadrito ofrece "Ver las 2 juntas"', /onclick="toggleConsolidado\(\)"[\s\S]*?Ver las 2 juntas/.test(src));
+
 console.log('\n═══ Módulo de cotizaciones encendido ═══');
 ok('MODULOS_DESACTIVADOS vacío (cotizaciones visible)', /const MODULOS_DESACTIVADOS=\[\];/.test(src));
 

@@ -1,4 +1,5 @@
 function renderReportes(){
+  _consolidadoScope=esConsolidadoVista(); // vista consolidada: no filtra por empresa mientras dibuja
   bindRep();renderRepFilters();
   const r=repRange();
   let ventas=deEmpresa(documentos).filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&enRango(d.creada,r)); // multiempresa
@@ -1443,5 +1444,6 @@ function renderReportes(){
   // Si es el reporte cliente/producto, aplicar el estado de colapso guardado
   if(repType==='cliprod'||repType==='dircli'||repType==='climes'||repType==='prodmescomp')aplicarColapso();
   enhanceRepTables();
+  _consolidadoScope=false; // fin del render consolidado
 }
 

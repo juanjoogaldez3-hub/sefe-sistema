@@ -446,12 +446,29 @@ function empresaParaNuevo(){ return empresaActiva||'SEFE'; }
 // Ojo: sólo se usa para LISTAR/agregar; las búsquedas por id siguen usando el
 // array completo (un documento de una empresa puede referir a su cliente igual).
 function deEmpresa(arr){
-  if(!empresaActiva) return arr||[];
+  if(_consolidadoScope||!empresaActiva) return arr||[];
   return (arr||[]).filter(x=> (x&&x.empresa||'SEFE')===empresaActiva );
 }
+// ── Vista consolidada (ver las dos empresas juntas) ─────────
+// Sólo para el dashboard y los reportes: mientras se dibujan, `deEmpresa`
+// devuelve TODO (no filtra), para ver los números combinados. No toca las
+// listas operativas ni la creación (la empresa activa sigue siendo una).
+let _verConsolidado=false;   // preferencia del usuario (persiste en el navegador)
+let _consolidadoScope=false; // interruptor temporal SOLO durante el render de esas pantallas
+const CONSOLIDADO_KEY='sefe_consolidado';
+function esConsolidadoVista(){ return haymultiempresa() && _verConsolidado; }
+function toggleConsolidado(){
+  _verConsolidado=!_verConsolidado;
+  try{ localStorage.setItem(CONSOLIDADO_KEY,_verConsolidado?'1':''); }catch(e){}
+  const b=document.querySelector('.nav button.active');
+  const v=(b&&b.dataset&&b.dataset.view)||(location.hash||'').replace('#','');
+  if(v&&typeof go==='function')go(v);
+}
+if(typeof window!=='undefined'){ window.toggleConsolidado=toggleConsolidado; window.esConsolidadoVista=esConsolidadoVista; }
 // Arranca la empresa activa al entrar: si hay más de una empresa, toma la
 // recordada en el navegador (o SEFE por defecto). Con una sola, queda null.
 function iniciarEmpresaActiva(){
+  try{ _verConsolidado = localStorage.getItem(CONSOLIDADO_KEY)==='1'; }catch(e){}
   if(!haymultiempresa()){ empresaActiva=null; return; }
   let g=null; try{ g=localStorage.getItem(EMPRESA_KEY); }catch(e){}
   const existe = g && (empresas||[]).some(e=>e.codigo===g && e.activo);
@@ -492,7 +509,9 @@ function renderSelectorEmpresa(){
   if(chev)chev.style.display='';
   if(menu){
     menu.innerHTML=(empresas||[]).filter(e=>e.activo).map(e=>
-      `<button type="button" onclick="cambiarEmpresa('${e.codigo}')" class="${e.codigo===empresaActiva?'on':''}"><span class="emp-dot" style="background:${e.color||'#888'}"></span>${e.nombre}</button>`).join('');
+      `<button type="button" onclick="cambiarEmpresa('${e.codigo}')" class="${e.codigo===empresaActiva?'on':''}"><span class="emp-dot" style="background:${e.color||'#888'}"></span>${e.nombre}</button>`).join('')+
+      `<div class="brand-menu-sep"></div>`+
+      `<button type="button" class="brand-menu-cons${_verConsolidado?' on':''}" onclick="toggleConsolidado()" title="Ver los números de las dos empresas juntas en el panel y los reportes"><span class="emp-dot" style="background:${_verConsolidado?'#7FBF4D':'#bbb'}"></span>Ver las 2 juntas<span class="cons-sub">panel y reportes</span></button>`;
   }
 }
 // Abre/cierra el menú del cuadrito. Con una sola empresa no hace nada.
@@ -723,6 +742,7 @@ function tienePermiso(v){
   return r.views==='ALL'||r.views.includes(v);
 }
 function go(v,desdeHash){
+  _consolidadoScope=false; // por seguridad: solo el dashboard/reportes lo prenden
   // Vista de un módulo apagado (o inexistente): al panel, sin ruido.
   if(v!=='panel' && !vistaDisponible(v)){ v='panel'; desdeHash=false; }
   if(!tienePermiso(v)){toast('No tenés permiso para esta sección','Tu rol es '+(ROLES[currentRole]?.label||currentRole),true);return;}
