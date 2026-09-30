@@ -469,6 +469,8 @@
   .brand-menu button:hover{background:rgba(255,255,255,.10)}
   .brand-menu button.on{color:#fff;background:rgba(255,255,255,.07)}
   .brand-menu .emp-dot{width:10px;height:10px;box-shadow:none}
+  .brand-menu-sep{height:1px;background:rgba(255,255,255,.12);margin:2px 0}
+  .brand-menu-cons .cons-sub{font-size:10px;font-weight:400;color:#9FB394;margin-left:auto}
   /* Etiqueta de empresa por fila en vistas compartidas (ruta/despachos) */
   .emp-tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:rgba(0,0,0,.06);color:#333;vertical-align:middle}
   .emp-tag .emp-dot{width:7px;height:7px;box-shadow:none}

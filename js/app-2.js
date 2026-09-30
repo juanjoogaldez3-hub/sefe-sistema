@@ -150,6 +150,7 @@ function dashReset(){
 window.dashReset=dashReset;
 
 function renderPanel(){
+  _consolidadoScope=esConsolidadoVista(); // vista consolidada: no filtra por empresa mientras dibuja
   const hoy=new Date();hoy.setHours(0,0,0,0);
   const semana=new Date(hoy);semana.setDate(semana.getDate()+7);
   const mes=new Date(hoy.getFullYear(),hoy.getMonth(),1);
@@ -469,6 +470,7 @@ function renderPanel(){
   // Aplicar el acomodo personal (orden + ocultos) y, si está activo, el modo edición.
   _aplicarLayoutDashboard();
   _dashEditUI();
+  _consolidadoScope=false; // fin del render consolidado
 }
 // Definir / cambiar la meta de ventas del mes (admin/gerencia).
 function editarMetaVentas(){
