@@ -901,11 +901,11 @@ function renderCliDet(){
     </div>`;
     const segs=Array.isArray(c.seguimientos)?c.seguimientos:[];
     const resultOpts=Object.entries(RESULT_SEG).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');
-    const filas=segs.length?segs.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||((b.id||0)-(a.id||0))).map(s=>{
+    const filas=segs.length?segs.slice().sort((a,b)=>(b.registrado||b.fecha||'').localeCompare(a.registrado||a.fecha||'')||((b.id||0)-(a.id||0))).map(s=>{
       const r=(typeof _resultSeg==='function')?_resultSeg(s):(RESULT_SEG[s.resultado]||['—','b-muted']);
       const tag=s.tipo==='venta'?'<span class="badge b-info" style="font-size:9px;margin-left:5px">Venta</span>':'<span class="badge b-muted" style="font-size:9px;margin-left:5px">Cobro</span>';
       return `<tr>
-        <td style="color:var(--muted);white-space:nowrap">${s.fecha?fdate(s.fecha):'—'}</td>
+        <td style="color:var(--muted);white-space:nowrap">${s.registrado?fdatehora(s.registrado):(s.fecha?fdate(s.fecha):'—')}</td>
         <td><span class="badge ${r[1]}">${r[0]}</span>${tag}</td>
         <td>${s.nota?escHtml(s.nota):'<span style="color:var(--muted-2)">—</span>'}</td>
         <td style="color:var(--muted);white-space:nowrap">${s.proximaFecha?fdate(s.proximaFecha)+(s.hecho?' <span style="color:var(--ok)" title="Atendido">✓</span>':(s.proximaFecha===fechaHoyGT()?' <span style="color:var(--warn)" title="Recordatorio para hoy">🔔</span>':'')):'—'}</td>
@@ -927,7 +927,7 @@ function renderCliDet(){
           <button class="btn btn-primary" style="white-space:nowrap" onclick="agregarSeguimiento(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
         </div>
       </div>`:''}
-      <table><thead><tr><th>Fecha</th><th>Resultado</th><th>Nota</th><th>Próximo</th><th>Registró</th><th></th></tr></thead><tbody>${filas}</tbody></table>
+      <table><thead><tr><th>Fecha y hora</th><th>Resultado</th><th>Nota</th><th>Próximo</th><th>Registró</th><th></th></tr></thead><tbody>${filas}</tbody></table>
     </div>`;
   }else if(cliTab==='ubicacion'){
     const puedeEditar=canCrearCliente();
