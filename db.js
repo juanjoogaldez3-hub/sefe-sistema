@@ -78,8 +78,8 @@ async function cargarTodo() {
       rDocumentos, rAbonos, rCobrosRuta, rCompras, rPagos, rRoles, rUsuarios, rAudit, rDashboard, rTalonarios, rRecAnul,
       rCuentasBanco, rMovBanco, rConc, rEmpleados, rPlanillas, rAmb, rBatTipos, rBatCambios, rBatEntregas, rGas, rRecEsp, rParadas, rAjustes
     ] = await Promise.all([
-      sb.from('clientes').select('*').order('id'),
-      sb.from('productos').select('*').order('id'),
+      fetchAll('clientes','id'),
+      fetchAll('productos','id'),
       sb.from('vendedores').select('*').order('id'),
       sb.from('pilotos').select('*').order('id'),
       sb.from('proveedores').select('*').order('id'),
