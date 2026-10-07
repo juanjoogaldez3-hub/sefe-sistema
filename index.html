@@ -732,12 +732,22 @@
 
       <!-- POR PAGAR -->
       <section class="view" id="v-porpagar">
+        <div class="ct-tabs" id="pp-tabs" style="padding:0 2px">
+          <button class="ct-tab on" data-t="deuda" onclick="setPpTab('deuda')">Por pagar</button>
+          <button class="ct-tab" data-t="pagos" onclick="setPpTab('pagos')">Pagos realizados</button>
+        </div>
         <div class="kpis stagger" id="pp-kpis"></div>
         <div class="panel">
-          <div class="panel-head"><h3>Cuentas por pagar</h3></div>
+          <div class="panel-head"><h3 id="pp-title">Cuentas por pagar</h3></div>
           <div id="pp-filtros" style="padding:2px 16px 12px"></div>
-          <table><thead><tr><th>Compra</th><th>Factura</th><th>Proveedor</th><th>Fecha</th><th>Vence</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="t-pp"></tbody></table>
-          <div class="empty" id="pp-empty">No hay cuentas por pagar.</div>
+          <div id="pp-deuda-wrap">
+            <table><thead><tr><th>Compra</th><th>Factura</th><th>Proveedor</th><th>Fecha</th><th>Vence</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="t-pp"></tbody></table>
+            <div class="empty" id="pp-empty">No hay cuentas por pagar.</div>
+          </div>
+          <div id="pp-pagos-wrap" style="display:none">
+            <table><thead><tr><th>Fecha</th><th>Compra</th><th>Proveedor</th><th>Factura</th><th>Método</th><th>Referencia</th><th>Registró</th><th>Monto</th></tr></thead><tbody id="t-pp-pagos"></tbody></table>
+            <div class="empty" id="pp-pagos-empty">No hay pagos registrados.</div>
+          </div>
         </div>
       </section>
 

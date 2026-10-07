@@ -55,6 +55,9 @@ function openFacturaProv(id){
 window.openFacturaProv=openFacturaProv;
 let _ppProv='';
 let _ppEstados=new Set(),_ppPeriodo='',_ppExport=[],_ppFilterOpen=false;
+let _ppTab='deuda',_ppPagosExport=[];
+function setPpTab(v){_ppTab=v;renderPorPagar();}
+window.setPpTab=setPpTab;
 function setPpProv(v){_ppProv=v;renderPorPagar();}
 window.setPpProv=setPpProv;
 function togglePpEstado(v){if(_ppEstados.has(v))_ppEstados.delete(v);else _ppEstados.add(v);renderPorPagar();}
@@ -74,6 +77,12 @@ function ppEnPeriodo(fecha){
   return true;
 }
 function renderPorPagar(){
+  // Pestañas: "Por pagar" (deuda) y "Pagos realizados" (pagos a proveedores)
+  const tabsEl=$('#pp-tabs');
+  if(tabsEl)tabsEl.querySelectorAll('.ct-tab').forEach(b=>b.classList.toggle('on',b.dataset.t===_ppTab));
+  if(_ppTab==='pagos'){ renderPpPagos(); return; }
+  const _dw=$('#pp-deuda-wrap'),_pw=$('#pp-pagos-wrap'),_tt=$('#pp-title');
+  if(_dw)_dw.style.display=''; if(_pw)_pw.style.display='none'; if(_tt)_tt.textContent='Cuentas por pagar';
   // Excluye compras anuladas (antes aparecían como deuda)
   const todas=deEmpresa(compras).map(c=>({c,...apInfo(c)})).filter(x=>x.c.facturada&&x.c.tipoPago==='credito'&&!x.c.anulado); // multiempresa
   // Filtro por proveedor
@@ -116,6 +125,76 @@ function renderPorPagar(){
   }).join('');
   enhanceTable('t-pp');
 }
+function _metodoLblProv(m){
+  if(!m)return '—';
+  const M={efectivo:'Efectivo',cheque:'Cheque',transferencia:'Transferencia',deposito:'Depósito',tarjeta:'Tarjeta'};
+  return M[m]||(String(m).charAt(0).toUpperCase()+String(m).slice(1));
+}
+// Pestaña "Pagos realizados": lista todos los pagos hechos a proveedores (abonos de compras).
+function renderPpPagos(){
+  const _dw=$('#pp-deuda-wrap'),_pw=$('#pp-pagos-wrap'),_tt=$('#pp-title');
+  if(_dw)_dw.style.display='none'; if(_pw)_pw.style.display=''; if(_tt)_tt.textContent='Pagos realizados a proveedores';
+  // Aplanar los abonos (pagos) de las compras no anuladas de la empresa activa
+  const comprasEmp=deEmpresa(compras).filter(c=>!c.anulado); // multiempresa
+  let pagos=[];
+  comprasEmp.forEach(c=>(c.abonos||[]).forEach(a=>{ if(!a.anulado) pagos.push({c,a}); }));
+  // Filtros: proveedor + período (reusa el estado _ppProv/_ppPeriodo)
+  const provIds=[...new Set(comprasEmp.map(c=>c.proveedorId))];
+  const opts=provIds.map(id=>{const p=proveedores.find(v=>v.id===id);return {v:String(id),l:(p&&p.nombre)||'Sin proveedor'};}).sort((a,b)=>a.l.localeCompare(b.l,'es'));
+  const fil=$('#pp-filtros');
+  if(fil)fil.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <select onchange="setPpProv(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:220px"><option value="">Todos los proveedores</option>${opts.map(o=>`<option value="${o.v}"${_ppProv===o.v?' selected':''}>${o.l}</option>`).join('')}</select>
+    <select onchange="setPpPeriodo(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:180px"><option value="">Todo el tiempo</option>${[['mes','Este mes'],['mesant','Mes anterior'],['2m','Últimos 2 meses'],['3m','Últimos 3 meses']].map(([v,l])=>`<option value="${v}"${_ppPeriodo===v?' selected':''}>${l}</option>`).join('')}</select>
+    <button class="btn btn-ghost btn-sm" onclick="exportarPagosProvExcel()"><svg viewBox="0 0 24 24" style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Excel</button>
+  </div>`;
+  if(_ppProv)pagos=pagos.filter(p=>String(p.c.proveedorId)===String(_ppProv));
+  if(_ppPeriodo)pagos=pagos.filter(p=>ppEnPeriodo(p.a.fecha));
+  const totalPagado=pagos.reduce((s,p)=>s+Number(p.a.monto||0),0);
+  const hoy=new Date(fechaHoyGT()+'T00:00:00'); const iniMes=new Date(hoy.getFullYear(),hoy.getMonth(),1);
+  const pagadoMes=pagos.filter(p=>{const f=new Date(p.a.fecha);return !isNaN(f)&&f>=iniMes;}).reduce((s,p)=>s+Number(p.a.monto||0),0);
+  const provsPag=new Set(pagos.map(p=>p.c.proveedorId)).size;
+  const k=[
+    {ic:'i-green',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>',lbl:'Total pagado',val:money(totalPagado),sub:pagos.length+' pagos'},
+    {ic:'i-blue',svg:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Pagado este mes',val:money(pagadoMes),sub:'mes en curso'},
+    {ic:'i-lime',svg:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',lbl:'Proveedores pagados',val:provsPag,sub:'distintos'},
+  ];
+  $('#pp-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
+  pagos.sort((a,b)=>new Date(b.a.fecha)-new Date(a.a.fecha));
+  $('#pp-pagos-empty').style.display=pagos.length?'none':'block';
+  _ppPagosExport=pagos.map(p=>({Fecha:fdate(p.a.fecha),Compra:'CMP-'+padn(p.c.id),Proveedor:p.c.proveedorNombre,Factura:p.c.docProv||'',Metodo:_metodoLblProv(p.a.metodo),Referencia:p.a.referencia||p.a.noRecibo||'',Registro:p.a.registradoPor||'',Monto:Number(p.a.monto||0)}));
+  $('#t-pp-pagos').innerHTML=pagos.map(p=>{const c=p.c,a=p.a;
+    return `<tr><td style="color:var(--muted)">${fdate(a.fecha)}</td><td style="font-weight:600">CMP-${padn(c.id)}</td><td>${c.proveedorNombre}</td><td style="color:var(--blue)">${c.docProv||'—'}</td><td>${_metodoLblProv(a.metodo)}</td><td style="color:var(--muted)">${a.referencia||a.noRecibo||'—'}</td><td style="color:var(--muted)">${a.registradoPor||'—'}</td><td class="num" style="font-weight:700;color:var(--ok)">${money(a.monto)}</td></tr>`;
+  }).join('');
+  enhanceTable('t-pp-pagos');
+}
+window.renderPpPagos=renderPpPagos;
+async function exportarPagosProvExcel(){
+  if(!_ppPagosExport.length){toast('Sin datos para exportar',null,true);return;}
+  try{
+    const {XLSX,styled:_styled}=await _cargarXLSX();
+    const prov=_ppProv?(proveedores.find(p=>String(p.id)===String(_ppProv))?.nombre||'—'):'Todos';
+    const per=_ppPeriodo?({mes:'Este mes',mesant:'Mes anterior','2m':'Últimos 2 meses','3m':'Últimos 3 meses'})[_ppPeriodo]:'Todo el tiempo';
+    const meta=[[SEFE_MARCA.membrete],['PAGOS A PROVEEDORES'],['Proveedor:',prov],['Período:',per],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],[]];
+    const HR=7;
+    const ws=XLSX.utils.aoa_to_sheet(meta);
+    XLSX.utils.sheet_add_json(ws,_ppPagosExport,{origin:'A'+(HR+1)});
+    const _keys=Object.keys(_ppPagosExport[0]);
+    const moneyCols=_keys.map((k,i)=>/monto/i.test(k)?i:-1).filter(i=>i>=0);
+    const totalRow=HR+1+_ppPagosExport.length;
+    _keys.forEach((k,ci)=>{
+      const val=ci===0?'TOTAL':(moneyCols.indexOf(ci)>=0?Math.round(_ppPagosExport.reduce((s,r)=>s+(Number(r[k])||0),0)*100)/100:null);
+      if(val===null)return;
+      const ref=XLSX.utils.encode_cell({c:ci,r:totalRow});
+      ws[ref]={t:typeof val==='number'?'n':'s',v:val};
+    });
+    ws['!ref']=XLSX.utils.encode_range({s:{c:0,r:0},e:{c:_keys.length-1,r:totalRow}});
+    _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:_ppPagosExport.length,moneyCols,totalRow,brandRow:0,titleRow:1,metaRows:[2,3,4,5]});
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Pagos');
+    descargarXlsx(XLSX,wb,'SEFE_pagos_proveedores_'+fechaHoyGT()+'.xlsx');
+    toast('✓ Excel descargado','SEFE_pagos_proveedores_'+fechaHoyGT()+'.xlsx');
+  }catch(e){console.error(e);toast('No se pudo generar el Excel',e.message||String(e),true);}
+}
+window.exportarPagosProvExcel=exportarPagosProvExcel;
 async function exportarPorPagarExcel(){
   if(!_ppExport.length){toast('Sin datos para exportar',null,true);return;}
   try{
