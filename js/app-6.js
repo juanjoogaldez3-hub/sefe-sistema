@@ -68,7 +68,7 @@ function setPpPeriodo(v){_ppPeriodo=v;renderPorPagar();}
 window.setPpPeriodo=setPpPeriodo;
 function ppEnPeriodo(fecha){
   if(!_ppPeriodo)return true;
-  const f=new Date(fecha); if(isNaN(f))return true;
+  const f=(typeof _fechaDe==='function')?_fechaDe(fecha):new Date(fecha); if(!f||isNaN(f))return true;
   const hoy=new Date(fechaHoyGT()+'T00:00:00');const y=hoy.getFullYear(),m=hoy.getMonth();
   if(_ppPeriodo==='mes')return f>=new Date(y,m,1);
   if(_ppPeriodo==='mesant')return f>=new Date(y,m-1,1)&&f<new Date(y,m,1);
@@ -151,7 +151,8 @@ function renderPpPagos(){
   if(_ppPeriodo)pagos=pagos.filter(p=>ppEnPeriodo(p.a.fecha));
   const totalPagado=pagos.reduce((s,p)=>s+Number(p.a.monto||0),0);
   const hoy=new Date(fechaHoyGT()+'T00:00:00'); const iniMes=new Date(hoy.getFullYear(),hoy.getMonth(),1);
-  const pagadoMes=pagos.filter(p=>{const f=new Date(p.a.fecha);return !isNaN(f)&&f>=iniMes;}).reduce((s,p)=>s+Number(p.a.monto||0),0);
+  const _fd=f=>(typeof _fechaDe==='function')?_fechaDe(f):new Date(f);
+  const pagadoMes=pagos.filter(p=>{const f=_fd(p.a.fecha);return f&&!isNaN(f)&&f>=iniMes;}).reduce((s,p)=>s+Number(p.a.monto||0),0);
   const provsPag=new Set(pagos.map(p=>p.c.proveedorId)).size;
   const k=[
     {ic:'i-green',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>',lbl:'Total pagado',val:money(totalPagado),sub:pagos.length+' pagos'},
@@ -159,7 +160,7 @@ function renderPpPagos(){
     {ic:'i-lime',svg:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',lbl:'Proveedores pagados',val:provsPag,sub:'distintos'},
   ];
   $('#pp-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
-  pagos.sort((a,b)=>new Date(b.a.fecha)-new Date(a.a.fecha));
+  pagos.sort((a,b)=>(_fd(b.a.fecha)||0)-(_fd(a.a.fecha)||0));
   $('#pp-pagos-empty').style.display=pagos.length?'none':'block';
   _ppPagosExport=pagos.map(p=>({Fecha:fdate(p.a.fecha),Compra:'CMP-'+padn(p.c.id),Proveedor:p.c.proveedorNombre,Factura:p.c.docProv||'',Metodo:_metodoLblProv(p.a.metodo),Referencia:p.a.referencia||p.a.noRecibo||'',Registro:p.a.registradoPor||'',Monto:Number(p.a.monto||0)}));
   $('#t-pp-pagos').innerHTML=pagos.map(p=>{const c=p.c,a=p.a;
