@@ -196,8 +196,8 @@ function renderPanel(){
   const porCobrarMis=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada').reduce((s,d)=>s+arInfo(d).saldo,0);
   const vencidosMis=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&arInfo(d).vencido);
   // Cobrado en el mes actual (todos los abonos no anulados con fecha dentro del mes)
-  let cobradoMes=0;_docs.forEach(d=>(d.abonos||[]).forEach(a=>{if(!a.anulado&&a.fecha&&new Date(a.fecha)>=mes)cobradoMes+=Number(a.monto);}));
-  let cobradoMesAnt=0;_docs.forEach(d=>(d.abonos||[]).forEach(a=>{if(a.anulado||!a.fecha)return;const f=new Date(a.fecha);if(f>=mesAntIni&&f<=mesAntFin)cobradoMesAnt+=Number(a.monto);}));
+  let cobradoMes=0;_docs.forEach(d=>(d.abonos||[]).forEach(a=>{if(!a.anulado&&a.fecha&&_fechaDe(a.fecha)>=mes)cobradoMes+=Number(a.monto);}));
+  let cobradoMesAnt=0;_docs.forEach(d=>(d.abonos||[]).forEach(a=>{if(a.anulado||!a.fecha)return;const f=_fechaDe(a.fecha);if(f&&f>=mesAntIni&&f<=mesAntFin)cobradoMesAnt+=Number(a.monto);}));
   // Monto que vence en los próximos 7 días (porVencer ya está calculado arriba)
   const porVencerMonto=porVencer.reduce((s,d)=>s+arInfo(d).saldo,0);
 

@@ -216,7 +216,7 @@ function repRange(){
   else start=new Date(0);
   return {start,end:new Date('2999-01-01')};
 }
-function enRango(iso,r){const t=new Date(iso);return t>=r.start&&t<=r.end;}
+function enRango(iso,r){const t=_fechaDe(iso);return !!t&&t>=r.start&&t<=r.end;}
 // Etiqueta legible del RANGO DE FECHAS seleccionado, para estampar en los
 // reportes generados (PDF y Excel). Si hay fechas manuales (desde/hasta) las
 // usa; si no, arma el rango real del período elegido (mes, mes anterior, etc.).
