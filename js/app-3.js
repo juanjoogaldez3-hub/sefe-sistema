@@ -787,7 +787,7 @@ function clienteStats(c){
   if(facturas.length>=2){const dias=facturas.map(f=>new Date(f.creada).getTime());let sum=0;for(let i=1;i<dias.length;i++)sum+=(dias[i]-dias[i-1]);frecuencia=Math.round(sum/(facturas.length-1)/86400000);}
   const pagadasConAbono=facturas.filter(f=>(f.abonos||[]).length&&arInfo(f).saldo<=0.001);
   let promPago=null;
-  if(pagadasConAbono.length){const tot=pagadasConAbono.reduce((s,f)=>{const activos=(f.abonos||[]).filter(a=>!a.anulado);const ult=activos[activos.length-1];if(!ult)return s;const dp=(new Date(ult.fecha)-new Date(f.creada))/86400000;return s+Math.max(0,dp);},0);promPago=Math.round(tot/pagadasConAbono.length);}
+  if(pagadasConAbono.length){const tot=pagadasConAbono.reduce((s,f)=>{const activos=(f.abonos||[]).filter(a=>!a.anulado);const ult=activos[activos.length-1];if(!ult)return s;const dp=(_fechaDe(ult.fecha)-_fechaDe(f.creada))/86400000;return s+Math.max(0,dp);},0);promPago=Math.round(tot/pagadasConAbono.length);}
   const buckets={c30:0,c60:0,c90:0,c90p:0};
   facturas.forEach(f=>{const ai=arInfo(f);if(ai.saldo<=0.001||!f.vencimiento)return;const dias=Math.floor((new Date()-new Date(f.vencimiento))/86400000);if(dias<=0)return;
     if(dias<=30)buckets.c30+=ai.saldo;else if(dias<=60)buckets.c60+=ai.saldo;else if(dias<=90)buckets.c90+=ai.saldo;else buckets.c90p+=ai.saldo;});
