@@ -1211,7 +1211,8 @@ function mapGasolinaFromDB(g){
     galones:Number(g.galones)||0, monto:Number(g.monto)||0,
     kilometraje:(g.kilometraje==null?null:Number(g.kilometraje)),
     cuentaId:g.cuenta_id||null, movPoliza:g.mov_poliza||null, nota:g.nota||'',
-    creadoPor:g.creado_por||'', creado:g.creado
+    creadoPor:g.creado_por||'', creado:g.creado,
+    empresa:g.empresa||'SEFE' // multiempresa: qué empresa pagó la gasolina (control compartido)
   };
 }
 async function guardarGasolina(g){
@@ -1219,7 +1220,8 @@ async function guardarGasolina(g){
     piloto_id:g.pilotoId||null, vehiculo:g.vehiculo||null, fecha:g.fecha||null,
     galones:Number(g.galones)||0, monto:Number(g.monto)||0,
     kilometraje:(g.kilometraje==null||g.kilometraje===''?null:Number(g.kilometraje)),
-    cuenta_id:g.cuentaId||null, mov_poliza:g.movPoliza||null, nota:g.nota||null
+    cuenta_id:g.cuentaId||null, mov_poliza:g.movPoliza||null, nota:g.nota||null,
+    empresa:g.empresa||'SEFE' // multiempresa: empresa que pagó la gasolina
   };
   if(g._nuevo){
     delete g._nuevo;
