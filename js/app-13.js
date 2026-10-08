@@ -537,6 +537,30 @@ function _optTipos(sel){return `<option value="">— Elegí tipo —</option>`+
 function _optPilotos(sel){return `<option value="">— Elegí piloto —</option>`+
   (typeof pilotos!=='undefined'?pilotos:[]).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)))
     .map(p=>`<option value="${p.id}"${String(sel)===String(p.id)?' selected':''}>${escHtml(p.nombre)}</option>`).join('');}
+// Igual que _optPilotos pero con la opción de crear uno nuevo al final.
+function _optPilotosMas(sel){return _optPilotos(sel)+`<option value="__nuevo__">➕ Agregar piloto nuevo…</option>`;}
+// Agrega un piloto nuevo desde un <select> (se guarda en la tabla compartida de
+// pilotos, así queda disponible también para armar rutas/despachos).
+async function agregarPilotoEnSelect(selectId){
+  const sel=document.getElementById(selectId); if(!sel||sel.value!=='__nuevo__')return;
+  const nom=((typeof window!=='undefined'&&window.prompt)?window.prompt('Nombre del piloto nuevo:'):'')||'';
+  const nombre=nom.trim();
+  if(!nombre){ sel.value=''; return; }
+  let p=(typeof pilotos!=='undefined'?pilotos:[]).find(x=>String(x.nombre).trim().toLowerCase()===nombre.toLowerCase());
+  if(!p){
+    p={nombre,_nuevo:true};
+    (typeof pilotos!=='undefined'?pilotos:[]).push(p);
+    try{ if(typeof guardarPiloto==='function')await guardarPiloto(p); }catch(e){ console.error(e); }
+    if(p._nuevo||p.id==null){ // no se pudo guardar
+      const i=pilotos.indexOf(p); if(i>=0)pilotos.splice(i,1);
+      sel.value=''; if(typeof toast==='function')toast('No se pudo agregar el piloto','Intentá de nuevo',true); return;
+    }
+    if(typeof logAudit==='function')logAudit('Piloto agregado',nombre);
+    if(typeof toast==='function')toast('✓ Piloto agregado',nombre);
+  }
+  sel.innerHTML=_optPilotosMas(p.id);
+}
+window.agregarPilotoEnSelect=agregarPilotoEnSelect;
 
 function openBatCambio(id){
   const c=id?batCambios.find(x=>String(x.id)===String(id)):null;
@@ -785,7 +809,7 @@ function renderGasolina(){
     const rend=_gasRendimiento(g);
     return `<tr>
       <td>${g.fecha?fdate(g.fecha):'—'}</td>
-      <td style="font-weight:600">${escHtml(_gasQuien(g))}</td>
+      <td style="font-weight:600">${escHtml(_gasQuien(g))}${(typeof empTag==='function')?' '+empTag(g.empresa):''}</td>
       <td class="num">${(Math.round((Number(g.galones)||0)*10)/10)}</td>
       <td class="num" style="font-weight:700">${money(g.monto)}</td>
       <td class="num">${g.kilometraje!=null?Number(g.kilometraje).toLocaleString('es-GT'):'—'}</td>
@@ -801,15 +825,16 @@ function openGasolina(id){
   const g=id?gasolina.find(x=>String(x.id)===String(id)):null;
   const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():'';
   openMod(g?'Editar carga de combustible':'Nueva carga de combustible',
-    `<div class="row"><div><label>Piloto</label><select id="gas-pil">${_optPilotos(g&&g.pilotoId)}</select></div><div><label>Vehículo <span style="font-weight:400;color:var(--muted-2)">(placa / opcional)</span></label><input id="gas-veh" value="${g?escHtml(g.vehiculo||''):''}" placeholder="Ej. P-123ABC"></div></div>
+    `<div class="row"><div><label>Piloto</label><select id="gas-pil" onchange="agregarPilotoEnSelect('gas-pil')">${_optPilotosMas(g&&g.pilotoId)}</select></div><div><label>Vehículo <span style="font-weight:400;color:var(--muted-2)">(placa / opcional)</span></label><input id="gas-veh" value="${g?escHtml(g.vehiculo||''):''}" placeholder="Ej. P-123ABC"></div></div>
      <div class="row"><div><label>Fecha</label><input id="gas-fecha" type="date" value="${g&&g.fecha?String(g.fecha).slice(0,10):hoy}"></div><div><label>Kilometraje del tablero <span style="font-weight:400;color:var(--muted-2)">(odómetro total)</span></label><input id="gas-km" type="number" step="1" value="${g&&g.kilometraje!=null?g.kilometraje:''}" placeholder="Ej. 251726 (lo que marca el tablero)"></div></div>
      <div class="row"><div><label>Galones</label><input id="gas-gal" type="number" step="0.01" value="${g?(Number(g.galones)||''):''}" placeholder="0.00"></div><div><label>Monto (Q)</label><input id="gas-monto" type="number" step="0.01" value="${g?(Number(g.monto)||''):''}" placeholder="0.00"></div></div>
-     <div class="row"><div><label>Nota</label><input id="gas-nota" value="${g?escHtml(g.nota||''):''}"></div><div></div></div>
+     <div class="row"><div><label>Nota</label><input id="gas-nota" value="${g?escHtml(g.nota||''):''}"></div><div>${(typeof haymultiempresa==='function'&&haymultiempresa())?`<label>Empresa <span style="font-weight:400;color:var(--muted-2)">(quién la pagó)</span></label><select id="gas-emp">${(empresas||[]).filter(e=>e.activo).map(e=>`<option value="${e.codigo}"${String((g&&g.empresa)||empresaParaNuevo())===e.codigo?' selected':''}>${escHtml(e.nombre)}</option>`).join('')}</select>`:''}</div></div>
      ${g?`<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_gasBorrar(${g.id})">Eliminar carga</button></div>`:''}
      <div class="note n-danger" id="gas-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     async ()=>{
       const err=m=>{$('#gas-err').style.display='flex';$('#gas-err').querySelector('span').textContent=m;};
-      const pilotoId=$('#gas-pil').value?Number($('#gas-pil').value):null;
+      const _pv=$('#gas-pil').value;
+      const pilotoId=(_pv&&_pv!=='__nuevo__')?Number(_pv):null;
       const vehiculo=$('#gas-veh').value.trim();
       if(!pilotoId&&!vehiculo){err('Elegí el piloto o escribí el vehículo');return;}
       const monto=Number($('#gas-monto').value)||0;
@@ -820,6 +845,8 @@ function openGasolina(id){
       g0.galones=galones; g0.monto=monto;
       g0.kilometraje=$('#gas-km').value!==''?Number($('#gas-km').value):null;
       g0.nota=$('#gas-nota').value.trim();
+      const _empEl=document.getElementById('gas-emp');
+      g0.empresa=_empEl?_empEl.value:(g0.empresa||(typeof empresaParaNuevo==='function'?empresaParaNuevo():'SEFE'));
       if(!g0.creadoPor&&typeof currentUser!=='undefined')g0.creadoPor=currentUser;
       const ok=await (typeof guardarGasolina==='function'?guardarGasolina(g0):Promise.resolve(false));
       if(!ok){err('No se pudo guardar. ¿Ya corriste el SQL de Gasolina?');if(!g)g0._nuevo=true;return;}
