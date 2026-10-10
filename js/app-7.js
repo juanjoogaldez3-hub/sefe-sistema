@@ -1173,6 +1173,7 @@ function _iaDispatch(data){
     case 'ventas_producto': return _ventasIARender(data);
     case 'ventas_total': return _iaVentasTotal(data);
     case 'ventas_cliente': return _iaVentasCliente(data);
+    case 'frecuencia_cliente': return _iaFrecuencia(data);
     case 'ventas_top': return _iaVentasTop(data);
     case 'saldo_cliente': return _iaSaldoCliente(data);
     case 'deudores': return _iaDeudores(data);
@@ -1215,6 +1216,27 @@ function _iaVentasCliente(data){
       h+=`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-weight:600">${_invEsc(cli.nombre||cli.razonSocial||'')}<span style="font-size:11px;color:var(--muted)"> · ${docs.length} fact.</span></span><span style="font-weight:800">${money(total)}</span></div>`;
     });
   }
+  _iaTxt(h+_iaNota(data));
+}
+function _iaFrecuencia(data){
+  const cls=_iaClientes(data);
+  if(!cls.length)return _iaTxt(_iaMuted('No identifiqué el cliente'+(data.clienteTexto?` "${data.clienteTexto}"`:'')+'.')+_iaNota(data));
+  const base=_iaVentasDocs(data.desde,data.hasta);
+  const per=_iaPer(data);
+  let h=`<div style="font-size:13.5px;color:var(--muted);margin-bottom:6px">Frecuencia de compra${per?` · ${per}`:''}</div>`;
+  cls.forEach(cli=>{
+    const fechas=base.filter(d=>d.clienteId===cli.id).map(d=>String(d.creada).slice(0,10)).sort();
+    const n=fechas.length;
+    let detalle;
+    if(n===0)detalle='sin compras registradas';
+    else if(n===1)detalle=`1 compra (el ${fechas[0]})`;
+    else{
+      const d0=new Date(fechas[0]+'T12:00:00'), d1=new Date(fechas[n-1]+'T12:00:00');
+      const dias=Math.max(1,Math.round((d1-d0)/86400000/(n-1)));
+      detalle=`pide cada <b>~${dias} día${dias!==1?'s':''}</b> · ${n} compras · última el ${fechas[n-1]}`;
+    }
+    h+=`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><div style="font-weight:600">${_invEsc(cli.nombre||cli.razonSocial||'')}</div><div style="font-size:12.5px;color:var(--muted)">${detalle}</div></div>`;
+  });
   _iaTxt(h+_iaNota(data));
 }
 function _iaVentasTop(data){
