@@ -1182,6 +1182,11 @@ function _iaDispatch(data){
   }
 }
 window._iaDispatch=_iaDispatch;
+// Resuelve el/los cliente(s) de la respuesta: uno claro, o varios parecidos.
+function _iaClientes(data){
+  const ids=(data.clienteId!=null)?[data.clienteId]:(Array.isArray(data.clienteOpciones)?data.clienteOpciones:[]);
+  return ids.map(id=>clientes.find(c=>c.id===id)).filter(Boolean);
+}
 
 function _iaVentasTotal(data){
   const docs=_iaVentasDocs(data.desde,data.hasta);
@@ -1193,15 +1198,24 @@ function _iaVentasTotal(data){
   _iaTxt(h);
 }
 function _iaVentasCliente(data){
-  const cli=(data.clienteId!=null)?clientes.find(c=>c.id===data.clienteId):null;
-  if(!cli)return _iaTxt(_iaMuted('No identifiqué el cliente'+(data.clienteTexto?` "${data.clienteTexto}"`:'')+'. Probá con el nombre como está en Clientes.')+_iaNota(data));
-  const docs=_iaVentasDocs(data.desde,data.hasta).filter(d=>d.clienteId===cli.id);
-  const total=docs.reduce((s,d)=>s+((d.totales&&d.totales.total)||0),0);
+  const cls=_iaClientes(data);
+  if(!cls.length)return _iaTxt(_iaMuted('No identifiqué el cliente'+(data.clienteTexto?` "${data.clienteTexto}"`:'')+'. Probá con el nombre como está en Clientes.')+_iaNota(data));
   const per=_iaPer(data);
-  let h=`<div style="font-size:13.5px;color:var(--muted);margin-bottom:4px">Ventas a <b>${_invEsc(cli.nombre||cli.razonSocial||'')}</b>${per?` · ${per}`:''}</div>`;
-  h+=`<div style="font-size:22px;font-weight:800">${money(total)}</div>`;
-  h+=`<div style="font-size:12px;color:var(--muted);margin-top:4px">${docs.length} factura${docs.length!==1?'s':''}</div>`+_iaNota(data);
-  _iaTxt(h);
+  const docsAll=_iaVentasDocs(data.desde,data.hasta);
+  let h=`<div style="font-size:13.5px;color:var(--muted);margin-bottom:6px">Ventas${per?` · ${per}`:''}${cls.length>1?` · ${cls.length} clientes parecidos`:''}</div>`;
+  if(cls.length===1){
+    const docs=docsAll.filter(d=>d.clienteId===cls[0].id);
+    const total=docs.reduce((s,d)=>s+((d.totales&&d.totales.total)||0),0);
+    h+=`<div style="font-weight:600;margin-bottom:2px">${_invEsc(cls[0].nombre||cls[0].razonSocial||'')}</div>`;
+    h+=`<div style="font-size:22px;font-weight:800">${money(total)}</div><div style="font-size:12px;color:var(--muted)">${docs.length} factura${docs.length!==1?'s':''}</div>`;
+  }else{
+    cls.forEach(cli=>{
+      const docs=docsAll.filter(d=>d.clienteId===cli.id);
+      const total=docs.reduce((s,d)=>s+((d.totales&&d.totales.total)||0),0);
+      h+=`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-weight:600">${_invEsc(cli.nombre||cli.razonSocial||'')}<span style="font-size:11px;color:var(--muted)"> · ${docs.length} fact.</span></span><span style="font-weight:800">${money(total)}</span></div>`;
+    });
+  }
+  _iaTxt(h+_iaNota(data));
 }
 function _iaVentasTop(data){
   const docs=_iaVentasDocs(data.desde,data.hasta);
@@ -1224,12 +1238,16 @@ function _iaVentasTop(data){
   _iaTxt(h);
 }
 function _iaSaldoCliente(data){
-  const cli=(data.clienteId!=null)?clientes.find(c=>c.id===data.clienteId):null;
-  if(!cli)return _iaTxt(_iaMuted('No identifiqué el cliente'+(data.clienteTexto?` "${data.clienteTexto}"`:'')+'.')+_iaNota(data));
-  const saldo=(typeof saldoCliente==='function')?saldoCliente(cli):0;
-  let h=`<div style="font-size:13.5px;color:var(--muted);margin-bottom:4px">Saldo de <b>${_invEsc(cli.nombre||cli.razonSocial||'')}</b></div>`;
-  if(saldo>0.01)h+=`<div style="font-size:22px;font-weight:800;color:#b45309">${money(saldo)}</div><div style="font-size:12px;color:var(--muted)">pendiente de cobro</div>`;
-  else h+=`<div style="font-size:16px;font-weight:700;color:#15803d">Al día</div><div style="font-size:12px;color:var(--muted)">no tiene saldo pendiente</div>`;
+  const cls=_iaClientes(data);
+  if(!cls.length)return _iaTxt(_iaMuted('No identifiqué el cliente'+(data.clienteTexto?` "${data.clienteTexto}"`:'')+'.')+_iaNota(data));
+  let h='';
+  if(cls.length>1)h+=`<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Hay ${cls.length} clientes parecidos:</div>`;
+  cls.forEach(cli=>{
+    const saldo=(typeof saldoCliente==='function')?saldoCliente(cli):0;
+    const col=saldo>0.01?'#b45309':'#15803d';
+    const txt=saldo>0.01?money(saldo):'Al día';
+    h+=`<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)"><span style="font-weight:600">${_invEsc(cli.nombre||cli.razonSocial||'')}</span><span style="font-weight:800;color:${col}">${txt}</span></div>`;
+  });
   _iaTxt(h+_iaNota(data));
 }
 function _iaDeudores(data){
@@ -1261,13 +1279,17 @@ function _iaPrecio(data){
   _iaTxt(h);
 }
 function _iaClienteInfo(data){
-  const cli=(data.clienteId!=null)?clientes.find(c=>c.id===data.clienteId):null;
-  if(!cli)return _iaTxt(_iaMuted('No identifiqué el cliente'+(data.clienteTexto?` "${data.clienteTexto}"`:'')+'.')+_iaNota(data));
+  const cls=_iaClientes(data);
+  if(!cls.length)return _iaTxt(_iaMuted('No identifiqué el cliente'+(data.clienteTexto?` "${data.clienteTexto}"`:'')+'.')+_iaNota(data));
   const fila=(lbl,val)=>val?`<div style="display:flex;gap:8px;margin:2px 0"><span style="color:var(--muted);min-width:96px">${lbl}</span><span style="font-weight:600">${_invEsc(val)}</span></div>`:'';
-  let h=`<div style="font-size:14px;font-weight:700;margin-bottom:6px">${_invEsc(cli.nombre||cli.razonSocial||'')}</div>`;
-  h+=fila('NIT',cli.nit)+fila('Razón social',cli.razonSocial)+fila('Dirección',cli.direccion)+fila('Correo',cli.email);
-  const saldo=(typeof saldoCliente==='function')?saldoCliente(cli):0;
-  if(saldo>0.01)h+=fila('Saldo',money(saldo));
+  let h='';
+  cls.forEach((cli,idx)=>{
+    if(idx>0)h+='<hr style="border:none;border-top:1px solid var(--line);margin:10px 0">';
+    h+=`<div style="font-size:14px;font-weight:700;margin-bottom:6px">${_invEsc(cli.nombre||cli.razonSocial||'')}</div>`;
+    h+=fila('NIT',cli.nit)+fila('Razón social',cli.razonSocial)+fila('Dirección',cli.direccion)+fila('Correo',cli.email);
+    const saldo=(typeof saldoCliente==='function')?saldoCliente(cli):0;
+    if(saldo>0.01)h+=fila('Saldo',money(saldo));
+  });
   _iaTxt(h+_iaNota(data));
 }
 
