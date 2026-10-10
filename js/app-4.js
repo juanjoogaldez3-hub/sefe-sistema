@@ -55,7 +55,7 @@ function renderRecordatorios(){
       <td style="font-size:12px">${_escRec(r.asignadoA||'—')}</td>
       <td style="color:${vencido?'var(--danger)':(esHoy?'#9A6B07':'var(--muted)')};font-weight:${vencido||esHoy?'700':'400'}">${r.fechaVencimiento?fdate(r.fechaVencimiento)+(vencido?' · vencido':(esHoy?' · hoy':'')):'—'}</td>
       <td>${prioBadge}</td>
-      <td><div class="acts">${r.tipo==='cliente'&&r.refId?`<button class="btn btn-ghost btn-sm" onclick="openSegVenta(${r.refId},${r.id})" title="Anotar qué dijo el cliente">📝 Registrar</button>`:''}<button class="btn btn-ghost btn-sm" onclick="openRecordatorio(${r.id})">Editar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarRecordatorioUI(${r.id})">✕</button></div></td>
+      <td><div class="acts">${r.tipo==='cliente'&&r.refId?`<button class="btn btn-ghost btn-sm" onclick="openSegVenta(${r.refId},${r.id})" title="Anotar qué dijo el cliente">📝 Registrar</button>`:''}${r.fechaVencimiento&&!r.hecho?`<button class="btn btn-ghost btn-sm" onclick="recAGoogleCalendar(${r.id})" title="Agregar a Google Calendar">📅</button>`:''}<button class="btn btn-ghost btn-sm" onclick="openRecordatorio(${r.id})">Editar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarRecordatorioUI(${r.id})">✕</button></div></td>
     </tr>`;
   }).join(''):`<tr><td colspan="7" class="empty">Sin recordatorios ${recFiltro==='hechos'?'hechos':'en esta vista'}</td></tr>`;
 }

@@ -1179,6 +1179,7 @@ function _iaDispatch(data){
     case 'deudores': return _iaDeudores(data);
     case 'precio': return _iaPrecio(data);
     case 'cliente_info': return _iaClienteInfo(data);
+    case 'agendar': return _iaAgendar(data);
     default: return _iaTxt(_iaMuted(data.respuesta||data.nota||'Todavía no sé responder eso. Probá por inventario, ventas, saldos o precios.'));
   }
 }
@@ -1188,6 +1189,57 @@ function _iaClientes(data){
   const ids=(data.clienteId!=null)?[data.clienteId]:(Array.isArray(data.clienteOpciones)?data.clienteOpciones:[]);
   return ids.map(id=>clientes.find(c=>c.id===id)).filter(Boolean);
 }
+
+// ===== Google Calendar (Nivel 1): arma un link para guardar el evento =====
+// No usa Google Cloud ni credenciales: abre Calendar ya rellenado.
+function _gcalLink(o){
+  const pad=n=>String(n).padStart(2,'0');
+  const fecha=String(o.fecha||'').slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha))return '';
+  let dates;
+  if(o.hora && /^\d{1,2}:\d{2}$/.test(o.hora)){
+    const [Y,M,D]=fecha.split('-').map(Number); const [h,mi]=o.hora.split(':').map(Number);
+    const ini=new Date(Y,M-1,D,h,mi);
+    const fin=new Date(ini.getTime()+(o.duracionMin||60)*60000);
+    const f=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+    dates=f(ini)+'/'+f(fin);
+  }else{
+    const s=fecha.replace(/-/g,'');
+    const [Y,M,D]=fecha.split('-').map(Number); const nd=new Date(Y,M-1,D); nd.setDate(nd.getDate()+1);
+    dates=s+'/'+`${nd.getFullYear()}${pad(nd.getMonth()+1)}${pad(nd.getDate())}`;
+  }
+  const p=new URLSearchParams();
+  p.set('action','TEMPLATE'); p.set('text',o.titulo||'Recordatorio'); p.set('dates',dates);
+  if(o.detalles)p.set('details',o.detalles);
+  if(o.ubicacion)p.set('location',o.ubicacion);
+  p.set('ctz','America/Guatemala');
+  return 'https://calendar.google.com/calendar/render?'+p.toString();
+}
+// Desde el asistente: "agendá visita a Monoloco el martes 3pm"
+function _iaAgendar(data){
+  if(!data.fecha)return _iaTxt(_iaMuted('No entendí la fecha. Probá: "agendá visita a Monoloco el martes a las 3".')+_iaNota(data));
+  const cls=_iaClientes(data);
+  const cli=cls[0]||null;
+  let titulo=data.titulo||'';
+  if(!titulo)titulo=cli?('Visita a '+(cli.nombre||cli.razonSocial||'')):'Recordatorio';
+  const ubic=cli?(cli.direccion||''):'';
+  const link=_gcalLink({titulo,fecha:data.fecha,hora:data.hora,ubicacion:ubic,detalles:'Agendado desde SEFE'});
+  if(!link)return _iaTxt(_iaMuted('No pude armar la fecha del evento.')+_iaNota(data));
+  const cuando=data.fecha+(data.hora?(' · '+data.hora):' · todo el día');
+  let h=`<div style="font-size:13.5px;margin-bottom:8px">📅 <b>${_invEsc(titulo)}</b><div style="color:var(--muted);font-size:12.5px">${_invEsc(cuando)}${ubic?(' · '+_invEsc(ubic)):''}</div></div>`;
+  h+=`<a href="${link}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="text-decoration:none">Agregar a Google Calendar</a>`;
+  if(cls.length>1)h+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">Había varios clientes parecidos; usé "${_invEsc(cli.nombre||cli.razonSocial||'')}".</div>`;
+  _iaTxt(h+_iaNota(data));
+}
+// Desde Recordatorios: botón que abre el evento en Google Calendar.
+function recAGoogleCalendar(id){
+  const r=(typeof recordatorios!=='undefined'?recordatorios:[]).find(x=>x.id===id);
+  if(!r){toast('No encontrado',null,true);return;}
+  const link=_gcalLink({titulo:r.titulo||'Recordatorio',fecha:r.fechaVencimiento,detalles:r.nota||'Recordatorio de SEFE'});
+  if(!link){toast('Sin fecha','Este recordatorio no tiene fecha para agendar',true);return;}
+  window.open(link,'_blank','noopener');
+}
+window.recAGoogleCalendar=recAGoogleCalendar;
 
 function _iaVentasTotal(data){
   const docs=_iaVentasDocs(data.desde,data.hasta);
