@@ -1059,6 +1059,9 @@ async function inventarioIA(){
   const prodList=productos
     .filter(p=>p.activo!==false && (!emp||!p.empresa||p.empresa===emp))
     .map(p=>({id:p.id,codigo:p.codigo||'',nombre:p.nombre||'',stock:existenciaTotal(p),umbral:_umbralDe(p)}));
+  const cliList=((typeof clientes!=='undefined'&&clientes)||[])
+    .filter(c=>(!emp||!c.empresa||c.empresa===emp))
+    .map(c=>({id:c.id,nombre:c.nombre||c.razonSocial||''}));
   if(btn){btn.disabled=true;btn.textContent='Buscando…';}
   setResp('<span style="font-size:13px;color:var(--muted)">Pensando…</span>');
   try{
@@ -1067,17 +1070,12 @@ async function inventarioIA(){
     if(!token){setResp('<span style="font-size:13px;color:var(--muted)">No hay sesión activa. Volvé a iniciar sesión.</span>');return;}
     const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/inventario-ia',{
       method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
-      body:JSON.stringify({pregunta,productos:prodList,hoy:(typeof fechaHoyGT==='function'?fechaHoyGT():new Date().toISOString().slice(0,10))})
+      body:JSON.stringify({pregunta,productos:prodList,clientes:cliList,hoy:(typeof fechaHoyGT==='function'?fechaHoyGT():new Date().toISOString().slice(0,10))})
     });
     const data=await r.json().catch(()=>({}));
     if(!r.ok||!data.ok){setResp('<span style="font-size:13px;color:var(--muted)">'+_invEsc(data.error||'No se pudo consultar.')+'</span>');return;}
-    if(data.tipo==='ventas'){
-      if(!_iaPuedeVentas()){setResp('<span style="font-size:13px;color:var(--muted)">Tu rol no tiene acceso a las ventas.</span>');return;}
-      _ventasIARender(data);
-    }else{
-      if(!_iaPuedeInventario()){setResp('<span style="font-size:13px;color:var(--muted)">Tu rol no tiene acceso al inventario.</span>');return;}
-      _invIARender(data);
-    }
+    if(!_iaDisponible()){setResp('<span style="font-size:13px;color:var(--muted)">Tu rol no tiene acceso al asistente.</span>');return;}
+    _iaDispatch(data);
   }catch(e){ setResp('<span style="font-size:13px;color:var(--muted)">Error de conexión con el backend: '+_invEsc(e.message||e)+'</span>'); }
   finally{ if(btn){btn.disabled=false;btn.textContent='Preguntar';} }
 }
@@ -1156,6 +1154,122 @@ function _ventasIARender(data){
   cont.innerHTML=html;
 }
 window._ventasIARender=_ventasIARender;
+
+// ===== Despachador: según la intención, SEFE calcula el número real =====
+function _iaTxt(h){const c=document.getElementById('ia-resp'); if(c)c.innerHTML=h||'';}
+function _iaMuted(t){return `<span style="font-size:13px;color:var(--muted)">${_invEsc(t)}</span>`;}
+function _iaNota(d){return (d&&d.nota)?`<div style="font-size:12px;color:var(--muted);margin-top:6px">${_invEsc(d.nota)}</div>`:'';}
+function _iaPer(d){return d.periodoTexto?_invEsc(d.periodoTexto):[d.desde,d.hasta].filter(Boolean).join(' a ');}
+// Mismas ventas que el reporte "Ventas por producto": facturas certificadas/facturadas, sin notas de crédito.
+function _iaVentasDocs(desde,hasta){
+  const base=(typeof deEmpresa==='function')?deEmpresa(documentos):documentos;
+  return (base||[])
+    .filter(d=>d&&['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&d.creada)
+    .filter(d=>{const f=String(d.creada).slice(0,10);return (!desde||f>=desde)&&(!hasta||f<=hasta);});
+}
+function _iaDispatch(data){
+  switch(data.intent){
+    case 'stock': case 'stock_bajo': return _invIARender(data);
+    case 'ventas_producto': return _ventasIARender(data);
+    case 'ventas_total': return _iaVentasTotal(data);
+    case 'ventas_cliente': return _iaVentasCliente(data);
+    case 'ventas_top': return _iaVentasTop(data);
+    case 'saldo_cliente': return _iaSaldoCliente(data);
+    case 'deudores': return _iaDeudores(data);
+    case 'precio': return _iaPrecio(data);
+    case 'cliente_info': return _iaClienteInfo(data);
+    default: return _iaTxt(_iaMuted(data.respuesta||data.nota||'Todavía no sé responder eso. Probá por inventario, ventas, saldos o precios.'));
+  }
+}
+window._iaDispatch=_iaDispatch;
+
+function _iaVentasTotal(data){
+  const docs=_iaVentasDocs(data.desde,data.hasta);
+  const total=docs.reduce((s,d)=>s+((d.totales&&d.totales.total)||0),0);
+  const per=_iaPer(data);
+  let h=`<div style="font-size:13.5px;color:var(--muted);margin-bottom:4px">Ventas totales${per?` · ${per}`:''}</div>`;
+  h+=`<div style="font-size:22px;font-weight:800">${money(total)}</div>`;
+  h+=`<div style="font-size:12px;color:var(--muted);margin-top:4px">${docs.length} factura${docs.length!==1?'s':''}</div>`+_iaNota(data);
+  _iaTxt(h);
+}
+function _iaVentasCliente(data){
+  const cli=(data.clienteId!=null)?clientes.find(c=>c.id===data.clienteId):null;
+  if(!cli)return _iaTxt(_iaMuted('No identifiqué el cliente'+(data.clienteTexto?` "${data.clienteTexto}"`:'')+'. Probá con el nombre como está en Clientes.')+_iaNota(data));
+  const docs=_iaVentasDocs(data.desde,data.hasta).filter(d=>d.clienteId===cli.id);
+  const total=docs.reduce((s,d)=>s+((d.totales&&d.totales.total)||0),0);
+  const per=_iaPer(data);
+  let h=`<div style="font-size:13.5px;color:var(--muted);margin-bottom:4px">Ventas a <b>${_invEsc(cli.nombre||cli.razonSocial||'')}</b>${per?` · ${per}`:''}</div>`;
+  h+=`<div style="font-size:22px;font-weight:800">${money(total)}</div>`;
+  h+=`<div style="font-size:12px;color:var(--muted);margin-top:4px">${docs.length} factura${docs.length!==1?'s':''}</div>`+_iaNota(data);
+  _iaTxt(h);
+}
+function _iaVentasTop(data){
+  const docs=_iaVentasDocs(data.desde,data.hasta);
+  const porP={};
+  docs.forEach(d=>(d.items||[]).forEach(it=>{
+    const k=(it.id!=null)?('id'+it.id):('cod'+(it.codigo||''));
+    if(!porP[k])porP[k]={codigo:it.codigo||'',nombre:it.nombre||'',q:0,v:0};
+    const c=Number(it.cantidad)||0;
+    porP[k].q+=c; porP[k].v+=c*(Number(it.precio)||0)-(Number(it.descuento)||0);
+  }));
+  let arr=Object.values(porP).sort((a,b)=>b.v-a.v);
+  const lim=(data.limite&&data.limite>0)?data.limite:10;
+  arr=arr.slice(0,lim);
+  const per=_iaPer(data);
+  if(!arr.length)return _iaTxt(_iaMuted('No hay ventas en ese período.')+_iaNota(data));
+  let h=`<div style="font-size:13.5px;color:var(--muted);margin-bottom:8px">Más vendidos${per?` · ${per}`:''}</div>`;
+  h+=`<div style="overflow:auto"><table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Producto</th><th style="text-align:right">Unidades</th><th style="text-align:right">Ingresos</th></tr></thead><tbody>`;
+  arr.forEach((p,i)=>{h+=`<tr><td style="color:var(--muted)">${i+1}</td><td style="font-weight:600">${_invEsc(p.nombre)}<div style="font-size:11px;color:var(--muted)">${_invEsc(p.codigo)}</div></td><td style="text-align:right;font-weight:600">${p.q}</td><td style="text-align:right;font-weight:600">${money(p.v)}</td></tr>`;});
+  h+=`</tbody></table></div>`+_iaNota(data);
+  _iaTxt(h);
+}
+function _iaSaldoCliente(data){
+  const cli=(data.clienteId!=null)?clientes.find(c=>c.id===data.clienteId):null;
+  if(!cli)return _iaTxt(_iaMuted('No identifiqué el cliente'+(data.clienteTexto?` "${data.clienteTexto}"`:'')+'.')+_iaNota(data));
+  const saldo=(typeof saldoCliente==='function')?saldoCliente(cli):0;
+  let h=`<div style="font-size:13.5px;color:var(--muted);margin-bottom:4px">Saldo de <b>${_invEsc(cli.nombre||cli.razonSocial||'')}</b></div>`;
+  if(saldo>0.01)h+=`<div style="font-size:22px;font-weight:800;color:#b45309">${money(saldo)}</div><div style="font-size:12px;color:var(--muted)">pendiente de cobro</div>`;
+  else h+=`<div style="font-size:16px;font-weight:700;color:#15803d">Al día</div><div style="font-size:12px;color:var(--muted)">no tiene saldo pendiente</div>`;
+  _iaTxt(h+_iaNota(data));
+}
+function _iaDeudores(data){
+  const base=(typeof deEmpresa==='function')?deEmpresa(clientes):clientes;
+  const arr=(base||[]).map(c=>({c,saldo:(typeof saldoCliente==='function')?saldoCliente(c):0}))
+    .filter(x=>x.saldo>0.01).sort((a,b)=>b.saldo-a.saldo);
+  const lim=(data.limite&&data.limite>0)?data.limite:10;
+  const top=arr.slice(0,lim);
+  if(!top.length)return _iaTxt(_iaMuted('Ningún cliente tiene saldo pendiente. 🎉')+_iaNota(data));
+  const totalDeuda=arr.reduce((s,x)=>s+x.saldo,0);
+  let h=`<div style="font-size:13.5px;color:var(--muted);margin-bottom:8px">Clientes que más deben · total por cobrar <b>${money(totalDeuda)}</b></div>`;
+  h+=`<div style="overflow:auto"><table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Cliente</th><th style="text-align:right">Debe</th></tr></thead><tbody>`;
+  top.forEach(x=>{h+=`<tr><td style="font-weight:600">${_invEsc(x.c.nombre||x.c.razonSocial||'')}</td><td style="text-align:right;font-weight:700;color:#b45309">${money(x.saldo)}</td></tr>`;});
+  h+=`</tbody></table></div>`+_iaNota(data);
+  _iaTxt(h);
+}
+function _iaPrecio(data){
+  const cli=(data.clienteId!=null)?clientes.find(c=>c.id===data.clienteId):null;
+  const prods=(data.productoIds||[]).map(id=>productos.find(p=>p.id===id)).filter(Boolean);
+  if(!prods.length)return _iaTxt(_iaMuted('No identifiqué el producto.')+_iaNota(data));
+  let h=`<div style="font-size:13.5px;color:var(--muted);margin-bottom:8px">Precio${cli?` para <b>${_invEsc(cli.nombre||cli.razonSocial||'')}</b>`:''}</div>`;
+  h+=`<div style="overflow:auto"><table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Código</th><th style="text-align:left">Producto</th><th style="text-align:right">Precio</th></tr></thead><tbody>`;
+  prods.forEach(p=>{
+    let precio=Number(p.precio)||0;
+    if(cli&&typeof precioCliente==='function'){try{const pc=precioCliente(cli,p);if(pc!=null)precio=Number(pc)||0;}catch(e){}}
+    h+=`<tr><td style="color:var(--muted)">${_invEsc(p.codigo||'')}</td><td style="font-weight:600">${_invEsc(p.nombre||'')}</td><td style="text-align:right;font-weight:700">${money(precio)}</td></tr>`;
+  });
+  h+=`</tbody></table></div>`+_iaNota(data);
+  _iaTxt(h);
+}
+function _iaClienteInfo(data){
+  const cli=(data.clienteId!=null)?clientes.find(c=>c.id===data.clienteId):null;
+  if(!cli)return _iaTxt(_iaMuted('No identifiqué el cliente'+(data.clienteTexto?` "${data.clienteTexto}"`:'')+'.')+_iaNota(data));
+  const fila=(lbl,val)=>val?`<div style="display:flex;gap:8px;margin:2px 0"><span style="color:var(--muted);min-width:96px">${lbl}</span><span style="font-weight:600">${_invEsc(val)}</span></div>`:'';
+  let h=`<div style="font-size:14px;font-weight:700;margin-bottom:6px">${_invEsc(cli.nombre||cli.razonSocial||'')}</div>`;
+  h+=fila('NIT',cli.nit)+fila('Razón social',cli.razonSocial)+fila('Dirección',cli.direccion)+fila('Correo',cli.email);
+  const saldo=(typeof saldoCliente==='function')?saldoCliente(cli):0;
+  if(saldo>0.01)h+=fila('Saldo',money(saldo));
+  _iaTxt(h+_iaNota(data));
+}
 
 // Botón flotante del asistente (logo de Claude, en todas las pestañas).
 function toggleIA(){
