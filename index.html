@@ -485,7 +485,19 @@
           <div class="kpis stagger" id="cot-kpis"></div>
           <div class="panel">
             <div class="panel-head"><h3>Cotizaciones</h3>
-              <button class="btn btn-primary btn-sm" onclick="nuevaCotizacion()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva cotización</button>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm" onclick="cotIAToggle()" title="Armá una cotización escribiéndola en lenguaje normal">✨ Armar con IA</button>
+                <button class="btn btn-primary btn-sm" onclick="nuevaCotizacion()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva cotización</button>
+              </div>
+            </div>
+            <div id="cot-ia-box" style="display:none;padding:12px 16px;border-top:1px solid var(--line);background:#f8fafc">
+              <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">Escribí el pedido en lenguaje normal (ej.: <i>"cotizale a Ferretería López 10 jumbo roll 2 hojas y 5 toalla universal blanca"</i>). La IA arma el <b>borrador</b> y vos lo revisás antes de guardar.</label>
+              <textarea id="cot-ia-texto" rows="2" style="width:100%;resize:vertical" placeholder="Cotizale a … 10 … y 5 …" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter')cotizarIA()"></textarea>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+                <button class="btn btn-primary btn-sm" id="cot-ia-btn" onclick="cotizarIA()">Armar borrador</button>
+                <button class="btn btn-ghost btn-sm" onclick="cotIAToggle()">Cerrar</button>
+                <span id="cot-ia-estado" style="font-size:13px;color:var(--muted)"></span>
+              </div>
             </div>
             <div id="cot-tabs" style="display:flex;gap:6px;padding:10px 16px 0;flex-wrap:wrap">
               <button class="ct-tab on" data-f="activas" onclick="setCotFiltro('activas')">Activas</button>

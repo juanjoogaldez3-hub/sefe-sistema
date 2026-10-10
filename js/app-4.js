@@ -407,6 +407,104 @@ function _cotDescartarBorrador(){
   });
 }
 window._cotDescartarBorrador=_cotDescartarBorrador;
+
+// ===== Asistente de cotización con IA (Paso 1: escrito) =====
+// Abre/cierra la cajita donde se escribe el pedido en lenguaje normal.
+function cotIAToggle(){
+  const box=document.getElementById('cot-ia-box'); if(!box)return;
+  const mostrar=(box.style.display==='none'||!box.style.display);
+  box.style.display=mostrar?'block':'none';
+  if(mostrar){const t=document.getElementById('cot-ia-texto');if(t)t.focus();}
+}
+window.cotIAToggle=cotIAToggle;
+
+// Manda el texto al backend, que usa la IA para emparejar con productos y
+// clientes REALES, y después pre-llena el borrador. No guarda nada solo.
+async function cotizarIA(){
+  const t=document.getElementById('cot-ia-texto');
+  const btn=document.getElementById('cot-ia-btn');
+  const est=document.getElementById('cot-ia-estado');
+  const setEst=m=>{if(est)est.textContent=m||'';};
+  const texto=((t&&t.value)||'').trim();
+  if(!texto){setEst('Escribí qué querés cotizar.');return;}
+  if(typeof FEL_BACKEND_URL==='undefined'||FEL_BACKEND_URL.includes('TU-BACKEND')){
+    toast('Backend no configurado','El asistente de IA necesita el backend',true);return;
+  }
+  // Catálogo e interlocutores que ve la IA: SOLO de la empresa activa.
+  const emp=(typeof empresaParaNuevo==='function')?empresaParaNuevo():null;
+  const prodList=productos
+    .filter(p=>p.activo!==false && (!emp||!p.empresa||p.empresa===emp))
+    .map(p=>({id:p.id,codigo:p.codigo||'',nombre:p.nombre||''}));
+  const cliList=clientes
+    .filter(c=>(!emp||!c.empresa||c.empresa===emp))
+    .map(c=>({id:c.id,nombre:c.nombre||c.razonSocial||''}));
+  if(btn){btn.disabled=true;btn.textContent='Armando…';}
+  setEst('Interpretando el pedido…');
+  try{
+    const {data:sess}=await sb.auth.getSession();
+    const token=sess&&sess.session&&sess.session.access_token;
+    if(!token){setEst('No hay sesión activa. Volvé a iniciar sesión.');return;}
+    const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/cotizar-ia',{
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({texto,productos:prodList,clientes:cliList})
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok||!data.ok){setEst(data.error||'No se pudo interpretar el pedido.');return;}
+    _cotIAAplicar(data);
+  }catch(e){ setEst('Error de conexión con el backend: '+(e.message||e)); }
+  finally{ if(btn){btn.disabled=false;btn.textContent='Armar borrador';} }
+}
+window.cotizarIA=cotizarIA;
+
+// Toma lo que devolvió la IA y pre-llena el editor de cotización, reusando
+// cotAddProducto (que ya aplica el precio por cliente).
+function _cotIAAplicar(data){
+  const lineas=Array.isArray(data.lineas)?data.lineas:[];
+  const dudas=Array.isArray(data.dudas)?data.dudas:[];
+  const est=document.getElementById('cot-ia-estado');
+  if(!lineas.length){
+    const detalle=dudas.length?' (hay productos para aclarar, ver abajo)':'';
+    if(est)est.textContent='No encontré productos claros'+detalle+'. Probá nombrarlos como en el catálogo.';
+  }
+  // Abrir cotización nueva (limpia carrito y cliente)
+  nuevaCotizacion();
+  // Cliente, si la IA lo identificó
+  if(data.clienteId!=null){
+    const cli=clientes.find(c=>c.id===data.clienteId);
+    if(cli){
+      cotClienteSel=cli;
+      setTimeout(()=>{const s=document.getElementById('cot-cli-search');if(s)s.value=`${cli.nombre} · ${cli.nit||''}`.trim();},0);
+    }
+  }else if(data.clienteTexto){
+    setTimeout(()=>{const s=document.getElementById('cot-cli-search');if(s)s.value=data.clienteTexto;},0);
+  }
+  // Líneas
+  let agregados=0, noEncontrados=[];
+  lineas.forEach(l=>{
+    const p=productos.find(x=>x.id===l.productoId);
+    if(!p){noEncontrados.push(l.textoOriginal||('#'+l.productoId));return;}
+    cotAddProducto(p.id);
+    const it=cotCart.find(x=>x.id===p.id);
+    if(it){it.cantidad=Math.max(1,Math.round(Number(l.cantidad)||1));}
+    agregados++;
+  });
+  cotRenderCart();
+  // Avisos (dudas + no encontrados) van a Observaciones para que el vendedor los vea
+  const avisos=[];
+  if(dudas.length)avisos.push('⚠ Revisar / aclarar: '+dudas.map(d=>d.texto).join('; '));
+  if(noEncontrados.length)avisos.push('No encontrados en catálogo: '+noEncontrados.join(', '));
+  if(data.nota)avisos.push('Nota IA: '+data.nota);
+  if(avisos.length){
+    setTimeout(()=>{const o=document.getElementById('cot-obs');if(o)o.value=(o.value?o.value+'\n':'')+avisos.join('\n');},0);
+  }
+  cotIAToggle();
+  const tt=document.getElementById('cot-ia-texto'); if(tt)tt.value='';
+  if(agregados){
+    toast('✨ Borrador armado',`${agregados} producto${agregados!==1?'s':''} · revisá precios y cantidades antes de guardar`);
+  }
+}
+window._cotIAAplicar=_cotIAAplicar;
+
 function cotAddProducto(pid){
   const p=productos.find(x=>x.id===pid);if(!p)return;
   const ex=cotCart.find(it=>it.id===pid);
