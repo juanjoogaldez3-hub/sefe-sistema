@@ -1165,10 +1165,11 @@ function toggleIA(){
   if(abrir){const t=document.getElementById('ia-texto'); if(t)t.focus();}
 }
 window.toggleIA=toggleIA;
-// Permisos del asistente: respeta los mismos módulos que el resto del sistema.
-function _iaPuedeInventario(){return (typeof tienePermiso==='function')?tienePermiso('inventario'):true;}
-function _iaPuedeVentas(){return (typeof tienePermiso==='function')?tienePermiso('reportes'):true;}
-function _iaDisponible(){return _iaPuedeInventario()||_iaPuedeVentas();}
+// El asistente de IA es solo para estos roles (los que más lo usan).
+const _IA_ROLES=['admin','gerencia','ventas'];
+function _iaDisponible(){return _IA_ROLES.includes(currentRole);}
+function _iaPuedeInventario(){return _iaDisponible();}
+function _iaPuedeVentas(){return _iaDisponible();}
 // Muestra u oculta el botón flotante (se llama al entrar/salir de la app).
 // Solo aparece si el rol puede ver inventario o reportes.
 function mostrarBotonIA(v){
