@@ -1071,7 +1071,13 @@ async function inventarioIA(){
     });
     const data=await r.json().catch(()=>({}));
     if(!r.ok||!data.ok){setResp('<span style="font-size:13px;color:var(--muted)">'+_invEsc(data.error||'No se pudo consultar.')+'</span>');return;}
-    if(data.tipo==='ventas')_ventasIARender(data); else _invIARender(data);
+    if(data.tipo==='ventas'){
+      if(!_iaPuedeVentas()){setResp('<span style="font-size:13px;color:var(--muted)">Tu rol no tiene acceso a las ventas.</span>');return;}
+      _ventasIARender(data);
+    }else{
+      if(!_iaPuedeInventario()){setResp('<span style="font-size:13px;color:var(--muted)">Tu rol no tiene acceso al inventario.</span>');return;}
+      _invIARender(data);
+    }
   }catch(e){ setResp('<span style="font-size:13px;color:var(--muted)">Error de conexión con el backend: '+_invEsc(e.message||e)+'</span>'); }
   finally{ if(btn){btn.disabled=false;btn.textContent='Preguntar';} }
 }
@@ -1159,10 +1165,16 @@ function toggleIA(){
   if(abrir){const t=document.getElementById('ia-texto'); if(t)t.focus();}
 }
 window.toggleIA=toggleIA;
+// Permisos del asistente: respeta los mismos módulos que el resto del sistema.
+function _iaPuedeInventario(){return (typeof tienePermiso==='function')?tienePermiso('inventario'):true;}
+function _iaPuedeVentas(){return (typeof tienePermiso==='function')?tienePermiso('reportes'):true;}
+function _iaDisponible(){return _iaPuedeInventario()||_iaPuedeVentas();}
 // Muestra u oculta el botón flotante (se llama al entrar/salir de la app).
+// Solo aparece si el rol puede ver inventario o reportes.
 function mostrarBotonIA(v){
-  const b=document.getElementById('ia-fab'); if(b)b.style.display=(v===false)?'none':'flex';
-  if(v===false){const p=document.getElementById('ia-panel'); if(p)p.style.display='none';}
+  const mostrar=(v!==false)&&_iaDisponible();
+  const b=document.getElementById('ia-fab'); if(b)b.style.display=mostrar?'flex':'none';
+  if(!mostrar){const p=document.getElementById('ia-panel'); if(p)p.style.display='none';}
 }
 window.mostrarBotonIA=mostrarBotonIA;
 // Modal para gestionar las categorías y su umbral de stock bajo.
