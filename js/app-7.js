@@ -1046,9 +1046,9 @@ function _umbralDe(p){
   }catch(e){return 0;}
 }
 async function inventarioIA(){
-  const t=document.getElementById('inv-ia-texto');
-  const btn=document.getElementById('inv-ia-btn');
-  const cont=document.getElementById('inv-ia-resp');
+  const t=document.getElementById('ia-texto');
+  const btn=document.getElementById('ia-btn');
+  const cont=document.getElementById('ia-resp');
   const pregunta=((t&&t.value)||'').trim();
   const setResp=h=>{if(cont)cont.innerHTML=h||'';};
   if(!pregunta){setResp('<span style="font-size:13px;color:var(--muted)">Escribí una pregunta sobre el inventario.</span>');return;}
@@ -1078,7 +1078,7 @@ async function inventarioIA(){
 window.inventarioIA=inventarioIA;
 
 function _invIARender(data){
-  const cont=document.getElementById('inv-ia-resp'); if(!cont)return;
+  const cont=document.getElementById('ia-resp'); if(!cont)return;
   const ids=Array.isArray(data.productoIds)?data.productoIds:[];
   const prods=ids.map(id=>productos.find(p=>p.id===id)).filter(Boolean);
   let html='';
@@ -1110,7 +1110,7 @@ window._invIARender=_invIARender;
 // acá SEFE cuenta las ventas reales (misma fórmula que el reporte
 // "Ventas por producto": facturas certificadas/facturadas, sin notas de crédito).
 function _ventasIARender(data){
-  const cont=document.getElementById('inv-ia-resp'); if(!cont)return;
+  const cont=document.getElementById('ia-resp'); if(!cont)return;
   const ids=Array.isArray(data.productoIds)?data.productoIds:[];
   const desde=data.desde||null, hasta=data.hasta||null;
   if(!ids.length){
@@ -1150,6 +1150,21 @@ function _ventasIARender(data){
   cont.innerHTML=html;
 }
 window._ventasIARender=_ventasIARender;
+
+// Botón flotante del asistente (logo de Claude, en todas las pestañas).
+function toggleIA(){
+  const p=document.getElementById('ia-panel'); if(!p)return;
+  const abrir=(p.style.display==='none'||!p.style.display);
+  p.style.display=abrir?'block':'none';
+  if(abrir){const t=document.getElementById('ia-texto'); if(t)t.focus();}
+}
+window.toggleIA=toggleIA;
+// Muestra u oculta el botón flotante (se llama al entrar/salir de la app).
+function mostrarBotonIA(v){
+  const b=document.getElementById('ia-fab'); if(b)b.style.display=(v===false)?'none':'flex';
+  if(v===false){const p=document.getElementById('ia-panel'); if(p)p.style.display='none';}
+}
+window.mostrarBotonIA=mostrarBotonIA;
 // Modal para gestionar las categorías y su umbral de stock bajo.
 function openCategorias(){
   if(!canEditInventario()){toast('Sin permiso','Solo Admin, Gerencia y Bodega pueden configurar categorías',true);return;}

@@ -6,11 +6,11 @@
 <title>SEFE · Pedidos y Facturación</title>
 <!-- Versión de la app (se sube en cada publicación junto con los ?v=). Sirve para
      avisar a quien tenga la pantalla abierta que hay una versión nueva. -->
-<script>window.APP_VERSION='v=20260930b';</script>
+<script>window.APP_VERSION='v=20261010a';</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/estilos.css?v=20260930b">
+<link rel="stylesheet" href="css/estilos.css?v=20261010a">
 <!-- PWA: instalable como app (ícono propio, pantalla completa) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#173916">
@@ -33,11 +33,11 @@
 <!-- Librería de Supabase (conexión a la base de datos) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tus credenciales (editás este archivo una sola vez) -->
-<script src="config.js?v=20260930b"></script>
+<script src="config.js?v=20261010a"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
-<script src="db.js?v=20260930b"></script>
+<script src="db.js?v=20261010a"></script>
 <!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
-<script src="realtime.js?v=20260930b"></script>
+<script src="realtime.js?v=20261010a"></script>
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
@@ -587,14 +587,6 @@
       <section class="view" id="v-inventario">
         <div class="panel">
           <div class="panel-head"><h3>Inventario</h3><div id="inv-acciones"></div></div>
-          <div id="inv-ia-box" style="padding:12px 16px;border-bottom:1px solid var(--line);background:#f8fafc">
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <span style="font-size:13px;color:var(--muted);white-space:nowrap">✨ Preguntá:</span>
-              <input id="inv-ia-texto" type="text" style="flex:1;min-width:200px" placeholder="¿qué está por agotarse? · ¿cuántas ET8910 se vendieron el mes pasado?" onkeydown="if(event.key==='Enter')inventarioIA()">
-              <button class="btn btn-primary btn-sm" id="inv-ia-btn" onclick="inventarioIA()">Preguntar</button>
-            </div>
-            <div id="inv-ia-resp" style="margin-top:10px"></div>
-          </div>
           <table><thead><tr><th>Código</th><th>Producto</th><th>Marca</th><th>Proveedor(es)</th><th>Costo</th><th>Precio</th><th>Unidad</th><th>Existencias</th><th></th></tr></thead><tbody id="t-prod"></tbody></table>
         </div>
       </section>
@@ -868,7 +860,33 @@
   <div class="modal-body" id="recmod-body" style="max-height:68vh;overflow:auto"></div>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="cerrarRecmod()">Cerrar</button><button class="btn btn-primary" onclick="cerrarRecmod();go('recordatorios')">Ver todos</button></div>
 </div></div>
-<button id="bell-recmod" onclick="mostrarRecordatoriosPopup(true)" title="Recordatorios de hoy" style="display:none;position:fixed;bottom:22px;right:22px;z-index:80;align-items:center;gap:7px;background:var(--green);color:#fff;border:none;border-radius:999px;padding:11px 16px;font-weight:700;font-size:13px;box-shadow:var(--shadow-lg);cursor:pointer">🔔 <span id="bell-recmod-n"></span></button>
+<button id="bell-recmod" onclick="mostrarRecordatoriosPopup(true)" title="Recordatorios de hoy" style="display:none;position:fixed;bottom:84px;right:22px;z-index:80;align-items:center;gap:7px;background:var(--green);color:#fff;border:none;border-radius:999px;padding:11px 16px;font-weight:700;font-size:13px;box-shadow:var(--shadow-lg);cursor:pointer">🔔 <span id="bell-recmod-n"></span></button>
+
+<!-- Asistente IA (Claude) — botón flotante, en todas las pestañas -->
+<button id="ia-fab" onclick="toggleIA()" title="Asistente (Claude)" style="display:none;position:fixed;bottom:22px;right:22px;z-index:81;align-items:center;justify-content:center;width:52px;height:52px;background:#D97757;color:#fff;border:none;border-radius:50%;box-shadow:var(--shadow-lg);cursor:pointer">
+  <svg viewBox="0 0 24 24" width="26" height="26" stroke="#fff" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+    <g>
+      <line x1="12" y1="2.5" x2="12" y2="7.4"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(30 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(60 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(90 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(120 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(150 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(180 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(210 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(240 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(270 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(300 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(330 12 12)"/>
+    </g>
+  </svg>
+</button>
+<div id="ia-panel" style="display:none;position:fixed;bottom:88px;right:22px;z-index:81;width:min(380px,calc(100vw - 32px));background:var(--card,#fff);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);overflow:hidden">
+  <div style="display:flex;align-items:center;gap:9px;padding:12px 14px;background:#D97757;color:#fff">
+    <svg viewBox="0 0 24 24" width="18" height="18" stroke="#fff" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><g>
+      <line x1="12" y1="2.5" x2="12" y2="7.4"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(45 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(90 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(135 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(180 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(225 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(270 12 12)"/><line x1="12" y1="2.5" x2="12" y2="7.4" transform="rotate(315 12 12)"/>
+    </g></svg>
+    <b style="flex:1;font-size:14px">Asistente</b>
+    <button onclick="toggleIA()" title="Cerrar" style="background:none;border:none;color:#fff;font-size:22px;line-height:1;cursor:pointer;padding:0 2px">×</button>
+  </div>
+  <div style="padding:12px 14px">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Preguntá por <b>inventario</b> o <b>ventas</b>. Ej.: <i>"¿qué está por agotarse?"</i> · <i>"¿cuántas ET8910 se vendieron el mes pasado?"</i></div>
+    <div style="display:flex;gap:8px">
+      <input id="ia-texto" type="text" style="flex:1;min-width:0" placeholder="Escribí tu pregunta…" onkeydown="if(event.key==='Enter')inventarioIA()">
+      <button class="btn btn-primary btn-sm" id="ia-btn" onclick="inventarioIA()">Ir</button>
+    </div>
+    <div id="ia-resp" style="margin-top:10px;max-height:46vh;overflow:auto"></div>
+  </div>
+</div>
 
 <div class="doc-overlay" id="docov">
   <div class="doc-wrap">
@@ -886,18 +904,18 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app-1.js?v=20260930b"></script>
-<script src="js/app-2.js?v=20260930b"></script>
-<script src="js/app-3.js?v=20260930b"></script>
-<script src="js/app-4.js?v=20260930b"></script>
-<script src="js/app-5.js?v=20260930b"></script>
-<script src="js/app-6.js?v=20260930b"></script>
-<script src="js/app-7.js?v=20260930b"></script>
-<script src="js/app-8.js?v=20260930b"></script>
-<script src="js/app-9.js?v=20260930b"></script>
-<script src="js/app-10.js?v=20260930b"></script>
-<script src="js/app-11.js?v=20260930b"></script>
-<script src="js/app-12.js?v=20260930b"></script>
-<script src="js/app-13.js?v=20260930b"></script>
+<script src="js/app-1.js?v=20261010a"></script>
+<script src="js/app-2.js?v=20261010a"></script>
+<script src="js/app-3.js?v=20261010a"></script>
+<script src="js/app-4.js?v=20261010a"></script>
+<script src="js/app-5.js?v=20261010a"></script>
+<script src="js/app-6.js?v=20261010a"></script>
+<script src="js/app-7.js?v=20261010a"></script>
+<script src="js/app-8.js?v=20261010a"></script>
+<script src="js/app-9.js?v=20261010a"></script>
+<script src="js/app-10.js?v=20261010a"></script>
+<script src="js/app-11.js?v=20261010a"></script>
+<script src="js/app-12.js?v=20261010a"></script>
+<script src="js/app-13.js?v=20261010a"></script>
 </body>
 </html>

@@ -918,6 +918,7 @@ async function doLoginAuth(){
       }
     }
     $('#app-layout').style.display='flex';
+    if(typeof mostrarBotonIA==='function')mostrarBotonIA(true);
     aplicarPermisosUI();
     entrarVistaInicial();
     // Sincronización en vivo: a partir de acá los cambios de los demás
@@ -986,6 +987,7 @@ async function logoutAuth(){
   currentUser=null;currentRole=null;currentUserId=null;currentDashLayout={order:[],hidden:[]};
   const _b=document.getElementById('bell-recmod');if(_b)_b.style.display='none';
   const _o=document.getElementById('recmod');if(_o)_o.classList.remove('show');
+  if(typeof mostrarBotonIA==='function')mostrarBotonIA(false);
   $('#app-layout').style.display='none';$('#login-screen').style.display='flex';
   const e=$('#login-email'),p=$('#login-pass');if(e)e.value='';if(p)p.value='';
 }

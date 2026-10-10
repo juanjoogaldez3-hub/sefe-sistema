@@ -736,6 +736,7 @@ async function verificarSesion(){
         currentUserId=u.id!=null?u.id:null;
         currentDashLayout=(u.dashboardLayout&&typeof u.dashboardLayout==='object')?u.dashboardLayout:{order:[],hidden:[]};
         $('#login-screen').style.display='none';$('#app-layout').style.display='flex';
+        if(typeof mostrarBotonIA==='function')mostrarBotonIA(true);
         aplicarPermisosUI();
         entrarVistaInicial();
         // Sincronización en vivo también al restaurar sesión (F5 / volver a abrir).
