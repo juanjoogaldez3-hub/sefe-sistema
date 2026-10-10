@@ -1067,11 +1067,11 @@ async function inventarioIA(){
     if(!token){setResp('<span style="font-size:13px;color:var(--muted)">No hay sesión activa. Volvé a iniciar sesión.</span>');return;}
     const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/inventario-ia',{
       method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
-      body:JSON.stringify({pregunta,productos:prodList})
+      body:JSON.stringify({pregunta,productos:prodList,hoy:(typeof fechaHoyGT==='function'?fechaHoyGT():new Date().toISOString().slice(0,10))})
     });
     const data=await r.json().catch(()=>({}));
     if(!r.ok||!data.ok){setResp('<span style="font-size:13px;color:var(--muted)">'+_invEsc(data.error||'No se pudo consultar.')+'</span>');return;}
-    _invIARender(data);
+    if(data.tipo==='ventas')_ventasIARender(data); else _invIARender(data);
   }catch(e){ setResp('<span style="font-size:13px;color:var(--muted)">Error de conexión con el backend: '+_invEsc(e.message||e)+'</span>'); }
   finally{ if(btn){btn.disabled=false;btn.textContent='Preguntar';} }
 }
@@ -1105,6 +1105,51 @@ function _invIARender(data){
   cont.innerHTML=html;
 }
 window._invIARender=_invIARender;
+
+// Pregunta de VENTAS: la IA ya dio los productos y el rango de fechas;
+// acá SEFE cuenta las ventas reales (misma fórmula que el reporte
+// "Ventas por producto": facturas certificadas/facturadas, sin notas de crédito).
+function _ventasIARender(data){
+  const cont=document.getElementById('inv-ia-resp'); if(!cont)return;
+  const ids=Array.isArray(data.productoIds)?data.productoIds:[];
+  const desde=data.desde||null, hasta=data.hasta||null;
+  if(!ids.length){
+    let h='<span style="font-size:13px;color:var(--muted)">No encontré el producto de la pregunta.</span>';
+    if(data.nota)h+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">${_invEsc(data.nota)}</div>`;
+    cont.innerHTML=h; return;
+  }
+  const base=(typeof deEmpresa==='function')?deEmpresa(documentos):documentos;
+  const docs=base
+    .filter(d=>d&&['certificada','facturado'].includes(d.estado)&&d.tipoDoc!=='notaCredito'&&d.creada)
+    .filter(d=>{const f=String(d.creada).slice(0,10);return (!desde||f>=desde)&&(!hasta||f<=hasta);});
+  const filas=ids.map(id=>{
+    const p=productos.find(x=>x.id===id)||{};
+    let q=0,v=0;
+    docs.forEach(d=>(d.items||[]).forEach(it=>{
+      if(it.id===id||(p.codigo&&it.codigo===p.codigo)){
+        const c=Number(it.cantidad)||0;
+        q+=c; v+=c*(Number(it.precio)||0)-(Number(it.descuento)||0);
+      }
+    }));
+    return {codigo:p.codigo||'',nombre:p.nombre||('#'+id),q,v};
+  });
+  const totQ=filas.reduce((s,f)=>s+f.q,0), totV=filas.reduce((s,f)=>s+f.v,0);
+  const per=data.periodoTexto?_invEsc(data.periodoTexto):([desde,hasta].filter(Boolean).join(' a '));
+  let html=`<div style="font-size:13.5px;margin-bottom:8px">Ventas${per?` · <b>${per}</b>`:''}</div>`;
+  html+=`<div style="overflow:auto"><table style="width:100%;font-size:13px">
+    <thead><tr><th style="text-align:left">Código</th><th style="text-align:left">Producto</th><th style="text-align:right">Unidades</th><th style="text-align:right">Ingresos</th></tr></thead><tbody>`;
+  filas.forEach(f=>{
+    html+=`<tr><td style="color:var(--muted)">${_invEsc(f.codigo)}</td><td style="font-weight:600">${_invEsc(f.nombre)}</td><td style="text-align:right;font-weight:600">${f.q}</td><td style="text-align:right;font-weight:600">${money(f.v)}</td></tr>`;
+  });
+  if(filas.length>1){
+    html+=`<tr><td></td><td style="font-weight:700;text-align:right">Total</td><td style="text-align:right;font-weight:700">${totQ}</td><td style="text-align:right;font-weight:700">${money(totV)}</td></tr>`;
+  }
+  html+=`</tbody></table></div>`;
+  if(totQ===0)html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">No hay ventas registradas de eso en el período.</div>`;
+  if(data.nota)html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">${_invEsc(data.nota)}</div>`;
+  cont.innerHTML=html;
+}
+window._ventasIARender=_ventasIARender;
 // Modal para gestionar las categorías y su umbral de stock bajo.
 function openCategorias(){
   if(!canEditInventario()){toast('Sin permiso','Solo Admin, Gerencia y Bodega pueden configurar categorías',true);return;}
