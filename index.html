@@ -587,6 +587,14 @@
       <section class="view" id="v-inventario">
         <div class="panel">
           <div class="panel-head"><h3>Inventario</h3><div id="inv-acciones"></div></div>
+          <div id="inv-ia-box" style="padding:12px 16px;border-bottom:1px solid var(--line);background:#f8fafc">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span style="font-size:13px;color:var(--muted);white-space:nowrap">✨ Preguntá al inventario:</span>
+              <input id="inv-ia-texto" type="text" style="flex:1;min-width:200px" placeholder="¿qué hay de Versel? · ¿qué está por agotarse?" onkeydown="if(event.key==='Enter')inventarioIA()">
+              <button class="btn btn-primary btn-sm" id="inv-ia-btn" onclick="inventarioIA()">Preguntar</button>
+            </div>
+            <div id="inv-ia-resp" style="margin-top:10px"></div>
+          </div>
           <table><thead><tr><th>Código</th><th>Producto</th><th>Marca</th><th>Proveedor(es)</th><th>Costo</th><th>Precio</th><th>Unidad</th><th>Existencias</th><th></th></tr></thead><tbody id="t-prod"></tbody></table>
         </div>
       </section>

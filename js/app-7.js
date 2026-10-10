@@ -1034,6 +1034,77 @@ function existenciaCajas(p){
 }
 function fmtCajas(n){return (Math.round(n*100)/100).toLocaleString('es-GT',{maximumFractionDigits:2});}
 function medidaProducto(p){return (p&&(p.tipoEmpaque==='caja_unidad'||p.tipoEmpaque==='caja'))?'Caja':((p&&p.unidad)||'UNI');}
+
+// ===== Asistente de inventario con IA (solo lectura) =====
+function _invEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// Umbral de "stock bajo" de la categoría del producto (0 si no tiene).
+function _umbralDe(p){
+  try{
+    if(typeof categorias==='undefined'||!p)return 0;
+    const c=categorias.find(x=>x.nombre===p.categoria);
+    return c?(Number(c.umbralStock)||0):0;
+  }catch(e){return 0;}
+}
+async function inventarioIA(){
+  const t=document.getElementById('inv-ia-texto');
+  const btn=document.getElementById('inv-ia-btn');
+  const cont=document.getElementById('inv-ia-resp');
+  const pregunta=((t&&t.value)||'').trim();
+  const setResp=h=>{if(cont)cont.innerHTML=h||'';};
+  if(!pregunta){setResp('<span style="font-size:13px;color:var(--muted)">Escribí una pregunta sobre el inventario.</span>');return;}
+  if(typeof FEL_BACKEND_URL==='undefined'||FEL_BACKEND_URL.includes('TU-BACKEND')){
+    toast('Backend no configurado','El asistente de IA necesita el backend',true);return;
+  }
+  const emp=(typeof empresaParaNuevo==='function')?empresaParaNuevo():null;
+  const prodList=productos
+    .filter(p=>p.activo!==false && (!emp||!p.empresa||p.empresa===emp))
+    .map(p=>({id:p.id,codigo:p.codigo||'',nombre:p.nombre||'',stock:existenciaTotal(p),umbral:_umbralDe(p)}));
+  if(btn){btn.disabled=true;btn.textContent='Buscando…';}
+  setResp('<span style="font-size:13px;color:var(--muted)">Pensando…</span>');
+  try{
+    const {data:sess}=await sb.auth.getSession();
+    const token=sess&&sess.session&&sess.session.access_token;
+    if(!token){setResp('<span style="font-size:13px;color:var(--muted)">No hay sesión activa. Volvé a iniciar sesión.</span>');return;}
+    const r=await fetch(FEL_BACKEND_URL.replace(/\/$/,'')+'/api/inventario-ia',{
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({pregunta,productos:prodList})
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok||!data.ok){setResp('<span style="font-size:13px;color:var(--muted)">'+_invEsc(data.error||'No se pudo consultar.')+'</span>');return;}
+    _invIARender(data);
+  }catch(e){ setResp('<span style="font-size:13px;color:var(--muted)">Error de conexión con el backend: '+_invEsc(e.message||e)+'</span>'); }
+  finally{ if(btn){btn.disabled=false;btn.textContent='Preguntar';} }
+}
+window.inventarioIA=inventarioIA;
+
+function _invIARender(data){
+  const cont=document.getElementById('inv-ia-resp'); if(!cont)return;
+  const ids=Array.isArray(data.productoIds)?data.productoIds:[];
+  const prods=ids.map(id=>productos.find(p=>p.id===id)).filter(Boolean);
+  let html='';
+  if(data.respuesta)html+=`<div style="font-size:13.5px;margin-bottom:8px">${_invEsc(data.respuesta)}</div>`;
+  if(prods.length){
+    html+=`<div style="overflow:auto"><table style="width:100%;font-size:13px">
+      <thead><tr><th style="text-align:left">Código</th><th style="text-align:left">Producto</th><th style="text-align:right">Existencia</th><th></th></tr></thead><tbody>`;
+    prods.forEach(p=>{
+      const ex=existenciaTotal(p), umb=_umbralDe(p), desg=existenciaDesglose(p);
+      let badge='';
+      if(ex<=0)badge='<span style="color:#b91c1c;font-weight:600">Agotado</span>';
+      else if(umb>0&&ex<=umb)badge='<span style="color:#b45309;font-weight:600">Bajo</span>';
+      html+=`<tr>
+        <td style="color:var(--muted)">${_invEsc(p.codigo||'')}</td>
+        <td style="font-weight:600">${_invEsc(p.nombre||'')}</td>
+        <td style="text-align:right;font-weight:600">${ex}${desg?` <span style="color:var(--muted);font-weight:400">(${_invEsc(desg)})</span>`:''}</td>
+        <td>${badge}</td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  }else if(!data.respuesta){
+    html=`<span style="font-size:13px;color:var(--muted)">No encontré productos para eso. Probá con otra palabra o una marca.</span>`;
+  }
+  if(data.nota)html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">${_invEsc(data.nota)}</div>`;
+  cont.innerHTML=html;
+}
+window._invIARender=_invIARender;
 // Modal para gestionar las categorías y su umbral de stock bajo.
 function openCategorias(){
   if(!canEditInventario()){toast('Sin permiso','Solo Admin, Gerencia y Bodega pueden configurar categorías',true);return;}
