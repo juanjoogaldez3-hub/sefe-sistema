@@ -188,7 +188,12 @@ function enhanceTable(tbodyId,opts){
         if(stP){
           // Tabla paginada: ordenar el ARRAY completo y volver a renderizar
           stP.filas.sort((a,b)=>cmpFn(valDe(a),valDe(b)));
-          stP.mostradas=0;tb.innerHTML='';_pintarMasFilas(tbId);
+          // Si hay una búsqueda activa, respetarla (re-filtrar sobre el array ya
+          // ordenado) en vez de mostrar todas las filas otra vez.
+          const _tbWrap=table.previousElementSibling;
+          const _q=(_tbWrap&&_tbWrap.classList.contains('tbl-toolbar'))?(((_tbWrap.querySelector('.tbl-search')||{}).value)||'').trim():'';
+          if(_q){ applyTableFilter(table); }
+          else { stP.mostradas=0;tb.innerHTML='';_pintarMasFilas(tbId); }
         }else{
           // Tabla normal: ordenar el DOM, pero SÓLO las corridas de filas de
           // datos, dejando fijas las de estructura (encabezados de grupo,
