@@ -710,7 +710,7 @@ function cotizacionPDF(id){
     ${c.observaciones?`<div style="margin-top:12px;font-size:11.5px;color:#555"><b>Observaciones:</b> ${cotEsc(c.observaciones)}</div>`:''}
     <div style="margin-top:14px;font-size:10.5px;color:#888">Precios en quetzales, IVA incluido. Cotización válida por ${c.validezDias||15} días a partir de su emisión. Sujeta a existencias.</div>
   `;
-  _abrirPDF(_pdfShell({titulo:'COTIZACIÓN',subtitulo:c.clienteComercial||c.clienteNombre||'',orientacion:'portrait',body}));
+  _abrirPDF(_pdfShell({titulo:'COTIZACIÓN',subtitulo:c.clienteComercial||c.clienteNombre||'',archivo:'Cotizacion COT-'+padn(c.numero)+' '+(c.clienteComercial||c.clienteNombre||''),orientacion:'portrait',body}));
 }
 window.cotizacionPDF=cotizacionPDF;
 async function cotizacionExcel(id){

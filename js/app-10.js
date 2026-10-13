@@ -248,7 +248,21 @@ window.exportarExcel=exportarExcel;
 function _pdfTH(extra){return 'padding:8px 10px;background:#173916;color:#fff;font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;text-align:left;'+(extra||'');}
 function _pdfTD(extra){return 'padding:7px 10px;border-bottom:1px solid #E7EBDF;font-size:11.5px;'+(extra||'');}
 function _pdfSec(t){return '<div style="font-size:10.5px;font-weight:700;color:#173916;text-transform:uppercase;letter-spacing:.8px;margin:22px 0 8px;display:flex;align-items:center;gap:10px"><span>'+t+'</span><span style="flex:1;height:1px;background:#D6DCC9"></span></div>';}
+// Nombre sugerido para el PDF: el navegador usa document.title al imprimir.
+let _pdfNombreSugerido='';
+function _pdfNombreArchivo(o){
+  let base=o.archivo||((o.titulo||'Documento')+(o.subtitulo?(' - '+o.subtitulo):''));
+  base=String(base)
+    .replace(/<[^>]*>/g,'')              // por si el subtítulo trae HTML
+    .replace(/[\\/:*?"<>|]+/g,' ')       // caracteres inválidos en nombres
+    .replace(/[·•]+/g,'-')
+    .replace(/\s+/g,' ')
+    .trim()
+    .slice(0,120);
+  return base||'Documento';
+}
 function _pdfShell(o){
+  try{ _pdfNombreSugerido=_pdfNombreArchivo(o); }catch(e){ _pdfNombreSugerido=''; }
   const hoy=new Date();
   const fecha=fdate(hoy);
   const hora=hoy.toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'});
@@ -286,8 +300,11 @@ async function _abrirPDF(html){
   // Esperar a que el logo esté dibujado. Antes se imprimía en la misma
   // línea en que se armaba el HTML, así que el reporte salía sin logo.
   await esperarImagenes(div);
+  // El navegador usa document.title como nombre del PDF al "Guardar como PDF".
+  const _titOld=document.title;
+  if(_pdfNombreSugerido)document.title=_pdfNombreSugerido;
   window.print();
-  setTimeout(()=>{const e=document.getElementById('rep-print-area');if(e)e.remove();},1000);
+  setTimeout(()=>{const e=document.getElementById('rep-print-area');if(e)e.remove();document.title=_titOld;},1500);
 }
 function exportarPDF(){
   if(!repLastData.length){toast('Sin datos para exportar','Generá un reporte primero',true);return;}
