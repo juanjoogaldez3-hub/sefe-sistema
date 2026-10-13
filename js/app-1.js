@@ -299,28 +299,36 @@ const LAML_MARCA = Object.assign({}, _MARCA_DEFAULT, {
   nombreDoc:     'Soluciones Efectivas',
   monograma:     'SE',
   tagline:       'Piensa Verde, Vive Verde',
-  razonSocial:   'Soluciones Efectivas, S.A.',
-  membrete:      'Soluciones Efectivas, S.A.',
+  razonSocial:   'Soluciones Efectivas',
+  membrete:      'Soluciones Efectivas',
   prefijoArchivo:'SolucionesEfectivas',
   logo: (typeof window!=='undefined' && window.LAML_LOGO) ? window.LAML_LOGO : SEFE_MARCA.logo,
 });
 window.LAML_MARCA = LAML_MARCA;
 
-// Devuelve la marca de la EMPRESA ACTIVA. Para SEFE es la de siempre.
-// Para LAML usa el logo de Soluciones Efectivas y, encima, los datos
-// legales (nombre, razón social, NIT, membrete) de la tabla de empresas.
+// Marca de la EMPRESA ACTIVA.
+// - SEFE: la de siempre.
+// - LAML (Luis Menocal): marca COMERCIAL "Soluciones Efectivas" (logo,
+//   nombre, membrete). Los datos LEGALES de la factura (razón social y
+//   NIT) salen de la ficha de la empresa (Luis Alfonso Menocal Lezana).
+// - Otra empresa: su propia data con el logo de SEFE.
 function marcaActiva(){
   try{
     const e=(typeof empresaActiva!=='undefined' && empresaActiva!=='SEFE' && typeof empresaActivaObj==='function') ? empresaActivaObj() : null;
+    if(e && e.codigo==='LAML'){
+      return Object.assign({}, LAML_MARCA, {
+        razonSocial: e.razonSocial || LAML_MARCA.razonSocial,
+        nit:         e.nit || LAML_MARCA.nit,
+      });
+    }
     if(e){
-      const base=(e.codigo==='LAML') ? LAML_MARCA : SEFE_MARCA;
-      return Object.assign({}, base, {
-        nombre:      e.nombre      || base.nombre,
-        nombreDoc:   e.nombre      || base.nombreDoc,
-        nombreLargo: e.nombre      || base.nombreLargo,
-        razonSocial: e.razonSocial || base.razonSocial,
-        membrete:    e.membrete    || base.membrete || e.razonSocial || base.razonSocial,
-        nit:         e.nit         || base.nit,
+      return Object.assign({}, SEFE_MARCA, {
+        nombre:      e.nombre      || SEFE_MARCA.nombre,
+        nombreDoc:   e.nombre      || SEFE_MARCA.nombreDoc,
+        nombreLargo: e.nombre      || SEFE_MARCA.nombreLargo,
+        razonSocial: e.razonSocial || SEFE_MARCA.razonSocial,
+        membrete:    e.membrete    || e.razonSocial || SEFE_MARCA.membrete,
+        nit:         e.nit         || SEFE_MARCA.nit,
       });
     }
   }catch(err){ /* ante cualquier duda, la marca SEFE */ }
