@@ -175,7 +175,7 @@ async function exportarPagosProvExcel(){
     const {XLSX,styled:_styled}=await _cargarXLSX();
     const prov=_ppProv?(proveedores.find(p=>String(p.id)===String(_ppProv))?.nombre||'—'):'Todos';
     const per=_ppPeriodo?({mes:'Este mes',mesant:'Mes anterior','2m':'Últimos 2 meses','3m':'Últimos 3 meses'})[_ppPeriodo]:'Todo el tiempo';
-    const meta=[[SEFE_MARCA.membrete],['PAGOS A PROVEEDORES'],['Proveedor:',prov],['Período:',per],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],[]];
+    const meta=[[marcaActiva().membrete],['PAGOS A PROVEEDORES'],['Proveedor:',prov],['Período:',per],['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],[]];
     const HR=7;
     const ws=XLSX.utils.aoa_to_sheet(meta);
     XLSX.utils.sheet_add_json(ws,_ppPagosExport,{origin:'A'+(HR+1)});
@@ -204,7 +204,7 @@ async function exportarPorPagarExcel(){
     const est=_ppEstados.size?[..._ppEstados].map(e=>({vencido:'Vencido',pendiente:'Pendiente',parcial:'Parcial',pagado:'Pagado'})[e]).join(', '):'Todos';
     const per=_ppPeriodo?({mes:'Este mes',mesant:'Mes anterior','2m':'Últimos 2 meses','3m':'Últimos 3 meses'})[_ppPeriodo]:'Todo el tiempo';
     const meta=[
-      [SEFE_MARCA.membrete],
+      [marcaActiva().membrete],
       ['CUENTAS POR PAGAR'],
       ['Proveedor:',prov],['Estado:',est],['Período:',per],
       ['Generado el:',fdatehora(new Date())],['Generado por:',currentUser],
@@ -672,7 +672,7 @@ async function estadoCuentaBancoExcel(id){
     const _C='_("Q"* #,##0.00_);_("Q"* (#,##0.00);_("Q"* "-"??_);_(@_)'; // formato contable
     // ── Hoja 1: Movimientos (libro mayor con saldo corriente) ──
     const meta=[
-      [SEFE_MARCA.membrete],
+      [marcaActiva().membrete],
       ['ESTADO DE CUENTA BANCARIO'],
       ['Cuenta:',c.nombre||''],
       ['Banco:',(c.banco||'')+(c.numero?' · No. '+c.numero:'')],
@@ -702,7 +702,7 @@ async function estadoCuentaBancoExcel(id){
     const _refL=XLSX.utils.encode_cell({c:1,r:_rf}); if(_styled&&ws1[_refL])ws1[_refL].s={font:{bold:true,color:{rgb:'173916'}}};
     // ── Hoja 2: Resumen por categoría ──
     const resumen=[
-      [SEFE_MARCA.membrete],
+      [marcaActiva().membrete],
       ['RESUMEN POR CATEGORÍA'],
       ['Cuenta:',c.nombre||''],
       [],
@@ -1408,7 +1408,7 @@ function verCompra(id){
   const REC={pendiente:'Pendiente de recibir',parcial:'Recepción parcial',recibida:'Recibida completa'};
   $('#doc-bar-t').textContent='ORDEN DE COMPRA · CMP-'+padn(c.id);
   $('#doc-sheet').innerHTML=`
-    <div class="ds-head"><div class="ds-emisor"><div class="ds-mk">${SEFE_MARCA.monograma}</div><div><h4>${SEFE_MARCA.nombreDoc}</h4><p>Orden de compra</p></div></div>
+    <div class="ds-head"><div class="ds-emisor"><div class="ds-mk">${marcaActiva().monograma}</div><div><h4>${marcaActiva().nombreDoc}</h4><p>Orden de compra</p></div></div>
       <div class="ds-doctype"><div class="dt">ORDEN DE COMPRA</div><p>CMP-${padn(c.id)}${c.docProv&&c.docProv!=='—'?'<br>Factura: '+c.docProv:''}</p></div></div>
     <div class="ds-stamp" style="color:${c.estadoRecepcion==='recibida'?'var(--ok)':'var(--warn)'}">${REC[c.estadoRecepcion].toUpperCase()}${c.facturada?' · FACTURADA':' · SIN FACTURA'}</div>
     <div class="ds-meta"><div><div class="mt-l">Proveedor</div><div class="mt-v">${c.proveedorNombre}</div></div>

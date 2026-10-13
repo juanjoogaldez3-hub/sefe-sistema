@@ -270,7 +270,7 @@ async function reporteAmbientalesExcel(){
   if(!servicios.length){toast('Sin datos','No hay servicios de ambientales registrados',true);return;}
   try{
     const {XLSX,styled}=await _cargarXLSX();
-    const marca=(typeof SEFE_MARCA!=='undefined'&&SEFE_MARCA.membrete)||'SEFE, S.A.';
+    const marca=(typeof marcaActiva()!=='undefined'&&marcaActiva().membrete)||'SEFE, S.A.';
     const aoa=[
       [marca],
       ['AMBIENTALES POR CLIENTE'],
@@ -730,7 +730,7 @@ async function reporteBateriasExcel(){
   if(!cambios.length){toast('Sin datos','No hay colocaciones registradas',true);return;}
   try{
     const {XLSX,styled}=await _cargarXLSX();
-    const marca=(typeof SEFE_MARCA!=='undefined'&&SEFE_MARCA.membrete)||'SEFE, S.A.';
+    const marca=(typeof marcaActiva()!=='undefined'&&marcaActiva().membrete)||'SEFE, S.A.';
     const aoa=[
       [marca],
       ['BATERÍAS POR CLIENTE'],
@@ -886,7 +886,7 @@ async function _reporteGasolina(excel){
   if(excel){
     try{
       const {XLSX,styled}=await _cargarXLSX();
-      const marca=(typeof SEFE_MARCA!=='undefined'&&SEFE_MARCA.membrete)||'SEFE, S.A.';
+      const marca=(typeof marcaActiva()!=='undefined'&&marcaActiva().membrete)||'SEFE, S.A.';
       const aoa=[[marca],['CONSUMO DE COMBUSTIBLE'],['Generado el '+fdate(new Date())],[],
         ['Fecha','Piloto / vehículo','Galones','Monto','Kilometraje','Rendimiento (km/gal)']];
       lista.forEach(g=>{const r=_gasRendimiento(g);aoa.push([g.fecha?fdate(g.fecha):'',_gasQuien(g),Number(g.galones)||0,Number(g.monto)||0,g.kilometraje!=null?Number(g.kilometraje):'',r!=null?r:'']);});
@@ -965,7 +965,7 @@ async function _reporteGasUnidad(excel){
   if(excel){
     try{
       const {XLSX,styled}=await _cargarXLSX();
-      const marca=(typeof SEFE_MARCA!=='undefined'&&SEFE_MARCA.membrete)||'SEFE, S.A.';
+      const marca=(typeof marcaActiva()!=='undefined'&&marcaActiva().membrete)||'SEFE, S.A.';
       const aoa=[[marca],['GASOLINA · RESUMEN POR UNIDAD'],['Generado el '+fdate(new Date())],[],
         ['Unidad','Piloto(s)','Galones','Gasto','Km recorridos','Rendimiento (km/gal)']];
       rows.forEach(r=>aoa.push([r.unidad,r.pilotos,Math.round(r.galones*10)/10,r.monto,r.km,r.rend!=null?r.rend:'']));
@@ -1013,7 +1013,7 @@ async function _reporteGasMes(excel){
   if(excel){
     try{
       const {XLSX,styled}=await _cargarXLSX();
-      const marca=(typeof SEFE_MARCA!=='undefined'&&SEFE_MARCA.membrete)||'SEFE, S.A.';
+      const marca=(typeof marcaActiva()!=='undefined'&&marcaActiva().membrete)||'SEFE, S.A.';
       const aoa=[[marca],['GASOLINA · CONSUMO POR MES'],['Generado el '+fdate(new Date())],[],['Mes','Galones','Gasto']];
       meses.forEach(m=>aoa.push([m.label,Math.round(m.galones*10)/10,m.monto]));
       aoa.push(['Total',Math.round(totGal*10)/10,totQ]);

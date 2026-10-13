@@ -289,6 +289,45 @@ const SEFE_MARCA = Object.assign({}, _MARCA_DEFAULT,
   (typeof SEFE_CONFIG!=='undefined' && SEFE_CONFIG.marca) || {});
 window.SEFE_MARCA = SEFE_MARCA;
 
+// ── Marca de Soluciones Efectivas (empresa LAML) ──────────────
+// El logo viene embebido en marca-laml.js (window.LAML_LOGO). El resto
+// (razón social, NIT, membrete) sale de la tabla de empresas; acá van los
+// valores por defecto por si la empresa no los tiene cargados.
+const LAML_MARCA = Object.assign({}, _MARCA_DEFAULT, {
+  nombre:        'Soluciones Efectivas',
+  nombreLargo:   'Soluciones Efectivas',
+  nombreDoc:     'Soluciones Efectivas',
+  monograma:     'SE',
+  tagline:       'Piensa Verde, Vive Verde',
+  razonSocial:   'Soluciones Efectivas, S.A.',
+  membrete:      'Soluciones Efectivas, S.A.',
+  prefijoArchivo:'SolucionesEfectivas',
+  logo: (typeof window!=='undefined' && window.LAML_LOGO) ? window.LAML_LOGO : SEFE_MARCA.logo,
+});
+window.LAML_MARCA = LAML_MARCA;
+
+// Devuelve la marca de la EMPRESA ACTIVA. Para SEFE es la de siempre.
+// Para LAML usa el logo de Soluciones Efectivas y, encima, los datos
+// legales (nombre, razón social, NIT, membrete) de la tabla de empresas.
+function marcaActiva(){
+  try{
+    const e=(typeof empresaActiva!=='undefined' && empresaActiva!=='SEFE' && typeof empresaActivaObj==='function') ? empresaActivaObj() : null;
+    if(e){
+      const base=(e.codigo==='LAML') ? LAML_MARCA : SEFE_MARCA;
+      return Object.assign({}, base, {
+        nombre:      e.nombre      || base.nombre,
+        nombreDoc:   e.nombre      || base.nombreDoc,
+        nombreLargo: e.nombre      || base.nombreLargo,
+        razonSocial: e.razonSocial || base.razonSocial,
+        membrete:    e.membrete    || base.membrete || e.razonSocial || base.razonSocial,
+        nit:         e.nit         || base.nit,
+      });
+    }
+  }catch(err){ /* ante cualquier duda, la marca SEFE */ }
+  return SEFE_MARCA;
+}
+window.marcaActiva=marcaActiva;
+
 // Mezcla un color hex hacia otro (blanco o negro) en proporción t (0..1).
 // Sirve para derivar los tonos claros/oscuros cuando el cliente sólo da
 // el color base y no los tonos.
@@ -372,9 +411,10 @@ function aplicarMarcaEmpresa(){
       if(h2&&SEFE_MARCA.nombre)h2.textContent=SEFE_MARCA.nombre;
       return;
     }
-    const mono=String(e.codigo||'').slice(0,2).toUpperCase()||'··';
+    const _m=(typeof marcaActiva==='function')?marcaActiva():null;
+    const mono=(_m&&_m.monograma)||String(e.codigo||'').slice(0,2).toUpperCase()||'··';
     if(mk){ mk.textContent=mono; if(e.color){mk.style.background=e.color;mk.style.color='#fff';} }
-    if(h2)h2.textContent=e.nombre||e.codigo;
+    if(h2)h2.textContent=(_m&&_m.nombre)||e.nombre||e.codigo;
   }catch(err){ console.error('aplicarMarcaEmpresa:',err); }
 }
 if(typeof window!=='undefined')window.aplicarMarcaEmpresa=aplicarMarcaEmpresa;

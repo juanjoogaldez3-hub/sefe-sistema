@@ -719,7 +719,7 @@ async function cotizacionExcel(id){
     const {XLSX,styled:_styled}=await _cargarXLSX();
     const fecha=c.creada?fdate(String(c.creada).slice(0,10)):fdate(fechaHoyGT());
     const meta=[
-      [SEFE_MARCA.membrete],
+      [marcaActiva().membrete],
       ['COTIZACIÓN COT-'+padn(c.numero)],
       ['Cliente:',c.clienteComercial||c.clienteNombre||''],
       ['NIT:',c.clienteNit||''],
