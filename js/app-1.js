@@ -530,7 +530,15 @@ function iniciarEmpresaActiva(){
 // Cambia la empresa activa: recuerda la elección, refresca el selector y la
 // marca, y vuelve a dibujar la vista actual con el nuevo filtro.
 function cambiarEmpresa(codigo){
-  if(!codigo||codigo===empresaActiva) return;
+  if(!codigo) return;
+  // Elegir una empresa puntual SIEMPRE sale del modo "ver las 2 juntas".
+  // (Si no, al volver a una sola empresa se quedaba en consolidado.)
+  const estabaConsolidado=_verConsolidado;
+  if(codigo===empresaActiva && !estabaConsolidado) return;
+  if(estabaConsolidado){
+    _verConsolidado=false;
+    try{ localStorage.setItem(CONSOLIDADO_KEY,''); }catch(e){}
+  }
   empresaActiva=codigo;
   try{ localStorage.setItem(EMPRESA_KEY,codigo); }catch(e){}
   // Forzar que los filtros con dropdown cacheado (proveedores, clientes, cuentas)
