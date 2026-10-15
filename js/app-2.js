@@ -206,10 +206,14 @@ function renderPanel(){
   const hojE=new Date();
   const saludo=hojE.getHours()<12?'Buenos días':hojE.getHours()<19?'Buenas tardes':'Buenas noches';
   const fechaLarga=hojE.toLocaleDateString('es-GT',{weekday:'long'})+' '+fdate(hojE);
-  const facturasHoy=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.creada?.slice(0,10)===hoyStr);
+  // La fecha de creación se guarda en UTC; en Guatemala (UTC-6) a partir de
+  // las 6 PM el día UTC ya cambió. Se compara el día GT real, no el UTC, para
+  // que las facturas de la tarde/noche sigan contando como de HOY.
+  const diaGT=ts=>ts?new Date(new Date(ts).getTime()-6*3600000).toISOString().slice(0,10):'';
+  const facturasHoy=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&diaGT(d.creada)===hoyStr);
   const ventasHoy=facturasHoy.reduce((s,d)=>s+d.totales.total,0);
   let cobradoHoy=0;misDocsBase.forEach(d=>(d.abonos||[]).forEach(a=>{if(!a.anulado&&a.fecha===hoyStr)cobradoHoy+=Number(a.monto);}));
-  const pedidosHoy=misDocsBase.filter(d=>d.tipoDoc==='pedido'&&d.creada?.slice(0,10)===hoyStr).length;
+  const pedidosHoy=misDocsBase.filter(d=>d.tipoDoc==='pedido'&&diaGT(d.creada)===hoyStr).length;
   const vencenHoy=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&d.vencimiento.slice(0,10)===hoyStr&&arInfo(d).saldo>0).length;
   const rdItems=[];
   if(dbConf('kpi_ventas')||['admin','gerencia','auditoria'].includes(rol))rdItems.push({lbl:esVentasRol?'Mis ventas hoy':'Vendido hoy',val:money(ventasHoy),sub:facturasHoy.length+' factura'+(facturasHoy.length!==1?'s':'')});
