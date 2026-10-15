@@ -424,6 +424,13 @@
     .modal-body{overflow-x:auto}
     /* Grids 1fr 1fr escritos a mano dentro de modales → una columna */
     .overlay [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important}
+    /* Barra de Reportes: envuelve y los date pickers / PDF / Excel no se cortan */
+    #v-reportes #rep-period{width:100%}
+    #v-reportes .rep-acciones{margin-left:0;width:100%}
+    #v-reportes #rep-desde,#v-reportes #rep-hasta{flex:1 1 130px;width:auto !important;min-width:0}
+    #v-reportes .rep-acciones .btn{flex:1 1 auto;justify-content:center}
+    /* En el cajón móvil mostrar el nombre de la empresa activa (no solo el monograma) */
+    .brand h2,.brand span{display:block}
   }
   .btn-exenta{background:transparent;border:1.5px solid var(--warn);color:var(--warn);font-size:11px;padding:5px 9px;border-radius:var(--r-sm);cursor:pointer;font-weight:600;transition:.13s;white-space:nowrap}
   .btn-exenta:hover{background:var(--warn-bg)}

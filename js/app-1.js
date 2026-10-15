@@ -841,6 +841,10 @@ function _tarjetasMovil(){
     document.querySelectorAll('.content .panel table').forEach(tb=>{
       const ths=Array.prototype.map.call(tb.querySelectorAll('thead th'),th=>th.textContent.trim());
       // Sin encabezados o con campos editables (grillas) → se deja con scroll.
+      // Tablas anchas pensadas para scroll (reportes con min-width en línea, o
+      // marcadas con .no-cards) → se dejan como tabla con scroll, NO tarjetas
+      // (si no, cada "tarjeta" arrastra el ancho mínimo y queda ilegible).
+      if(tb.classList.contains('no-cards')||tb.closest('.no-cards')||(tb.style&&tb.style.minWidth&&parseInt(tb.style.minWidth)>0)){tb.classList.remove('cards');return;}
       // Grillas de verdad (con inputs de texto/número/select) → se dejan con
       // scroll. Las que solo tienen un checkbox por fila (Recordatorios,
       // Despachos) SÍ se vuelven tarjetas.
