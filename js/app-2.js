@@ -212,11 +212,14 @@ function renderPanel(){
   const diaGT=ts=>ts?new Date(new Date(ts).getTime()-6*3600000).toISOString().slice(0,10):'';
   const facturasHoy=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&diaGT(d.creada)===hoyStr);
   const ventasHoy=facturasHoy.reduce((s,d)=>s+d.totales.total,0);
-  // "Cobrado hoy" usa _fechaDe (igual que el "cobrado del mes", que sí
-  // funciona), robusto a que la fecha del abono venga como "AAAA-MM-DD" o
-  // como marca de tiempo. Antes comparaba texto exacto y daba siempre 0.
-  const _manana=new Date(hoy);_manana.setDate(_manana.getDate()+1);
-  let cobradoHoy=0;misDocsBase.forEach(d=>(d.abonos||[]).forEach(a=>{if(a.anulado||!a.fecha)return;const f=_fechaDe(a.fecha);if(f&&f>=hoy&&f<_manana)cobradoHoy+=Number(a.monto);}));
+  // "Cobrado hoy" = cobros REGISTRADOS hoy en el sistema (registradoEl),
+  // sin importar la fecha de pago. Mismo criterio que "Vendido hoy".
+  let cobradoHoy=0;misDocsBase.forEach(d=>(d.abonos||[]).forEach(a=>{
+    if(a.anulado)return;
+    const v=a.registradoEl||a.fecha; if(!v)return;
+    const dia=/^\d{4}-\d{2}-\d{2}$/.test(String(v))?String(v):diaGT(v);
+    if(dia===hoyStr)cobradoHoy+=Number(a.monto);
+  }));
   const pedidosHoy=misDocsBase.filter(d=>d.tipoDoc==='pedido'&&diaGT(d.creada)===hoyStr).length;
   const vencenHoy=misDocsBase.filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'&&d.vencimiento&&d.vencimiento.slice(0,10)===hoyStr&&arInfo(d).saldo>0).length;
   const rdItems=[];
