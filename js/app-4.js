@@ -750,6 +750,88 @@ async function cotizacionExcel(id){
   }catch(e){console.error('Error exportando cotización a Excel:',e);toast('No se pudo generar el Excel',e.message||String(e),true);}
 }
 window.cotizacionExcel=cotizacionExcel;
+
+// ==================== LISTA DE PRECIOS POR CLIENTE ====================
+// Exporta (PDF / Excel) la tablita de precios específicos del cliente que
+// se está viendo en la pestaña "Precios". Lleva el nombre del cliente y,
+// para cada producto: código, nombre, precio base y precio del cliente.
+// No incluye costo ni margen (datos internos sensibles).
+function _cliActualObj(){ return clientes.find(x=>x.id===cliActual); }
+function _cliPreciosFilas(c){
+  const ids=Object.keys(c.precios||{}).map(Number).filter(id=>productos.find(p=>p.id===id));
+  return ids.map(pid=>{
+    const p=productos.find(x=>x.id===pid);
+    const base=Number(p.precio)||0;
+    const precioCli=Number(c.precios[pid])||0;
+    const desc=base>0?((precioCli-base)/base*100):0;
+    return {codigo:p.codigo||'',nombre:p.nombre||'',base,precioCli,desc};
+  }).sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es'));
+}
+function cliPreciosPDF(){
+  const c=_cliActualObj();if(!c){toast('Cliente no encontrado',null,true);return;}
+  if(typeof _pdfShell!=='function'||typeof _abrirPDF!=='function'){toast('PDF no disponible',null,true);return;}
+  const filas=_cliPreciosFilas(c);
+  if(!filas.length){toast('Sin precios','Este cliente no tiene precios asignados',true);return;}
+  const rows=filas.map(f=>{
+    const descTxt=f.desc<-0.05?`<span style="color:#2e7d32">${f.desc.toFixed(1)}%</span>`:(f.desc>0.05?`<span style="color:#B45309">+${f.desc.toFixed(1)}%</span>`:'—');
+    return `<tr>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE">${cotEsc(f.codigo)}</td>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE">${cotEsc(f.nombre)}</td>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE;text-align:right">${money(f.base)}</td>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE;text-align:right;font-weight:700">${money(f.precioCli)}</td>
+      <td style="padding:5px 4px;border-bottom:1px solid #EEE;text-align:right">${descTxt}</td>
+    </tr>`;
+  }).join('');
+  const body=`
+    <div style="font-size:12px;line-height:1.55;margin-bottom:12px">
+      <div style="font-weight:700;font-size:12.5px;color:#173916">CLIENTE</div>
+      ${cotEsc(c.nombre||'')}<br>
+      ${c.nit?'NIT: '+cotEsc(c.nit)+'<br>':''}
+      ${c.direccion?cotEsc(c.direccion)+'<br>':''}
+      <span style="color:#888">Fecha: ${fdate(fechaHoyGT())}</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#F4F8F3">
+        <th style="text-align:left;padding:6px 4px;border-bottom:2px solid #173916">Código</th>
+        <th style="text-align:left;padding:6px 4px;border-bottom:2px solid #173916">Producto</th>
+        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Precio base</th>
+        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Precio cliente</th>
+        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Desc.</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="margin-top:14px;font-size:10.5px;color:#888">Precios en quetzales, IVA incluido. Precios sujetos a cambio sin previo aviso.</div>
+  `;
+  _abrirPDF(_pdfShell({titulo:'LISTA DE PRECIOS',subtitulo:c.nombre||'',archivo:'Precios '+(c.nombre||'cliente'),orientacion:'portrait',body}));
+}
+window.cliPreciosPDF=cliPreciosPDF;
+async function cliPreciosExcel(){
+  const c=_cliActualObj();if(!c){toast('Cliente no encontrado',null,true);return;}
+  const filas=_cliPreciosFilas(c);
+  if(!filas.length){toast('Sin precios','Este cliente no tiene precios asignados',true);return;}
+  try{
+    const {XLSX,styled:_styled}=await _cargarXLSX();
+    const meta=[
+      [marcaActiva().membrete],
+      ['LISTA DE PRECIOS'],
+      ['Cliente:',c.nombre||''],
+      ['NIT:',c.nit||''],
+      ['Fecha:',fdate(fechaHoyGT())],
+      []
+    ];
+    const ws=XLSX.utils.aoa_to_sheet(meta);
+    const data=filas.map(f=>({'Código':f.codigo,'Producto':f.nombre,'Precio base':f.base,'Precio cliente':f.precioCli,'Desc %':Math.round(f.desc*10)/10}));
+    const HDR=6; // fila 0-index del encabezado de la tabla (tras el membrete)
+    XLSX.utils.sheet_add_json(ws,data,{origin:'A'+(HDR+1)});
+    _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HDR,nCols:5,dataRows:filas.length,moneyCols:[2,3],totalRow:null,brandRow:0,titleRow:1,metaRows:[2,3,4]});
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Precios');
+    const fn='Precios '+(c.nombre||'cliente').replace(/[\\/:*?"<>|]/g,' ').trim()+'.xlsx';
+    descargarXlsx(XLSX,wb,fn);
+    toast('✓ Excel descargado',fn);
+  }catch(e){console.error('Error exportando precios a Excel:',e);toast('No se pudo generar el Excel',e.message||String(e),true);}
+}
+window.cliPreciosExcel=cliPreciosExcel;
+
 // ==================== FIN COTIZACIONES ====================
 window.cerrarRecmod=function(){const ov=$('#recmod');if(ov)ov.classList.remove('show');};
 // ---- Recordatorios de cobro: pop-up en la pantalla principal ----
@@ -860,7 +942,13 @@ function renderCliDet(){
       <td><button class="x" onclick="quitarPrecio(${pid})">×</button></td></tr>`;
     }).join(''):`<tr><td colspan="${esAdmin?6:5}" class="empty">Este cliente aún no tiene precios asignados. Agregá los productos que compra.</td></tr>`;
     body=`<div class="panel">
-      <div class="panel-head"><h3>Precios específicos</h3><span style="font-size:12px;color:var(--muted)">${ids.length} producto(s) asignado(s)${ids.length?' · <span id="cli-prom-desc">'+_promDescLabel(_promDescCli(c))+'</span>':''}</span></div>
+      <div class="panel-head" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px"><h3 style="margin:0">Precios específicos</h3><span style="font-size:12px;color:var(--muted)">${ids.length} producto(s) asignado(s)${ids.length?' · <span id="cli-prom-desc">'+_promDescLabel(_promDescCli(c))+'</span>':''}</span></div>
+        ${ids.length?`<div style="display:flex;gap:7px">
+          <button class="btn btn-ghost btn-sm" onclick="cliPreciosPDF()" title="Lista de precios del cliente (PDF)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15h6M9 11h2"/></svg>PDF</button>
+          <button class="btn btn-ghost btn-sm" onclick="cliPreciosExcel()" title="Lista de precios del cliente (Excel)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13l3 4M12 13l-3 4"/></svg>Excel</button>
+        </div>`:''}
+      </div>
       <div class="panel-body" style="padding-bottom:8px">
         <div style="display:flex;gap:9px;align-items:flex-end">
           <div style="flex:1"><label>Agregar producto</label><input id="cp-add" list="cp-prods" placeholder="Buscar por código o nombre…" onkeydown="if(event.key==='Enter')addPrecioProd()"><datalist id="cp-prods">${opts}</datalist></div>
