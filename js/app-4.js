@@ -773,13 +773,10 @@ function cliPreciosPDF(){
   const filas=_cliPreciosFilas(c);
   if(!filas.length){toast('Sin precios','Este cliente no tiene precios asignados',true);return;}
   const rows=filas.map(f=>{
-    const descTxt=f.desc<-0.05?`<span style="color:#2e7d32">${f.desc.toFixed(1)}%</span>`:(f.desc>0.05?`<span style="color:#B45309">+${f.desc.toFixed(1)}%</span>`:'—');
     return `<tr>
       <td style="padding:5px 4px;border-bottom:1px solid #EEE">${cotEsc(f.codigo)}</td>
       <td style="padding:5px 4px;border-bottom:1px solid #EEE">${cotEsc(f.nombre)}</td>
-      <td style="padding:5px 4px;border-bottom:1px solid #EEE;text-align:right">${money(f.base)}</td>
       <td style="padding:5px 4px;border-bottom:1px solid #EEE;text-align:right;font-weight:700">${money(f.precioCli)}</td>
-      <td style="padding:5px 4px;border-bottom:1px solid #EEE;text-align:right">${descTxt}</td>
     </tr>`;
   }).join('');
   const body=`
@@ -794,9 +791,7 @@ function cliPreciosPDF(){
       <thead><tr style="background:#F4F8F3">
         <th style="text-align:left;padding:6px 4px;border-bottom:2px solid #173916">Código</th>
         <th style="text-align:left;padding:6px 4px;border-bottom:2px solid #173916">Producto</th>
-        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Precio base</th>
-        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Precio cliente</th>
-        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Desc.</th>
+        <th style="text-align:right;padding:6px 4px;border-bottom:2px solid #173916">Precio</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
