@@ -401,6 +401,29 @@
     /* Tabs scrolleables */
     .ct-tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
     .ct-tab{white-space:nowrap}
+    /* ── Pulido móvil ─────────────────────────────────────── */
+    /* Renglones de Nuevo pedido / Nueva compra: reflujo a líneas
+       (nombre arriba a todo el ancho; abajo cant./precio/desc.; y
+       subtotal + × en la última línea). Evita que se corte la derecha. */
+    #v-pedido .li,#v-nuevacompra .li{grid-template-columns:1fr 1fr 1fr;gap:8px;padding:12px 0}
+    #v-pedido .li>:first-child,#v-nuevacompra .li>:first-child{grid-column:1/-1}
+    #v-pedido .li>:nth-child(5),#v-nuevacompra .li>:nth-child(5){grid-column:1/3;text-align:right}
+    #v-pedido .li>:nth-child(6),#v-nuevacompra .li>:nth-child(6){justify-self:end}
+    #v-pedido .li input,#v-nuevacompra .li input{width:100%;min-width:0}
+    #v-pedido .li.head>span,#v-nuevacompra .li.head>span{font-size:10.5px;color:var(--muted)}
+    /* Acciones dentro de las tarjetas: que envuelvan en vez de desbordar */
+    .panel table.cards tbody td[data-acts]{flex-wrap:wrap}
+    .panel table.cards tbody td[data-acts] .acts{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px}
+    /* El disparador del menú de acciones, tocable */
+    .acts-btn{min-height:40px}
+    /* El botón flotante del asistente no tapa el último contenido */
+    .content{padding-bottom:96px}
+    /* Toast que no se corte en pantallas angostas */
+    .toast{left:14px;right:14px;max-width:none}
+    /* Tablas dentro de modales: scroll lateral */
+    .modal-body{overflow-x:auto}
+    /* Grids 1fr 1fr escritos a mano dentro de modales → una columna */
+    .overlay [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important}
   }
   .btn-exenta{background:transparent;border:1.5px solid var(--warn);color:var(--warn);font-size:11px;padding:5px 9px;border-radius:var(--r-sm);cursor:pointer;font-weight:600;transition:.13s;white-space:nowrap}
   .btn-exenta:hover{background:var(--warn-bg)}

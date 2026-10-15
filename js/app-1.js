@@ -841,7 +841,10 @@ function _tarjetasMovil(){
     document.querySelectorAll('.content .panel table').forEach(tb=>{
       const ths=Array.prototype.map.call(tb.querySelectorAll('thead th'),th=>th.textContent.trim());
       // Sin encabezados o con campos editables (grillas) → se deja con scroll.
-      if(!ths.length||tb.querySelector('tbody input,tbody select,tbody textarea')){tb.classList.remove('cards');return;}
+      // Grillas de verdad (con inputs de texto/número/select) → se dejan con
+      // scroll. Las que solo tienen un checkbox por fila (Recordatorios,
+      // Despachos) SÍ se vuelven tarjetas.
+      if(!ths.length||tb.querySelector('tbody select,tbody textarea,tbody input:not([type="checkbox"])')){tb.classList.remove('cards');return;}
       tb.querySelectorAll('tbody tr').forEach(tr=>{
         Array.prototype.forEach.call(tr.children,(td,i)=>{
           if(td.hasAttribute('colspan'))return;
