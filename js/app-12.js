@@ -658,8 +658,7 @@ function boletaPagoPDF(pl,l,parte){
       </div>
     </div>
 
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-top:22px">
-      <div>${chip}</div>
+    <div style="display:flex;justify-content:flex-end;align-items:flex-end;gap:20px;margin-top:28px">
       <div style="flex:1;max-width:230px;text-align:center">
         <div style="border-top:1px solid #555;padding-top:5px;font-size:10px;color:#555">Recibí conforme</div>
       </div>
