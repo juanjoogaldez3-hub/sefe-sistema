@@ -815,10 +815,10 @@ async function cliPreciosExcel(){
       []
     ];
     const ws=XLSX.utils.aoa_to_sheet(meta);
-    const data=filas.map(f=>({'Código':f.codigo,'Producto':f.nombre,'Precio base':f.base,'Precio cliente':f.precioCli,'Desc %':Math.round(f.desc*10)/10}));
+    const data=filas.map(f=>({'Código':f.codigo,'Producto':f.nombre,'Precio':f.precioCli}));
     const HDR=6; // fila 0-index del encabezado de la tabla (tras el membrete)
     XLSX.utils.sheet_add_json(ws,data,{origin:'A'+(HDR+1)});
-    _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HDR,nCols:5,dataRows:filas.length,moneyCols:[2,3],totalRow:null,brandRow:0,titleRow:1,metaRows:[2,3,4]});
+    _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HDR,nCols:3,dataRows:filas.length,moneyCols:[2],totalRow:null,brandRow:0,titleRow:1,metaRows:[2,3,4]});
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Precios');
     const fn='Precios '+(c.nombre||'cliente').replace(/[\\/:*?"<>|]/g,' ').trim()+'.xlsx';
     descargarXlsx(XLSX,wb,fn);
