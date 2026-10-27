@@ -57,7 +57,15 @@
       arr: () => documentos,
       map: (f) => mapDocumentoFromDB(f, []),
       conservar: ['abonos'],
-      identidad: ['creada'],   // marca de tiempo que pone el navegador al crear
+      // Identidad para reconocer la copia local sin id: hora de creación
+      // (ms que pone el navegador) MÁS el cliente. Antes era solo `creada`:
+      // si dos vendedores creaban un pedido en el mismo milisegundo, el
+      // sync los confundía y una copia adoptaba el id del otro pedido →
+      // al editar/facturar se sobrescribía la fila equivocada. Pidiendo
+      // que también coincida el cliente, dos pedidos distintos ya no se
+      // pueden confundir (sin romper el adoptar la propia copia, que sí
+      // comparte hora y cliente con su fila real).
+      identidad: ['creada', 'clienteId'],
       vistas: ['documentos', 'cobros', 'panel', 'despachos', 'misentregas', 'clientedet'],
     },
     // Los abonos NO son un array de primer nivel: viven dentro de
