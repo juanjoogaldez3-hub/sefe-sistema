@@ -169,6 +169,10 @@ async function anularFacturaReal(id,motivo,devolverAPedido){
   if(!canAnular()){toast('Sin permiso','Tu rol no puede anular',true);return;}
   const f=documentos.find(d=>d.id===id);
   if(!f)return;
+  // Idempotencia: si ya está anulada, cortar. Evita que un doble clic (sobre todo
+  // en facturas simuladas, que no pasan por el candado _felLock) reintegre el
+  // inventario dos veces y cree un segundo pedido de devolución.
+  if(f.estado==='anulada'){toast('Esta factura ya estaba anulada',null,true);return;}
   const esRealFEL=f.autorizacion && !String(f.autorizacion).startsWith('SIM-');
 
   // Si es factura real certificada, anular primero en EcoFactura
@@ -280,7 +284,11 @@ function openNotaCD(facturaId){
     });
 }
 window.openNotaCD=openNotaCD;
+let _creandoNC=false;
 async function crearNotaCD(f,monto,motivo,fecha){
+  if(_creandoNC)return;              // evita el doble clic que duplicaba la nota de crédito
+  _creandoNC=true; const _ncBtn=document.getElementById('m-save'); if(_ncBtn)_ncBtn.disabled=true;
+  try{
   const uuid='SIM-'+Math.random().toString(36).slice(2,10).toUpperCase();
   // Id temporal negativo (no puede chocar con un id real de la base). El número
   // de DTE simulado se deriva del correlativo, que es estable y no depende del id.
@@ -296,6 +304,7 @@ async function crearNotaCD(f,monto,motivo,fecha){
   closeMod();renderDocs();
   toast('✓ Nota de Crédito generada',money(monto)+' · saldo de la factura: '+money(nuevo.saldo));
   logAudit('Nota de crédito','Factura '+f.serie+'-'+f.numeroDte+' · '+money(monto)+' · Motivo: '+motivo);
+  }finally{ _creandoNC=false; if(_ncBtn)_ncBtn.disabled=false; }
 }
 window.crearNotaCD=crearNotaCD;
 window.anularNotaCD=id=>{const d=documentos.find(x=>x.id===id);if(!d)return;

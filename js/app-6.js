@@ -955,15 +955,18 @@ window._concConfirmarManual=function(sefeId){
 };
 
 // ── Guardar la conciliación y ver el historial ──────────────
+let _guardandoConc=false;
 window._concGuardar=function(){
+  if(_guardandoConc)return;                 // evita el doble clic que duplicaba la conciliación
   if(!_concUltimo||_concUltimo.saldoBanco==null){toast('Nada que guardar','Subí un estado de cuenta primero',true);return;}
+  _guardandoConc=true;
   const rec=Object.assign({},_concUltimo,{archivo:_concArchivoNombre||'',guardadoPor:(typeof currentUser!=='undefined'?currentUser:'')});
   Promise.resolve(typeof guardarConciliacion==='function'?guardarConciliacion(rec):null).then(saved=>{
     if(!saved){toast('No se pudo guardar','¿Ya corriste el SQL de conciliaciones?',true);return;}
     if(typeof conciliaciones!=='undefined')conciliaciones.unshift(saved);
     if(typeof logAudit==='function')logAudit('Conciliación guardada',((cuentasBanco.find(c=>String(c.id)===String(rec.cuentaId))||{}).nombre||'')+' · '+rec.desde+'→'+rec.hasta+' · dif '+money(rec.diferencia));
     toast('✓ Conciliación guardada','Quedó en el historial');
-  });
+  }).finally(()=>{ _guardandoConc=false; });
 };
 window._concHistorial=function(){
   const lista=(typeof conciliaciones!=='undefined'?conciliaciones:[]).slice();
