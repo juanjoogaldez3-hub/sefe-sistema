@@ -1491,7 +1491,9 @@ $('#co-especial').onchange=()=>{
   $('#co-go').textContent=esp?'Crear compra especial':'Crear orden de compra';
 };
 
-$('#co-go').onclick=()=>{
+let _guardandoCompra=false;
+$('#co-go').onclick=async ()=>{
+  if(_guardandoCompra)return;              // evita el doble clic que duplicaba la compra
   const prov=proveedores.find(p=>p.id===Number($('#co-prov').value));
   const total=compraCart.reduce((s,it)=>s+it.cantidad*it.costo,0);
   const fecha=$('#co-fecha').value?new Date($('#co-fecha').value+'T12:00:00').toISOString():new Date().toISOString();
@@ -1515,8 +1517,11 @@ $('#co-go').onclick=()=>{
     toast('✓ Orden de compra creada','CMP-'+padn(c.id)+' · pendiente de recibir');
     logAudit('Compra creada','CMP-'+padn(c.id)+' · '+prov.nombre+' · '+money(total));
   }
+  _guardandoCompra=true; const _btnCo=$('#co-go'); if(_btnCo)_btnCo.disabled=true;
   compras.push(c);
-  if(typeof guardarCompra==='function')guardarCompra(c);
+  try{
+    if(typeof guardarCompra==='function')await guardarCompra(c);
+  }finally{ _guardandoCompra=false; if(_btnCo)_btnCo.disabled=false; }
   compraCart=[];$('#co-doc').value='';$('#co-especial').checked=false;
   $('#co-nota-normal').style.display='flex';$('#co-nota-especial').style.display='none';
   $('#co-go').textContent='Crear orden de compra';
