@@ -881,9 +881,12 @@ async function guardarVendedor(v){
   const row = {nombre:v.nombre};
   if (v._nuevo) {
     delete v._nuevo;
+    // Multiempresa: un vendedor nuevo nace marcado con la empresa activa.
+    // (Los compartidos — que se ven en las dos — se dejan en NULL por SQL.)
+    row.empresa = (typeof empresaParaNuevo==='function') ? empresaParaNuevo() : (v.empresa||'SEFE');
     const {data,error} = await sb.from('vendedores').insert(row).select().single();
     if(error){console.error('Error guardando vendedor:',error); v._nuevo=true;}
-    else v.id = data.id;
+    else { v.id = data.id; v.empresa = data.empresa; }
   } else {
     const {error} = await sb.from('vendedores').update(row).eq('id', v.id);
     if(error)console.error('Error actualizando vendedor:',error);

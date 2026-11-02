@@ -464,7 +464,7 @@ function renderPanel(){
         _docs.filter(d=>['certificada','facturado'].includes(d.estado)&&d.tipoDoc==='cambiaria'&&new Date(d.creada)>=mes).forEach(d=>{const v=d.vendedorId||0;ventasVend[v]=(ventasVend[v]||0)+d.totales.total;});
         let html='<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Empresa</div>';
         html+=meta>0?_barMeta(ventasMes,meta):`<div class="empty" style="font-size:12px">Sin meta de empresa.${puedeEmpresa?' Definila con el botón de arriba.':''}</div>`;
-        const filas=(typeof vendedores!=='undefined'?vendedores:[]).map(v=>{
+        const filas=(typeof vendedoresEmp==='function'?vendedoresEmp():(typeof vendedores!=='undefined'?vendedores:[])).map(v=>{
           const mv=Number(metasVend[v.id])||0, vv=ventasVend[v.id]||0;
           if(mv<=0&&vv<=0)return '';
           const p=mv>0?Math.round(vv/mv*100):null;

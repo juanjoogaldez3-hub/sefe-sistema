@@ -300,7 +300,7 @@ function renderRepFilters(){
   };
   if(repType==='resumen'||repType==='costos'||repType==='producto'){
     const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
-    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    const vendOpts=(typeof vendedoresEmp==='function'?vendedoresEmp():vendedores).map(v=>({v:v.nombre,l:v.nombre}));
     if(repType!=='producto')html+=sel('rf-cli','Cliente',cliOpts,repFiltros.cliente,'cliente');
     if(repType!=='producto')html+=sel('rf-vend','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple');
     if(repType==='producto'){
@@ -322,7 +322,7 @@ function renderRepFilters(){
     html=`<div class="rep-filter-bar">${sel('rf-prov','Proveedor',provOpts,repFiltros.proveedor,'proveedor')}</div>`;
   }
   else if(repType==='cliprod'){
-    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    const vendOpts=(typeof vendedoresEmp==='function'?vendedoresEmp():vendedores).map(v=>({v:v.nombre,l:v.nombre}));
     const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     html=`<div class="rep-filter-bar">
       ${sel('rf-vend-cp','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}
@@ -334,7 +334,7 @@ function renderRepFilters(){
     </div>`;
   }
   else if(repType==='climes'){
-    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    const vendOpts=(typeof vendedoresEmp==='function'?vendedoresEmp():vendedores).map(v=>({v:v.nombre,l:v.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-vend-cm','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}
       <div style="display:flex;align-items:flex-end;gap:8px">
         <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(true)" title="Expandir todo">⊞ Expandir</button>
@@ -343,7 +343,7 @@ function renderRepFilters(){
     </div>`;
   }
   else if(repType==='climescomp'||repType==='comision'){
-    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    const vendOpts=(typeof vendedoresEmp==='function'?vendedoresEmp():vendedores).map(v=>({v:v.nombre,l:v.nombre}));
     const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     // En la Comparativa cliente/mes se puede ordenar por Total (default) o por
     // la diferencia del último mes vs. el anterior: "Más creció" / "Más cayó".
@@ -351,7 +351,7 @@ function renderRepFilters(){
     html=`<div class="rep-filter-bar">${sel('rf-vend-cc','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}${sel('rf-cli-cc','Cliente',cliOpts,repFiltros.cliente,'cliente')}${ordCC}</div>`;
   }
   else if(repType==='prodmescomp'){
-    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    const vendOpts=(typeof vendedoresEmp==='function'?vendedoresEmp():vendedores).map(v=>({v:v.nombre,l:v.nombre}));
     const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
     // Mismo ordenamiento que la Comparativa cliente/mes: Total (default), Más creció, Más cayó.
     const ordPM=`<div><label>Ordenar por</label><select style="margin-top:4px;height:34px" onchange="setRepFiltro('prodmescompOrden',this.value)"><option value="total"${(repFiltros.prodmescompOrden||'total')==='total'?' selected':''}>Total</option><option value="crecio"${repFiltros.prodmescompOrden==='crecio'?' selected':''}>Más creció</option><option value="cayo"${repFiltros.prodmescompOrden==='cayo'?' selected':''}>Más cayó</option></select></div>`;
@@ -367,11 +367,11 @@ function renderRepFilters(){
     html=`<div class="rep-filter-bar">${sel('rf-cli-ret','Cliente',cliOpts,repFiltros.cliente,'cliente')}</div>`;
   }
   else if(repType==='seguimiento'){
-    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    const vendOpts=(typeof vendedoresEmp==='function'?vendedoresEmp():vendedores).map(v=>({v:v.nombre,l:v.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-vend-seg','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}</div>`;
   }
   else if(repType==='dircli'){
-    const vendOpts=vendedores.map(v=>({v:v.nombre,l:v.nombre}));
+    const vendOpts=(typeof vendedoresEmp==='function'?vendedoresEmp():vendedores).map(v=>({v:v.nombre,l:v.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-vend-dc','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}
       <div style="display:flex;align-items:flex-end;gap:8px">
         <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(true)" title="Expandir todo">⊞ Expandir</button>

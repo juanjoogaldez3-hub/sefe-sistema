@@ -1380,7 +1380,7 @@ function _clientesConLoc(){
 }
 function openMapaClientes(){
   const rutas=[...new Set(deEmpresa(typeof clientes!=='undefined'?clientes:[]).map(c=>(c.ruta||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es')); // multiempresa
-  const optVend='<option value="">Todos los vendedores</option>'+(typeof vendedores!=='undefined'?vendedores:[]).map(v=>`<option value="${v.id}">${escHtml(v.nombre)}</option>`).join('');
+  const optVend='<option value="">Todos los vendedores</option>'+(typeof vendedoresEmp==='function'?vendedoresEmp():(typeof vendedores!=='undefined'?vendedores:[])).map(v=>`<option value="${v.id}">${escHtml(v.nombre)}</option>`).join('');
   const optRuta='<option value="">Todas las rutas</option>'+rutas.map(r=>`<option value="${escHtml(r)}">${escHtml(r)}</option>`).join('');
   openMod('Mapa de clientes',
     `<div class="row" style="margin-bottom:8px">

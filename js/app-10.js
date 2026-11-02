@@ -440,7 +440,7 @@ function openCli(id){
   </div>
   <div class="row"><div><label>Vendedor responsable</label><select id="c-vend">
     <option value="">Sin asignar</option>
-    ${vendedores.map(v=>`<option value="${v.id}" ${c&&c.vendedorId===v.id?'selected':''}>${v.nombre}</option>`).join('')}
+    ${(()=>{let vs=(typeof vendedoresEmp==='function'?vendedoresEmp():vendedores);if(c&&c.vendedorId&&!vs.some(v=>v.id===c.vendedorId)){const vx=vendedores.find(v=>v.id===c.vendedorId);if(vx)vs=vs.concat(vx);}return vs.map(v=>`<option value="${v.id}" ${c&&c.vendedorId===v.id?'selected':''}>${v.nombre}</option>`).join('');})()}
     </select></div>
   </div>
   <div class="row" id="c-subvend-wrap" style="display:none"><div><label>Sub-vendedor por Whaticket <span style="font-weight:400;color:var(--muted-2)">(quién le vende a este cliente por el canal)</span></label><select id="c-subvend">

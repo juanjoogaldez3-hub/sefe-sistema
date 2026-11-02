@@ -523,6 +523,16 @@ function deEmpresa(arr){
   if(_consolidadoScope||!empresaActiva) return arr||[];
   return (arr||[]).filter(x=> (x&&x.empresa||'SEFE')===empresaActiva );
 }
+// Vendedores visibles en la empresa activa: los de esa empresa MÁS los
+// compartidos (empresa vacía/nula = "ambas", ej. Luis Menocal, WHATICKET).
+// Es SOLO para los MENÚS; las búsquedas por id siguen usando el array
+// completo `vendedores` (un documento viejo puede referir a un vendedor de
+// la otra empresa y debe encontrar su nombre igual). En consolidado o con
+// una sola empresa, devuelve todos.
+function vendedoresEmp(){
+  if(_consolidadoScope||!empresaActiva) return vendedores||[];
+  return (vendedores||[]).filter(v=> !v.empresa || v.empresa===empresaActiva );
+}
 // ── Vista consolidada (ver las dos empresas juntas) ─────────
 // Sólo para el dashboard y los reportes: mientras se dibujan, `deEmpresa`
 // devuelve TODO (no filtra), para ver los números combinados. No toca las
@@ -664,6 +674,7 @@ function empTag(codigo){
 if(typeof window!=='undefined'){
   window.empresaActivaObj=empresaActivaObj; window.haymultiempresa=haymultiempresa;
   window.deEmpresa=deEmpresa; window.empresaParaNuevo=empresaParaNuevo;
+  window.vendedoresEmp=vendedoresEmp;
   window.cambiarEmpresa=cambiarEmpresa; window.renderSelectorEmpresa=renderSelectorEmpresa;
   window.iniciarEmpresaActiva=iniciarEmpresaActiva; window.empTag=empTag;
 }
