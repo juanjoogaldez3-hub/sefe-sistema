@@ -302,10 +302,11 @@ const LAML_MARCA = Object.assign({}, _MARCA_DEFAULT, {
   razonSocial:   'Soluciones Efectivas',
   membrete:      'Soluciones Efectivas',
   prefijoArchivo:'SolucionesEfectivas',
-  // Color de Luis Menocal: amarillo mostaza en toda la interfaz. El
-  // primario es un mostaza profundo (el texto blanco del menú sigue
-  // legible); el acento es un mostaza más claro (resalta el botón activo).
-  colorPrimario:'#8C6D0A', colorAcento:'#E8CC5B',
+  // Color de Luis Menocal: estilo "premium" — menú y encabezados en gris
+  // grafito oscuro, con amarillo mostaza como ACENTO (botón activo del
+  // menú, cuadrito del monograma, resaltados). El grafito da buen
+  // contraste con el texto claro y el mostaza aporta el toque de marca.
+  colorPrimario:'#2A2E35', colorAcento:'#D4A017',
   logo: (typeof window!=='undefined' && window.LAML_LOGO) ? window.LAML_LOGO : SEFE_MARCA.logo,
 });
 window.LAML_MARCA = LAML_MARCA;
