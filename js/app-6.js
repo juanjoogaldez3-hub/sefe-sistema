@@ -431,7 +431,9 @@ window.eliminarCuentaBancoUI=function(id){
 // resuelve desde acá asignándole la cuenta (y ahí se crea el movimiento).
 function comprasContadoSinCuenta(){
   const out=[];
-  (compras||[]).forEach(c=>{
+  // Multiempresa: solo las compras de la empresa activa (este panel vive en
+  // la pantalla Bancos y debe mostrar lo de una sola empresa).
+  (typeof deEmpresa==='function'?deEmpresa(compras):(compras||[])).forEach(c=>{
     if(c.anulado)return;
     (c.abonos||[]).forEach((a,idx)=>{
       if(a.anulado)return;

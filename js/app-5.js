@@ -1015,7 +1015,7 @@ function renderCompras(){
   const pendRec=filtradas.filter(c=>c.estadoRecepcion!=='recibida').length;
   const sinFact=filtradas.filter(c=>!c.facturada).length;
   const k=[
-    {ic:'i-blue',svg:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',lbl:'Total comprado',val:money(totalComprado),sub:compras.length+' órdenes'},
+    {ic:'i-blue',svg:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',lbl:'Total comprado',val:money(totalComprado),sub:filtradas.length+' órdenes'},
     {ic:'i-warn',svg:'<path d="M16 3h5v5M21 3l-7 7M10 14 3 21M3 16v5h5"/>',lbl:'Pendientes de recibir',val:pendRec,sub:'órdenes en camino'},
     {ic:'i-lime',svg:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',lbl:'Sin factura',val:sinFact,sub:'por registrar factura'},
     {ic:'i-green',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>',lbl:'Por pagar',val:money(porPagar),sub:'a proveedores'},
