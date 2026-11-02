@@ -601,11 +601,28 @@ function toggleBrandMenu(e){
   if(e){ e.stopPropagation(); }
   if(!haymultiempresa()) return;
   const menu=document.getElementById('brand-menu'); if(!menu) return;
+  renderSelectorEmpresa(); // asegura que el menú tenga su contenido (empresas) al abrir
   const abrir=(menu.style.display==='none'||!menu.style.display);
-  menu.style.display=abrir?'block':'none';
-  if(abrir){ setTimeout(()=>document.addEventListener('click',_cerrarBrandMenu,{once:true}),0); }
+  if(abrir){
+    menu.style.display='block';
+    // Cerrar al tocar fuera. OJO móvil: el patrón viejo ({once:true}) cerraba
+    // el menú en el MISMO toque que lo abría (parecía que no salía). Ahora el
+    // listener ignora los toques dentro del menú o del cuadrito, y solo cierra
+    // con un toque de verdad afuera.
+    setTimeout(()=>document.addEventListener('click',_cerrarBrandMenuFuera),0);
+  }else{
+    _cerrarBrandMenu();
+  }
 }
-function _cerrarBrandMenu(){ const menu=document.getElementById('brand-menu'); if(menu)menu.style.display='none'; }
+function _cerrarBrandMenuFuera(ev){
+  const menu=document.getElementById('brand-menu'), brand=document.getElementById('brand-sw');
+  if(menu && ((menu.contains(ev.target))||(brand&&brand.contains(ev.target)))) return; // toque adentro: no cerrar
+  _cerrarBrandMenu();
+}
+function _cerrarBrandMenu(){
+  const menu=document.getElementById('brand-menu'); if(menu)menu.style.display='none';
+  document.removeEventListener('click',_cerrarBrandMenuFuera);
+}
 // Cambia a la empresa de un registro si es distinta a la activa. Sirve para
 // abrir algo de la OTRA empresa desde un recordatorio (que es compartido):
 // primero cambia de empresa y así el registro sí queda visible. Devuelve
