@@ -244,7 +244,14 @@ function saldoCuenta(cuentaId){
   return s;
 }
 function nMovsCuenta(cuentaId){return movimientosBanco.filter(m=>!m.anulado&&m.cuentaId===cuentaId).length;}
-function cuentasActivasBanco(){return (typeof cuentasBanco!=='undefined'?cuentasBanco:[]).filter(c=>c.activo!==false);}
+function cuentasActivasBanco(){
+  const todas=(typeof cuentasBanco!=='undefined'?cuentasBanco:[]).filter(c=>c.activo!==false);
+  // Multiempresa: cada cuenta de banco pertenece a una empresa. En una sola
+  // empresa, en consolidado, o si una cuenta no tiene empresa (compartida),
+  // se muestran todas; si hay empresa activa, solo las suyas + las compartidas.
+  if(typeof empresaActiva==='undefined'||!empresaActiva||(typeof _consolidadoScope!=='undefined'&&_consolidadoScope)) return todas;
+  return todas.filter(c=> !c.empresa || c.empresa===empresaActiva );
+}
 // Selector reutilizable de cuenta de banco (para cobros, pagos, gastos)
 function selectorCuentaBancoHTML(idSel,label,sel){
   const cuentas=cuentasActivasBanco();
