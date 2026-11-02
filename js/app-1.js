@@ -302,6 +302,10 @@ const LAML_MARCA = Object.assign({}, _MARCA_DEFAULT, {
   razonSocial:   'Soluciones Efectivas',
   membrete:      'Soluciones Efectivas',
   prefijoArchivo:'SolucionesEfectivas',
+  // Color de Luis Menocal: amarillo mostaza en toda la interfaz. El
+  // primario es un mostaza profundo (el texto blanco del menú sigue
+  // legible); el acento es un mostaza más claro (resalta el botón activo).
+  colorPrimario:'#8C6D0A', colorAcento:'#E8CC5B',
   logo: (typeof window!=='undefined' && window.LAML_LOGO) ? window.LAML_LOGO : SEFE_MARCA.logo,
 });
 window.LAML_MARCA = LAML_MARCA;
@@ -350,6 +354,27 @@ function _mezclarColor(hex, hacia, t){
   }catch(e){ return hex; }
 }
 
+// Pinta las variables CSS de color según una marca. Se usa al arrancar
+// (marca del producto) y al cambiar de empresa (cada empresa puede tener
+// su color). Si la marca no trae colores, no toca nada.
+function _aplicarColoresMarca(m){
+  try{
+    if(!m)return;
+    const root=document.documentElement && document.documentElement.style;
+    if(root&&m.colorPrimario){
+      root.setProperty('--green',     m.colorPrimario);
+      root.setProperty('--green-700', m.colorPrimario700||_mezclarColor(m.colorPrimario,'blanco',.09));
+      root.setProperty('--green-600', m.colorPrimario600||_mezclarColor(m.colorPrimario,'blanco',.17));
+    }
+    if(root&&m.colorAcento){
+      root.setProperty('--lime',    m.colorAcento);
+      root.setProperty('--lime-dk', m.colorAcentoOsc||_mezclarColor(m.colorAcento,'negro',.24));
+    }
+    const metaTheme=document.querySelector('meta[name="theme-color"]');
+    if(metaTheme&&m.colorPrimario)metaTheme.setAttribute('content',m.colorPrimario);
+  }catch(e){ console.error('_aplicarColoresMarca:',e); }
+}
+
 // Aplica la marca a la interfaz: pestaña, barra lateral, pantalla de
 // carga, login, ícono y colores. Se llama una sola vez al arrancar.
 // Para SEFE (sin bloque `marca`) todo queda idéntico a como estaba.
@@ -387,17 +412,8 @@ function aplicarMarca(){
     if(loginImg&&m.logo)loginImg.src=m.logo;
 
     // Colores del sistema (variables CSS). Para SEFE son los mismos de
-    // siempre; un cliente con colores propios repinta toda la interfaz.
-    const root=document.documentElement && document.documentElement.style;
-    if(root&&m.colorPrimario){
-      root.setProperty('--green',     m.colorPrimario);
-      root.setProperty('--green-700', m.colorPrimario700||_mezclarColor(m.colorPrimario,'blanco',.09));
-      root.setProperty('--green-600', m.colorPrimario600||_mezclarColor(m.colorPrimario,'blanco',.17));
-    }
-    if(root&&m.colorAcento){
-      root.setProperty('--lime',    m.colorAcento);
-      root.setProperty('--lime-dk', m.colorAcentoOsc||_mezclarColor(m.colorAcento,'negro',.24));
-    }
+    // siempre; una empresa con colores propios repinta toda la interfaz.
+    _aplicarColoresMarca(m);
   }catch(e){ console.error('aplicarMarca:',e); }
 }
 window.aplicarMarca=aplicarMarca;
@@ -414,15 +430,19 @@ function aplicarMarcaEmpresa(){
     const mk=brand.querySelector('.mk'), h2=brand.querySelector('h2');
     const e=(typeof haymultiempresa==='function'&&haymultiempresa())?empresaActivaObj():null;
     if(!e || e.codigo==='SEFE'){
-      // Marca del producto (SEFE) tal cual.
+      // Marca del producto (SEFE) tal cual: color verde de siempre.
       if(mk){ if(SEFE_MARCA.monograma)mk.textContent=SEFE_MARCA.monograma; mk.style.background=''; mk.style.color=''; }
       if(h2&&SEFE_MARCA.nombre)h2.textContent=SEFE_MARCA.nombre;
+      _aplicarColoresMarca(SEFE_MARCA);
       return;
     }
     const _m=(typeof marcaActiva==='function')?marcaActiva():null;
     const mono=(_m&&_m.monograma)||String(e.codigo||'').slice(0,2).toUpperCase()||'··';
     if(mk){ mk.textContent=mono; if(e.color){mk.style.background=e.color;mk.style.color='#fff';} }
     if(h2)h2.textContent=(_m&&_m.nombre)||e.nombre||e.codigo;
+    // Repinta toda la interfaz con el color de la empresa (ej. Luis Menocal
+    // en mostaza). Si la empresa no trae color propio, usa el de su marca.
+    _aplicarColoresMarca(_m||marcaActiva());
   }catch(err){ console.error('aplicarMarcaEmpresa:',err); }
 }
 if(typeof window!=='undefined')window.aplicarMarcaEmpresa=aplicarMarcaEmpresa;
