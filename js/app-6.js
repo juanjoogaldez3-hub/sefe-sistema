@@ -252,11 +252,14 @@ function cuentasActivasBanco(){
   if(typeof empresaActiva==='undefined'||!empresaActiva||(typeof _consolidadoScope!=='undefined'&&_consolidadoScope)) return todas;
   return todas.filter(c=> !c.empresa || c.empresa===empresaActiva );
 }
+// Etiqueta de una cuenta para los menús: nombre + número de cuenta entre
+// paréntesis (si tiene). Ej: "MONETARIOS BI (0123456789)".
+function cuentaLabel(c){ return (c&&c.nombre||'')+(c&&c.numero?` (${c.numero})`:''); }
 // Selector reutilizable de cuenta de banco (para cobros, pagos, gastos)
 function selectorCuentaBancoHTML(idSel,label,sel){
   const cuentas=cuentasActivasBanco();
   if(!cuentas.length)return `<div><label>${label}</label><div style="font-size:12px;color:var(--muted);padding:9px 0">Sin cuentas — creá una en la sección Bancos para registrar el movimiento.</div></div>`;
-  return `<div><label>${label}</label><select id="${idSel}"><option value="">— Sin especificar —</option>${cuentas.map(c=>`<option value="${c.id}"${String(sel)===String(c.id)?' selected':''}>${c.nombre}</option>`).join('')}</select></div>`;
+  return `<div><label>${label}</label><select id="${idSel}"><option value="">— Sin especificar —</option>${cuentas.map(c=>`<option value="${c.id}"${String(sel)===String(c.id)?' selected':''}>${cuentaLabel(c)}</option>`).join('')}</select></div>`;
 }
 // Registra un movimiento de banco (entrada/salida) ligado a un origen (cobro, pago, gasto)
 function registrarMovimientoBanco({cuentaId,tipo,monto,concepto,categoria,origen,origenId,referencia,fecha,beneficiario,sinPoliza}){
@@ -352,7 +355,7 @@ function renderBancos(){
   const selCta=document.getElementById('mov-filtro-cuenta');
   if(selCta){
     const valPrev=selCta.value;
-    selCta.innerHTML='<option value="">Todas las cuentas</option>'+deEmpresa(cuentasBanco).map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+    selCta.innerHTML='<option value="">Todas las cuentas</option>'+deEmpresa(cuentasBanco).map(c=>`<option value="${c.id}">${cuentaLabel(c)}</option>`).join('');
     selCta.value=valPrev;
   }
   const fTipo=document.getElementById('mov-filtro-tipo')?.value||'';
@@ -494,8 +497,8 @@ function openMovimientoBanco(pre,onDone){
   const cats=CAT_MOV_OPCIONES.map(k=>`<option value="${k}">${CAT_MOV_LBL[k]}</option>`).join('');
   openMod('Registrar movimiento / gasto',
     `<div class="row"><div><label>Tipo</label><select id="mv-tipo" onchange="onTipoMov()"><option value="salida">Salida (gasto/pago)</option><option value="entrada">Entrada (depósito/ingreso)</option><option value="transferencia">Transferencia entre cuentas</option></select></div><div><label>Monto</label><input id="mv-monto" type="number" step="0.01" placeholder="0.00"></div></div>
-     <div class="row"><div><label id="mv-cuenta-lbl">Cuenta</label><select id="mv-cuenta">${cuentasActivasBanco().map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}</select></div><div><label>Fecha</label><input id="mv-fecha" type="date" value="${hoy}"></div></div>
-     <div class="row" id="mv-destino-row" style="display:none"><div><label>Cuenta destino</label><select id="mv-destino">${cuentasActivasBanco().map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}</select></div></div>
+     <div class="row"><div><label id="mv-cuenta-lbl">Cuenta</label><select id="mv-cuenta">${cuentasActivasBanco().map(c=>`<option value="${c.id}">${cuentaLabel(c)}</option>`).join('')}</select></div><div><label>Fecha</label><input id="mv-fecha" type="date" value="${hoy}"></div></div>
+     <div class="row" id="mv-destino-row" style="display:none"><div><label>Cuenta destino</label><select id="mv-destino">${cuentasActivasBanco().map(c=>`<option value="${c.id}">${cuentaLabel(c)}</option>`).join('')}</select></div></div>
      <div class="row"><div><label>Categoría</label><select id="mv-cat">${cats}</select></div><div><label>No. cheque / autorización / transferencia</label><input id="mv-ref" placeholder="Según la forma de pago (opcional)"></div></div>
      <div class="row"><div><label>Beneficiario / a favor de <span style="font-weight:400;color:var(--muted-2)">(para la póliza de cheque en salidas)</span></label><input id="mv-benef" placeholder="Nombre de a quién se le paga"></div></div>
      <div class="row"><div><label>Concepto / descripción</label><input id="mv-concepto" placeholder="Ej. Pago de planilla quincena, luz, alquiler..."></div></div>
@@ -850,7 +853,7 @@ let _concData=null, _concCuentaId=null, _concTab='conc', _concRes=null,
 function openConciliacion(){
   if(!cuentasActivasBanco().length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
   if(!_concCuentaId){const c0=cuentasActivasBanco()[0];_concCuentaId=c0?c0.id:null;}
-  const ops=cuentasActivasBanco().map(c=>`<option value="${c.id}"${String(c.id)===String(_concCuentaId)?' selected':''}>${c.nombre}</option>`).join('');
+  const ops=cuentasActivasBanco().map(c=>`<option value="${c.id}"${String(c.id)===String(_concCuentaId)?' selected':''}>${cuentaLabel(c)}</option>`).join('');
   openMod('Conciliación bancaria',
     `<div class="row">
        <div><label>1. Archivo del banco (CSV de Bi en Línea)</label>
@@ -1281,7 +1284,7 @@ window.openEditarPoliza=function(id){
   // La cuenta solo se edita en movimientos MANUALES (los ligados a un pago van
   // atados a su cuenta para no descuadrar). El beneficiario solo aplica a
   // salidas manuales (los pagos a proveedor toman el nombre del proveedor).
-  const ctaOpts=cuentasActivasBanco().map(c=>`<option value="${c.id}"${String(m.cuentaId)===String(c.id)?' selected':''}>${c.nombre}</option>`).join('');
+  const ctaOpts=cuentasActivasBanco().map(c=>`<option value="${c.id}"${String(m.cuentaId)===String(c.id)?' selected':''}>${cuentaLabel(c)}</option>`).join('');
   const mostrarBenef=esManual&&esSalida;
   openMod(titulo,
     `<div class="row"><div><label>Fecha</label><input id="ep-fecha" type="date" value="${(m.fecha||'').slice(0,10)}"></div><div><label>Monto</label><input id="ep-monto" type="number" step="0.01" value="${Number(m.monto)}"${esManual?'':' disabled'}></div></div>

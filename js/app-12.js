@@ -70,7 +70,7 @@ function openEmpleado(id){
     vends.map(v=>`<option value="${v.id}"${e&&String(e.vendedorId)===String(v.id)?' selected':''}>${escHtml(v.nombre||('Vendedor '+v.id))}</option>`).join('');
   const cuentas=(typeof cuentasActivasBanco==='function'?cuentasActivasBanco():[]);
   const optCta=`<option value="">— Cuenta por defecto de la planilla —</option>`+
-    cuentas.map(c=>`<option value="${c.id}"${e&&String(e.cuentaBancoId)===String(c.id)?' selected':''}>${escHtml(c.nombre)}</option>`).join('');
+    cuentas.map(c=>`<option value="${c.id}"${e&&String(e.cuentaBancoId)===String(c.id)?' selected':''}>${escHtml(typeof cuentaLabel==='function'?cuentaLabel(c):c.nombre)}</option>`).join('');
   openMod(e?'Editar empleado':'Nuevo empleado',
     `<div class="row"><div><label>Nombre completo</label><input id="emp-nom" value="${e?e.nombre:''}" placeholder="Ej. María López"></div><div><label>Puesto</label><input id="emp-puesto" value="${e?e.puesto:''}" placeholder="Ej. Vendedora, Bodega"></div></div>
      <div class="row"><div><label>Sueldo base (mensual)</label><input id="emp-sueldo" type="number" step="0.01" value="${e?e.sueldoBase:''}" placeholder="0.00"></div><div><label>Bonificación incentivo (mensual)</label><input id="emp-bonif" type="number" step="0.01" value="${e?e.bonifIncentivo:250}" placeholder="250.00"></div></div>
@@ -280,7 +280,7 @@ function _abrirEditorPlanilla(){
   const pl=_planActual;
   _planEdit=new Set();   // arrancar con todo en su estado normal (bloqueado si está pagado)
   const cuentas=(typeof cuentasActivasBanco==='function'?cuentasActivasBanco():[]);
-  const optCta=cuentas.map(c=>`<option value="${c.id}"${String(pl.cuentaPagoId)===String(c.id)?' selected':''}>${escHtml(c.nombre)}</option>`).join('');
+  const optCta=cuentas.map(c=>`<option value="${c.id}"${String(pl.cuentaPagoId)===String(c.id)?' selected':''}>${escHtml(typeof cuentaLabel==='function'?cuentaLabel(c):c.nombre)}</option>`).join('');
   const valMesActual=`${(+pl.desde.slice(0,4))}-${(+pl.desde.slice(5,7))}`;
   const selMes=pl._nuevo
     ? `<select id="pl-mes" onchange="_planCambiarMes(this.value)">${_mesesRecientes(12).map(q=>`<option value="${q.val}"${q.val===valMesActual?' selected':''}>${q.etiqueta}</option>`).join('')}</select>`
@@ -764,7 +764,7 @@ window.verReciboEspecial=verReciboEspecial;
 function _reAbrirEditor(){
   const r=_reActual; _reEdit=new Set();
   const cuentas=(typeof cuentasActivasBanco==='function'?cuentasActivasBanco():[]);
-  const optCta=cuentas.map(c=>`<option value="${c.id}"${String(r.cuentaPagoId)===String(c.id)?' selected':''}>${escHtml(c.nombre)}</option>`).join('');
+  const optCta=cuentas.map(c=>`<option value="${c.id}"${String(r.cuentaPagoId)===String(c.id)?' selected':''}>${escHtml(typeof cuentaLabel==='function'?cuentaLabel(c):c.nombre)}</option>`).join('');
   const selTipo=r._nuevo
     ? `<select id="re-tipo" onchange="_reCambiarTipo(this.value)">${Object.keys(_RE_TIPOS).map(k=>`<option value="${k}"${r.tipo===k?' selected':''}>${_RE_TIPOS[k]}</option>`).join('')}</select>`
     : `<div style="font-weight:700;font-size:15px;color:var(--ink)">${escHtml(_RE_TIPOS[r.tipo]||r.tipo)}</div>`;
