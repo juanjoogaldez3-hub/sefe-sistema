@@ -55,7 +55,7 @@ function registrarCompraDividida(facturas){
       items:fac.items.map(it=>({...it,recibido:0})),
       total,fecha,referencia:(ref?ref+' · ':'')+'parte '+(idx+1)+'/'+facturas.length,
       estadoRecepcion:'pendiente',facturada:false,docProv:'',tipoPago:null,diasCredito:0,vencimiento:null,abonos:[],
-      especial:false,mes:null,oficializada:false,empresa:empresaParaNuevo(),_nuevo:true};
+      especial:false,mes:null,oficializada:false,empresa:(prov&&prov.empresa)||empresaParaNuevo(),_nuevo:true};
     compras.push(c); if(typeof guardarCompra==='function')guardarCompra(c); creadas.push(c);
   });
   logAudit('Orden dividida en '+facturas.length+' compras',prov.nombre+' · '+creadas.map(c=>'CMP-'+padn(c.id)).join(', '));
@@ -314,7 +314,7 @@ function abrirAnularCompra(id){
       c.anulado=true;c.motivoAnulacion=motivo;c.anuladoPor=currentUser;c.anuladoFecha=new Date().toISOString();
       // Si tenía cuenta por pagar, cerrarla con un abono de cierre (y persistirlo)
       if(c.facturada&&c.tipoPago==='credito'&&apInfo(c).saldo>0.001){
-        const cierre={fecha:fechaHoyGT(),monto:apInfo(c).saldo,metodo:'Cierre por anulación',referencia:'Compra anulada',noRecibo:'—',registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,esCierre:true};
+        const cierre={fecha:fechaHoyGT(),monto:apInfo(c).saldo,metodo:'Cierre por anulación',referencia:'Compra anulada',noRecibo:'—',registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,esCierre:true,empresa:c.empresa||empresaParaNuevo()};
         c.abonos.push(cierre);
         if(typeof guardarPagoProveedor==='function')guardarPagoProveedor(c.id,cierre);
       }

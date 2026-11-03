@@ -178,7 +178,9 @@ function openAmbServicio(id){
       // Si el próximo servicio cae sábado/domingo, se corre al lunes.
       if(rec.proximo){const hab=_siguienteHabil(rec.proximo);if(hab!==rec.proximo){rec.proximo=hab;toast('Próximo servicio movido','Caía en fin de semana → '+fdate(hab));}}
       if(!rec.creadoPor&&typeof currentUser!=='undefined')rec.creadoPor=currentUser;
-      if(!s&&typeof empresaParaNuevo==='function')rec.empresa=empresaParaNuevo(); // multiempresa
+      // Multiempresa: el servicio hereda la empresa de su CLIENTE (fuente de
+      // verdad), no la activa — así no se cruza si el cliente es de la otra.
+      if(!s){const _cliA=(typeof clientes!=='undefined'?clientes:[]).find(c=>c.id===clienteId);rec.empresa=(_cliA&&_cliA.empresa)||(typeof empresaParaNuevo==='function'?empresaParaNuevo():'SEFE');}
       // Un servicio nuevo con fecha = su primera recarga → arranca el historial.
       if(!s){rec.historial=rec.fecha?[{fecha:rec.fecha,por:rec.creadoPor||''}]:[];}
       else if(!Array.isArray(rec.historial))rec.historial=[];
@@ -782,7 +784,7 @@ function _gasRendimiento(g){
 }
 function renderGasolina(){
   const tb=$('#t-gas'); if(!tb)return;
-  const lista=(typeof gasolina!=='undefined'?gasolina:[]).slice().sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+  const lista=deEmpresa(typeof gasolina!=='undefined'?gasolina:[]).slice().sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||''))); // multiempresa
   const empty=$('#gas-empty'); if(empty)empty.style.display=lista.length?'none':'block';
   // KPIs del mes
   const mes=((typeof fechaHoyGT==='function')?fechaHoyGT():new Date().toISOString().slice(0,10)).slice(0,7);
@@ -882,7 +884,7 @@ function reporteGasolinaExcel(){ return _reporteGasolina(true); }
 function reporteGasolinaPDF(){ return _reporteGasolina(false); }
 window.reporteGasolinaExcel=reporteGasolinaExcel; window.reporteGasolinaPDF=reporteGasolinaPDF;
 async function _reporteGasolina(excel){
-  const lista=(typeof gasolina!=='undefined'?gasolina:[]).slice()
+  const lista=deEmpresa(typeof gasolina!=='undefined'?gasolina:[]).slice() // multiempresa
     .sort((a,b)=>_gasQuien(a).localeCompare(_gasQuien(b))||String(a.fecha||'').localeCompare(String(b.fecha||'')));
   if(!lista.length){toast('Sin datos','No hay cargas registradas',true);return;}
   const totGal=lista.reduce((s,g)=>s+(Number(g.galones)||0),0);
@@ -945,7 +947,7 @@ window.reporteGasolinaUI=reporteGasolinaUI;
 // la carga que cierra ese tramo.
 function _gasResumenUnidad(){
   const por={};
-  (typeof gasolina!=='undefined'?gasolina:[]).forEach(g=>{
+  deEmpresa(typeof gasolina!=='undefined'?gasolina:[]).forEach(g=>{ // multiempresa
     const veh=String(g.vehiculo||'').trim();
     const k=veh?veh.toUpperCase():'—';
     const o=por[k]||(por[k]={unidad:veh||'Sin placa',pilotos:new Set(),cargas:0,galones:0,monto:0,km:0,galRend:0,_lecturas:[]});
@@ -1001,7 +1003,7 @@ window._reporteGasUnidad=_reporteGasUnidad;
 // Agrega por mes: galones y gasto.
 function _gasPorMes(){
   const por={};
-  (typeof gasolina!=='undefined'?gasolina:[]).forEach(g=>{
+  deEmpresa(typeof gasolina!=='undefined'?gasolina:[]).forEach(g=>{ // multiempresa
     const m=String(g.fecha||'').slice(0,7); if(!m)return;
     const o=por[m]||(por[m]={mes:m,galones:0,monto:0});
     o.galones+=Number(g.galones)||0; o.monto+=Number(g.monto)||0;

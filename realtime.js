@@ -140,7 +140,7 @@
     movimientos_banco: {
       arr: () => movimientosBanco,
       map: mapMovimientoBancoFromDB,
-      identidad: ['registradoEl', 'monto'],
+      identidad: ['registradoEl', 'monto', 'cuentaId'],
       vistas: ['bancos', 'panel'],
     },
 
@@ -166,7 +166,7 @@
     cotizaciones: {
       arr: () => cotizaciones,
       map: mapCotizacionFromDB,
-      identidad: ['creada'],
+      identidad: ['creada', 'clienteId'],
       vistas: ['cotizaciones', 'panel'],
     },
     usuarios: {

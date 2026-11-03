@@ -1641,7 +1641,7 @@ function procesarCobro(id){
         d.abonos=d.abonos||[];
         const _ab={fecha:_fecha,monto:aplicado,metodo:_met,referencia:_ref,
           noRecibo:_rec,comprobante:_compFoto,cuentaBancoId:_cta,
-          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,origenCobroRuta:c.id};
+          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,origenCobroRuta:c.id,empresa:d.empresa||empresaParaNuevo()};
         d.abonos.push(_ab);
         d.estadoPago=arInfo(d).estado;
         if(typeof guardarAbono==='function')guardarAbono(d.id,_ab);
@@ -1651,7 +1651,7 @@ function procesarCobro(id){
         const _cr={clienteId:d.clienteId,tipo:'ingreso',monto:exceso,fecha:_fecha,documentoId:d.id,
           noRecibo:_rec,metodo:_met,referencia:_ref,cuentaBancoId:_cta,
           concepto:'Sobrepago en ruta recibo '+(_rec||'—')+' · '+(d.clienteComercial||d.clienteNombre),
-          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
+          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,empresa:d.empresa||empresaParaNuevo()};
         creditosCliente=creditosCliente||[];creditosCliente.push(_cr);
         if(typeof guardarCredito==='function')guardarCredito(_cr);
       }

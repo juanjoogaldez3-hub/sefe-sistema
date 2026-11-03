@@ -35,7 +35,7 @@ function openFacturaProv(id){
       const cuentaContado=tipoPago==='contado'?($('#fp-cuenta')?.value||null):null;
       Object.assign(c,{facturada:true,docProv:$('#fp-doc').value||'—',tipoPago,diasCredito:tipoPago==='credito'?dias:0,
         vencimiento:tipoPago==='credito'?new Date(new Date(fechaF).getTime()+dias*86400000).toISOString():null,
-        abonos:tipoPago==='contado'?[{fecha:fechaF.slice(0,10),monto:c.total,metodo:'Contado',referencia:($('#fp-doc').value||null),cuentaBancoId:cuentaContado,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false}]:[]});
+        abonos:tipoPago==='contado'?[{fecha:fechaF.slice(0,10),monto:c.total,metodo:'Contado',referencia:($('#fp-doc').value||null),cuentaBancoId:cuentaContado,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,empresa:c.empresa||empresaParaNuevo()}]:[]});
       // El abono de contado vive en pagos_proveedor: si no se guarda ahí, se pierde al recargar
       if(tipoPago==='contado'&&c.abonos[0]&&typeof guardarPagoProveedor==='function')guardarPagoProveedor(c.id,c.abonos[0]);
       // Contado con cuenta: salida de banco + póliza de cheque, igual que "Registrar pago".
@@ -1329,7 +1329,7 @@ function openAbonoProv(id){
       if(!(monto>0)){$('#pp-err').style.display='flex';$('#pp-err').querySelector('span').textContent='El monto debe ser mayor a cero';return;}
       if(monto>saldo+0.001){$('#pp-err').style.display='flex';$('#pp-err').querySelector('span').textContent='El pago no puede superar el saldo de '+money(saldo);return;}
       const _noRec=$('#pp-recibo').value, _cuenta=$('#pp-cuenta')?.value||null, _ref=$('#pp-ref').value;
-      const _pago={fecha:$('#pp-fecha').value||hoy,monto,metodo:$('#pp-met').value,referencia:_ref,noRecibo:_noRec,comprobante:_compFoto,cuentaBancoId:_cuenta,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
+      const _pago={fecha:$('#pp-fecha').value||hoy,monto,metodo:$('#pp-met').value,referencia:_ref,noRecibo:_noRec,comprobante:_compFoto,cuentaBancoId:_cuenta,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,empresa:c.empresa||empresaParaNuevo()};
       // Guardar el abono PRIMERO y esperar confirmación. Si falla, no seguimos: así
       // nunca queda un movimiento de banco sin su abono (la compra mostraría pendiente).
       const _btn=$('#m-save');if(_btn)_btn.disabled=true;
@@ -1521,7 +1521,7 @@ $('#co-go').onclick=async ()=>{
     total,fecha,referencia:$('#co-doc').value,
     estadoRecepcion:esEspecial?'recibida':'pendiente',
     facturada:false,docProv:'',tipoPago:null,diasCredito:0,vencimiento:null,abonos:[],
-    especial:esEspecial,mes:esEspecial?mes:null,oficializada:false,empresa:empresaParaNuevo(),_nuevo:true};
+    especial:esEspecial,mes:esEspecial?mes:null,oficializada:false,empresa:(prov&&prov.empresa)||empresaParaNuevo(),_nuevo:true};
 
   // Compra especial: subir inventario de inmediato
   if(esEspecial){

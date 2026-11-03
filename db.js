@@ -656,7 +656,7 @@ async function guardarPagoProveedor(compraId, pago){
     referencia:pago.referencia, no_recibo:pago.noRecibo, comprobante:pago.comprobante,
     registrado_por:pago.registradoPor, registrado_el:pago.registradoEl,
     anulado:pago.anulado, motivo_anulacion:pago.motivoAnulacion, es_cierre:pago.esCierre,
-    cuenta_banco_id:pago.cuentaBancoId||null
+    cuenta_banco_id:pago.cuentaBancoId||null, empresa:pago.empresa||'SEFE'
   };
   const {data,error} = await sb.from('pagos_proveedor').insert(row).select().single();
   if(error){console.error('Error guardando pago a proveedor:',error);return false;}

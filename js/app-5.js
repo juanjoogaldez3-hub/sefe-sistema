@@ -547,14 +547,14 @@ function aplicarSaldoFavor(id){
     f.abonos=f.abonos||[];
     const _ab={fecha:hoy,monto:aplicar,metodo:'Saldo a favor',referencia:'Aplicación de saldo a favor',
       noRecibo:'',comprobante:null,cuentaBancoId:null,
-      registradoPor:currentUser,registradoEl:ahora,anulado:false};
+      registradoPor:currentUser,registradoEl:ahora,anulado:false,empresa:f.empresa||empresaParaNuevo()};
     f.abonos.push(_ab);
     f.estadoPago=arInfo(f).estado;
     if(typeof guardarAbono==='function')guardarAbono(f.id,_ab);
     if(typeof guardarDocumento==='function')guardarDocumento(f);
     const _cr={clienteId:f.clienteId,tipo:'aplicacion',monto:aplicar,fecha:hoy,documentoId:f.id,
       metodo:'Saldo a favor',concepto:'Aplicado a factura '+f.serie+'-'+f.numeroDte,
-      registradoPor:currentUser,registradoEl:ahora,anulado:false};
+      registradoPor:currentUser,registradoEl:ahora,anulado:false,empresa:f.empresa||empresaParaNuevo()};
     creditosCliente=creditosCliente||[];creditosCliente.push(_cr);
     if(typeof guardarCredito==='function')guardarCredito(_cr);
     closeMod();renderCobros();
@@ -906,7 +906,7 @@ function openAnularAbono(facturaId,abonoIdx){
       if(a.metodo==='Saldo a favor'){
         const _cr={clienteId:f.clienteId,tipo:'ingreso',monto:a.monto,fecha:fechaHoyGT(),documentoId:f.id,
           metodo:'Saldo a favor',concepto:'Reverso por anulación de aplicación · '+f.serie+'-'+f.numeroDte,
-          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
+          registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false,empresa:f.empresa||empresaParaNuevo()};
         creditosCliente=creditosCliente||[];creditosCliente.push(_cr);
         if(typeof guardarCredito==='function')guardarCredito(_cr);
       }
