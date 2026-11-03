@@ -395,7 +395,7 @@ function mapCompraFromDB(c, todosPagos){
 function mapUsuarioFromDB(u){
   return {
     id:u.id, nombre:u.nombre, correo:u.correo, rol:u.rol, activo:u.activo,
-    vendedorId:u.vendedor_id, pilotoId:u.piloto_id, authId:u.auth_id,
+    vendedorId:u.vendedor_id, pilotoId:u.piloto_id, puedeRepartir:u.puede_repartir===true, authId:u.auth_id,
     dashboardLayout:(u.dashboard_layout&&typeof u.dashboard_layout==='object')?u.dashboard_layout:null
   };
 }
@@ -863,7 +863,7 @@ if(typeof window!=='undefined')window.actualizarCuentaPagoProveedor=actualizarCu
 async function guardarUsuario(u){
   const row = {
     nombre:u.nombre, correo:u.correo, rol:u.rol, activo:u.activo,
-    vendedor_id:u.vendedorId, piloto_id:u.pilotoId
+    vendedor_id:u.vendedorId, piloto_id:u.pilotoId, puede_repartir:u.puedeRepartir===true
   };
   if (u._nuevo) {
     delete u._nuevo;

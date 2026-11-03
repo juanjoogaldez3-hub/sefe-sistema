@@ -703,6 +703,37 @@ function miPilotoId(){
 }
 function esPiloto(){return currentRole==='piloto';}
 function canAsignarPiloto(){return (currentRole==='admin'||ROLES[currentRole]?.asignarPiloto===true)&&!soloLectura();}
+// ── Repartidores: usuarios que pueden salir a repartir ──────────────
+// Son los usuarios activos marcados "Puede repartir" (o de rol Piloto, que
+// siempre pueden) y que ya tienen su identidad de reparto (pilotoId). El
+// documento sigue guardando pilotoId, así que el historial no se toca.
+function repartidores(){
+  return (typeof usuarios!=='undefined'?usuarios:[]).filter(u=>u&&u.activo!==false&&(u.puedeRepartir===true||u.rol==='piloto')&&u.pilotoId!=null);
+}
+// Opciones <option> para los menús de asignar entrega: value = pilotoId del
+// usuario, texto = su nombre. Incluye al piloto YA asignado aunque hoy no sea
+// repartidor (historial, o usuario desmarcado), para no perder la asignación.
+function _optRepartidores(selPid){
+  const esc=(typeof escHtml==='function')?escHtml:(s=>String(s==null?'':s));
+  const list=repartidores().slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)));
+  let opts=`<option value="">— Elegí repartidor —</option>`;
+  const seen=new Set();
+  list.forEach(u=>{opts+=`<option value="${u.pilotoId}"${String(selPid)===String(u.pilotoId)?' selected':''}>${esc(u.nombre)}</option>`;seen.add(String(u.pilotoId));});
+  if(selPid!=null&&selPid!==''&&!seen.has(String(selPid))){
+    const p=(typeof pilotos!=='undefined'?pilotos:[]).find(x=>String(x.id)===String(selPid));
+    if(p)opts+=`<option value="${p.id}" selected>${esc(p.nombre)} (actual)</option>`;
+  }
+  return opts;
+}
+// ¿El usuario actual tiene al menos una entrega asignada (no entregada)?
+// Con esto se le habilita "Mis entregas" aunque su rol no lo incluya.
+function tieneEntregasAsignadas(){
+  const pid=(typeof miPilotoId==='function')?miPilotoId():null;
+  if(pid==null)return false;
+  if(typeof docsDespachables!=='function')return false;
+  return docsDespachables().some(d=>String(d.pilotoId)===String(pid)&&(d.estadoEntrega||'sin')!=='entregado');
+}
+if(typeof window!=='undefined'){ window.repartidores=repartidores; window._optRepartidores=_optRepartidores; window.tieneEntregasAsignadas=tieneEntregasAsignadas; }
 function canConvertir(){return (currentRole==='admin'||ROLES[currentRole]?.convertirCajas===true)&&!soloLectura();}
 let proveedores=[];
 let compras=[];
@@ -848,6 +879,9 @@ function tienePermiso(v){
   if(MODULOS_DESACTIVADOS.includes(v))return false;
   if(MODULOS_SOLO_ADMIN.includes(v) && currentRole!=='admin')return false; // en prueba: sólo admin
   if(!vistaDisponible(v))return false;   // módulo apagado para este cliente
+  // "Mis entregas" se habilita a CUALQUIER usuario que tenga al menos una
+  // entrega asignada (no entregada), aunque su rol no lo incluya.
+  if(v==='misentregas' && typeof tieneEntregasAsignadas==='function' && tieneEntregasAsignadas())return true;
   const r=ROLES[currentRole];if(!r)return true;
   return r.views==='ALL'||r.views.includes(v);
 }

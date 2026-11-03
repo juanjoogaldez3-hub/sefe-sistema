@@ -960,10 +960,13 @@ function openUsuario(id){const u=id?usuarios.find(x=>x.id===id):null;
   <div class="row"><div><label>Vendedor asignado <span style="color:var(--muted-2);font-weight:400">(solo rol Ventas)</span></label><select id="u-vend">${vendOpts}</select></div></div>
   <div class="row"><div><label>Piloto asignado <span style="color:var(--muted-2);font-weight:400">(solo rol Piloto)</span></label><select id="u-pil">${pilOpts}</select></div></div>
   <div class="row"><div><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="u-esvend" ${u&&u.vendedorId?'checked':''} style="width:auto;margin:0"> También es vendedor <span style="color:var(--muted-2);font-weight:400">(se le pueden asignar clientes y ventas)</span></label></div></div>
-  <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El rol define qué módulos puede ver. Marcá "También es vendedor" si a esta persona (aunque sea admin o gerente) se le asignan clientes y ventas.</span></div>`,()=>{
+  <div class="row"><div><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="u-esrep" ${u&&(u.puedeRepartir||u.rol==='piloto')?'checked':''} style="width:auto;margin:0"> 🚚 Puede repartir <span style="color:var(--muted-2);font-weight:400">(aparece en Despachos para asignarle entregas; al tener una, ve "Mis entregas")</span></label></div></div>
+  <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El rol define qué módulos puede ver. Marcá "También es vendedor" si a esta persona (aunque sea admin o gerente) se le asignan clientes y ventas.</span></div>`,async ()=>{
     const nom=$('#u-nom').value.trim();if(!nom)return;
     const rol=$('#u-rol').value;
     const esVend=$('#u-esvend')?.checked;
+    const esRep=$('#u-esrep')?.checked;
+    const puedeRepartir=!!(esRep||rol==='piloto'); // el rol Piloto siempre puede repartir
     let vendedorId=$('#u-vend').value?Number($('#u-vend').value):null;
     let pilotoId=$('#u-pil').value?Number($('#u-pil').value):null;
 
@@ -976,15 +979,18 @@ function openUsuario(id){const u=id?usuarios.find(x=>x.id===id):null;
     }
     // Si se desmarcó "también es vendedor" y no es rol ventas, quitar el vendedor
     if(!esVend && rol!=='ventas'){vendedorId=null;}
-    // Si el rol es Piloto y no tiene piloto asignado, crear su ficha de piloto automáticamente
-    if(rol==='piloto' && !pilotoId){
+    // Si puede repartir (rol Piloto o check "Puede repartir") y todavía no tiene
+    // identidad de reparto, se le crea automáticamente su ficha de piloto.
+    // Se ESPERA el guardado para tomar el id real de la base (así el vínculo
+    // usuario→piloto queda correcto al recargar).
+    if(puedeRepartir && !pilotoId){
       const np={id:pilN++,nombre:nom,_nuevo:true};
       pilotos.push(np);
-      if(typeof guardarPiloto==='function')guardarPiloto(np);
+      if(typeof guardarPiloto==='function')await guardarPiloto(np);
       pilotoId=np.id;
     }
 
-    const datos={nombre:nom,correo:$('#u-mail').value,rol,vendedorId,pilotoId};
+    const datos={nombre:nom,correo:$('#u-mail').value,rol,vendedorId,pilotoId,puedeRepartir};
     if(u){
       Object.assign(u,datos);
       // Sincronizar el nombre del vendedor/piloto vinculado

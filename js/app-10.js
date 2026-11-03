@@ -1272,9 +1272,8 @@ async function _geocodeGoogle(dir){
 }
 function openParadaRuta(pidPre){
   if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede agregar paradas',true);return;}
-  const pilOpts=pilotos.map(p=>`<option value="${p.id}" ${String(pidPre||'')===String(p.id)?'selected':''}>${escHtml(p.nombre)}</option>`).join('');
   openMod('➕ Agregar parada a la ruta',`
-    <div class="row"><div style="flex:1"><label>Piloto</label><select id="pr-piloto"><option value="">— Seleccioná —</option>${pilOpts}</select></div></div>
+    <div class="row"><div style="flex:1"><label>Repartidor</label><select id="pr-piloto">${_optRepartidores(pidPre)}</select></div></div>
     <div class="row"><div><label>Título</label><input id="pr-tit" placeholder="Ej. Ir al banco · Recolectar en Proveedor X · Cargar combustible"></div></div>
     <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" placeholder="Dirección o nombre del lugar"></div></div>
     <div class="row"><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px"></div></div>
@@ -1325,10 +1324,9 @@ function asignarMasivo(){
   if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede asignar entregas',true);return;}
   const docs=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(Boolean);
   if(!docs.length){toast('Nada seleccionado','Marcá una o más entregas en la lista',false);return;}
-  const pilOpts=pilotos.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
   const hayBodega=(typeof SEFE_BODEGA!=='undefined'&&SEFE_BODEGA&&SEFE_BODEGA.lat!=null);
   openMod('Asignar '+docs.length+' entrega'+(docs.length!==1?'s':''),`
-    <div class="row"><div style="flex:1"><label>Piloto</label><select id="am-piloto"><option value="">— Seleccioná —</option>${pilOpts}</select></div></div>
+    <div class="row"><div style="flex:1"><label>Repartidor</label><select id="am-piloto">${_optRepartidores('')}</select></div></div>
     <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:10px;cursor:pointer${hayBodega?'':';opacity:.5'}"><input type="checkbox" id="am-cercania" ${hayBodega?'checked':'disabled'} style="width:auto"> 🧭 Optimizar con tiempos reales de Google y horas límite</label>
     <div class="note n-ok" style="margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Se asignan las ${docs.length} entregas a ese piloto. Al optimizar, el sistema arma <b>toda su ruta</b> con los tiempos reales de Google, calcula la <b>hora de llegada</b> a cada parada y respeta las <b>horas límite</b>. Igual podés reordenar a mano.</span></div>`,
     ()=>{
@@ -1421,7 +1419,7 @@ function _agruparPreview(){
   _gruposZona=grupos;
   const cont=$('#agr-res');if(!cont)return;
   if(!grupos.length&&!sinUbic.length){cont.innerHTML='<div class="empty">No quedan entregas sin asignar.</div>';return;}
-  const pilOpts=pilotos.map(p=>`<option value="${p.id}">${escHtml(p.nombre)}</option>`).join('');
+  const pilOpts=_optRepartidores('').replace(/^<option value="">[^<]*<\/option>/,'');
   const nombres=g=>{
     const ns=g.docs.map(d=>escHtml(d.clienteComercial||d.clienteNombre));
     return ns.slice(0,6).join(' · ')+(ns.length>6?` <span style="color:var(--muted-2)">y ${ns.length-6} más</span>`:'');
@@ -1678,7 +1676,7 @@ function asignarDespacho(id){
   const docNum=d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
   openMod('Asignar entrega · '+docNum,`
     <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${d.clienteComercial||d.clienteNombre} · ${money(d.totales.total)}<br><span style="font-size:11.5px">📍 ${dirEntrega(d)}</span></p>
-    <div class="row"><div><label>Piloto</label><select id="dsp-piloto" onchange="agregarPilotoEnSelect('dsp-piloto')">${_optPilotosMas(d.pilotoId)}</select></div>
+    <div class="row"><div><label>Repartidor</label><select id="dsp-piloto">${_optRepartidores(d.pilotoId)}</select></div>
       <div><label>Orden en la ruta</label><input id="dsp-orden" type="number" min="1" value="${d.ordenRuta||''}" placeholder="1, 2, 3…"></div></div>
     <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El piloto verá este documento en "Mis entregas". El número de ruta define el orden de visita.</span></div>`,
     ()=>{
