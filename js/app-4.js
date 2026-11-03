@@ -582,9 +582,9 @@ async function guardarCotizacionUI(){
   let cot;
   if(cotEditId){
     cot=cotizaciones.find(c=>c.id===cotEditId);if(!cot){toast('No encontrada',null,true);return;}
-    Object.assign(cot,{clienteId,clienteNombre,clienteComercial,clienteNit,clienteContacto,clienteTel,clienteEmail,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado});
+    Object.assign(cot,{clienteId,clienteNombre,clienteComercial,clienteNit,clienteContacto,clienteTel,clienteEmail,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,empresa:(cliObj&&cliObj.empresa)||cot.empresa||empresaParaNuevo()});
   }else{
-    cot={id:-Date.now(),numero:cotN,clienteId,clienteNombre,clienteComercial,clienteNit,clienteContacto,clienteTel,clienteEmail,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,empresa:empresaParaNuevo(),_nuevo:true};
+    cot={id:-Date.now(),numero:cotN,clienteId,clienteNombre,clienteComercial,clienteNit,clienteContacto,clienteTel,clienteEmail,vendedorId:vend?vend.id:null,vendedorNombre:vendNom,vendedorTel:vendTel,vendedorEmail:vendMail,items:cotCart.map(it=>({...it})),totales:{total},observaciones:obs,validezDias:validez,fechaVence,estado,creadoPor:currentUser,creada:new Date().toISOString(),convertidoPedidoId:null,empresa:(cliObj&&cliObj.empresa)||empresaParaNuevo(),_nuevo:true};
     cotizaciones.push(cot);cotN++;
   }
   const ok=(typeof guardarCotizacion==='function')?await guardarCotizacion(cot):true;
