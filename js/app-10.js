@@ -1206,6 +1206,9 @@ function _despActualizarBulk(){
   // Botón "Quitar asignación": aparece si alguna de las marcadas tiene piloto.
   const bd=document.getElementById('desp-bulk-desasig');
   if(bd){const asig=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&d.pilotoId!=null).length;bd.style.display=asig?'':'none';bd.textContent='Quitar asignación ('+asig+')';}
+  // Botón "Marcar entregadas": aparece si alguna de las marcadas todavía no está entregada.
+  const be=document.getElementById('desp-bulk-entregar');
+  if(be){const pend=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&estadoEntrega(d)!=='entregado').length;be.style.display=pend?'':'none';be.textContent='✓ Marcar entregadas ('+pend+')';}
 }
 // Desasignar (quitar piloto + ruta) las entregas marcadas — vuelven a "Sin asignar".
 function desasignarMasivo(){
@@ -1220,6 +1223,26 @@ function desasignarMasivo(){
   });
 }
 window.desasignarMasivo=desasignarMasivo;
+// Marcar como ENTREGADAS las entregas marcadas — salen de Despachos. Limpieza
+// masiva: NO registra pagos ni pide firma (los saldos quedan igual); para eso
+// está el "Marcar entregado" individual de Mis entregas.
+function marcarEntregadosMasivo(){
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede marcar entregas',true);return;}
+  const sel=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&estadoEntrega(d)!=='entregado'&&d.estado!=='anulada');
+  if(!sel.length){toast('Nada que marcar','Marcá con el check las entregas que querés dar por entregadas.',false);return;}
+  confirmar('Marcar entregadas','Vas a dar por <b>entregadas</b> '+sel.length+' entrega(s) y van a salir de Despachos. <b>No registra pagos</b> (los saldos quedan igual); si necesitás registrar el cobro, usá "Marcar entregado" en Mis entregas.','Marcar entregadas',()=>{
+    const fecha=new Date().toISOString();
+    sel.forEach(d=>{
+      d.estadoEntrega='entregado';
+      d.entregaInfo={fecha,modo:'masivo',piloto:currentUser,nota:'Marcado entregado en masa'};
+      logAudit('Entrega marcada (masiva)',(d.serie?d.serie+'-'+d.numeroDte:refPed(d))+' · '+(d.clienteComercial||d.clienteNombre));
+      if(typeof guardarDocumento==='function')guardarDocumento(d);
+    });
+    _despSel.clear();renderDespachos();
+    toast('✓ '+sel.length+' marcada'+(sel.length!==1?'s':'')+' entregada'+(sel.length!==1?'s':''),'Salieron de Despachos.');
+  });
+}
+window.marcarEntregadosMasivo=marcarEntregadosMasivo;
 // Desasignar una entrega (fila) — quita piloto y ruta, vuelve a "Sin asignar".
 function desasignarDespacho(id){
   const d=documentos.find(x=>x.id===id); if(!d)return;
