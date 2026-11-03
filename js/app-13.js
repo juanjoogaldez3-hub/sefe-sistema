@@ -561,6 +561,10 @@ async function agregarPilotoEnSelect(selectId){
   sel.innerHTML=_optPilotosMas(p.id);
 }
 window.agregarPilotoEnSelect=agregarPilotoEnSelect;
+// Cambio del selector de piloto en el formulario de CAMBIO de batería: primero
+// resuelve el "➕ Agregar nuevo" (si lo eligieron) y después recalcula en mano.
+async function _bcPilChange(){ await agregarPilotoEnSelect('bc-pil'); if(typeof _bcActualizarEnMano==='function')_bcActualizarEnMano(); }
+window._bcPilChange=_bcPilChange;
 
 function openBatCambio(id){
   const c=id?batCambios.find(x=>String(x.id)===String(id)):null;
@@ -568,7 +572,7 @@ function openBatCambio(id){
   const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():'';
   openMod(c?'Editar colocación de batería':'Nueva colocación de batería',
     `<div class="row"><div><label>Cliente</label>${_ctrlCampoCliente('bc-cli-search','bc-cli',c&&c.clienteId!=null?c.clienteId:null)}</div><div><label>Equipo / ubicación</label><input id="bc-eq" value="${c?escHtml(c.equipo||''):''}" placeholder="Ej. Dispensador baño 1"></div></div>
-     <div class="row"><div><label>Piloto <span style="font-weight:400;color:var(--muted-2)">(de quién sale)</span></label><select id="bc-pil" onchange="_bcActualizarEnMano()">${_optPilotos(c&&c.pilotoId)}</select></div><div><label>Tipo de batería</label><select id="bc-tipo" onchange="_bcActualizarEnMano()">${_optTipos(c&&c.tipoId)}</select></div></div>
+     <div class="row"><div><label>Piloto <span style="font-weight:400;color:var(--muted-2)">(de quién sale)</span></label><select id="bc-pil" onchange="_bcPilChange()">${_optPilotosMas(c&&c.pilotoId)}</select></div><div><label>Tipo de batería</label><select id="bc-tipo" onchange="_bcActualizarEnMano()">${_optTipos(c&&c.tipoId)}</select></div></div>
      <div class="row"><div><label>Cantidad</label><input id="bc-cant" type="number" step="1" value="${c?(Number(c.cantidad)||1):1}"></div><div></div></div>
      <div class="row"><div><label>Fecha del cambio</label><input id="bc-fecha" type="date" value="${c&&c.fecha?String(c.fecha).slice(0,10):hoy}"></div><div><label>Próximo cambio <span style="font-weight:400;color:var(--muted-2)">(si cae fin de semana pasa al lunes)</span></label><input id="bc-prox" type="date" onchange="this.value=_siguienteHabil(this.value)" value="${c&&c.proximo?String(c.proximo).slice(0,10):''}"></div></div>
      <div class="row"><div style="grid-column:1/-1"><label>Nota</label><input id="bc-nota" value="${c?escHtml(c.nota||''):''}"></div></div>
@@ -632,7 +636,7 @@ function openBatEntrega(id){
   const old=e?{tipoId:e.tipoId,cantidad:Number(e.cantidad)||0}:null;
   const hoy=(typeof fechaHoyGT==='function')?fechaHoyGT():'';
   openMod(e?'Editar entrega a piloto':'Nueva entrega a piloto',
-    `<div class="row"><div><label>Piloto</label><select id="be-pil">${_optPilotos(e&&e.pilotoId)}</select></div><div><label>Tipo de batería</label><select id="be-tipo">${_optTipos(e&&e.tipoId)}</select></div></div>
+    `<div class="row"><div><label>Piloto</label><select id="be-pil" onchange="agregarPilotoEnSelect('be-pil')">${_optPilotosMas(e&&e.pilotoId)}</select></div><div><label>Tipo de batería</label><select id="be-tipo">${_optTipos(e&&e.tipoId)}</select></div></div>
      <div class="row"><div><label>Cantidad entregada</label><input id="be-cant" type="number" step="1" value="${e?(Number(e.cantidad)||1):1}"></div><div><label>Fecha</label><input id="be-fecha" type="date" value="${e&&e.fecha?String(e.fecha).slice(0,10):hoy}"></div></div>
      <div class="row"><div style="grid-column:1/-1"><label>Nota</label><input id="be-nota" value="${e?escHtml(e.nota||''):''}"></div></div>
      ${e?`<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_batEntregaBorrar(${e.id})">Eliminar entrega</button></div>`:''}

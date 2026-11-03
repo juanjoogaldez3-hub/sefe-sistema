@@ -1676,10 +1676,9 @@ function asignarDespacho(id){
   if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede asignar entregas',true);return;}
   const d=documentos.find(x=>x.id===id);if(!d)return;
   const docNum=d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
-  const pilOpts=pilotos.map(p=>`<option value="${p.id}" ${d.pilotoId===p.id?'selected':''}>${p.nombre}</option>`).join('');
   openMod('Asignar entrega · '+docNum,`
     <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${d.clienteComercial||d.clienteNombre} · ${money(d.totales.total)}<br><span style="font-size:11.5px">📍 ${dirEntrega(d)}</span></p>
-    <div class="row"><div><label>Piloto</label><select id="dsp-piloto"><option value="">— Seleccioná —</option>${pilOpts}</select></div>
+    <div class="row"><div><label>Piloto</label><select id="dsp-piloto" onchange="agregarPilotoEnSelect('dsp-piloto')">${_optPilotosMas(d.pilotoId)}</select></div>
       <div><label>Orden en la ruta</label><input id="dsp-orden" type="number" min="1" value="${d.ordenRuta||''}" placeholder="1, 2, 3…"></div></div>
     <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El piloto verá este documento en "Mis entregas". El número de ruta define el orden de visita.</span></div>`,
     ()=>{
