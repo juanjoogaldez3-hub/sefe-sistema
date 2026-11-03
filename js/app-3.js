@@ -263,6 +263,8 @@ window.cancelarEdicion=()=>{editId=null;editOldMap={};cart=[];if($('#f-cli'))$('
 window.regresar=id=>{const f=documentos.find(d=>d.id===id);if(!['envio','prestamo'].includes(f.tipoDoc)||f.estado!=='pendiente')return;
   Object.assign(f,{tipoDoc:'pedido',estado:'abierto'});delete f.autorizacion;delete f.serie;delete f.numeroDte;
   closeMod();renderDocs();
+  logAudit('Regresado a pedido',refPed(f));
+  if(typeof guardarDocumento==='function')guardarDocumento(f); // persistir: sin esto, al refrescar volvía a nota de envío/préstamo
   toast('✓ Regresado a pedido',refPed(f)+' · ahora podés editarlo o facturarlo de nuevo');};
 
 // ---- Nota de Crédito ----
