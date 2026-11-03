@@ -998,7 +998,7 @@ $('#f-go').onclick=async()=>{
     // temporal nunca puede coincidir con otro documento (evita facturar el equivocado).
     const nuevoId=-Date.now();
     const doc={id:nuevoId,numero:corr,tipoDoc:'pedido',clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend?.id,vendedorNombre:vend?.nombre,subVendedorNombre:subVend,
-      items:itemsPed,totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre,empresa:empresaParaNuevo(),_nuevo:true};
+      items:itemsPed,totales,estado:'abierto',inventarioRebajado:true,creada:new Date().toISOString(),ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre,empresa:(cli&&cli.empresa)||empresaParaNuevo(),_nuevo:true};
     documentos.push(doc);corr++;
     logAudit('Pedido creado','PED-'+padn(doc.numero)+' · '+cli.nombre+' · '+money(totales.total));
     // Esperamos el id real de la base ANTES de dibujar la lista, para que los
