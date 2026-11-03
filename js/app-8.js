@@ -445,7 +445,7 @@ function bindRep(){
   document.querySelectorAll('#rep-types .ct-tab').forEach(b=>b.onclick=()=>{repType=b.dataset.r;repFiltros={cliente:'',vendedores:[],proveedor:'',soloVencidos:false,tiempoCredito:'',marca_prod:'',producto:''};gruposColapsados={};document.querySelectorAll('#rep-types .ct-tab').forEach(x=>x.classList.toggle('on',x===b));renderRepFilters();renderReportes();});
   ['rep-desde','rep-hasta'].forEach(id=>{const e=$('#'+id);if(e)e.onchange=()=>{document.querySelectorAll('#rep-period .rep-tab').forEach(b=>b.classList.remove('on'));renderReportes();};});
 }
-const kpiHTML=k=>k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub||''}</div></div>`).join('');
+const kpiHTML=k=>k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-body"><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div>${x.sub?`<div class="k-sub">${x.sub}</div>`:''}</div></div>`).join('');
 const hbars=arr=>{const max=Math.max(1,...arr.map(x=>x.v));return arr.length?arr.map(x=>`<div class="hbar-row"><div class="hbar-name">${x.n}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.round(x.v/max*100)}%;${x.c?'background:'+x.c:''}"></div></div><div class="hbar-val num">${money(x.v)}</div></div>`).join(''):'<div class="empty">Sin datos en el período</div>';};
 function mesesEje(docs,getF){
   let min=null,max=null;
