@@ -823,20 +823,24 @@ function toggleBtnPrecios(){
 // Acepta: "CLO-002", "Cloro", "CLO-002 — Cloro concentrado", "CLO-002 — Cloro concer (stock: 7)", etc.
 function buscarProducto(v){
   const q=v.toLowerCase().trim();
+  // Multiempresa: resolver SOLO entre productos de la empresa activa. Sin esto,
+  // un código que existe en las dos empresas resuelve al de SEFE (id más bajo)
+  // y el pedido agregaría el producto de la otra empresa (precio y stock mal).
+  const _prods=(typeof deEmpresa==='function')?deEmpresa(productos):productos;
   // 1. Coincidencia exacta con el formato del datalist
-  let r=productos.find(x=>`${x.codigo} — ${x.nombre} (stock: ${x.stock})`.toLowerCase()===q);
+  let r=_prods.find(x=>`${x.codigo} — ${x.nombre} (stock: ${x.stock})`.toLowerCase()===q);
   if(r)return r;
   // 2. Empieza con el código (cuando el browser trunca la sugerencia)
-  r=productos.find(x=>q.startsWith(x.codigo.toLowerCase()));
+  r=_prods.find(x=>q.startsWith(x.codigo.toLowerCase()));
   if(r)return r;
   // 3. Código exacto
-  r=productos.find(x=>x.codigo.toLowerCase()===q);
+  r=_prods.find(x=>x.codigo.toLowerCase()===q);
   if(r)return r;
   // 4. El valor contiene el código al inicio (ej "clo-002 — cloro concer")
-  r=productos.find(x=>q.includes(x.codigo.toLowerCase()));
+  r=_prods.find(x=>q.includes(x.codigo.toLowerCase()));
   if(r)return r;
   // 5. Nombre parcial
-  r=productos.find(x=>x.nombre.toLowerCase().includes(q)||q.includes(x.nombre.toLowerCase().slice(0,8)));
+  r=_prods.find(x=>x.nombre.toLowerCase().includes(q)||q.includes(x.nombre.toLowerCase().slice(0,8)));
   return r||null;
 }
 

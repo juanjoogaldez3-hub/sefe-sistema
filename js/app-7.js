@@ -162,7 +162,7 @@ function addEspecialItem(compraId){
   const mot=_reqMotivoEsp();if(mot==null)return;
   const c=compras.find(x=>x.id===compraId);if(!c)return;
   const v=($('#esp-add').value||'').trim();if(!v)return;
-  const p=productos.find(x=>`${x.skuProveedor||x.codigo} — ${x.nombreProveedor||x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase().includes(v.toLowerCase()));
+  const p=((typeof deEmpresa==='function')?deEmpresa(productos):productos).find(x=>`${x.skuProveedor||x.codigo} — ${x.nombreProveedor||x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase().includes(v.toLowerCase()));
   if(!p){toast('✗ Producto no encontrado',null,true);return;}
   const ex=c.items.find(it=>it.id===p.id);
   if(ex){ex.cantidad++;ex.recibido++;aplicarStock(productos.find(x=>x.id===p.id),1,'caja');}
@@ -249,7 +249,7 @@ function addPendItem(compraId){
   const mot=_reqMotivoEsp();if(mot==null)return;
   const c=compras.find(x=>x.id===compraId);if(!c||c.especial||c.estadoRecepcion!=='pendiente')return;
   const v=($('#pend-add').value||'').trim();if(!v)return;
-  const p=productos.find(x=>`${x.skuProveedor||x.codigo} — ${x.nombreProveedor||x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase().includes(v.toLowerCase()));
+  const p=((typeof deEmpresa==='function')?deEmpresa(productos):productos).find(x=>`${x.skuProveedor||x.codigo} — ${x.nombreProveedor||x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase().includes(v.toLowerCase()));
   if(!p){toast('✗ Producto no encontrado',null,true);return;}
   const ex=c.items.find(it=>it.id===p.id);
   if(ex)ex.cantidad++;
@@ -424,7 +424,7 @@ function provSetTab(t){provTab=t;renderProveedorDet();}
 window.provSetTab=provSetTab;
 function addProveedorProd(provId){
   const v=($('#pp-add').value||'').trim();if(!v)return;
-  const p=productos.find(x=>`${x.codigo} — ${x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase()===v.toLowerCase());
+  const p=((typeof deEmpresa==='function')?deEmpresa(productos):productos).find(x=>`${x.codigo} — ${x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase()===v.toLowerCase());
   if(!p){toast('✗ Producto no encontrado','Seleccioná uno de la lista',true);return;}
   p.proveedorIds=p.proveedorIds||[];
   if(p.proveedorIds.includes(provId)){toast('Ese producto ya está asignado');return;}

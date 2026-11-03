@@ -1471,7 +1471,8 @@ function addCompraProducto(){
   const inp=$('#co-add');const v=(inp.value||'').trim();if(!v)return;
   // Buscar también por SKU proveedor
   const q=v.toLowerCase();
-  let p=productos.find(x=>{const sku=(x.skuProveedor||x.codigo).toLowerCase();const nom=(x.nombreProveedor||x.nombre).toLowerCase();
+  // Multiempresa: resolver solo entre productos de la empresa activa.
+  let p=((typeof deEmpresa==='function')?deEmpresa(productos):productos).find(x=>{const sku=(x.skuProveedor||x.codigo).toLowerCase();const nom=(x.nombreProveedor||x.nombre).toLowerCase();
     return `${sku} — ${nom}`===q||q.startsWith(sku)||q.includes(sku);});
   if(!p)p=buscarProducto(v);
   if(!p){toast('✗ Producto no encontrado','Buscá por Código, SKU proveedor o nombre',true);return;}

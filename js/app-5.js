@@ -112,7 +112,11 @@ function guardarPreciosCli(){
 window.guardarPreciosCli=guardarPreciosCli;
 function addPrecioProd(){const c=clientes.find(x=>x.id===cliActual);if(!c)return;c.precios=c.precios||{};
   const v=($('#cp-add').value||'').trim();if(!v)return;
-  const p=productos.find(x=>`${x.codigo} — ${x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase()===v.toLowerCase());
+  // Multiempresa: resolver el producto DENTRO de la empresa activa. Si no se
+  // filtra, un código que existe en las dos empresas resuelve al de SEFE (id
+  // más bajo) y el precio quedaría guardado bajo el producto equivocado.
+  const _prodsEmp=(typeof deEmpresa==='function')?deEmpresa(productos):productos;
+  const p=_prodsEmp.find(x=>`${x.codigo} — ${x.nombre}`===v||x.codigo.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase()===v.toLowerCase());
   if(!p){toast('✗ Producto no encontrado','Seleccioná uno de la lista',true);return;}
   if(c.precios[p.id]!=null){toast('Ese producto ya está en la lista');return;}
   c.precios[p.id]=p.precio;renderCliDet();toast('✓ Producto agregado','Ajustá el precio de '+p.nombre);if(typeof guardarCliente==='function')guardarCliente(c);}
