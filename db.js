@@ -633,10 +633,13 @@ async function guardarCompra(c){
     empresa:c.empresa||'SEFE'
   };
   if (c._nuevo) {
-    delete c._nuevo;
+    // OJO: NO borrar _nuevo antes de guardar. Mientras el insert viaja, el
+    // aviso del websocket puede llegar antes que la respuesta; realtime usa
+    // esta marca para reconocer la copia local (su id es provisorio) y no
+    // duplicarla. Se borra recién cuando la base confirma el id real.
     const {data,error} = await sb.from('compras').insert(row).select().single();
-    if(error){console.error('Error guardando compra:',error); c._nuevo=true;}
-    else c.id = data.id;
+    if(error){console.error('Error guardando compra:',error);}
+    else { c.id = data.id; delete c._nuevo; }
   } else {
     const {error} = await sb.from('compras').update(row).eq('id', c.id);
     if(error)console.error('Error actualizando compra:',error);

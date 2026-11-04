@@ -110,6 +110,10 @@
       arr: () => compras,
       map: (f) => mapCompraFromDB(f, []),
       conservar: ['abonos'],
+      // Identidad para reconocer la copia local todavía sin confirmar (su id
+      // es un correlativo del navegador, no sirve para comparar). Proveedor +
+      // total + fecha: lo que fija el navegador al crearla.
+      identidad: ['proveedorId', 'total', 'fecha'],
       vistas: ['compras', 'porpagar', 'panel', 'proveedordet'],
     },
     pagos_proveedor: {
@@ -301,7 +305,10 @@
   // filas hijas (abonos, pagos) directamente no tienen _id todavía.
   function sinGuardar(fila, campoId) {
     const v = fila[campoId];
-    return v == null || (typeof v === 'number' && v < 0);
+    // Sin id (null), con id provisorio negativo, O marcada `_nuevo` (todavía
+    // no confirmó el guardado). Esto último cubre las copias con id temporal
+    // POSITIVO, como las compras (id = correlativo del navegador).
+    return v == null || (typeof v === 'number' && v < 0) || (fila && fila._nuevo === true);
   }
 
   // ¿Esta fila local es la MISMA que la que acaba de llegar de la base?
@@ -319,9 +326,22 @@
     if (!campos || !campos.length) return false;
     for (const c of campos) {
       if (nuevo[c] == null || local[c] == null) return false;
-      if (String(local[c]) !== String(nuevo[c])) return false;
+      if (!_mismoValor(local[c], nuevo[c])) return false;
     }
     return true;
+  }
+  // Compara el valor de un campo de identidad. Igual por texto, O — si ambos
+  // son fechas/timestamps — por el MISMO instante. La base devuelve el
+  // timestamp con distinto formato/precisión que el ISO del navegador
+  // (ej. '...123Z' vs '...123456+00:00'), y compararlo como texto fallaba,
+  // así que no reconocía la copia local y el registro se DUPLICABA hasta
+  // recargar. Para un monto u otro número, el texto ya coincide (ambos
+  // vienen mapeados como número) y no entra al parseo de fecha.
+  function _mismoValor(a, b) {
+    if (String(a) === String(b)) return true;
+    const ta = Date.parse(a), tb = Date.parse(b);
+    if (!isNaN(ta) && !isNaN(tb)) return ta === tb;
+    return false;
   }
 
   // Busca la copia local sin guardar que corresponde a lo que llegó.
