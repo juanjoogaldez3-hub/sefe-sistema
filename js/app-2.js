@@ -866,9 +866,16 @@ window.agregarProductoPorId=agregarProductoPorId;
 function aplicarStock(p,delta,modoVenta){
   if(!p||!delta)return;
   if(esServicio(p))return; // los servicios no manejan inventario
-  if(p.tipoEmpaque==='caja_unidad'&&modoVenta==='caja')p.stockCajas=(Number(p.stockCajas)||0)+delta;
-  else p.stock=(Number(p.stock)||0)+delta;
-  if(typeof guardarProducto==='function')guardarProducto(p);
+  const campo=(p.tipoEmpaque==='caja_unidad'&&modoVenta==='caja')?'stockCajas':'stock';
+  // Optimista: actualiza el local al instante para que la UI reaccione.
+  p[campo]=(Number(p[campo])||0)+delta;
+  // ATÓMICO en la base: en vez de guardar el valor absoluto del producto
+  // (que pisaba cambios de otros y causaba descuadres de ±1), le suma/resta
+  // el delta directo en la base. Así dos operaciones concurrentes no se
+  // pisan. ajustarStockDB reconcilia el local con el valor REAL que devuelve
+  // la base; si la función todavía no existe, cae al guardado viejo.
+  if(typeof ajustarStockDB==='function') ajustarStockDB(p,delta,campo);
+  else if(typeof guardarProducto==='function') guardarProducto(p);
 }
 window.aplicarStock=aplicarStock;
 // Lógica común de agregar al carrito

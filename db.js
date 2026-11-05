@@ -666,6 +666,23 @@ async function guardarPagoProveedor(compraId, pago){
   pago._id = data.id; return true;
 }
 
+// Ajuste ATÓMICO de stock: suma/resta el delta directo en la base (no guarda
+// el valor absoluto), así dos operaciones concurrentes no se pisan. Reconcilia
+// el valor local con el REAL que devuelve la base. Si la función todavía no
+// existe en la base (no se corrió el SQL), cae al guardado del producto entero.
+async function ajustarStockDB(p, delta, campo){
+  try{
+    const col = (campo==='stockCajas') ? 'stock_cajas' : 'stock';
+    const {data,error} = await sb.rpc('sefe_ajustar_stock', {p_id:p.id, p_delta:delta, p_campo:col});
+    if(error) throw error;
+    if(data!=null){ p[campo]=Number(data); } // valor real tras el ajuste atómico
+  }catch(e){
+    console.error('ajustarStockDB: uso respaldo (guardarProducto):', e && (e.message||e.code||e));
+    if(typeof guardarProducto==='function') await guardarProducto(p);
+  }
+}
+if(typeof window!=='undefined') window.ajustarStockDB=ajustarStockDB;
+
 async function guardarProducto(p){
   const row = {
     codigo:p.codigo, codigo_barras:p.codigoBarras||null, nombre:p.nombre, precio:p.precio, costo:p.costo,
