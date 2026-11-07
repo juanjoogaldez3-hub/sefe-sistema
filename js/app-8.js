@@ -71,6 +71,13 @@ window.verTrazabilidad=function(id){
   const p=productos.find(x=>x.id===id);
   if(!p)return;
   const {movs,totalEntra,totalSale}=trazabilidadProducto(p);
+  // Existencia inicial = lo que había ANTES del primer movimiento registrado.
+  // Se deduce al revés: stock actual − entradas + salidas. Con esto el cuadro
+  // cierra solo: inicial + entradas − salidas = stock actual. (En la misma
+  // medida que entradas/salidas: cajas para los productos por caja.)
+  const _esCajaTz=(p.tipoEmpaque==='caja'||p.tipoEmpaque==='caja_unidad');
+  const _stockMedTz=_esCajaTz?((typeof existenciaCajas==='function')?existenciaCajas(p):(Number(p.stockCajas)||0)):existenciaTotal(p);
+  const existenciaInicial=Math.round((_stockMedTz-totalEntra+totalSale)*100)/100;
   const filas=movs.length?movs.map(m=>{
     const fecha=fdate(m.fecha);
     const esEntrada=m.tipo==='entrada';
@@ -94,6 +101,10 @@ window.verTrazabilidad=function(id){
        <div style="flex:1;min-width:90px;background:var(--surface-2);border-radius:8px;padding:10px 12px">
          <div style="font-size:11px;color:var(--muted)">Código</div>
          <div style="font-weight:700">${p.codigo}</div></div>
+       <div style="flex:1;min-width:90px;background:#EEF3F8;border-radius:8px;padding:10px 12px">
+         <div style="font-size:11px;color:#4a6b8a">Existencia inicial</div>
+         <div style="font-weight:700;color:#4a6b8a">${fmtCajas(existenciaInicial)}</div>
+         <div style="font-size:10px;color:var(--muted-2);margin-top:2px">antes del 1er movimiento</div></div>
        <div style="flex:1;min-width:90px;background:#E8F5E9;border-radius:8px;padding:10px 12px">
          <div style="font-size:11px;color:#1a7f37">Total entradas</div>
          <div style="font-weight:700;color:#1a7f37">+${fmtCajas(totalEntra)}</div></div>
@@ -116,7 +127,7 @@ window.verTrazabilidad=function(id){
          <tbody>${filas}</tbody>
        </table>
      </div>
-     <div class="note n-ok" style="margin-top:12px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Entradas = compras recibidas. Salidas = pedidos y facturas. Los documentos anulados no se cuentan.</span></div>`,
+     <div class="note n-ok" style="margin-top:12px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span><b>Existencia inicial + Entradas − Salidas = Stock actual.</b> Entradas = compras recibidas. Salidas = pedidos y facturas. Los documentos anulados no se cuentan. La existencia inicial es lo que había antes del primer movimiento de la lista (toda la historia).</span></div>`,
     null);
   // Modal solo de lectura: ocultar botón Guardar
   const sv=$('#m-save');if(sv)sv.style.display='none';
