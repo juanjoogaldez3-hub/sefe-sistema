@@ -1484,6 +1484,18 @@ window.addCompraProducto=addCompraProducto;
 // Enter también agrega
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement.id==='co-add')addCompraProducto();});
 function renderCompraForm(){
+  // Multiempresa: el desplegable de proveedor debe reflejar SIEMPRE la empresa
+  // activa. `initCompra()` solo corre al entrar (con la empresa del login), así
+  // que al cambiar de empresa quedaba cacheado el listado de SEFE y la compra
+  // terminaba creándose en SEFE aunque estuvieras en LAML. Lo reconstruimos acá
+  // (a esto llega tanto go('nuevacompra') como cambiarEmpresa), conservando el
+  // proveedor elegido si sigue siendo válido para no perderlo al editar el carrito.
+  const _selProv=$('#co-prov')?$('#co-prov').value:null;
+  const _provsEmp=(typeof deEmpresa==='function')?deEmpresa(proveedores):proveedores;
+  if($('#co-prov')){
+    $('#co-prov').innerHTML=_provsEmp.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+    if(_selProv&&_provsEmp.some(p=>String(p.id)===String(_selProv)))$('#co-prov').value=_selProv;
+  }
   const bloque=$('#bloque-compra-especial');
   if(bloque)bloque.style.display=canCompraEspecial()?'block':'none';
   $('#co-empty').style.display=compraCart.length?'none':'block';
@@ -1511,6 +1523,7 @@ let _guardandoCompra=false;
 $('#co-go').onclick=async ()=>{
   if(_guardandoCompra)return;              // evita el doble clic que duplicaba la compra
   const prov=proveedores.find(p=>p.id===Number($('#co-prov').value));
+  if(!prov){toast('✗ Elegí un proveedor','No hay proveedor seleccionado para esta empresa',true);return;}
   const total=compraCart.reduce((s,it)=>s+it.cantidad*it.costo,0);
   const fecha=$('#co-fecha').value?new Date($('#co-fecha').value+'T12:00:00').toISOString():new Date().toISOString();
   const esEspecial=$('#co-especial').checked;
