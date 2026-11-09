@@ -927,7 +927,9 @@ window._concMarcar=function(id,val){
 // Marca de una vez todos los que ya conciliaron solos.
 window._concMarcarTodos=function(){
   if(!_concRes||!_concRes.conciliados.length)return;
-  const ids=_concRes.conciliados.map(x=>x.sefe.id);
+  // Incluye los cruces 1 a 1 y los grupos (1 banco ↔ varios cobros).
+  const ids=[];
+  _concRes.conciliados.forEach(x=>{ if(x.grupo)x.sefes.forEach(m=>ids.push(m.id)); else if(x.sefe)ids.push(x.sefe.id); });
   ids.forEach(id=>{const m=movimientosBanco.find(x=>String(x.id)===String(id));if(m){m.conciliado=true;m.conciliadoEl=new Date().toISOString();}});
   _concRender();
   Promise.resolve(typeof marcarConciliadoBanco==='function'?marcarConciliadoBanco(ids,true):false).then(okr=>{
@@ -983,8 +985,42 @@ window._concConfirmarManual=function(sefeId){
   Promise.resolve(typeof marcarConciliadoBanco==='function'?marcarConciliadoBanco(sefeId,true,bankKey):false).then(okr=>{
     if(okr===false)toast('No se pudo guardar el emparejamiento','¿Ya corriste el SQL de conciliación?',true);
   });
-  _concEmparejando=null;_concTab='conc';_concRender();
-  toast('✓ Emparejados a mano','Si el monto no es igual, revisá la diferencia en la fila');
+  // Un depósito del banco puede juntar VARIOS cobros. Si con lo elegido ya
+  // cuadra el monto del banco, cerramos; si todavía falta, seguimos sumando.
+  const objetivo=_concMontoBanco(bankKey);
+  const suma=_concSumaGrupo(bankKey);
+  const resta=Math.round((objetivo-suma)*100)/100;
+  if(Math.abs(resta)<0.01){
+    _concEmparejando=null;_concTab='conc';_concRender();
+    toast('✓ Emparejado a mano',money(objetivo)+' cuadrado'+(_concManuales.filter(x=>x.bankKey===bankKey).length>1?(' con '+_concManuales.filter(x=>x.bankKey===bankKey).length+' cobros'):''));
+  }else{
+    _concTab='sefe';_concRender();
+    if(resta>0)toast('Llevás '+money(suma)+' de '+money(objetivo),'Faltan '+money(resta)+' — elegí otro cobro del depósito');
+    else toast('Te pasaste por '+money(-resta),'Quitá alguno con ✕ en la pestaña Conciliados');
+  }
+};
+// Monto (absoluto) de la línea del banco, leído de su llave.
+function _concMontoBanco(bankKey){
+  const bl=(_concData&&_concData.filas||[]).find(f=>_concBankKey(f)===bankKey);
+  return bl?Math.abs(Number(bl.monto)||0):Math.abs(Number((String(bankKey).split('|')[2])||0));
+}
+// Suma de los cobros ya emparejados a mano con esa línea del banco.
+function _concSumaGrupo(bankKey){
+  return _concManuales.filter(x=>x.bankKey===bankKey).reduce((s,x)=>{
+    const m=movimientosBanco.find(y=>String(y.id)===String(x.sefeId));return s+(m?Number(m.monto||0):0);
+  },0);
+}
+// Separar TODO un grupo (depósito ↔ varios cobros): devuelve los cobros a
+// "Sólo en <empresa>" y la línea a "Sólo en el banco".
+window._concSepararGrupo=function(bankKey){
+  _concManuales.filter(x=>x.bankKey===bankKey).forEach(p=>{
+    const m=movimientosBanco.find(y=>String(y.id)===String(p.sefeId));
+    if(m){m.conciliado=false;m.conciliadoEl=null;m.conciliadoRef=null;}
+    Promise.resolve(typeof marcarConciliadoBanco==='function'?marcarConciliadoBanco(p.sefeId,false):false);
+    _concRechazados.add(bankKey+'||'+p.sefeId);
+  });
+  _concManuales=_concManuales.filter(x=>x.bankKey!==bankKey);
+  _concRender();
 };
 
 // ── Guardar la conciliación y ver el historial ──────────────
@@ -1086,10 +1122,21 @@ function _concAjustar(r){
     if(_concRechazados.has(k)){sb.push(x.banco);ss.push(x.sefe);return false;}
     return true;
   });
-  _concManuales.forEach(mm=>{
-    const bi=sb.findIndex(f=>_concBankKey(f)===mm.bankKey);
-    const si=ss.findIndex(m=>String(m.id)===String(mm.sefeId));
-    if(bi>=0&&si>=0){const banco=sb.splice(bi,1)[0];const sefe=ss.splice(si,1)[0];conc.push({banco,sefe,manual:true});}
+  // Emparejados a mano: se agrupan por línea del banco para permitir que UN
+  // depósito del banco cuadre con VARIOS cobros del sistema (ej. el banco
+  // junta 3 cobros en un solo depósito). Si al grupo le toca un solo cobro,
+  // se muestra como un cruce normal 1 a 1.
+  const porBanco={};
+  _concManuales.forEach(mm=>{(porBanco[mm.bankKey]=porBanco[mm.bankKey]||[]).push(mm.sefeId);});
+  Object.keys(porBanco).forEach(bankKey=>{
+    const bi=sb.findIndex(f=>_concBankKey(f)===bankKey);
+    if(bi<0)return;
+    const sefes=[];
+    porBanco[bankKey].forEach(sid=>{const si=ss.findIndex(m=>String(m.id)===String(sid));if(si>=0)sefes.push(ss.splice(si,1)[0]);});
+    if(!sefes.length)return;
+    const banco=sb.splice(bi,1)[0];
+    if(sefes.length===1)conc.push({banco,sefe:sefes[0],manual:true});
+    else conc.push({banco,sefes,manual:true,grupo:true});
   });
   const sumT=(arr,tipo)=>arr.filter(x=>(x.tipo||'')===tipo).reduce((s,x)=>s+Number(x.monto||0),0);
   const resumen=Object.assign({},r.resumen,{
@@ -1166,11 +1213,15 @@ function _concRender(){
     html+=`<div style="font-size:12px;color:#7A4A07;background:var(--warn-bg,#fbf1d9);border:1px solid var(--warn);border-radius:10px;padding:8px 12px;margin:6px 0 2px">⚠️ De la lista "Sólo en ${_concEmp()}", ${r._arrastres} son de un mes anterior y siguen SIN conciliar — revisalos y conciliálos (o corregilos) para que dejen de arrastrarse.</div>`;
   }
   if(_concEmparejando){
-    const bf=(r.soloBanco||[]).find(f=>_concBankKey(f)===_concEmparejando);
+    const bf=(_concData&&_concData.filas||[]).find(f=>_concBankKey(f)===_concEmparejando);
+    const obj=_concMontoBanco(_concEmparejando);
+    const sum=_concSumaGrupo(_concEmparejando);
+    const falta=Math.round((obj-sum)*100)/100;
+    const nEleg=_concManuales.filter(x=>x.bankKey===_concEmparejando).length;
     html+=`<div style="background:var(--warn-bg,#fbf1d9);border:1px solid var(--warn);border-radius:10px;padding:9px 13px;margin:6px 0 2px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:#7A4A07">
-      <span>👉 Elegí abajo el movimiento de ${_concEmp()} que corresponde a <b>${bf?money(bf.monto)+' · '+escHtml(bf.descripcion):'este movimiento del banco'}</b>, con el botón <b>"Emparejar con esta"</b>.</span>
+      <span>👉 Depósito del banco <b>${money(obj)}</b>${bf?' · '+escHtml(bf.descripcion):''}. Elegí abajo el/los cobros de ${_concEmp()} que lo forman (botón <b>"Emparejar con esta"</b>).${nEleg?` <b>Llevás ${money(sum)} en ${nEleg} cobro(s)</b> — ${Math.abs(falta)<0.01?'✔ cuadra':(falta>0?('faltan '+money(falta)):('te pasaste '+money(-falta)))}.`:''}</span>
       <span style="flex:1"></span>
-      <button class="btn btn-ghost btn-sm" onclick="_concCancelarEmparejar()">Cancelar</button></div>`;
+      <button class="btn btn-ghost btn-sm" onclick="_concCancelarEmparejar()">Terminar</button></div>`;
   }
   const tab=(t,txt,n)=>`<button class="btn ${_concTab===t?'btn-primary':'btn-ghost'} btn-sm" onclick="_concIrTab('${t}')">${txt} (${n})</button>`;
   html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 2px">
@@ -1188,17 +1239,30 @@ function _concRender(){
 function _concTabla(r){
   const bdg=t=>t==='entrada'?'<span class="badge b-ok" style="font-size:10px">▲ Entrada</span>':'<span class="badge b-danger" style="font-size:10px">▼ Salida</span>';
   const doc=d=>`<div style="color:var(--muted-2);font-size:11px">Doc ${d||'—'}</div>`;
+  // Suma del lado SEFE de un cruce (uno o varios cobros si es un grupo).
+  const sumSefe=x=>x.grupo?x.sefes.reduce((s,m)=>s+Number(m.monto||0),0):Number((x.sefe&&x.sefe.monto)||0);
   // Etiqueta "a mano" / "dif Qxx" cuando el par es manual o los montos difieren.
-  const difBadge=x=>{const d=Math.round((Number(x.banco.monto)-Number(x.sefe.monto))*100)/100;const p=[];if(x.manual)p.push('a mano');if(Math.abs(d)>=0.01)p.push('dif '+money(Math.abs(d)));return p.length?` <span class="badge b-warn" style="font-size:10px">${p.join(' · ')}</span>`:'';};
+  const difBadge=x=>{const d=Math.round((Number(x.banco.monto)-sumSefe(x))*100)/100;const p=[];if(x.manual)p.push(x.grupo?('a mano · '+x.sefes.length+' cobros'):'a mano');if(Math.abs(d)>=0.01)p.push('dif '+money(Math.abs(d)));return p.length?` <span class="badge b-warn" style="font-size:10px">${p.join(' · ')}</span>`:'';};
+  // Celdas que cambian según sea cruce 1 a 1 o un grupo (1 banco ↔ varios cobros).
+  const estaMarcado=x=>x.grupo?x.sefes.every(m=>m.conciliado):!!(x.sefe&&x.sefe.conciliado);
+  const chkCell=x=>x.grupo
+    ? `<input type="checkbox" checked disabled title="Emparejado a mano (${x.sefes.length} cobros)">`
+    : `<input type="checkbox" ${x.sefe.conciliado?'checked':''} onclick="_concMarcar(${x.sefe.id},this.checked)">`;
+  const coincideCell=x=>x.grupo
+    ? `↔ <b>${x.sefes.length} cobros</b>: ${x.sefes.map(m=>escHtml(m.concepto||'movimiento')+' ('+money(m.monto)+')').join(' · ')}${difBadge(x)}`
+    : `↔ ${escHtml((x.sefe&&x.sefe.concepto)||'movimiento')}${difBadge(x)}`;
+  const xCell=x=>x.grupo
+    ? `<button class="btn btn-ghost btn-sm" title="Separar el grupo" onclick="_concSepararGrupo('${_concBankKey(x.banco)}')">✕</button>`
+    : `<button class="btn btn-ghost btn-sm" title="Separar — no es el mismo" onclick="_concSeparar('${_concBankKey(x.banco)}',${x.sefe.id})">✕</button>`;
   if(_concTab==='conc'){
     if(!r.conciliados.length)return '<div class="empty">Nada conciliado todavía.</div>';
-    const marcados=r.conciliados.filter(x=>x.sefe.conciliado).length;
+    const marcados=r.conciliados.filter(estaMarcado).length;
     const head=`<div style="display:flex;align-items:center;gap:10px;margin:6px 0 8px;flex-wrap:wrap">
       <span style="font-size:12.5px;color:var(--muted)">Marcados como conciliados: <b style="color:var(--ink)">${marcados}</b> de ${r.conciliados.length}</span>
       <span style="flex:1"></span>
       <button class="btn btn-ghost btn-sm" onclick="_concMarcarTodos()">✔ Marcar todos</button></div>`;
     return head+`<table><thead><tr><th style="width:34px;text-align:center" title="Conciliado">✔</th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th>Coincide con ${_concEmp()}</th><th></th></tr></thead><tbody>`+
-      r.conciliados.map(x=>`<tr><td style="text-align:center"><input type="checkbox" ${x.sefe.conciliado?'checked':''} onclick="_concMarcar(${x.sefe.id},this.checked)"></td><td style="white-space:nowrap">${fdate(x.banco.fecha)}</td><td>${escHtml(x.banco.descripcion)}${doc(x.banco.noDoc)}</td><td>${bdg(x.banco.tipo)}</td><td class="num">${money(x.banco.monto)}</td><td style="color:var(--muted);font-size:12px">↔ ${escHtml(x.sefe.concepto||'movimiento')}${difBadge(x)}</td><td style="text-align:right"><button class="btn btn-ghost btn-sm" title="Separar — no es el mismo" onclick="_concSeparar('${_concBankKey(x.banco)}',${x.sefe.id})">✕</button></td></tr>`).join('')+'</tbody></table>';
+      r.conciliados.map(x=>`<tr><td style="text-align:center">${chkCell(x)}</td><td style="white-space:nowrap">${fdate(x.banco.fecha)}</td><td>${escHtml(x.banco.descripcion)}${doc(x.banco.noDoc)}</td><td>${bdg(x.banco.tipo)}</td><td class="num">${money(x.banco.monto)}</td><td style="color:var(--muted);font-size:12px">${coincideCell(x)}</td><td style="text-align:right">${xCell(x)}</td></tr>`).join('')+'</tbody></table>';
   }
   if(_concTab==='banco'){
     if(!r.soloBanco.length)return '<div class="empty">No falta registrar nada. 🎉</div>';
