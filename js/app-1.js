@@ -575,6 +575,10 @@ function cambiarEmpresa(codigo){
   // Forzar que los filtros con dropdown cacheado (proveedores, clientes, cuentas)
   // se reconstruyan con los datos de la nueva empresa.
   try{ document.querySelectorAll('[data-built]').forEach(el=>{el.dataset.built='';}); }catch(e){}
+  // La conciliación bancaria guarda estado en memoria de UNA empresa (cuenta,
+  // archivo del banco, emparejamientos). Se limpia para que no quede trabada
+  // mostrando la conciliación de la empresa anterior.
+  try{ if(typeof _concReset==='function')_concReset(); }catch(e){}
   _cerrarBrandMenu();
   renderSelectorEmpresa();
   aplicarMarcaEmpresa();

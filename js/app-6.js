@@ -852,9 +852,26 @@ let _concData=null, _concCuentaId=null, _concTab='conc', _concRes=null,
     _concRechazados=new Set(), _concManuales=[], _concEmparejando=null,
     _concArchivoNombre='', _concUltimo=null;
 
+// Multiempresa: la conciliación en memoria (cuenta elegida, archivo del banco
+// subido y emparejamientos) es SIEMPRE de una empresa. Al cambiar de empresa
+// hay que vaciarla, si no se queda "trabada" mostrando la conciliación de la
+// empresa anterior. Lo llama cambiarEmpresa(), y openConciliacion() se cura
+// solo si la cuenta elegida ya no es de la empresa activa.
+function _concReset(){
+  _concData=null; _concCuentaId=null; _concTab='conc'; _concRes=null;
+  _concRechazados=new Set(); _concManuales=[]; _concEmparejando=null;
+  _concArchivoNombre=''; _concUltimo=null;
+}
+window._concReset=_concReset;
+
 function openConciliacion(){
-  if(!cuentasActivasBanco().length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
-  if(!_concCuentaId){const c0=cuentasActivasBanco()[0];_concCuentaId=c0?c0.id:null;}
+  const _ctas=cuentasActivasBanco();
+  if(!_ctas.length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
+  // Si la cuenta que quedó en memoria no es de la empresa activa (se cambió de
+  // empresa), se limpia todo y se arranca con la primera cuenta de ésta.
+  if(!_concCuentaId || !_ctas.some(c=>String(c.id)===String(_concCuentaId))){
+    _concReset(); const c0=_ctas[0]; _concCuentaId=c0?c0.id:null;
+  }
   const ops=cuentasActivasBanco().map(c=>`<option value="${c.id}"${String(c.id)===String(_concCuentaId)?' selected':''}>${cuentaLabel(c)}</option>`).join('');
   openMod('Conciliación bancaria',
     `<div class="row">
