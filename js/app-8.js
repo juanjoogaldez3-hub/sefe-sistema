@@ -560,6 +560,7 @@ function agregarTotalesReportes(){
     if(!thead||!tbody)return;
     const headRow=thead.querySelector('tr'); if(!headRow)return;
     const heads=[...headRow.children].map(th=>(th.textContent||'').toLowerCase());
+    const headEls=[...headRow.children];
     const nCols=heads.length;
     const rows=[...tbody.querySelectorAll(':scope > tr')];
     const tieneColspan=rows.some(r=>[...r.children].some(td=>Number(td.getAttribute('colspan')||1)>1));
@@ -567,7 +568,10 @@ function agregarTotalesReportes(){
     if(tieneColspan||yaTotal)return;
     const datos=rows.filter(r=>r.children.length===nCols);
     if(datos.length<2)return;
-    const skip=c=>{const h=heads[c]||'';return h.includes('%')||h.includes('unitari')||h.includes('precio lista')||h.includes('fecha')||h.includes('día')||h.includes('dias');};
+    // Una columna marcada con data-no-total no se suma (ej. el SALDO corriente
+    // del cardex: es un saldo que se arrastra fila por fila; sumarlo no tiene
+    // sentido). Tampoco se suman %, precios unitarios ni fechas.
+    const skip=c=>{const h=heads[c]||'';const el=headEls[c];return (el&&el.hasAttribute&&el.hasAttribute('data-no-total'))||h.includes('%')||h.includes('unitari')||h.includes('precio lista')||h.includes('fecha')||h.includes('día')||h.includes('dias');};
     const sums=new Array(nCols).fill(null), esMoney=new Array(nCols).fill(false);
     for(let c=1;c<nCols;c++){
       if(skip(c))continue;

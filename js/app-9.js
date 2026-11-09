@@ -908,7 +908,7 @@ function renderReportes(){
       html+=`<div class="panel"><div class="panel-head"><h3>Cardex: ${prodSel.nombre}</h3><span style="font-size:12px;color:var(--muted)">${prodSel.codigo} · Stock actual: <b style="color:var(--ink)">${stockActual}</b> · ${movs.length} movimiento${movs.length!==1?'s':''}</span></div>
         ${movs.length?`<table style="font-size:12px"><thead><tr>
           <th>Fecha</th><th>Documento</th><th>Cliente / Proveedor</th>
-          <th class="num">Entra</th><th class="num">Sale</th><th class="num">Saldo</th><th>Quién</th>
+          <th class="num">Entra</th><th class="num">Sale</th><th class="num" data-no-total>Saldo</th><th>Quién</th>
         </tr></thead><tbody>${filas}</tbody></table>`:'<div class="panel-body"><p class="empty">Sin movimientos para este producto en el período.</p></div>'}</div>`;
     }else{
       // ── VISTA GENERAL: todos los productos, sin saldo corriente ──
