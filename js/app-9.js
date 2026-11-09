@@ -909,7 +909,11 @@ function renderReportes(){
         ${movs.length?`<table style="font-size:12px"><thead><tr>
           <th>Fecha</th><th>Documento</th><th>Cliente / Proveedor</th>
           <th class="num">Entra</th><th class="num">Sale</th><th class="num" data-no-total>Saldo</th><th>Quién</th>
-        </tr></thead><tbody>${filas}</tbody></table>`:'<div class="panel-body"><p class="empty">Sin movimientos para este producto en el período.</p></div>'}</div>`;
+        </tr></thead><tbody>${filas}</tbody></table>
+        <div style="margin:10px 14px 14px;padding:9px 12px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;font-size:11.5px;color:var(--muted);display:flex;gap:8px;align-items:flex-start">
+          <svg viewBox="0 0 24 24" style="width:15px;height:15px;flex:none;margin-top:1px;stroke:currentColor;fill:none;stroke-width:2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <span>La columna <b>Saldo</b> es un saldo corriente del período: arranca en 0 con el primer movimiento de la lista y va sumando/restando fila por fila. <b>No es el stock absoluto</b> — el stock real es <b style="color:var(--ink)">${stockActual}</b> (arriba). Por eso el Saldo no se totaliza al pie.</span>
+        </div>`:'<div class="panel-body"><p class="empty">Sin movimientos para este producto en el período.</p></div>'}</div>`;
     }else{
       // ── VISTA GENERAL: todos los productos, sin saldo corriente ──
       const filas=movs.map(m=>{
