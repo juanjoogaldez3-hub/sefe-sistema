@@ -1103,8 +1103,15 @@ function _concCalcular(){
   // anteriores—: son pendientes reales que hay que conciliar y no deben
   // perderse (además el saldo de SEFE los incluye, así que sostienen la
   // diferencia). Sacar por fecha estaba mal: escondía pendientes de verdad.
-  const yaConciliados=r.soloSEFE.filter(m=>m.conciliado===true).length;
-  r.soloSEFE=r.soloSEFE.filter(m=>m.conciliado!==true);
+  // OJO: no sacar los que están emparejados A MANO con una línea del estado de
+  // cuenta ACTUAL. _concAjustar los arma como cruces (incluidos los grupos
+  // 1 banco ↔ varios cobros); si los filtráramos acá por estar "conciliados",
+  // desaparecerían antes de agruparse y la línea del banco quedaría suelta.
+  const _refsArchivo=new Set((_concData.filas||[]).map(f=>_concBankKey(f)));
+  const _manualIds=new Set((_concManuales||[]).map(x=>String(x.sefeId)));
+  const _enGrupoActual=m=> _manualIds.has(String(m.id)) || (m.conciliadoRef && _refsArchivo.has(m.conciliadoRef));
+  const yaConciliados=r.soloSEFE.filter(m=>m.conciliado===true && !_enGrupoActual(m)).length;
+  r.soloSEFE=r.soloSEFE.filter(m=> m.conciliado!==true || _enGrupoActual(m));
   // De los que quedan, cuántos son de un mes anterior (arrastres sin conciliar).
   const arrastres=r.soloSEFE.filter(m=>(m.fecha||'').slice(0,10)<desde).length;
   r._posteriores=posteriores; r._yaConciliados=yaConciliados; r._arrastres=arrastres; r._corte=corte; r._desde=desde;
