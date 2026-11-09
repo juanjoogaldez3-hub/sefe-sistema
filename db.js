@@ -526,7 +526,36 @@ async function borrarCliente(id){
 }
 window.borrarCliente = borrarCliente;
 
+// ── Multiempresa · blindaje central de la empresa ───────────────
+// Problema recurrente: cada registro guardaba `empresa: X.empresa||'SEFE'`,
+// confiando en lo que puso la pantalla. Si un desplegable quedaba viejo y
+// se elegía mal, o si algún código nuevo olvidaba poner la empresa, el
+// registro caía por defecto en SEFE (fuga silenciosa de LAML hacia SEFE).
+//
+// Solución de fondo: la empresa de un registro SIEMPRE se deriva de su
+// "padre" —el cliente del documento/cotización/saldo, el proveedor de la
+// compra, el documento del abono/cobro, la compra del pago, la cuenta del
+// movimiento— buscándolo por id entre los datos ya cargados en el navegador
+// (que SON la fuente de verdad y están bien etiquetados). Si no se puede
+// resolver el padre, o el padre es "compartido" (empresa vacía, ej. una
+// cuenta de banco de ambas), se respeta la empresa que ya traía el registro,
+// y recién en última instancia 'SEFE' (como fue siempre). Así ningún camino
+// —ni los de hoy ni los que se agreguen mañana— puede mandar un registro de
+// LAML a SEFE por error.
+function _empPorId(arr, id){
+  try{ if(id==null) return null; const x=(arr||[]).find(o=>o&&o.id===id); return (x&&x.empresa)||null; }
+  catch(e){ return null; }
+}
+function empresaDeCliente(id){    return _empPorId(typeof clientes!=='undefined'?clientes:[], id); }
+function empresaDeProveedor(id){  return _empPorId(typeof proveedores!=='undefined'?proveedores:[], id); }
+function empresaDeCuenta(id){     return _empPorId(typeof cuentasBanco!=='undefined'?cuentasBanco:[], id); }
+function empresaDeDocumento(id){  return _empPorId(typeof documentos!=='undefined'?documentos:[], id); }
+function empresaDeCompra(id){     return _empPorId(typeof compras!=='undefined'?compras:[], id); }
+
 async function guardarDocumento(d){
+  // Blindaje: la empresa del documento es la de su cliente (no la que
+  // quedó en el formulario). Se fija también en la copia local.
+  d.empresa = empresaDeCliente(d.clienteId) || d.empresa || 'SEFE';
   const row = {
     numero:d.numero, tipo_doc:d.tipoDoc, cliente_id:d.clienteId,
     cliente_nombre:d.clienteNombre, cliente_comercial:d.clienteComercial, cliente_nit:d.clienteNit,
@@ -564,13 +593,14 @@ async function guardarDocumento(d){
 }
 
 async function guardarAbono(documentoId, ab){
+  ab.empresa = empresaDeDocumento(documentoId) || ab.empresa || 'SEFE'; // blindaje: la del documento
   const row = {
     documento_id:documentoId, fecha:ab.fecha, monto:ab.monto, metodo:ab.metodo,
     referencia:ab.referencia, no_recibo:ab.noRecibo, comprobante:ab.comprobante,
     registrado_por:ab.registradoPor, registrado_el:ab.registradoEl,
     anulado:ab.anulado, motivo_anulacion:ab.motivoAnulacion, origen_cobro_ruta:ab.origenCobroRuta,
     cuenta_banco_id:ab.cuentaBancoId||null,
-    empresa:ab.empresa||'SEFE'
+    empresa:ab.empresa
   };
   const {data,error} = await sb.from('abonos').insert(row).select().single();
   if(error)console.error(error); else ab._id = data.id;
@@ -604,13 +634,14 @@ async function borrarParadaRuta(id){
   if(error)console.error('Error borrando parada de ruta:',error);
 }
 async function guardarCobroRuta(c){
+  c.empresa = empresaDeDocumento(c.docId) || c.empresa || 'SEFE'; // blindaje: la del documento
   const row = {
     documento_id:c.docId, doc_num:c.docNum, cliente:c.cliente, monto:c.monto,
     modo:c.modo, no_boleta:c.noBoleta, no_recibo:c.noRecibo, cheque:c.cheque,
     banco:c.banco, piloto:c.piloto, fecha:c.fecha, estado:c.estado,
     recibido_por:c.recibidoPor, recibido_fecha:c.recibidoFecha,
     procesado_por:c.procesadoPor, procesado_fecha:c.procesadoFecha,
-    empresa:c.empresa||'SEFE'
+    empresa:c.empresa
   };
   if (c._nuevo) {
     delete c._nuevo;
@@ -624,13 +655,14 @@ async function guardarCobroRuta(c){
 }
 
 async function guardarCompra(c){
+  c.empresa = empresaDeProveedor(c.proveedorId) || c.empresa || 'SEFE'; // blindaje: la del proveedor
   const row = {
     proveedor_id:c.proveedorId, proveedor_nombre:c.proveedorNombre,
     items:c.items, total:c.total, fecha:c.fecha, estado_recepcion:c.estadoRecepcion,
     facturada:c.facturada, doc_prov:c.docProv, tipo_pago:c.tipoPago,
     dias_credito:c.diasCredito, vencimiento:c.vencimiento, especial:c.especial,
     oficializada:c.oficializada, mes:c.mes, anulado:c.anulado, motivo_anulacion:c.motivoAnulacion,
-    empresa:c.empresa||'SEFE'
+    empresa:c.empresa
   };
   if (c._nuevo) {
     // OJO: NO borrar _nuevo antes de guardar. Mientras el insert viaja, el
@@ -654,12 +686,13 @@ if(typeof window!=='undefined')window.borrarCompra=borrarCompra;
 
 // Guardar un pago a proveedor (abono sobre una compra)
 async function guardarPagoProveedor(compraId, pago){
+  pago.empresa = empresaDeCompra(compraId) || pago.empresa || 'SEFE'; // blindaje: la de la compra
   const row = {
     compra_id:compraId, fecha:pago.fecha, monto:pago.monto, metodo:pago.metodo,
     referencia:pago.referencia, no_recibo:pago.noRecibo, comprobante:pago.comprobante,
     registrado_por:pago.registradoPor, registrado_el:pago.registradoEl,
     anulado:pago.anulado, motivo_anulacion:pago.motivoAnulacion, es_cierre:pago.esCierre,
-    cuenta_banco_id:pago.cuentaBancoId||null, empresa:pago.empresa||'SEFE'
+    cuenta_banco_id:pago.cuentaBancoId||null, empresa:pago.empresa
   };
   const {data,error} = await sb.from('pagos_proveedor').insert(row).select().single();
   if(error){console.error('Error guardando pago a proveedor:',error);return false;}
@@ -772,7 +805,7 @@ async function guardarCotizacion(cot){
     observaciones:cot.observaciones||null, validez_dias:cot.validezDias||15, fecha_vence:cot.fechaVence||null,
     estado:cot.estado||'borrador', creado_por:cot.creadoPor||null, creada:cot.creada||null,
     convertido_pedido_id:cot.convertidoPedidoId||null,
-    empresa:cot.empresa||'SEFE'
+    empresa:(cot.empresa=empresaDeCliente(cot.clienteId)||cot.empresa||'SEFE') // blindaje: la del cliente
   };
   if(cot._nuevo){
     delete cot._nuevo;
@@ -812,7 +845,7 @@ async function guardarCredito(cr){
     documento_id:cr.documentoId||null, no_recibo:cr.noRecibo||null, metodo:cr.metodo||null,
     referencia:cr.referencia||null, cuenta_banco_id:cr.cuentaBancoId||null, concepto:cr.concepto||null,
     registrado_por:cr.registradoPor||null, registrado_el:cr.registradoEl||null, anulado:cr.anulado===true,
-    empresa:cr.empresa||'SEFE'
+    empresa:(cr.empresa=empresaDeCliente(cr.clienteId)||cr.empresa||'SEFE') // blindaje: la del cliente
   };
   const {data,error}=await sb.from('creditos_cliente').insert(row).select().single();
   if(error){console.error('Error guardando saldo a favor:',error);return false;}
@@ -966,7 +999,10 @@ async function guardarMovimientoBanco(m){
     concepto:m.concepto||null, categoria:m.categoria||null, origen:m.origen||'manual', origen_id:m.origenId||null,
     cuenta_destino_id:m.cuentaDestinoId||null, referencia:m.referencia||null, poliza:m.poliza||null,
     beneficiario:m.beneficiario||null,
-    registrado_por:m.registradoPor||null, anulado:m.anulado===true, empresa:m.empresa||'SEFE'};
+    registrado_por:m.registradoPor||null, anulado:m.anulado===true,
+    // blindaje: la de la cuenta; si la cuenta es compartida (sin empresa),
+    // se respeta la empresa activa con que se creó el movimiento.
+    empresa:(m.empresa=empresaDeCuenta(m.cuentaId)||m.empresa||'SEFE')};
   if (m._nuevo) {
     delete m._nuevo;
     const {data,error} = await sb.from('movimientos_banco').insert(row).select().single();

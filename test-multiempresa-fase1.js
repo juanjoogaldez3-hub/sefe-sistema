@@ -89,19 +89,24 @@ console.log('\n═══ Escritura (app): el registro nuevo nace con su empresa 
   ['cobro en ruta hereda del documento', /estado:'cobrado',empresa:d\.empresa\|\|empresaParaNuevo\(\),_nuevo:true/],
 ].forEach(([n,re]) => ok(n, re.test(src)));
 
+// Nota: los registros "hijos" (documento, abono, compra, pago, cobro,
+// cotización, saldo a favor, movimiento) ahora DERIVAN la empresa de su
+// padre en db.js (ver test-multiempresa-blindaje.js). Acá sólo se cuida
+// que la columna empresa siga viajando al guardar; los registros "raíz"
+// (cliente, producto, proveedor, cuenta…) la toman de sí mismos.
 console.log('\n═══ Escritura (db.js): la columna empresa viaja al guardar ═══');
 [
   ['guardarCliente',        /function guardarCliente[\s\S]*?empresa:cli\.empresa\|\|'SEFE'/],
   ['guardarDocumento',      /function guardarDocumento[\s\S]*?empresa:d\.empresa\|\|'SEFE'/],
-  ['guardarAbono',          /function guardarAbono[\s\S]*?empresa:ab\.empresa\|\|'SEFE'/],
-  ['guardarCobroRuta',      /function guardarCobroRuta[\s\S]*?empresa:c\.empresa\|\|'SEFE'/],
-  ['guardarCompra',         /function guardarCompra[\s\S]*?empresa:c\.empresa\|\|'SEFE'/],
+  ['guardarAbono',          /function guardarAbono[\s\S]*?empresa:ab\.empresa\b/],
+  ['guardarCobroRuta',      /function guardarCobroRuta[\s\S]*?empresa:c\.empresa\b/],
+  ['guardarCompra',         /function guardarCompra[\s\S]*?empresa:c\.empresa\b/],
   ['guardarProducto',       /function guardarProducto[\s\S]*?empresa:p\.empresa\|\|'SEFE'/],
-  ['guardarCotizacion',     /convertido_pedido_id:cot\.convertidoPedidoId\|\|null,\s*empresa:cot\.empresa\|\|'SEFE'/],
+  ['guardarCotizacion',     /convertido_pedido_id:cot\.convertidoPedidoId\|\|null,\s*empresa:\(cot\.empresa=/],
   ['guardarProveedor',      /function guardarProveedor[\s\S]*?empresa:pr\.empresa\|\|'SEFE'/],
   ['guardarCuentaBanco',    /function guardarCuentaBanco[\s\S]*?empresa:c\.empresa\|\|'SEFE'/],
-  ['guardarMovimientoBanco',/function guardarMovimientoBanco[\s\S]*?empresa:m\.empresa\|\|'SEFE'/],
-  ['guardarCredito',        /function guardarCredito[\s\S]*?empresa:cr\.empresa\|\|'SEFE'/],
+  ['guardarMovimientoBanco',/function guardarMovimientoBanco[\s\S]*?empresa:\(m\.empresa=empresaDeCuenta/],
+  ['guardarCredito',        /function guardarCredito[\s\S]*?empresa:\(cr\.empresa=empresaDeCliente/],
   ['guardarAmbServicio',    /function guardarAmbServicio[\s\S]*?empresa:s\.empresa\|\|'SEFE'/],
 ].forEach(([n,re]) => ok(n, re.test(dbjs)));
 
