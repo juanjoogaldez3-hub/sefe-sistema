@@ -864,6 +864,10 @@ function _concReset(){
 }
 window._concReset=_concReset;
 
+// Nombre de la empresa activa para los rótulos de la conciliación. Antes
+// decían "SEFE" fijo, aunque estuvieras en otra empresa (LAML).
+function _concEmp(){ try{ return (typeof marcaActiva==='function' && marcaActiva().nombre) || 'SEFE'; }catch(e){ return 'SEFE'; } }
+
 function openConciliacion(){
   const _ctas=cuentasActivasBanco();
   if(!_ctas.length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
@@ -877,7 +881,7 @@ function openConciliacion(){
     `<div class="row">
        <div><label>1. Archivo del banco (CSV de Bi en Línea)</label>
          <input id="conc-file" type="file" accept=".csv,text/csv" onchange="_concArchivo(event)"></div>
-       <div><label>2. Cuenta de SEFE</label>
+       <div><label>2. Cuenta de ${_concEmp()}</label>
          <select id="conc-cuenta" onchange="_concSetCuenta(this.value)">${ops}</select></div>
      </div>
      <div id="conc-cont" style="margin-top:8px"></div>`, null);
@@ -1013,7 +1017,7 @@ window._concHistorial=function(){
     </tr>`).join(''):'<tr><td colspan="9" class="empty">Todavía no hay conciliaciones guardadas.</td></tr>';
   openMod('Historial de conciliaciones',
     `<div style="display:flex;justify-content:flex-end;margin-bottom:8px">${lista.length?'<button class="btn btn-primary btn-sm" onclick="_concHistorialExcel()">Descargar Excel</button>':''}</div>
-     <div style="overflow-x:auto"><table><thead><tr><th>Guardada</th><th>Cuenta</th><th>Período</th><th class="num">Saldo banco</th><th class="num">Saldo SEFE</th><th class="num">Diferencia</th><th class="num">Concil.</th><th class="num">Faltan</th><th>Por</th></tr></thead><tbody>${filas}</tbody></table></div>`, null);
+     <div style="overflow-x:auto"><table><thead><tr><th>Guardada</th><th>Cuenta</th><th>Período</th><th class="num">Saldo banco</th><th class="num">Saldo ${_concEmp()}</th><th class="num">Diferencia</th><th class="num">Concil.</th><th class="num">Faltan</th><th>Por</th></tr></thead><tbody>${filas}</tbody></table></div>`, null);
   $('#m-save').style.display='none';
   $('#ov').classList.add('modal-wide');
   const _m=document.querySelector('#ov .modal'); if(_m)_m.style.maxWidth='min(96vw,1040px)';
@@ -1024,16 +1028,18 @@ window._concHistorialExcel=async function(){
   try{
     const {XLSX,styled:_styled}=await _cargarXLSX();
     const nom=id=>(cuentasBanco.find(c=>String(c.id)===String(id))||{}).nombre||'';
-    const meta=[['SEFE, S.A.'],['HISTORIAL DE CONCILIACIONES'],['Generado el:',fdatehora(new Date())],['Generado por:',(typeof currentUser!=='undefined'?currentUser:'')],[]];
+    const _emp=(typeof marcaActiva==='function'?marcaActiva():{});
+    const meta=[[_emp.razonSocial||_emp.nombre||'SEFE'],['HISTORIAL DE CONCILIACIONES'],['Generado el:',fdatehora(new Date())],['Generado por:',(typeof currentUser!=='undefined'?currentUser:'')],[]];
     const HR=5;
     const ws=XLSX.utils.aoa_to_sheet(meta);
-    const data=lista.map(c=>({'Guardada':c.guardadoEl?fdatehora(new Date(c.guardadoEl)):'',Cuenta:nom(c.cuentaId),Desde:c.desde?fdate(c.desde):'',Hasta:c.hasta?fdate(c.hasta):'','Saldo banco':c.saldoBanco,'Saldo SEFE':c.saldoSefe,'Diferencia':c.diferencia,'Conciliados':c.nConciliados,'Sólo banco':c.nSoloBanco,'Sólo SEFE':c.nSoloSefe,'Por':c.guardadoPor||''}));
+    const _en=_emp.nombre||'SEFE';
+    const data=lista.map(c=>({'Guardada':c.guardadoEl?fdatehora(new Date(c.guardadoEl)):'',Cuenta:nom(c.cuentaId),Desde:c.desde?fdate(c.desde):'',Hasta:c.hasta?fdate(c.hasta):'','Saldo banco':c.saldoBanco,['Saldo '+_en]:c.saldoSefe,'Diferencia':c.diferencia,'Conciliados':c.nConciliados,'Sólo banco':c.nSoloBanco,['Sólo '+_en]:c.nSoloSefe,'Por':c.guardadoPor||''}));
     XLSX.utils.sheet_add_json(ws,data,{origin:'A'+(HR+1)});
     const _keys=Object.keys(data[0]);
     const moneyCols=_keys.map((k,i)=>/saldo|diferencia/i.test(k)?i:-1).filter(i=>i>=0);
     _estiloExcelHoja(XLSX,ws,{styled:_styled,headerRow:HR,nCols:_keys.length,dataRows:data.length,moneyCols,totalRow:null,brandRow:0,titleRow:1,metaRows:[2,3]});
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Conciliaciones');
-    const fn='SEFE_conciliaciones_'+fechaHoyGT()+'.xlsx';
+    const fn=(_en.replace(/[^a-zA-Z0-9]/g,'_')||'SEFE')+'_conciliaciones_'+fechaHoyGT()+'.xlsx';
     if(typeof descargarXlsx==='function')descargarXlsx(XLSX,wb,fn); else XLSX.writeFile(wb,fn);
     toast('✓ Excel descargado',fn);
   }catch(e){console.error('Historial Excel:',e);toast('No se pudo generar el Excel',e.message||String(e),true);}
@@ -1099,7 +1105,7 @@ function _concRender(){
   if(!_concData){cont.innerHTML='<div class="empty" style="padding:24px 10px">Subí el archivo CSV que exporta Bi en Línea (Movimientos → Exportar) y el sistema lo cruza solo con los movimientos de la cuenta.</div>';return;}
   _concSeedManuales(); // restaurar emparejamientos a mano guardados
   const r=_concAjustar(_concCalcular()); _concRes=r;
-  if(!r){cont.innerHTML='<div class="empty">Elegí la cuenta de SEFE.</div>';return;}
+  if(!r){cont.innerHTML='<div class="empty">Elegí la cuenta de '+_concEmp()+'.</div>';return;}
   const res=r.resumen;
   const cuenta=cuentasBanco.find(c=>String(c.id)===String(_concCuentaId));
   const corte=r._corte||_concData.hasta;   // hasta la última fecha del estado de cuenta
@@ -1122,7 +1128,7 @@ function _concRender(){
     <div style="font-size:11px;color:var(--muted);margin-top:2px">${sub||'&nbsp;'}</div></div>`;
   let html=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin:12px 0 4px">
     ${kpiT('Saldo según el banco',M(res.saldoFinalBanco),corte?('al '+fdate(corte)):'')}
-    ${kpiT('Saldo según SEFE',M(saldoSEFE),(cuenta?cuenta.nombre:'')+(corte?(' · al '+fdate(corte)):''))}
+    ${kpiT('Saldo según '+_concEmp(),M(saldoSEFE),(cuenta?cuenta.nombre:'')+(corte?(' · al '+fdate(corte)):''))}
     ${kpiT('Diferencia',dif==null?'—':M(dif),cuadra?'¡cuadra!':'falta registrar',cuadra?'var(--ok)':'var(--warn)')}
     ${kpiT('Conciliado',r.conciliados.length+' / '+res.totalFilas,pct+'%')}
   </div>`;
@@ -1134,12 +1140,12 @@ function _concRender(){
   const soloBancoNet=Math.round((res.soloBancoEntradas-res.soloBancoSalidas)*100)/100;
   const difRestante=Math.round((openGap+soloSEFEnet)*100)/100; // lo que quedaría tras registrar lo del banco
   if(dif!=null&&cuadra){
-    html+=`<div style="background:var(--ok-bg,#e8f3e4);border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin:6px 0 2px;font-size:13px"><b style="color:var(--ok)">✔ La cuenta cuadra con el banco.</b> El saldo de SEFE coincide con el del estado de cuenta.</div>`;
+    html+=`<div style="background:var(--ok-bg,#e8f3e4);border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin:6px 0 2px;font-size:13px"><b style="color:var(--ok)">✔ La cuenta cuadra con el banco.</b> El saldo de ${_concEmp()} coincide con el del estado de cuenta.</div>`;
   }else if(dif!=null){
     const parte=(emoji,txt,val,nota)=>(Math.abs(val)>=0.01)?`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:6px 0">
       <span>${emoji} ${txt}${nota?`<div style="color:var(--muted-2);font-size:11px;margin-top:1px">${nota}</div>`:''}</span>
       <span class="num" style="font-weight:700;white-space:nowrap">${money(Math.abs(val))}</span></div>`:'';
-    const p1=parte('🔴','Saldo inicial distinto — SEFE arranca en '+money(sefeOpen)+' y el banco en '+money(bankOpen),openGap,'Casi siempre es el saldo inicial de la cuenta mal puesto. Se corrige una sola vez.');
+    const p1=parte('🔴','Saldo inicial distinto — '+_concEmp()+' arranca en '+money(sefeOpen)+' y el banco en '+money(bankOpen),openGap,'Casi siempre es el saldo inicial de la cuenta mal puesto. Se corrige una sola vez.');
     const p2=parte('🟡','Falta registrar del banco ('+res.soloBanco+' mov.)',soloBancoNet,'Registralos en la pestaña “Sólo en el banco”.');
     const p3=parte('🔵','En SEFE y el banco aún no lo muestra ('+res.soloSEFE+' mov.)',soloSEFEnet,'Normal si son de fin de mes; caen en el próximo estado de cuenta.');
     html+=`<div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:6px 0 2px">
@@ -1151,18 +1157,18 @@ function _concRender(){
     </div>`;
   }
   if(r._posteriores>0){
-    html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._posteriores} movimiento(s) de SEFE posteriores al ${fdate(corte)} no se cuentan acá — son de después de este estado de cuenta y aparecerán en el próximo.</div>`;
+    html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._posteriores} movimiento(s) de ${_concEmp()} posteriores al ${fdate(corte)} no se cuentan acá — son de después de este estado de cuenta y aparecerán en el próximo.</div>`;
   }
   if(r._yaConciliados>0){
-    html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._yaConciliados} movimiento(s) de SEFE ya conciliados no se cuentan acá — cuadraron contra el banco en su mes.</div>`;
+    html+=`<div style="font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:8px 12px;margin:6px 0 2px">ℹ️ ${r._yaConciliados} movimiento(s) de ${_concEmp()} ya conciliados no se cuentan acá — cuadraron contra el banco en su mes.</div>`;
   }
   if(r._arrastres>0){
-    html+=`<div style="font-size:12px;color:#7A4A07;background:var(--warn-bg,#fbf1d9);border:1px solid var(--warn);border-radius:10px;padding:8px 12px;margin:6px 0 2px">⚠️ De la lista "Sólo en SEFE", ${r._arrastres} son de un mes anterior y siguen SIN conciliar — revisalos y conciliálos (o corregilos) para que dejen de arrastrarse.</div>`;
+    html+=`<div style="font-size:12px;color:#7A4A07;background:var(--warn-bg,#fbf1d9);border:1px solid var(--warn);border-radius:10px;padding:8px 12px;margin:6px 0 2px">⚠️ De la lista "Sólo en ${_concEmp()}", ${r._arrastres} son de un mes anterior y siguen SIN conciliar — revisalos y conciliálos (o corregilos) para que dejen de arrastrarse.</div>`;
   }
   if(_concEmparejando){
     const bf=(r.soloBanco||[]).find(f=>_concBankKey(f)===_concEmparejando);
     html+=`<div style="background:var(--warn-bg,#fbf1d9);border:1px solid var(--warn);border-radius:10px;padding:9px 13px;margin:6px 0 2px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:#7A4A07">
-      <span>👉 Elegí abajo el movimiento de SEFE que corresponde a <b>${bf?money(bf.monto)+' · '+escHtml(bf.descripcion):'este movimiento del banco'}</b>, con el botón <b>"Emparejar con esta"</b>.</span>
+      <span>👉 Elegí abajo el movimiento de ${_concEmp()} que corresponde a <b>${bf?money(bf.monto)+' · '+escHtml(bf.descripcion):'este movimiento del banco'}</b>, con el botón <b>"Emparejar con esta"</b>.</span>
       <span style="flex:1"></span>
       <button class="btn btn-ghost btn-sm" onclick="_concCancelarEmparejar()">Cancelar</button></div>`;
   }
@@ -1170,7 +1176,7 @@ function _concRender(){
   html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 2px">
     ${tab('conc','✅ Conciliados',r.conciliados.length)}
     ${tab('banco','🟡 Sólo en el banco',r.soloBanco.length)}
-    ${tab('sefe','🔴 Sólo en SEFE',r.soloSEFE.length)}
+    ${tab('sefe','🔴 Sólo en '+_concEmp(),r.soloSEFE.length)}
     <span style="flex:1"></span>
     <button class="btn btn-ghost btn-sm" onclick="_concHistorial()">📋 Historial</button>
     <button class="btn btn-primary btn-sm" onclick="_concGuardar()">💾 Guardar conciliación</button>
@@ -1191,16 +1197,16 @@ function _concTabla(r){
       <span style="font-size:12.5px;color:var(--muted)">Marcados como conciliados: <b style="color:var(--ink)">${marcados}</b> de ${r.conciliados.length}</span>
       <span style="flex:1"></span>
       <button class="btn btn-ghost btn-sm" onclick="_concMarcarTodos()">✔ Marcar todos</button></div>`;
-    return head+`<table><thead><tr><th style="width:34px;text-align:center" title="Conciliado">✔</th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th>Coincide con SEFE</th><th></th></tr></thead><tbody>`+
+    return head+`<table><thead><tr><th style="width:34px;text-align:center" title="Conciliado">✔</th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th>Coincide con ${_concEmp()}</th><th></th></tr></thead><tbody>`+
       r.conciliados.map(x=>`<tr><td style="text-align:center"><input type="checkbox" ${x.sefe.conciliado?'checked':''} onclick="_concMarcar(${x.sefe.id},this.checked)"></td><td style="white-space:nowrap">${fdate(x.banco.fecha)}</td><td>${escHtml(x.banco.descripcion)}${doc(x.banco.noDoc)}</td><td>${bdg(x.banco.tipo)}</td><td class="num">${money(x.banco.monto)}</td><td style="color:var(--muted);font-size:12px">↔ ${escHtml(x.sefe.concepto||'movimiento')}${difBadge(x)}</td><td style="text-align:right"><button class="btn btn-ghost btn-sm" title="Separar — no es el mismo" onclick="_concSeparar('${_concBankKey(x.banco)}',${x.sefe.id})">✕</button></td></tr>`).join('')+'</tbody></table>';
   }
   if(_concTab==='banco'){
     if(!r.soloBanco.length)return '<div class="empty">No falta registrar nada. 🎉</div>';
     return `<table><thead><tr><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead><tbody>`+
-      r.soloBanco.map((f,i)=>`<tr><td style="white-space:nowrap">${fdate(f.fecha)}</td><td>${escHtml(f.descripcion)}${doc(f.noDoc)}</td><td>${bdg(f.tipo)}</td><td class="num">${money(f.monto)}</td><td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="_concEmparejar('${_concBankKey(f)}')">Emparejar</button> <button class="btn btn-primary btn-sm" onclick="_concRegistrar(${i})">Registrar en SEFE</button></td></tr>`).join('')+'</tbody></table>';
+      r.soloBanco.map((f,i)=>`<tr><td style="white-space:nowrap">${fdate(f.fecha)}</td><td>${escHtml(f.descripcion)}${doc(f.noDoc)}</td><td>${bdg(f.tipo)}</td><td class="num">${money(f.monto)}</td><td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="_concEmparejar('${_concBankKey(f)}')">Emparejar</button> <button class="btn btn-primary btn-sm" onclick="_concRegistrar(${i})">Registrar en ${_concEmp()}</button></td></tr>`).join('')+'</tbody></table>';
   }
-  if(!r.soloSEFE.length)return '<div class="empty">Todo lo de SEFE aparece en el banco. 🎉</div>';
-  return `<table><thead><tr><th>Fecha</th><th>Movimiento en SEFE</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead><tbody>`+
+  if(!r.soloSEFE.length)return '<div class="empty">Todo lo de '+_concEmp()+' aparece en el banco. 🎉</div>';
+  return `<table><thead><tr><th>Fecha</th><th>Movimiento en ${_concEmp()}</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead><tbody>`+
     r.soloSEFE.map(m=>{const viejo=r._desde&&(m.fecha||'').slice(0,10)<r._desde;return `<tr><td style="white-space:nowrap">${fdate(m.fecha)}${viejo?'<div style="font-size:10px;color:#7A4A07;font-weight:700">⚠ mes anterior</div>':''}</td><td>${escHtml(m.concepto||'—')}${m.referencia?`<div style="color:var(--muted-2);font-size:11px">${escHtml(String(m.referencia))}</div>`:''}</td><td>${bdg(m.tipo)}</td><td class="num">${money(m.monto)}</td><td style="text-align:right">${_concEmparejando?`<button class="btn btn-primary btn-sm" onclick="_concConfirmarManual(${m.id})">Emparejar con esta</button>`:''}</td></tr>`;}).join('')+'</tbody></table>';
 }
 
