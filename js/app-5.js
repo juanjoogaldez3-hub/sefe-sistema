@@ -758,33 +758,54 @@ function guardarPagoGlobal(){
 window.guardarPagoGlobal=guardarPagoGlobal;
 
 // ---- Historial de abonos + anulación auditada ----
-// Registrar una RETENCIÓN (IVA/ISR): baja el saldo como un abono especial, sin entrar a banco, con su constancia.
+// Tipos de "retención" que bajan el saldo SIN que el dinero entre completo a
+// banco. Además de las de SAT (IVA/ISR), la comisión que el banco/procesador
+// retiene al cobrar con tarjeta: el cliente pagó completo, pero al banco entra
+// menos esa comisión. Todas arrancan con "Retenci" en el método para que el
+// sistema las trate igual (esRetencion / reporte de retenciones).
+const RET_TIPOS={
+  IVA:    {lbl:'IVA',              nota:'La retención baja el saldo pero <b>no entra a banco</b> (el cliente la entera a SAT). Adjuntá la constancia.', clbl:'No. de constancia', cph:'No. de la constancia de retención'},
+  ISR:    {lbl:'ISR',              nota:'La retención baja el saldo pero <b>no entra a banco</b> (el cliente la entera a SAT). Adjuntá la constancia.', clbl:'No. de constancia', cph:'No. de la constancia de retención'},
+  TARJETA:{lbl:'comisión tarjeta', nota:'Baja el saldo pero <b>no entra a banco</b>: es la comisión que el banco/procesador retiene por cobrar con tarjeta. Adjuntá el comprobante si tenés.', clbl:'No. de referencia', cph:'No. de voucher / referencia (opcional)'}
+};
+// Cuando se cambia el tipo, se acomoda el texto de ayuda y la etiqueta del
+// campo (lo de "constancia SAT" no aplica a la comisión de tarjeta).
+function _retTipoChange(){
+  const t=($('#ret-tipo')?.value)||'IVA'; const c=RET_TIPOS[t]||RET_TIPOS.IVA;
+  const n=$('#ret-nota'); if(n)n.innerHTML=c.nota;
+  const l=$('#ret-const-lbl'); if(l)l.textContent=c.clbl;
+  const i=$('#ret-const'); if(i)i.placeholder=c.cph;
+}
+window._retTipoChange=_retTipoChange;
+
+// Registrar una RETENCIÓN (IVA/ISR/comisión tarjeta): baja el saldo como un abono especial, sin entrar a banco, con su constancia/comprobante.
 function openRetencion(id){
   if(!canRegistrarAbono()){toast('Sin permiso','Tu rol no puede registrar retenciones',true);return;}
   _compFoto=null;
   const f=documentos.find(d=>d.id===id);const ai=arInfo(f);const saldo=ai.saldo;
   const hoy=fechaHoyGT();
   openMod('Registrar retención · '+f.serie+'-'+f.numeroDte,
-    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${f.clienteComercial||f.clienteNombre} · Saldo pendiente: <b style="color:var(--ink)">${money(saldo)}</b><br><span style="font-size:11.5px">La retención baja el saldo pero <b>no entra a banco</b> (el cliente la entera a SAT). Adjuntá la constancia.</span></p>
-     <div class="row"><div><label>Tipo de retención</label><select id="ret-tipo"><option value="IVA">Retención de IVA</option><option value="ISR">Retención de ISR</option></select></div><div><label>Monto retenido</label><input id="ret-monto" type="number" step="0.01" placeholder="0.00"></div></div>
-     <div class="row"><div><label>No. de constancia</label><input id="ret-const" placeholder="No. de la constancia de retención"></div><div><label>Fecha</label><input id="ret-fecha" type="date" value="${hoy}"></div></div>
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${f.clienteComercial||f.clienteNombre} · Saldo pendiente: <b style="color:var(--ink)">${money(saldo)}</b><br><span id="ret-nota" style="font-size:11.5px">La retención baja el saldo pero <b>no entra a banco</b> (el cliente la entera a SAT). Adjuntá la constancia.</span></p>
+     <div class="row"><div><label>Tipo de retención</label><select id="ret-tipo" onchange="_retTipoChange()"><option value="IVA">Retención de IVA</option><option value="ISR">Retención de ISR</option><option value="TARJETA">Comisión por tarjeta de crédito</option></select></div><div><label>Monto retenido</label><input id="ret-monto" type="number" step="0.01" placeholder="0.00"></div></div>
+     <div class="row"><div><label id="ret-const-lbl">No. de constancia</label><input id="ret-const" placeholder="No. de la constancia de retención"></div><div><label>Fecha</label><input id="ret-fecha" type="date" value="${hoy}"></div></div>
      ${compFotoHTML()}
      <div class="note n-danger" id="ret-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>{
       const tipo=$('#ret-tipo')?.value||'IVA';
+      const lbl=(RET_TIPOS[tipo]||RET_TIPOS.IVA).lbl; // "IVA" / "ISR" / "comisión tarjeta"
       const monto=Number($('#ret-monto')?.value);
       const nconst=($('#ret-const')?.value||'').trim();
       const fecha=$('#ret-fecha')?.value||hoy;
       const err=$('#ret-err'); const setErr=t=>{if(err){err.style.display='flex';err.querySelector('span').textContent=t;}};
-      if(!(monto>0)){setErr('El monto de la retención debe ser mayor a cero');return;}
-      if(monto>saldo+0.001){setErr('La retención no puede superar el saldo de '+money(saldo));return;}
+      if(!(monto>0)){setErr('El monto debe ser mayor a cero');return;}
+      if(monto>saldo+0.001){setErr('El monto no puede superar el saldo de '+money(saldo));return;}
       f.abonos=f.abonos||[];
-      const _ab={fecha,monto,metodo:'Retención '+tipo,referencia:nconst?('Constancia '+nconst):('Retención '+tipo),noRecibo:'',comprobante:_compFoto,cuentaBancoId:null,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
+      const _ab={fecha,monto,metodo:'Retención '+lbl,referencia:nconst?('Constancia '+nconst):('Retención '+lbl),noRecibo:'',comprobante:_compFoto,cuentaBancoId:null,registradoPor:currentUser,registradoEl:new Date().toISOString(),anulado:false};
       f.abonos.push(_ab);
       const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
       closeMod();renderCobros();
-      logAudit('Retención registrada','Factura '+f.serie+'-'+f.numeroDte+' · Ret. '+tipo+' '+money(monto)+(nconst?(' · Const. '+nconst):''));
-      toast('✓ Retención registrada','Ret. '+tipo+' '+money(monto)+' · saldo '+money(nuevo.saldo));
+      logAudit('Retención registrada','Factura '+f.serie+'-'+f.numeroDte+' · Ret. '+lbl+' '+money(monto)+(nconst?(' · Const. '+nconst):''));
+      toast('✓ Retención registrada','Ret. '+lbl+' '+money(monto)+' · saldo '+money(nuevo.saldo));
       if(typeof guardarAbono==='function')guardarAbono(f.id,_ab);
       if(typeof guardarDocumento==='function')guardarDocumento(f);
     });
