@@ -308,8 +308,8 @@ const LAML_MARCA = Object.assign({}, _MARCA_DEFAULT, {
   // grafito como colorPrimario para que esas letras sobre fondo blanco sigan
   // legibles; la barra usa su propio fondo dorado (sidebarBg) con texto oscuro.
   colorPrimario:'#2A2E35', colorAcento:'#D4A017',
-  sidebarBg:'#D4A017',        // barra lateral dorada
-  sidebarAccent:'#2A2E35',    // botón activo / monograma en grafito (resalta sobre el dorado)
+  sidebarBg:'#C4623A',        // barra lateral terracota
+  sidebarAccent:'#2A2E35',    // botón activo / monograma en grafito (resalta sobre el terracota)
   sidebarAccentInk:'#ffffff', // texto sobre el grafito
   logo: (typeof window!=='undefined' && window.LAML_LOGO) ? window.LAML_LOGO : SEFE_MARCA.logo,
 });
@@ -385,19 +385,27 @@ function _aplicarColoresMarca(m){
       root.setProperty('--lime',    m.colorAcento);
       root.setProperty('--lime-dk', m.colorAcentoOsc||_mezclarColor(m.colorAcento,'negro',.24));
     }
-    // Barra lateral: puede tener un fondo PROPIO (ej. LAML "inverso": barra
-    // dorada). Si no, usa el color primario de siempre. El texto de la barra se
-    // aclara u oscurece según el fondo, para que SIEMPRE se lea.
-    const sbBg=m.sidebarBg||m.colorPrimario;
-    if(root&&sbBg){
-      root.setProperty('--sidebar-bg',sbBg);
-      if(_esColorClaro(sbBg)){
-        root.setProperty('--sb-ink','#2a2a1e');   root.setProperty('--sb-ink-2','#403d2c');
-        root.setProperty('--sb-ink-dim','rgba(35,28,0,.5)'); root.setProperty('--sb-ink-str','#19190f');
-        root.setProperty('--sb-hover','rgba(0,0,0,.08)'); root.setProperty('--sb-line','rgba(0,0,0,.14)');
-        root.setProperty('--sb-glow','rgba(255,255,255,.16)');
+    // Barra lateral con fondo PROPIO (ej. LAML: barra dorada o terracota). Si
+    // la marca no define sidebarBg, la barra usa el tema de siempre (verde
+    // SEFE, con su texto claro verdoso) y se quitan los overrides. Con color
+    // propio, el texto se oscurece (fondo claro) o se aclara en tono NEUTRO
+    // (fondo oscuro), para que SIEMPRE se lea bien.
+    if(root){
+      if(m.sidebarBg){
+        root.setProperty('--sidebar-bg',m.sidebarBg);
+        if(_esColorClaro(m.sidebarBg)){        // fondo claro → texto oscuro
+          root.setProperty('--sb-ink','#2a2a1e');   root.setProperty('--sb-ink-2','#403d2c');
+          root.setProperty('--sb-ink-dim','rgba(35,28,0,.5)'); root.setProperty('--sb-ink-str','#19190f');
+          root.setProperty('--sb-hover','rgba(0,0,0,.08)'); root.setProperty('--sb-line','rgba(0,0,0,.14)');
+          root.setProperty('--sb-glow','rgba(255,255,255,.16)');
+        }else{                                 // fondo oscuro → texto claro neutro
+          root.setProperty('--sb-ink','#f3ece2');   root.setProperty('--sb-ink-2','#e6dccf');
+          root.setProperty('--sb-ink-dim','rgba(255,250,244,.6)'); root.setProperty('--sb-ink-str','#ffffff');
+          root.setProperty('--sb-hover','rgba(255,255,255,.1)'); root.setProperty('--sb-line','rgba(255,255,255,.16)');
+          root.setProperty('--sb-glow','rgba(255,255,255,.08)');
+        }
       }else{
-        ['--sb-ink','--sb-ink-2','--sb-ink-dim','--sb-ink-str','--sb-hover','--sb-line','--sb-glow'].forEach(v=>root.removeProperty(v));
+        ['--sidebar-bg','--sb-ink','--sb-ink-2','--sb-ink-dim','--sb-ink-str','--sb-hover','--sb-line','--sb-glow'].forEach(v=>root.removeProperty(v));
       }
     }
     // Acento de la barra (botón activo y monograma): color propio o el acento normal.
