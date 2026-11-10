@@ -302,11 +302,15 @@ const LAML_MARCA = Object.assign({}, _MARCA_DEFAULT, {
   razonSocial:   'Soluciones Efectivas',
   membrete:      'Soluciones Efectivas',
   prefijoArchivo:'SolucionesEfectivas',
-  // Color de Luis Menocal: estilo "premium" — menú y encabezados en gris
-  // grafito oscuro, con amarillo mostaza como ACENTO (botón activo del
-  // menú, cuadrito del monograma, resaltados). El grafito da buen
-  // contraste con el texto claro y el mostaza aporta el toque de marca.
+  // Color de Luis Menocal — versión INVERSA: la barra lateral y el monograma
+  // van en DORADO mostaza, y el grafito pasa a ser el acento (botón activo,
+  // monograma) y el color de letras/detalles sobre blanco. Se mantiene el
+  // grafito como colorPrimario para que esas letras sobre fondo blanco sigan
+  // legibles; la barra usa su propio fondo dorado (sidebarBg) con texto oscuro.
   colorPrimario:'#2A2E35', colorAcento:'#D4A017',
+  sidebarBg:'#D4A017',        // barra lateral dorada
+  sidebarAccent:'#2A2E35',    // botón activo / monograma en grafito (resalta sobre el dorado)
+  sidebarAccentInk:'#ffffff', // texto sobre el grafito
   logo: (typeof window!=='undefined' && window.LAML_LOGO) ? window.LAML_LOGO : SEFE_MARCA.logo,
 });
 window.LAML_MARCA = LAML_MARCA;
@@ -354,6 +358,16 @@ function _mezclarColor(hex, hacia, t){
     return '#'+m(r)+m(g)+m(b);
   }catch(e){ return hex; }
 }
+// ¿El color es CLARO? (luminancia percibida alta). Sirve para decidir si el
+// texto encima debe ser oscuro (sobre fondo claro) o claro (sobre oscuro).
+function _esColorClaro(hex){
+  try{
+    hex=String(hex).replace('#','');
+    if(hex.length===3)hex=hex.split('').map(c=>c+c).join('');
+    const r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16);
+    return (0.2126*r+0.7152*g+0.0722*b)>150;
+  }catch(e){ return false; }
+}
 
 // Pinta las variables CSS de color según una marca. Se usa al arrancar
 // (marca del producto) y al cambiar de empresa (cada empresa puede tener
@@ -370,6 +384,26 @@ function _aplicarColoresMarca(m){
     if(root&&m.colorAcento){
       root.setProperty('--lime',    m.colorAcento);
       root.setProperty('--lime-dk', m.colorAcentoOsc||_mezclarColor(m.colorAcento,'negro',.24));
+    }
+    // Barra lateral: puede tener un fondo PROPIO (ej. LAML "inverso": barra
+    // dorada). Si no, usa el color primario de siempre. El texto de la barra se
+    // aclara u oscurece según el fondo, para que SIEMPRE se lea.
+    const sbBg=m.sidebarBg||m.colorPrimario;
+    if(root&&sbBg){
+      root.setProperty('--sidebar-bg',sbBg);
+      if(_esColorClaro(sbBg)){
+        root.setProperty('--sb-ink','#2a2a1e');   root.setProperty('--sb-ink-2','#403d2c');
+        root.setProperty('--sb-ink-dim','rgba(35,28,0,.5)'); root.setProperty('--sb-ink-str','#19190f');
+        root.setProperty('--sb-hover','rgba(0,0,0,.08)'); root.setProperty('--sb-line','rgba(0,0,0,.14)');
+        root.setProperty('--sb-glow','rgba(255,255,255,.16)');
+      }else{
+        ['--sb-ink','--sb-ink-2','--sb-ink-dim','--sb-ink-str','--sb-hover','--sb-line','--sb-glow'].forEach(v=>root.removeProperty(v));
+      }
+    }
+    // Acento de la barra (botón activo y monograma): color propio o el acento normal.
+    if(root){
+      if(m.sidebarAccent){ root.setProperty('--sb-accent',m.sidebarAccent); root.setProperty('--sb-accent-ink',m.sidebarAccentInk||'#ffffff'); }
+      else { root.removeProperty('--sb-accent'); root.removeProperty('--sb-accent-ink'); }
     }
     const metaTheme=document.querySelector('meta[name="theme-color"]');
     if(metaTheme&&m.colorPrimario)metaTheme.setAttribute('content',m.colorPrimario);
@@ -439,7 +473,9 @@ function aplicarMarcaEmpresa(){
     }
     const _m=(typeof marcaActiva==='function')?marcaActiva():null;
     const mono=(_m&&_m.monograma)||String(e.codigo||'').slice(0,2).toUpperCase()||'··';
-    if(mk){ mk.textContent=mono; if(e.color){mk.style.background=e.color;mk.style.color='#fff';} }
+    // Monograma: si la marca define un acento de barra (ej. LAML inverso), el
+    // cuadrito va en ese color; si no, el color propio de la empresa.
+    if(mk){ mk.textContent=mono; const _mkBg=(_m&&_m.sidebarAccent)||e.color; if(_mkBg){mk.style.background=_mkBg;mk.style.color=(_m&&_m.sidebarAccentInk)||'#fff';} }
     if(h2)h2.textContent=(_m&&_m.nombre)||e.nombre||e.codigo;
     // Repinta toda la interfaz con el color de la empresa (ej. Luis Menocal
     // en mostaza). Si la empresa no trae color propio, usa el de su marca.
