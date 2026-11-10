@@ -308,8 +308,8 @@ const LAML_MARCA = Object.assign({}, _MARCA_DEFAULT, {
   // grafito como colorPrimario para que esas letras sobre fondo blanco sigan
   // legibles; la barra usa su propio fondo dorado (sidebarBg) con texto oscuro.
   colorPrimario:'#2A2E35', colorAcento:'#D4A017',
-  sidebarBg:'#C4623A',        // barra lateral terracota
-  sidebarAccent:'#2A2E35',    // botón activo / monograma en grafito (resalta sobre el terracota)
+  sidebarBg:'#E8C14E',        // barra lateral mostaza claro
+  sidebarAccent:'#2A2E35',    // botón activo / monograma en grafito (resalta sobre el mostaza)
   sidebarAccentInk:'#ffffff', // texto sobre el grafito
   logo: (typeof window!=='undefined' && window.LAML_LOGO) ? window.LAML_LOGO : SEFE_MARCA.logo,
 });
