@@ -581,6 +581,9 @@ function aplicarPermisosUI(){
   $('#sb-av').textContent=iniciales(currentUser);
   $('#sb-nm').textContent=currentUser;
   $('#sb-rl').textContent=r.label;
+  // Versión visible: para diagnosticar "cada quien ve algo distinto" (casi
+  // siempre es un caché viejo). Si dos personas ven diferente, comparan esto.
+  const _ver=$('#sb-ver'); if(_ver)_ver.textContent='v. '+String(window.APP_VERSION||'—').replace(/^v=/,'');
   $('#role-badge').textContent=r.label;
   const badgeColors={admin:['var(--ok-bg)','var(--ok)'],gerencia:['#E6EEF6','var(--blue)'],ventas:['var(--ok-bg)','var(--ok)'],cobros:['#E6EEF6','var(--blue)'],bodega:['var(--warn-bg)','var(--warn)'],contabilidad:['#F0EBF7','#7A4A9E'],auditoria:['#EEF0E8','var(--muted)'],facturador:['var(--warn-bg)','var(--warn)'],piloto:['#E6EEF6','var(--blue)']};
   const [bg,col]=badgeColors[currentRole]||['#EEF0E8','var(--muted)'];
