@@ -924,6 +924,20 @@ window._concMarcar=function(id,val){
     if(okr===false){m.conciliado=antes;toast('No se pudo guardar la marca','¿Ya corriste el SQL de conciliación (paso 1)?',true);_concRender();}
   });
 };
+// Marca un movimiento de "Sólo en <empresa>" como conciliado DIRECTO, sin
+// emparejarlo con una línea de este estado de cuenta. Es el caso del arrastre:
+// un movimiento (ej. de octubre) cuya línea del banco está en un mes anterior
+// y ya cuadró allá. Así deja de aparecer y de arrastrarse en los próximos cortes.
+window._concConciliarSolo=function(id){
+  const m=movimientosBanco.find(x=>String(x.id)===String(id)); if(!m)return;
+  const antes=m.conciliado, antesEl=m.conciliadoEl;
+  m.conciliado=true; m.conciliadoEl=new Date().toISOString();
+  _concRender();
+  Promise.resolve(typeof marcarConciliadoBanco==='function'?marcarConciliadoBanco(id,true):false).then(okr=>{
+    if(okr===false){ m.conciliado=antes; m.conciliadoEl=antesEl; toast('No se pudo guardar la marca','¿Ya corriste el SQL de conciliación (paso 1)?',true); _concRender(); }
+    else toast('✓ Marcado como conciliado','Ya no se arrastra en próximos cortes');
+  });
+};
 // Marca de una vez todos los que ya conciliaron solos.
 window._concMarcarTodos=function(){
   if(!_concRes||!_concRes.conciliados.length)return;
@@ -1278,7 +1292,7 @@ function _concTabla(r){
   }
   if(!r.soloSEFE.length)return '<div class="empty">Todo lo de '+_concEmp()+' aparece en el banco. 🎉</div>';
   return `<table><thead><tr><th>Fecha</th><th>Movimiento en ${_concEmp()}</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead><tbody>`+
-    r.soloSEFE.map(m=>{const viejo=r._desde&&(m.fecha||'').slice(0,10)<r._desde;return `<tr><td style="white-space:nowrap">${fdate(m.fecha)}${viejo?'<div style="font-size:10px;color:#7A4A07;font-weight:700">⚠ mes anterior</div>':''}</td><td>${escHtml(m.concepto||'—')}${m.referencia?`<div style="color:var(--muted-2);font-size:11px">${escHtml(String(m.referencia))}</div>`:''}</td><td>${bdg(m.tipo)}</td><td class="num">${money(m.monto)}</td><td style="text-align:right">${_concEmparejando?`<button class="btn btn-primary btn-sm" onclick="_concConfirmarManual(${m.id})">Emparejar con esta</button>`:''}</td></tr>`;}).join('')+'</tbody></table>';
+    r.soloSEFE.map(m=>{const viejo=r._desde&&(m.fecha||'').slice(0,10)<r._desde;return `<tr><td style="white-space:nowrap">${fdate(m.fecha)}${viejo?'<div style="font-size:10px;color:#7A4A07;font-weight:700">⚠ mes anterior</div>':''}</td><td>${escHtml(m.concepto||'—')}${m.referencia?`<div style="color:var(--muted-2);font-size:11px">${escHtml(String(m.referencia))}</div>`:''}</td><td>${bdg(m.tipo)}</td><td class="num">${money(m.monto)}</td><td style="text-align:right;white-space:nowrap">${_concEmparejando?`<button class="btn btn-primary btn-sm" onclick="_concConfirmarManual(${m.id})">Emparejar con esta</button>`:`<button class="btn btn-ghost btn-sm" title="Marcar como conciliado — ya cuadró contra el banco en su mes (deja de arrastrarse)" onclick="_concConciliarSolo(${m.id})">✓ Conciliado</button>`}</td></tr>`;}).join('')+'</tbody></table>';
 }
 
 // Abre el formulario de movimiento pre-llenado con la fila del banco; al
