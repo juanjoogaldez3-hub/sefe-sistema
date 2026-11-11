@@ -905,8 +905,9 @@ window.toggleBajaCliente=toggleBajaCliente;
 window.abrirClienteDesdeRec=abrirClienteDesdeRec;
 function renderCliDet(){
   const c=clientes.find(x=>x.id===cliActual);if(!c)return;
-  // Si es un cliente PRINCIPAL (paraguas) con sedes, mostrar vista consolidada del grupo
-  if(esPrincipal(c)){ renderGrupoConsolidado(c); return; }
+  // Si es un cliente PRINCIPAL (paraguas) con sedes, mostrar vista consolidada
+  // del grupo — salvo que se pidió ver su detalle PROPIO (cliForzarPropio).
+  if(esPrincipal(c) && !(typeof cliForzarPropio!=='undefined'&&cliForzarPropio)){ renderGrupoConsolidado(c); return; }
   const st=clienteStats(c);
   const facturas=st.facturas;
   const prestamos=documentos.filter(d=>d.clienteId===c.id&&d.tipoDoc==='prestamo');
@@ -1163,8 +1164,14 @@ function renderCliDet(){
       </div>
     </div>`;
   }
+  // Si estamos viendo el detalle PROPIO de un principal, el botón vuelve a su
+  // grupo (no directo a la lista), para no perder el contexto del paraguas.
+  const _esPropioDePrincipal=esPrincipal(c)&&(typeof cliForzarPropio!=='undefined'&&cliForzarPropio);
+  const _volverBtn=_esPropioDePrincipal
+    ? `<button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="abrirCliente(${c.id})">← Volver al grupo</button>`
+    : `<button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="go('clientes')">← Volver a clientes</button>`;
   $('#v-clientedet').innerHTML=`
-    <button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="go('clientes')">← Volver a clientes</button>
+    ${_volverBtn}
     <div class="panel"><div class="panel-body">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
         <div><div style="font-family:var(--disp);font-size:22px;font-weight:700;letter-spacing:-.4px">${c.nombre}${c.activo===false?' <span class="badge b-muted" style="font-size:11px;vertical-align:middle">Inactivo</span>':''}</div>

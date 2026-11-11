@@ -774,7 +774,13 @@ function renderCli(){
 
 // ---- Detalle de cliente ----
 let cliTab='precios',cliActual=null;
-function abrirCliente(id){cliActual=id;cliTab='precios';
+// cliForzarPropio: cuando es true, se muestra el estado de cuenta PROPIO del
+// cliente aunque sea un principal (paraguas), en vez de la vista de grupo. Sirve
+// para que un principal que también factura (ej. REYES DEL ASADO) pueda ver sus
+// propios movimientos; si no, la vista de grupo se abría en bucle y nunca se
+// llegaba a su detalle.
+let cliForzarPropio=false;
+function abrirCliente(id, verPropio){cliActual=id;cliTab='precios';cliForzarPropio=!!verPropio;
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   $('#v-clientedet').classList.add('active');
   $('#ttl').textContent='Cliente';$('#sub').textContent='Ficha integral del cliente';
@@ -932,13 +938,16 @@ function renderGrupoConsolidado(c){
   const filasSedes=g.porSede.map(x=>{
     const s=x.cliente, st=x.st;
     const etiqueta=x.esPrincipal?' <span class="badge b-muted" style="font-size:9px">Principal</span>':'';
-    return `<tr style="cursor:pointer" onclick="abrirCliente(${s.id})">
+    // El renglón del PRINCIPAL abre su detalle PROPIO (verPropio=true); si no,
+    // volvería a esta misma vista de grupo en bucle.
+    const _abrir=x.esPrincipal?`abrirCliente(${s.id},true)`:`abrirCliente(${s.id})`;
+    return `<tr style="cursor:pointer" onclick="${_abrir}">
       <td style="font-weight:600">${s.nombre}${etiqueta}<div style="font-size:10.5px;color:var(--muted)">${s.direccion||''}</div></td>
       <td class="num" style="color:var(--muted)">${money(st.totalFacturado)}</td>
       <td class="num" style="color:var(--ok)">${money(st.totalCobrado)}</td>
       <td class="num" style="font-weight:700;color:${st.saldoActual>0?'var(--warn)':'var(--muted-2)'}">${st.saldoActual>0?money(st.saldoActual):'—'}</td>
       <td class="num" style="color:${st.vencidos.length?'var(--danger)':'var(--muted-2)'}">${st.vencidos.length||'—'}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirCliente(${s.id})">Abrir</button></td>
+      <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();${_abrir}">Abrir</button></td>
     </tr>`;
   }).join('');
   const vend=c.vendedorId?vendedores.find(v=>v.id===c.vendedorId)?.nombre:null;
