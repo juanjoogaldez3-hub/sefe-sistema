@@ -588,6 +588,9 @@ function esConsolidadoVista(){ return haymultiempresa() && _verConsolidado; }
 function toggleConsolidado(){
   _verConsolidado=!_verConsolidado;
   try{ localStorage.setItem(CONSOLIDADO_KEY,_verConsolidado?'1':''); }catch(e){}
+  // Refrescar los selectores de empresa (barra lateral y chip del teléfono)
+  // para que reflejen "Las 2 juntas" al instante.
+  try{ if(typeof renderSelectorEmpresa==='function')renderSelectorEmpresa(); }catch(e){}
   const b=document.querySelector('.nav button.active');
   const v=(b&&b.dataset&&b.dataset.view)||(location.hash||'').replace('#','');
   if(v&&typeof go==='function')go(v);
