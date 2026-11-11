@@ -635,6 +635,7 @@ function cambiarEmpresa(codigo){
 // muestra la flecha y llena el menú desplegable. Con una sola empresa, el
 // cuadrito no es clickeable (queda como marca normal).
 function renderSelectorEmpresa(){
+  try{ renderTopbarEmp(); }catch(e){} // el selector de la barra de arriba (móvil) va en sintonía
   const brand=document.getElementById('brand-sw');
   const chev=document.getElementById('brand-chev');
   const menu=document.getElementById('brand-menu');
@@ -680,6 +681,41 @@ function _cerrarBrandMenuFuera(ev){
 function _cerrarBrandMenu(){
   const menu=document.getElementById('brand-menu'); if(menu)menu.style.display='none';
   document.removeEventListener('click',_cerrarBrandMenuFuera);
+  const tem=document.getElementById('topbar-emp-menu'); if(tem)tem.style.display='none';
+  document.removeEventListener('click',_cerrarEmpMenuMovilFuera);
+}
+// ── Selector de empresa en la BARRA DE ARRIBA (móvil/tablet) ─────────
+// En el teléfono la barra lateral es un cajón escondido, así que el cambiador
+// del cuadrito no es obvio. Este botón vive en la barra superior, siempre a la
+// vista, y abre el mismo menú de empresas. En escritorio no se muestra (CSS).
+function renderTopbarEmp(){
+  const chip=document.getElementById('topbar-emp'); if(!chip) return;
+  if(!haymultiempresa()){ chip.classList.remove('multi'); const mm=document.getElementById('topbar-emp-menu'); if(mm){mm.style.display='none';mm.innerHTML='';} return; }
+  chip.classList.add('multi');
+  const e=(typeof empresaActivaObj==='function'&&empresaActivaObj())||{};
+  const nombre=(typeof marcaActiva==='function'&&marcaActiva().nombre)||e.nombre||e.codigo||'Empresa';
+  const consol=(typeof _verConsolidado!=='undefined'&&_verConsolidado);
+  chip.innerHTML=`<span class="emp-dot" style="background:${consol?'#7FBF4D':(e.color||'#888')}"></span><span class="te-nm">${consol?'Las 2 juntas':escHtml(nombre)}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6"/></svg>`;
+  const menu=document.getElementById('topbar-emp-menu'); if(!menu) return;
+  menu.innerHTML=(empresas||[]).filter(x=>x.activo).map(x=>
+    `<button type="button" onclick="cambiarEmpresa('${x.codigo}')" class="${x.codigo===empresaActiva&&!consol?'on':''}"><span class="emp-dot" style="background:${x.color||'#888'}"></span>${escHtml(x.nombre)}</button>`).join('')+
+    `<div class="tem-sep"></div><button type="button" class="${consol?'on':''}" onclick="toggleConsolidado()"><span class="emp-dot" style="background:${consol?'#7FBF4D':'#bbb'}"></span>Ver las 2 juntas<span class="cons-sub">panel y reportes</span></button>`;
+}
+window.renderTopbarEmp=renderTopbarEmp;
+window.toggleEmpMenuMovil=function(e){
+  if(e){ e.stopPropagation(); }
+  if(!haymultiempresa()) return;
+  const menu=document.getElementById('topbar-emp-menu'); if(!menu) return;
+  renderTopbarEmp();
+  const abrir=(menu.style.display==='none'||!menu.style.display);
+  if(abrir){ menu.style.display='block'; setTimeout(()=>document.addEventListener('click',_cerrarEmpMenuMovilFuera),0); }
+  else _cerrarBrandMenu();
+};
+function _cerrarEmpMenuMovilFuera(ev){
+  const menu=document.getElementById('topbar-emp-menu'), chip=document.getElementById('topbar-emp');
+  if(menu && ((menu.contains(ev.target))||(chip&&chip.contains(ev.target)))) return; // toque adentro
+  if(menu)menu.style.display='none';
+  document.removeEventListener('click',_cerrarEmpMenuMovilFuera);
 }
 // Cambia a la empresa de un registro si es distinta a la activa. Sirve para
 // abrir algo de la OTRA empresa desde un recordatorio (que es compartido):
