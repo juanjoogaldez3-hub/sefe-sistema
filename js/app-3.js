@@ -334,8 +334,8 @@ function notaPrestamoHTML(f){
   <div style="font-family:'Inter',sans-serif;color:#1c1f17;-webkit-print-color-adjust:exact;print-color-adjust:exact">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
       <div>
-        <img src="${marcaActiva().logo}" alt="${marcaActiva().razonSocial}" style="width:172px;height:auto;display:block">
-        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">${marcaActiva().razonSocial}<br>NIT ${marcaActiva().nit} · ${marcaActiva().ciudadPais}</div>
+        <img src="${marcaActiva().logo}" alt="${marcaActiva().membrete}" style="width:172px;height:auto;display:block">
+        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">${marcaActiva().membrete}<br>NIT ${marcaActiva().nit} · ${marcaActiva().ciudadPais}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="display:inline-block;background:var(--green);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.3px;padding:8px 16px;border-radius:8px">NOTA DE PRÉSTAMO</div>
@@ -376,7 +376,7 @@ function notaPrestamoHTML(f){
     <p style="font-size:13px;color:#3a3f33;margin-top:18px">Atentamente,</p>
     <div style="margin-top:30px"><div style="width:240px;border-top:1.5px solid #1c1f17;padding-top:7px">
       <div style="font-family:var(--disp);font-size:14px;font-weight:700">${firmante}</div>
-      <div style="font-size:11.5px;color:#7a7f6e">${marcaActiva().razonSocial}</div>
+      <div style="font-size:11.5px;color:#7a7f6e">${marcaActiva().membrete}</div>
     </div></div>
     <div style="margin-top:46px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:26px">
       <div style="text-align:center"><div style="border-top:1.2px solid #aeb3a2;padding-top:7px;font-size:11px;color:#7a7f6e">Firma de quien recibe</div></div>
@@ -413,8 +413,8 @@ function notaEnvioHTML(f){
   <div style="font-family:'Inter',sans-serif;color:#1c1f17;-webkit-print-color-adjust:exact;print-color-adjust:exact">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
       <div>
-        <img src="${marcaActiva().logo}" alt="${marcaActiva().razonSocial}" style="width:172px;height:auto;display:block">
-        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">${marcaActiva().razonSocial}<br>NIT ${marcaActiva().nit} · ${marcaActiva().ciudadPais}</div>
+        <img src="${marcaActiva().logo}" alt="${marcaActiva().membrete}" style="width:172px;height:auto;display:block">
+        <div style="font-size:11px;color:#7a7f6e;margin-top:10px;line-height:1.5">${marcaActiva().membrete}<br>NIT ${marcaActiva().nit} · ${marcaActiva().ciudadPais}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="display:inline-block;background:var(--green);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.3px;padding:8px 16px;border-radius:8px">NOTA DE ENVÍO</div>
@@ -455,7 +455,7 @@ function notaEnvioHTML(f){
     <p style="font-size:12px;line-height:1.6;color:#7a7f6e;margin-top:22px">Documento no tributario para control de despacho y entrega de mercadería. No genera crédito fiscal. Verifique las cantidades al momento de recibir.</p>
     <div style="margin-top:24px"><div style="width:240px;border-top:1.5px solid #1c1f17;padding-top:7px">
       <div style="font-family:var(--disp);font-size:14px;font-weight:700">${firmante}</div>
-      <div style="font-size:11.5px;color:#7a7f6e">Entregado por · ${marcaActiva().razonSocial}</div>
+      <div style="font-size:11.5px;color:#7a7f6e">Entregado por · ${marcaActiva().membrete}</div>
     </div></div>
     <div style="margin-top:52px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:26px">
       <div style="text-align:center"><div style="border-top:1.2px solid #aeb3a2;padding-top:7px;font-size:11px;color:#7a7f6e">Firma de quien recibe</div></div>
