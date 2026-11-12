@@ -1079,7 +1079,7 @@ window._concHistorialExcel=async function(){
     const {XLSX,styled:_styled}=await _cargarXLSX();
     const nom=id=>(cuentasBanco.find(c=>String(c.id)===String(id))||{}).nombre||'';
     const _emp=(typeof marcaActiva==='function'?marcaActiva():{});
-    const meta=[[_emp.razonSocial||_emp.nombre||'SEFE'],['HISTORIAL DE CONCILIACIONES'],['Generado el:',fdatehora(new Date())],['Generado por:',(typeof currentUser!=='undefined'?currentUser:'')],[]];
+    const meta=[[_emp.membrete||_emp.nombre||'SEFE'],['HISTORIAL DE CONCILIACIONES'],['Generado el:',fdatehora(new Date())],['Generado por:',(typeof currentUser!=='undefined'?currentUser:'')],[]];
     const HR=5;
     const ws=XLSX.utils.aoa_to_sheet(meta);
     const _en=_emp.nombre||'SEFE';
