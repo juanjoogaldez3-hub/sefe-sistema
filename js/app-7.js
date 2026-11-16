@@ -545,8 +545,49 @@ function renderTalonarios(){
         <button class="btn btn-ghost btn-sm" onclick="openTalonario(${t.id})">Editar</button>
       </td></tr>`;
   }).join('');
+  // Si hay una búsqueda de recibo activa, refrescar su resultado con los datos al día
+  if(document.getElementById('tal-buscar')&&document.getElementById('tal-buscar').value)buscarReciboTal();
 }
 window.renderTalonarios=renderTalonarios;
+
+// Buscador de recibos del módulo Talonarios: por número, dice a qué talonario
+// pertenece y su estado (procesado / anulado / libre / inexistente), con un
+// botón para ver el detalle reusando verAbonoPorRecibo y verReciboAnulado.
+function buscarReciboTal(){
+  const inp=document.getElementById('tal-buscar');
+  const box=document.getElementById('tal-buscar-res');
+  if(!inp||!box)return;
+  const raw=String(inp.value||'').replace(/\D/g,'');
+  if(!raw){ box.innerHTML=''; return; }
+  const n=parseInt(raw,10);
+  const t=(talonarios||[]).find(x=>n>=x.numeroInicial&&n<=x.numeroFinal);
+  const usado=recibosUsados().has(n);
+  const ra=(typeof recibosAnulados!=='undefined'?recibosAnulados:[]).find(r=>r.numero===n);
+  const talTxt=t
+    ? `${(t.descripcion||('Talón '+t.numeroInicial))} <span style="color:var(--muted);font-family:monospace">(${t.numeroInicial}–${t.numeroFinal})</span>${t.asignadoA?' · '+t.asignadoA:''}`
+    : '<span style="color:var(--danger)">No pertenece a ningún talonario cargado</span>';
+  let estadoHTML,accion='';
+  if(usado){
+    estadoHTML='<span class="badge b-ok">Procesado</span>';
+    accion=`<button class="btn btn-primary btn-sm" onclick="verAbonoPorRecibo(${n})">Ver abono / factura</button>`;
+  }else if(ra){
+    estadoHTML='<span class="badge b-muted">Anulado</span>';
+    accion=`<button class="btn btn-ghost btn-sm" onclick="verReciboAnulado(${n})">Ver anulación</button>`;
+  }else if(t){
+    estadoHTML='<span class="badge b-warn">Libre (sin usar)</span>';
+    accion=`<button class="btn btn-ghost btn-sm" style="color:var(--blue)" onclick="verCuadreTalonario(${t.id})">Ver cuadre</button>`;
+  }else{
+    estadoHTML='<span class="badge b-danger">No existe</span>';
+  }
+  box.innerHTML=`<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <div>
+      <div style="font-family:monospace;font-weight:700;font-size:15px">Recibo ${n} ${estadoHTML}</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:4px">Talonario: ${talTxt}</div>
+    </div>
+    ${accion}
+  </div>`;
+}
+window.buscarReciboTal=buscarReciboTal;
 
 // Crear/editar un talonario
 function openTalonario(id){
