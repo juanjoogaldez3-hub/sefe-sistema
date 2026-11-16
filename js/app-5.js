@@ -449,6 +449,31 @@ function _abTalonarioChange(){
   if(prox!=null&&$('#ab-recibo'))$('#ab-recibo').value=prox;
 }
 window._abTalonarioChange=_abTalonarioChange;
+// Flujo inverso: al escribir el No. de recibo, detecta a qué talonario
+// pertenece ese número, lo selecciona solo, y avisa si está usado/anulado o
+// si no cae en ningún talonario cargado.
+function _abReciboBuscaTalonario(){
+  const inp=document.getElementById('ab-recibo');
+  const sel=document.getElementById('ab-talonario');
+  const hint=document.getElementById('ab-tal-hint');
+  if(!inp||!sel)return; // sin talonarios no aplica
+  const raw=String(inp.value||'').replace(/\D/g,'');
+  if(!raw){ if(hint)hint.style.display='none'; return; }
+  const n=parseInt(raw,10);
+  const t=(talonarios||[]).find(x=>x.estado!=='anulado'&&n>=x.numeroInicial&&n<=x.numeroFinal);
+  const _set=(color,txt)=>{ if(hint){hint.style.display='';hint.style.color=color;hint.textContent=txt;} };
+  if(!t){ _set('#A8420E','El recibo '+n+' no pertenece a ningún talonario cargado.'); return; }
+  // Seleccionar el talonario detectado, si está entre las opciones con recibos libres
+  const hayOpcion=Array.from(sel.options).some(o=>Number(o.value)===t.id);
+  if(hayOpcion && Number(sel.value)!==t.id) sel.value=String(t.id);
+  const usado=recibosUsados().has(n);
+  const anulado=(typeof recibosAnulados!=='undefined'?recibosAnulados:[]).some(r=>r.numero===n);
+  const desc=(t.descripcion||('Talón '+t.numeroInicial))+' ('+t.numeroInicial+'–'+t.numeroFinal+')';
+  if(usado) _set('#A8420E','Recibo '+n+' ya fue usado. Elegí otro número. · '+desc);
+  else if(anulado) _set('#A8420E','Recibo '+n+' está anulado. Elegí otro número. · '+desc);
+  else _set('var(--ok)','Talonario: '+desc+' ✓');
+}
+window._abReciboBuscaTalonario=_abReciboBuscaTalonario;
 function openAbono(id){
   _compFoto=null;
   const f=documentos.find(d=>d.id===id);const ai=arInfo(f);const saldo=ai.saldo;
@@ -462,7 +487,8 @@ function openAbono(id){
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${f.clienteNombre} · Saldo pendiente: <b style="color:var(--ink)">${money(saldo)}</b></p>
      ${(_favor>0.001&&saldo>0.001)?`<div class="note n-ok" style="margin-bottom:12px"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Este cliente tiene <b>${money(_favor)}</b> de saldo a favor. <a href="#" onclick="aplicarSaldoFavor(${f.id});return false" style="color:var(--brand);font-weight:600">Aplicarlo a esta factura</a></span></div>`:''}
      ${_hayTal?`<div class="row"><div><label>Talonario</label><select id="ab-talonario" onchange="_abTalonarioChange()">${_tals.map(x=>`<option value="${x.t.id}" ${x.t.id===_miTal.t.id?'selected':''}>${(x.t.descripcion||('Talón '+x.t.numeroInicial))} · ${x.t.asignadoA||'sin asignar'} (${x.t.numeroInicial}–${x.t.numeroFinal})</option>`).join('')}</select></div></div>`:`<div class="note" style="margin-bottom:12px;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>No hay talonarios con recibos libres. Cargá uno en <b>Talonarios</b>; por ahora el número queda libre.</span></div>`}
-     <div class="row"><div><label>No. de recibo ${_hayTal?'<span style="color:var(--muted);font-weight:400">(del talonario)</span>':''}</label><input id="ab-recibo" value="${_recIni}"></div><div><label>Fecha</label><input id="ab-fecha" type="date" value="${hoy}"></div></div>
+     <div class="row"><div><label>No. de recibo ${_hayTal?'<span style="color:var(--muted);font-weight:400">(escribilo y detecta el talonario)</span>':''}</label><input id="ab-recibo" value="${_recIni}" ${_hayTal?'oninput="_abReciboBuscaTalonario()"':''}></div><div><label>Fecha</label><input id="ab-fecha" type="date" value="${hoy}"></div></div>
+     ${_hayTal?'<div id="ab-tal-hint" style="display:none;font-size:11.5px;margin:-6px 0 10px"></div>':''}
      <div class="row"><div><label>Monto del abono</label><input id="ab-monto" type="number" step="0.01" value="${saldo.toFixed(2)}" data-saldo="${saldo.toFixed(2)}" oninput="_abChkExceso()"></div><div><label>Método</label><select id="ab-met"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>Depósito</option><option>Tarjeta</option></select></div></div>
      <div id="ab-exceso" style="display:none;font-size:11.5px;color:#7A4A07;background:var(--warn-bg,#fff8e6);border:1px solid rgba(168,130,0,.2);border-radius:8px;padding:7px 10px;margin:-4px 0 10px"></div>
      <div class="row"><div><label>Referencia / No. boleta / cheque</label><input id="ab-ref" placeholder="Opcional"></div></div>
