@@ -560,12 +560,12 @@ const EMPRESA_KEY='sefe_empresa_activa';
 // (una sola empresa), cae en 'SEFE' — igual que siempre.
 function empresaParaNuevo(){ return empresaActiva||'SEFE'; }
 // Nombre corto y claro de una empresa por su código, para mostrar en reportes
-// y listados (ej. columna "Empresa"). SEFE → "SEFE", LAML → "Luis Menocal".
+// y listados (ej. columna "Empresa"). SEFE → "SEFE", LAML → "Soluciones Efectivas".
 // Para cualquier otra empresa futura cae en el nombre del catálogo.
 function nombreEmpresa(cod){
   cod = cod || 'SEFE';
   if(cod==='SEFE') return 'SEFE';
-  if(cod==='LAML') return 'Luis Menocal';
+  if(cod==='LAML') return 'Soluciones Efectivas';
   const e=(typeof empresas!=='undefined'?empresas:[]).find(x=>x.codigo===cod);
   return (e&&e.nombre)||cod;
 }
