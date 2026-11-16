@@ -628,8 +628,11 @@ function cambiarEmpresa(codigo){
     _verConsolidado=false;
     try{ localStorage.setItem(CONSOLIDADO_KEY,''); }catch(e){}
   }
+  const _empPrev=empresaActiva;
   empresaActiva=codigo;
   try{ localStorage.setItem(EMPRESA_KEY,codigo); }catch(e){}
+  // El pedido a medias no se arrastra a la otra empresa (ver _pedidoAlCambiarEmpresa).
+  try{ if(_empPrev!==codigo && typeof _pedidoAlCambiarEmpresa==='function')_pedidoAlCambiarEmpresa(_empPrev); }catch(e){}
   // Forzar que los filtros con dropdown cacheado (proveedores, clientes, cuentas)
   // se reconstruyan con los datos de la nueva empresa.
   try{ document.querySelectorAll('[data-built]').forEach(el=>{el.dataset.built='';}); }catch(e){}
@@ -858,42 +861,90 @@ let cart=[],corr=4,cliN=4,prodN=6;
 
 // ===== Borrador automático del pedido (se guarda en el navegador) =====
 const BORRADOR_KEY='sefe_borrador_pedido';
+// Multiempresa: cada empresa tiene SU borrador. Antes había uno solo y un
+// pedido empezado en SEFE (con su cliente) se recuperaba estando en LAML,
+// y el pedido terminaba guardándose en la otra empresa (ej. PED-2781).
+function _borradorKey(emp){ return BORRADOR_KEY+':'+(emp||empresaActiva||'SEFE'); }
+// Empresa de un borrador: la que trae guardada o, si es viejo, la de su cliente.
+function _empresaDeBorrador(b){
+  if(b&&b.empresa) return b.empresa;
+  const c=b&&b.cliSel?clientes.find(x=>String(x.id)===String(b.cliSel)):null;
+  return (c&&c.empresa)||'SEFE';
+}
+// Pasa el borrador viejo (sin empresa) a la clave de la empresa que le toca.
+function _migrarBorradorViejo(){
+  try{
+    const raw=localStorage.getItem(BORRADOR_KEY);
+    if(!raw) return;
+    const b=JSON.parse(raw);
+    if(b&&b.cart&&b.cart.length){
+      const emp=_empresaDeBorrador(b);
+      if(!localStorage.getItem(_borradorKey(emp))) localStorage.setItem(_borradorKey(emp),JSON.stringify(Object.assign({},b,{empresa:emp})));
+    }
+    localStorage.removeItem(BORRADOR_KEY);
+  }catch(e){}
+}
+function _datosFormPedido(){
+  return {cart,
+    cliSel:$('#f-cli')?.value||'', cliSearch:$('#f-cli-search')?.value||'',
+    oc:$('#f-oc')?.value||'', obs:$('#f-obs')?.value||'', nota:$('#f-nota')?.value||'',
+    subvend:$('#f-subvend')?.value||'', ts:Date.now()};
+}
 function guardarBorrador(){
   try{
     // No guardar borrador si estamos editando un pedido existente
     if(editId)return;
-    if(!cart.length){localStorage.removeItem(BORRADOR_KEY);return;}
-    const cliSel=$('#f-cli')?.value||'';
-    const cliSearch=$('#f-cli-search')?.value||'';
-    const oc=$('#f-oc')?.value||'';
-    const obs=$('#f-obs')?.value||'';
-    const nota=$('#f-nota')?.value||'';
-    const subvend=$('#f-subvend')?.value||'';
-    localStorage.setItem(BORRADOR_KEY,JSON.stringify({cart,cliSel,cliSearch,oc,obs,nota,subvend,ts:Date.now()}));
+    if(!cart.length){localStorage.removeItem(_borradorKey());return;}
+    localStorage.setItem(_borradorKey(),JSON.stringify(Object.assign(_datosFormPedido(),{empresa:empresaActiva||'SEFE'})));
   }catch(e){/* si el navegador no permite, no pasa nada */}
 }
 function recuperarBorrador(){
   try{
-    const raw=localStorage.getItem(BORRADOR_KEY);
+    _migrarBorradorViejo();
+    const raw=localStorage.getItem(_borradorKey());
     if(!raw)return false;
     const b=JSON.parse(raw);
     if(!b.cart||!b.cart.length)return false;
+    // Defensa extra: si el borrador no es de esta empresa, no se usa.
+    if(empresaActiva && _empresaDeBorrador(b)!==empresaActiva)return false;
     cart=b.cart;
     initForm();
-    if(b.cliSel&&$('#f-cli')){$('#f-cli').value=b.cliSel;}
-    if(b.cliSearch&&$('#f-cli-search')){$('#f-cli-search').value=b.cliSearch;}
+    const cli=clientes.find(c=>String(c.id)===String(b.cliSel));
+    const cliOk=cli && (!empresaActiva || (cli.empresa||'SEFE')===empresaActiva);
+    if(cliOk&&$('#f-cli')){$('#f-cli').value=b.cliSel;}
+    if(cliOk&&b.cliSearch&&$('#f-cli-search')){$('#f-cli-search').value=b.cliSearch;}
     if(b.oc&&$('#f-oc'))$('#f-oc').value=b.oc;
     if(b.obs&&$('#f-obs'))$('#f-obs').value=b.obs;
     if(b.nota&&$('#f-nota'))$('#f-nota').value=b.nota;
-    const cli=clientes.find(c=>String(c.id)===String(b.cliSel));
-    if(cli)actualizarVendedorInfo(cli);
+    if(cliOk)actualizarVendedorInfo(cli);
     if(b.subvend&&$('#f-subvend'))$('#f-subvend').value=b.subvend;
     render();
     toast('📝 Borrador recuperado','Tenías un pedido sin guardar');
     return true;
   }catch(e){return false;}
 }
-function limpiarBorrador(){try{localStorage.removeItem(BORRADOR_KEY);}catch(e){}}
+function limpiarBorrador(){try{localStorage.removeItem(_borradorKey());localStorage.removeItem(BORRADOR_KEY);}catch(e){}}
+// Al cambiar de empresa: el pedido NUEVO que estaba a medias se guarda como
+// borrador de la empresa anterior, el formulario queda limpio, y si la nueva
+// empresa tiene su propio borrador, se recupera. Así nunca se arrastra un
+// cliente o productos de una empresa a la otra. (Si se está EDITANDO un pedido
+// existente no se toca: el guardado valida que todo sea de su empresa.)
+function _pedidoAlCambiarEmpresa(empPrev){
+  try{
+    if(editId) return;
+    if(cart&&cart.length){
+      localStorage.setItem(_borradorKey(empPrev),JSON.stringify(Object.assign(_datosFormPedido(),{empresa:empPrev||'SEFE'})));
+    }
+    cart=[];
+    ['#f-cli','#f-cli-search','#f-oc','#f-obs','#f-nota','#f-subvend'].forEach(sel=>{const el=$(sel);if(el)el.value='';});
+    if(typeof actualizarVendedorInfo==='function')actualizarVendedorInfo(null);
+    if($('#f-subvend-wrap'))$('#f-subvend-wrap').style.display='none';
+    if($('#f-nit-wrap'))$('#f-nit-wrap').style.display='none';
+    // Primero recuperar el borrador de la nueva empresa; ojo que render()
+    // autoguarda el borrador, y con el carrito vacío borraría el de esta empresa.
+    if(!recuperarBorrador() && typeof render==='function')render();
+  }catch(e){}
+}
 window.limpiarBorrador=limpiarBorrador;
 
 // ===== Chequeo de versión =====

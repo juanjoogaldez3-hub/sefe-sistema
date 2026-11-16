@@ -973,6 +973,25 @@ $('#f-go').onclick=async()=>{
   const cli=clientes.find(c=>c.id===Number($('#f-cli').value));
   if(!cli){toast('Seleccioná un cliente','Buscá por nombre o NIT en el campo de cliente',true);return;}
   if(esVentas()&&cli.vendedorId!==miVendedorId()){toast('Cliente no asignado','Solo podés crear pedidos para tus clientes',true);return;}
+  // Multiempresa: el cliente tiene que ser de la empresa del pedido (la activa,
+  // o la del pedido original si se está editando), y los productos de la misma
+  // empresa que el cliente. Hay clientes repetidos en las 2 empresas con el
+  // mismo nombre (ej. "SEFE, S.A."), así que en pantalla no se nota el error.
+  {
+    const _nomE=e=>(typeof nombreEmpresa==='function'?nombreEmpresa(e):e);
+    const _empPed=editId?(((documentos.find(d=>d.id===editId)||{}).empresa)||'SEFE'):(empresaActiva||null);
+    const _empCli=cli.empresa||'SEFE';
+    if(_empPed&&_empCli!==_empPed){
+      toast('Cliente de otra empresa','"'+cli.nombre+'" que quedó elegido es el cliente de '+_nomE(_empCli)+', y este pedido es de '+_nomE(_empPed)+'. Volvé a buscar y elegir el cliente.',true);
+      if(!editId){aplicarClienteSeleccionado(null);if($('#f-cli-search'))$('#f-cli-search').value='';}
+      return;
+    }
+    const _ajenos=cart.filter(it=>{const p=productos.find(x=>x.id===it.id);return p&&(p.empresa||'SEFE')!==_empCli;});
+    if(_ajenos.length){
+      toast('Productos de otra empresa','Estos productos son de otra empresa y no pueden ir en este pedido: '+_ajenos.slice(0,3).map(it=>it.nombre||it.codigo).join(', ')+(_ajenos.length>3?'…':'')+'. Quitalos y agregalos de nuevo.',true);
+      return;
+    }
+  }
   _guardandoPedido=true;
   const _btnGo=document.getElementById('f-go'); if(_btnGo)_btnGo.disabled=true;
   try{
