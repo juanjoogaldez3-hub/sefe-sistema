@@ -1530,7 +1530,15 @@ function verCompra(id){
   window._pdfActual=null;window._pdfNombre=null; // esto NO es factura EcoFactura: imprimir usa la hoja interna
   const REC={pendiente:'Pendiente de recibir',parcial:'Recepción parcial',recibida:'Recibida completa'};
   $('#doc-bar-t').textContent='ORDEN DE COMPRA · CMP-'+padn(c.id);
+  // Acceso directo a editar precios/cantidades cuando la orden está pendiente
+  // (sin recibir). Va marcado no-print para que no salga en la impresión.
+  const _editable=c.estadoRecepcion==='pendiente'&&!c.especial&&!c.anulado;
+  const _barraEd=_editable?`<div class="no-print" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--warn-bg);border:1px solid #E8D08A;border-radius:10px;padding:10px 14px;margin-bottom:14px">
+      <span style="font-size:12.5px;color:#7A4A07">Orden <b>pendiente</b> (sin recibir) — podés corregir <b>precios y cantidades</b> antes de recibirla.</span>
+      <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="closeDoc();editarCompraPendiente(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Editar precios</button>
+    </div>`:'';
   $('#doc-sheet').innerHTML=`
+    ${_barraEd}
     <div class="ds-head"><div class="ds-emisor"><div class="ds-mk">${marcaActiva().monograma}</div><div><h4>${marcaActiva().nombreDoc}</h4><p>Orden de compra</p></div></div>
       <div class="ds-doctype"><div class="dt">ORDEN DE COMPRA</div><p>CMP-${padn(c.id)}${c.docProv&&c.docProv!=='—'?'<br>Factura: '+c.docProv:''}</p></div></div>
     <div class="ds-stamp" style="color:${c.estadoRecepcion==='recibida'?'var(--ok)':'var(--warn)'}">${REC[c.estadoRecepcion].toUpperCase()}${c.facturada?' · FACTURADA':' · SIN FACTURA'}</div>
