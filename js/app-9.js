@@ -1149,28 +1149,29 @@ function renderReportes(){
       (d.abonos||[]).filter(a=>!a.anulado).forEach(a=>{
         if(repFiltros.metodoRec&&a.metodo!==repFiltros.metodoRec)return;
         if(!enRango(a.registradoEl||a.fecha,r))return;
-        filas.push({facturaId:d.id,cliente:d.clienteComercial||d.clienteNombre,nit:d.clienteNit||'',factura:d.serie+'-'+d.numeroDte,noRecibo:a.noRecibo||'—',fecha:a.fecha,monto:a.monto,metodo:a.metodo||'—',referencia:a.referencia||'',registradoPor:a.registradoPor||'—'});
+        filas.push({facturaId:d.id,empresa:d.empresa||'SEFE',cliente:d.clienteComercial||d.clienteNombre,nit:d.clienteNit||'',factura:d.serie+'-'+d.numeroDte,noRecibo:a.noRecibo||'—',fecha:a.fecha,monto:a.monto,metodo:a.metodo||'—',referencia:a.referencia||'',registradoPor:a.registradoPor||'—'});
       });
     });
     const _nrec=x=>{const d=String(x.noRecibo||'').replace(/[^0-9]/g,'');return d?parseInt(d,10):-Infinity;};
     filas.sort((a,b)=>{const na=_nrec(a),nb=_nrec(b);return na!==nb?nb-na:(new Date(b.fecha)-new Date(a.fecha));});
     const totalRec=filas.reduce((s,x)=>s+x.monto,0);
-    exportData=filas.map(x=>({'NombreComercial':x.cliente,'NIT':x.nit,'Recibo':x.noRecibo,'FechaRecibo':fdate(x.fecha),'Factura':x.factura,'ValorAbono':x.monto}));
+    exportData=filas.map(x=>({'Empresa':nombreEmpresa(x.empresa),'NombreComercial':x.cliente,'NIT':x.nit,'Recibo':x.noRecibo,'FechaRecibo':fdate(x.fecha),'Factura':x.factura,'ValorAbono':x.monto}));
     html+=`<div class="kpis stagger">${kpiHTML([
       {ic:'i-green',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Total cobrado',val:money(totalRec),sub:filas.length+' recibos'},
       {ic:'i-blue',svg:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',lbl:'Clientes',val:new Set(filas.map(x=>x.cliente)).size}])}</div>
       <div class="panel"><div class="panel-head"><h3>Recibos de cobro</h3><span style="font-size:12px;color:var(--muted)">${filas.length} recibo${filas.length!==1?'s':''}</span></div>
-      <table><thead><tr><th>No. Recibo</th><th>Cliente</th><th>Factura</th><th>Fecha</th><th>Monto</th><th>Método</th><th>Referencia</th><th>Registrado por</th></tr></thead><tbody>
+      <table><thead><tr><th>No. Recibo</th><th>Cliente</th><th>Empresa</th><th>Factura</th><th>Fecha</th><th>Monto</th><th>Método</th><th>Referencia</th><th>Registrado por</th></tr></thead><tbody>
       ${filas.length?filas.map(x=>`<tr>
         <td style="font-weight:700;color:var(--green)">${x.noRecibo}</td>
         <td style="font-weight:600">${x.cliente}</td>
+        <td style="font-size:12px;color:var(--muted)">${nombreEmpresa(x.empresa)}</td>
         <td style="color:var(--muted)">${x.factura}</td>
         <td style="color:var(--muted)">${fdate(x.fecha)}</td>
         <td class="num" style="font-weight:700">${money(x.monto)}</td>
         <td>${x.metodo}</td>
         <td style="color:var(--muted)">${x.referencia||'—'}</td>
         <td style="font-size:12px;color:var(--muted)">${x.registradoPor}</td>
-      </tr>`).join(''):'<tr><td colspan="8" class="empty">Sin recibos en el período</td></tr>'}</tbody></table>
+      </tr>`).join(''):'<tr><td colspan="9" class="empty">Sin recibos en el período</td></tr>'}</tbody></table>
       ${filas.length?`<div style="text-align:right;padding:13px 18px;font-family:var(--disp);font-size:15px;font-weight:600;border-top:1.5px solid var(--line-strong)">Total: ${money(totalRec)}</div>`:''}</div>`;
   }
   else if(repType==='factabo'){

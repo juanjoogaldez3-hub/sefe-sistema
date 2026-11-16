@@ -559,6 +559,17 @@ const EMPRESA_KEY='sefe_empresa_activa';
 // Código de empresa a usar al CREAR un registro nuevo. Si no hay filtro
 // (una sola empresa), cae en 'SEFE' — igual que siempre.
 function empresaParaNuevo(){ return empresaActiva||'SEFE'; }
+// Nombre corto y claro de una empresa por su código, para mostrar en reportes
+// y listados (ej. columna "Empresa"). SEFE → "SEFE", LAML → "Luis Menocal".
+// Para cualquier otra empresa futura cae en el nombre del catálogo.
+function nombreEmpresa(cod){
+  cod = cod || 'SEFE';
+  if(cod==='SEFE') return 'SEFE';
+  if(cod==='LAML') return 'Luis Menocal';
+  const e=(typeof empresas!=='undefined'?empresas:[]).find(x=>x.codigo===cod);
+  return (e&&e.nombre)||cod;
+}
+if(typeof window!=='undefined') window.nombreEmpresa=nombreEmpresa;
 // Filtra un array de registros a la empresa activa. Si no hay empresa activa
 // (una sola empresa, u otro cliente del producto), devuelve el array tal cual.
 // Ojo: sólo se usa para LISTAR/agregar; las búsquedas por id siguen usando el
