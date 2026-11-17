@@ -760,7 +760,7 @@ window.verAbonoPorRecibo=function(num){
     <table style="width:100%;font-size:13px;margin-top:4px">
       <thead><tr><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Factura</th><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Fecha</th><th style="text-align:right;font-size:10.5px;color:var(--muted-2)">Abono</th><th></th></tr></thead>
       <tbody>${filasFact}</tbody>
-      ${nF>1?`<tfoot><tr><td colspan="2" style="padding-top:8px;font-weight:700;border-top:1px solid var(--line)">Total</td><td class="num" style="padding-top:8px;font-weight:800;color:#1a7f37;border-top:1px solid var(--line);text-align:right">${money(total)}</td><td style="border-top:1px solid var(--line)"></td></tr></tfoot>`:''}
+      ${nF>1?`<tfoot><tr><td colspan="2" style="padding-top:8px;font-weight:700;border-top:1px solid var(--line)">Total</td><td class="num" style="padding:8px 0 0;font-weight:800;color:#1a7f37;border-top:1px solid var(--line);text-align:right">${money(total)}</td><td style="border-top:1px solid var(--line)"></td></tr></tfoot>`:''}
     </table>`;
   } else {
     const c=cobroRuta;
