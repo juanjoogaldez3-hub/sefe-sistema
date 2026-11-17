@@ -22,8 +22,13 @@ ok('el listener guarda ante input y change', /cont\.addEventListener\('input',_g
 console.log('\n═══ Reglas del borrador ═══');
 const gb = src.slice(src.indexOf('function guardarBorrador('), src.indexOf('function recuperarBorrador('));
 ok('no guarda borrador si se edita un pedido existente (editId)', /if\(editId\)return;/.test(gb));
-ok('con el carrito vacío borra el borrador', /if\(!cart\.length\)\{localStorage\.removeItem\(BORRADOR_KEY\)/.test(gb));
-ok('guarda cliente, OC, observaciones, nota y subvendedor', /cart,cliSel,cliSearch,oc,obs,nota,subvend/.test(gb));
+// Multiempresa: el borrador va en una clave por empresa (_borradorKey()) y los
+// campos se arman en _datosFormPedido().
+ok('con el carrito vacío borra el borrador', /if\(!cart\.length\)\{localStorage\.removeItem\(_borradorKey\(\)\)/.test(gb));
+const df = src.slice(src.indexOf('function _datosFormPedido('), src.indexOf('function guardarBorrador('));
+ok('guarda cliente, OC, observaciones, nota y subvendedor',
+  /_datosFormPedido\(\)/.test(gb) && ['cart', 'cliSel:', 'cliSearch:', 'oc:', 'obs:', 'nota:', 'subvend:'].every(k => df.includes(k)));
+ok('guarda el borrador con su empresa (uno por empresa)', /localStorage\.setItem\(_borradorKey\(\),[\s\S]*empresa:empresaActiva\|\|'SEFE'/.test(gb));
 
 console.log('\n═══ Recuperar y limpiar ═══');
 ok('al entrar se recupera el borrador (recuperarBorrador en el arranque)', /setTimeout\(recuperarBorrador,\s*\d+\)/.test(src));

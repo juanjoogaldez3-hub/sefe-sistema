@@ -37,6 +37,8 @@ const ctx = {
   document: { getElementById: id => (id in campos ? { value: campos[id] } : { value: '' }) },
   window: {},
   cotEditId: null, cotCart: [], cotClienteSel: null,
+  // multiempresa: el borrador se guarda por empresa (clave …:SEFE / …:LAML)
+  empresaActiva: 'SEFE', clientes: [], productos: [],
 };
 vm.createContext(ctx);
 vm.runInContext(bloque + '\n;globalThis.__api={_cotGuardarBorrador,_cotLimpiarBorrador,_cotHayBorrador};', ctx);
@@ -73,6 +75,26 @@ A._cotGuardarBorrador();
 ok('hay borrador antes de limpiar', A._cotHayBorrador() !== null);
 A._cotLimpiarBorrador();
 ok('se limpia con _cotLimpiarBorrador', A._cotHayBorrador() === null);
+
+console.log('\n═══ Multiempresa: un borrador por empresa ═══');
+for (const k of Object.keys(store)) delete store[k];
+ctx.empresaActiva = 'SEFE';
+ctx.cotCart = [{ id: 1, nombre: 'PAPEL', cantidad: 1, precio: 10 }];
+A._cotGuardarBorrador();
+ok('se guarda con la clave de la empresa activa', 'sefe_borrador_cotizacion:SEFE' in store, Object.keys(store).join(','));
+ctx.empresaActiva = 'LAML';
+ok('estando en LAML no aparece el borrador de SEFE', A._cotHayBorrador() === null);
+ctx.empresaActiva = 'SEFE';
+ok('de vuelta en SEFE sigue ahí', A._cotHayBorrador() !== null);
+A._cotLimpiarBorrador();
+// Borrador viejo (sin empresa): pasa a la empresa de su cliente.
+ctx.clientes = [{ id: 9, empresa: 'LAML' }];
+store['sefe_borrador_cotizacion'] = JSON.stringify({ cart: [{ id: 1, nombre: 'PAPEL' }], clienteId: 9, ts: 1 });
+ctx.empresaActiva = 'LAML';
+b = A._cotHayBorrador();
+ok('el borrador viejo (sin empresa) pasa a la empresa de su cliente', b && b.empresa === 'LAML' && !('sefe_borrador_cotizacion' in store), JSON.stringify(b));
+A._cotLimpiarBorrador();
+ctx.empresaActiva = 'SEFE'; ctx.clientes = [];
 
 console.log('\n═══ Cableado ═══');
 ok('index.html tiene el contenedor del aviso (#cot-borrador-aviso)', /id="cot-borrador-aviso"/.test(html));

@@ -15,7 +15,7 @@
 //  2) Talonarios: el detalle de un recibo que pagó varias facturas sólo
 //     mostraba la primera.
 //
-//  OJO: esta prueba lee el código ACTUAL de js/app-*.js (no test-fuente.js).
+//  Lee el código ACTUAL de js/app-*.js (igual que test-fuente.js).
 // ============================================================
 const fs = require('fs'), vm = require('vm'), path = require('path');
 let src = '';

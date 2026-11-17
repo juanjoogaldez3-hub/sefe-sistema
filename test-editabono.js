@@ -22,9 +22,14 @@ const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t +
 const i = src.indexOf('function openEditarAbono(facturaId,abonoIdx){');
 const j = src.indexOf('\nwindow.openEditarAbono=openEditarAbono;');
 if (i < 0 || j < 0) { console.log('✗ no se encontró openEditarAbono'); process.exit(1); }
-const fnSrc = src.slice(i, j);
+// openEditarAbono busca el movimiento con _movBancoDeAbono (mismo emparejamiento
+// que al anular): se carga también, tal cual está en el código.
+const iMv = src.indexOf('function _movBancoDeAbono(');
+const jMv = src.indexOf('function openHistorialAbonos(', iMv);
+if (iMv < 0 || jMv < 0) { console.log('✗ no se encontró _movBancoDeAbono'); process.exit(1); }
+const fnSrc = src.slice(iMv, jMv) + '\n' + src.slice(i, j);
 
-let saveCb = null, campos = {}, guardados = [];
+let saveCb = null, campos = {}, guardados = [], registrados = [];
 const elErr = { style: {}, querySelector: () => ({ textContent: '' }) };
 const $ = sel => {
   const id = sel.replace('#', '');
@@ -41,16 +46,21 @@ const ctx = {
   openHistorialAbonos: () => {}, renderCobros: () => {},
   actualizarAbonoDB: () => {}, guardarDocumento: () => {},
   guardarMovimientoBanco: (m) => guardados.push(m),
+  registrarMovimientoBanco: (m) => { registrados.push(m); return m; },
   documentos: [], movimientosBanco: [],
+  // Cuenta acreditada (se puede corregir desde el historial de abonos).
+  cuentasBanco: [{ id: 4, nombre: 'Bi Monetaria' }, { id: 6, nombre: 'Industrial' }],
+  cuentasActivasBanco: () => [{ id: 4, nombre: 'Bi Monetaria' }, { id: 6, nombre: 'Industrial' }],
+  cuentaLabel: c => c.nombre,
 };
 vm.createContext(ctx);
 vm.runInContext(fnSrc + '\n;globalThis.__e=openEditarAbono;', ctx);
 const openEditarAbono = ctx.__e;
 
-function escenario() {
-  saveCb = null; guardados = [];
-  const abono = { noRecibo: '31494', fecha: '2026-08-03', monto: 250, metodo: 'Transferencia', referencia: '', cuentaBancoId: 4, anulado: false };
-  const mov = { origen: 'cobro', origenId: 700, cuentaId: 4, monto: 250, fecha: '2026-08-03', anulado: false };
+function escenario(extraAbono, extraMov) {
+  saveCb = null; guardados = []; registrados = []; elErr.style = {};
+  const abono = Object.assign({ noRecibo: '31494', fecha: '2026-08-03', monto: 250, metodo: 'Transferencia', referencia: '', cuentaBancoId: 4, anulado: false }, extraAbono);
+  const mov = Object.assign({ origen: 'cobro', origenId: 700, cuentaId: 4, monto: 250, fecha: '2026-08-03', anulado: false }, extraMov);
   ctx.documentos = [{ id: 700, serie: 'A', numeroDte: '9', abonos: [abono], estadoPago: 'pagada' }];
   ctx.movimientosBanco = [mov];
   openEditarAbono(700, 0);
@@ -76,6 +86,31 @@ console.log('\n═══ No cambiar nada relevante → no toca el movimiento ═
 campos = { 'ea-recibo': '31494', 'ea-fecha': '2026-08-03', 'ea-monto': '250', 'ea-met': 'Transferencia', 'ea-ref': '' };
 saveCb();
 ok('no se guarda el movimiento si no cambió fecha ni monto', guardados.length === 0);
+
+console.log('\n═══ Corregir la cuenta acreditada ═══');
+({ abono, mov } = escenario());
+campos = { 'ea-recibo': '31494', 'ea-fecha': '2026-08-03', 'ea-monto': '250', 'ea-met': 'Transferencia', 'ea-ref': '', 'ea-cuenta': '6' };
+saveCb();
+ok('el abono queda en la cuenta nueva', abono.cuentaBancoId === 6, 'quedó ' + abono.cuentaBancoId);
+ok('el movimiento de banco se pasa a la cuenta nueva', mov.cuentaId === 6 && guardados.length === 1, 'cuenta ' + mov.cuentaId);
+ok('no se crea un movimiento nuevo (se mueve el que había)', registrados.length === 0);
+
+({ abono, mov } = escenario(null, { conciliado: true }));
+campos = { 'ea-recibo': '31494', 'ea-fecha': '2026-08-03', 'ea-monto': '250', 'ea-met': 'Transferencia', 'ea-ref': '', 'ea-cuenta': '6' };
+saveCb();
+ok('si el cobro ya está CONCILIADO no deja cambiarle la cuenta', abono.cuentaBancoId === 4 && mov.cuentaId === 4 && guardados.length === 0 && elErr.style.display === 'flex');
+
+({ abono, mov } = escenario());
+campos = { 'ea-recibo': '31494', 'ea-fecha': '2026-08-03', 'ea-monto': '250', 'ea-met': 'Transferencia', 'ea-ref': '', 'ea-cuenta': '' };
+saveCb();
+ok('un abono que tenía cuenta no se puede dejar sin cuenta', abono.cuentaBancoId === 4 && elErr.style.display === 'flex');
+
+({ abono, mov } = escenario({ cuentaBancoId: null }, { cuentaId: 99 }));
+campos = { 'ea-recibo': '31494', 'ea-fecha': '2026-08-03', 'ea-monto': '250', 'ea-met': 'Transferencia', 'ea-ref': '', 'ea-cuenta': '4' };
+saveCb();
+ok('abono que no había entrado a banco: al darle cuenta se registra la entrada',
+  abono.cuentaBancoId === 4 && registrados.length === 1 && registrados[0].tipo === 'entrada' && registrados[0].monto === 250 && Number(registrados[0].cuentaId) === 4 && registrados[0].origenId === 700,
+  JSON.stringify(registrados));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
