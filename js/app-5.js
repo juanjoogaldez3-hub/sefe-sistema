@@ -840,6 +840,28 @@ function openRetencion(id){
   const _b=$('#m-save'); if(_b){_b.className='btn btn-primary';_b.textContent='Registrar retención';}
 }
 window.openRetencion=openRetencion;
+// Cuenta de banco a la que entró un abono (para el historial). Sin cuenta =
+// el cobro no llegó a ningún banco: se marca en ámbar para que se vea.
+function _cuentaAbonoHTML(a){
+  if(!a||!a.cuentaBancoId)return '<span style="font-size:11.5px;color:#A8650E;font-weight:600">Sin cuenta</span>';
+  const c=(typeof cuentasBanco!=='undefined'?cuentasBanco:[]).find(x=>Number(x.id)===Number(a.cuentaBancoId));
+  if(!c)return '<span style="font-size:11.5px;color:var(--muted-2)">Cuenta #'+a.cuentaBancoId+'</span>';
+  return '<div style="font-size:12.5px;font-weight:600">'+(c.nombre||'')+'</div>'+((c.banco||c.numero)?'<div style="font-size:10.5px;color:var(--muted-2)">'+[c.banco,c.numero].filter(Boolean).join(' · ')+'</div>':'');
+}
+// Movimiento de banco (entrada por cobro) que generó un abono. Se empareja por
+// factura + cuenta + monto; si no, por referencia (cobro con sobrepago, donde el
+// banco registró el depósito completo). No modifica nada.
+function _movBancoDeAbono(f,a){
+  if(!a||!a.cuentaBancoId||typeof movimientosBanco==='undefined')return null;
+  const cta=Number(a.cuentaBancoId);
+  const cand=movimientosBanco.filter(m=>!m.anulado&&m.origen==='cobro'&&Number(m.origenId)===Number(f.id)&&Number(m.cuentaId)===cta);
+  let mv=cand.find(m=>Math.abs(Number(m.monto)-Number(a.monto))<0.01);
+  if(!mv){
+    const refA=(a.referencia!=null&&a.referencia!=='')?String(a.referencia):null;
+    if(refA)mv=cand.filter(m=>String(m.referencia||'')===refA&&Number(m.monto)>=Number(a.monto)-0.01).sort((x,y)=>Number(x.monto)-Number(y.monto))[0]||null;
+  }
+  return mv||null;
+}
 function openHistorialAbonos(id){
   const f=documentos.find(d=>d.id===id);
   const rows=(f.abonos||[]).slice().reverse().map((a,ridx)=>{
@@ -853,12 +875,13 @@ function openHistorialAbonos(id){
       <td style="${tachado}">${fdate(a.fecha)}</td>
       <td style="${tachado}" class="num">${money(a.monto)}</td>
       <td style="${tachado}">${a.metodo||'—'}${a.referencia?`<div style="font-size:10.5px;color:var(--muted-2)">${a.referencia}</div>`:''}${extra}</td>
+      <td style="${tachado}">${_cuentaAbonoHTML(a)}</td>
       <td>${a.comprobante?`<button class="btn btn-ghost btn-sm" onclick="verComprobante('doc',${f.id},${idx})">📷 Ver</button> `:''}${!a.anulado&&canRegistrarAbono()?`<button class="btn btn-ghost btn-sm" style="color:var(--blue)" onclick="openEditarAbono(${f.id},${idx})">Editar</button> `:''}${a.anulado?`<span class="badge b-muted">Anulado</span>`:(canAnular()?`<button class="btn btn-ghost btn-sm" onclick="openAnularAbono(${f.id},${idx})">Anular</button>`:'<span style="font-size:11px;color:var(--muted-2)">Sin permiso</span>')}</td>
     </tr>`;
   }).join('');
   openMod('Historial de abonos · '+f.serie+'-'+f.numeroDte,
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:13px">${f.clienteComercial||f.clienteNombre} · Saldo actual: <b style="color:var(--ink)">${money(arInfo(f).saldo)}</b></p>
-     <table><thead><tr><th>No. Recibo</th><th>Fecha</th><th>Monto</th><th>Método / Ref.</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="empty">Sin abonos registrados</td></tr>'}</tbody></table>`,
+     <table><thead><tr><th>No. Recibo</th><th>Fecha</th><th>Monto</th><th>Método / Ref.</th><th>Cuenta acreditada</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="6" class="empty">Sin abonos registrados</td></tr>'}</tbody></table>`,
     ()=>closeMod());
   $('#m-save').textContent='Cerrar';$('#m-save').className='btn btn-ghost';
 }
@@ -871,10 +894,17 @@ function openEditarAbono(facturaId,abonoIdx){
   const _mets=['Efectivo','Transferencia','Cheque','Depósito','Tarjeta','Cobro'];
   if(a.metodo&&_mets.indexOf(a.metodo)<0)_mets.unshift(a.metodo);
   const esc=s=>String(s||'').replace(/"/g,'&quot;');
+  // Cuentas de la empresa de la factura (+ la actual aunque esté inactiva, para no perderla).
+  const _ctas=(typeof cuentasActivasBanco==='function'?cuentasActivasBanco(f.empresa||'SEFE'):[]).slice();
+  const _ctaAct=a.cuentaBancoId?(cuentasBanco||[]).find(x=>Number(x.id)===Number(a.cuentaBancoId)):null;
+  if(_ctaAct&&!_ctas.some(x=>Number(x.id)===Number(_ctaAct.id)))_ctas.unshift(_ctaAct);
+  const _ctaOpts=(a.cuentaBancoId?'':'<option value="">— Sin cuenta (no entró a banco) —</option>')+
+    _ctas.map(c=>`<option value="${c.id}" ${Number(c.id)===Number(a.cuentaBancoId)?'selected':''}>${(typeof cuentaLabel==='function'?cuentaLabel(c):c.nombre)}</option>`).join('');
   openMod('Editar abono · '+f.serie+'-'+f.numeroDte,
     `<div class="row"><div><label>No. de recibo</label><input id="ea-recibo" value="${esc(a.noRecibo)}"></div><div><label>Fecha</label><input id="ea-fecha" type="date" value="${(a.fecha||'').slice(0,10)}"></div></div>
      <div class="row"><div><label>Monto</label><input id="ea-monto" type="number" step="0.01" value="${Number(a.monto)}"></div><div><label>Método</label><select id="ea-met">${_mets.map(m=>`<option ${a.metodo===m?'selected':''}>${m}</option>`).join('')}</select></div></div>
      <div class="row"><div><label>Referencia / No. boleta / cheque</label><input id="ea-ref" value="${esc(a.referencia)}"></div></div>
+     <div class="row"><div><label>Cuenta acreditada</label><select id="ea-cuenta">${_ctaOpts}</select></div></div>
      ${a.cuentaBancoId?`<div class="note" style="margin-bottom:0;font-size:11.5px;background:var(--warn-bg);color:#7A4A07;border-color:rgba(168,130,0,.2)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Este cobro entró a una cuenta de banco. Si cambiás el monto o la fecha, se ajusta también el movimiento de banco.</span></div>`:''}
      <div class="note n-danger" id="ea-err" style="display:none;margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>{
@@ -885,19 +915,36 @@ function openEditarAbono(facturaId,abonoIdx){
       if(nMonto>saldoSinEste+0.001){setErr('El monto no puede superar '+money(saldoSinEste)+' (saldo disponible de la factura)');return;}
       const montoViejo=Number(a.monto);
       const fechaVieja=a.fecha;
-      a.noRecibo=nRec;a.fecha=nFecha;a.monto=nMonto;a.metodo=nMet;a.referencia=nRef;
-      // Ajustar el movimiento de banco si cambió el monto O la fecha y el cobro estaba ligado
-      // a una cuenta. Antes sólo se ajustaba por monto, así que editar sólo la fecha dejaba el
-      // movimiento con la fecha vieja (y el cobro seguía apareciendo en el mes equivocado).
+      // Cuenta acreditada: si el abono tenía cuenta, no se puede dejar sin cuenta
+      // (el dinero ya está registrado en un banco); sí se puede pasar a otra.
+      const ctaVieja=a.cuentaBancoId?Number(a.cuentaBancoId):null;
+      const _selCta=$('#ea-cuenta'); const nCta=_selCta?(_selCta.value?Number(_selCta.value):null):ctaVieja;
+      if(ctaVieja&&!nCta){setErr('Elegí la cuenta a la que entró el dinero');return;}
+      const cambioCuenta=(ctaVieja||null)!==(nCta||null);
       const cambioMonto=Math.abs(nMonto-montoViejo)>0.001;
       const cambioFecha=String(fechaVieja||'')!==String(nFecha||'');
-      if(a.cuentaBancoId&&(cambioMonto||cambioFecha)&&typeof movimientosBanco!=='undefined'){
-        const mv=movimientosBanco.find(m=>!m.anulado&&m.origen==='cobro'&&m.origenId===f.id&&Number(m.cuentaId)===Number(a.cuentaBancoId)&&Math.abs(Number(m.monto)-montoViejo)<0.01);
-        if(mv){mv.monto=nMonto;mv.fecha=nFecha;if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mv);}
+      // El movimiento del banco se busca ANTES de tocar el abono (con su cuenta y monto viejos).
+      const mvViejo=_movBancoDeAbono(f,a);
+      if(cambioCuenta&&mvViejo&&mvViejo.conciliado){setErr('Ese cobro ya está CONCILIADO en la cuenta actual. Desconciliá el movimiento en la conciliación bancaria antes de cambiarle la cuenta.');return;}
+      a.noRecibo=nRec;a.fecha=nFecha;a.monto=nMonto;a.metodo=nMet;a.referencia=nRef;a.cuentaBancoId=nCta;
+      // Ajustar el movimiento de banco si cambió la cuenta, el monto o la fecha. Si el
+      // banco registró un depósito mayor (sobrepago con saldo a favor), se ajusta por
+      // la diferencia y se mueve completo a la cuenta nueva.
+      if(mvViejo&&(cambioCuenta||cambioMonto||cambioFecha)){
+        if(cambioMonto)mvViejo.monto=Math.round((Number(mvViejo.monto)+(nMonto-montoViejo))*100)/100;
+        mvViejo.fecha=nFecha;
+        if(cambioCuenta)mvViejo.cuentaId=nCta;
+        if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mvViejo);
+      }else if(cambioCuenta&&nCta&&!ctaVieja&&typeof registrarMovimientoBanco==='function'){
+        // El abono no había entrado a ningún banco: se registra la entrada ahora.
+        registrarMovimientoBanco({cuentaId:nCta,tipo:'entrada',monto:nMonto,
+          concepto:'Cobro '+(nRec||'')+' · '+(f.clienteComercial||f.clienteNombre),
+          categoria:'cobro',origen:'cobro',origenId:f.id,referencia:nRef,fecha:nFecha});
       }
       const nuevo=arInfo(f);f.estadoPago=nuevo.estado;
       openHistorialAbonos(facturaId);renderCobros();
-      logAudit('Abono editado','Factura '+f.serie+'-'+f.numeroDte+' · '+money(nMonto)+' · recibo '+(nRec||'—'));
+      const _nomCta=id=>{const c=(cuentasBanco||[]).find(x=>Number(x.id)===Number(id));return c?c.nombre:(id?('#'+id):'sin cuenta');};
+      logAudit('Abono editado','Factura '+f.serie+'-'+f.numeroDte+' · '+money(nMonto)+' · recibo '+(nRec||'—')+(cambioCuenta?(' · cuenta '+_nomCta(ctaVieja)+' → '+_nomCta(nCta)):''));
       toast('✓ Abono actualizado','Saldo: '+money(nuevo.saldo));
       if(typeof actualizarAbonoDB==='function')actualizarAbonoDB(a);
       if(typeof guardarDocumento==='function')guardarDocumento(f);
@@ -911,19 +958,9 @@ window.openEditarAbono=openEditarAbono;
 // encuentra). NO crea ninguna reversa. Se empareja por factura + cuenta + monto,
 // igual que el ajuste al editar un abono.
 function _anularEntradaBancoDeAbono(f,a){
-  if(!a||!a.cuentaBancoId||typeof movimientosBanco==='undefined')return null;
-  const cta=Number(a.cuentaBancoId);
-  // Candidatos: entradas de banco por cobro, de ESTA factura, en ESA cuenta.
-  const cand=movimientosBanco.filter(m=>!m.anulado&&m.origen==='cobro'&&Number(m.origenId)===Number(f.id)&&Number(m.cuentaId)===cta);
-  // 1) Monto exacto (el caso normal).
-  let mv=cand.find(m=>Math.abs(Number(m.monto)-Number(a.monto))<0.01);
-  // 2) Cobro en ruta con SOBREPAGO: el banco registró el depósito COMPLETO
-  //    (≥ al abono aplicado, la diferencia fue saldo a favor). Si la referencia
-  //    coincide, ése es; se toma el menor que alcance para no anular de más.
-  if(!mv){
-    const refA=(a.referencia!=null&&a.referencia!=='')?String(a.referencia):null;
-    if(refA)mv=cand.filter(m=>String(m.referencia||'')===refA&&Number(m.monto)>=Number(a.monto)-0.01).sort((x,y)=>Number(x.monto)-Number(y.monto))[0]||null;
-  }
+  // Mismo emparejamiento que al editar: factura + cuenta + monto, o por
+  // referencia si fue un cobro con sobrepago (depósito completo ≥ abono).
+  const mv=_movBancoDeAbono(f,a);
   if(!mv)return null;
   mv.anulado=true;
   if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mv);

@@ -900,7 +900,8 @@ async function actualizarAbonoDB(abono){
   if(!abono._id)return; // si no tiene id de base, no estaba guardado
   const {error}=await sb.from('abonos').update({
     fecha:abono.fecha, monto:abono.monto, metodo:abono.metodo,
-    referencia:abono.referencia, no_recibo:abono.noRecibo
+    referencia:abono.referencia, no_recibo:abono.noRecibo,
+    cuenta_banco_id:abono.cuentaBancoId||null
   }).eq('id', abono._id);
   if(error)console.error('Error actualizando abono:',error);
 }
