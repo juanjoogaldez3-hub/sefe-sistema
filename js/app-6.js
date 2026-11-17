@@ -1528,27 +1528,39 @@ function anularPagoProv(compraId,idx){
   $('#m-save').textContent='Anular pago';$('#m-save').className='btn btn-primary';$('#m-save').style.background='var(--danger)';
 }
 window.anularPagoProv=anularPagoProv;
+// Orden de compra: se muestra NUESTRO nombre del producto y SOLO el SKU del
+// proveedor (nunca nuestro código interno). Ojo: cuando el producto no tenía
+// SKU de proveedor, la línea guardó nuestro código en skuProveedor; en ese
+// caso no se muestra nada.
+function _skuProvOC(it){
+  const sku=String((it&&it.skuProveedor)||'').trim();
+  if(!sku)return '';
+  if(sku!==String(it.codigo||'').trim())return sku;
+  const p=(typeof productos!=='undefined'?productos:[]).find(x=>x.id===it.id);
+  return (p&&String(p.skuProveedor||'').trim()===sku)?sku:''; // coincide de verdad con el del proveedor
+}
 function verCompra(id){
   const c=compras.find(x=>x.id===id);const ai=apInfo(c);
   window._pdfActual=null;window._pdfNombre=null; // esto NO es factura EcoFactura: imprimir usa la hoja interna
   const REC={pendiente:'Pendiente de recibir',parcial:'Recepción parcial',recibida:'Recibida completa'};
   $('#doc-bar-t').textContent='ORDEN DE COMPRA · CMP-'+padn(c.id);
   // Acceso directo a editar precios/cantidades cuando la orden está pendiente
-  // (sin recibir). Va marcado no-print para que no salga en la impresión.
+  // (sin recibir). Va marcado no-print para que no salga en la impresión, y va
+  // DEBAJO del encabezado verde (.ds-head tiene margen negativo y la tapaba).
   const _editable=c.estadoRecepcion==='pendiente'&&!c.especial&&!c.anulado;
   const _barraEd=_editable?`<div class="no-print" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--warn-bg);border:1px solid #E8D08A;border-radius:10px;padding:10px 14px;margin-bottom:14px">
       <span style="font-size:12.5px;color:#7A4A07">Orden <b>pendiente</b> (sin recibir) — podés corregir <b>precios y cantidades</b> antes de recibirla.</span>
-      <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="closeDoc();editarCompraPendiente(${c.id})"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Editar precios</button>
+      <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="closeDoc();editarCompraPendiente(${c.id})">Editar precios</button>
     </div>`:'';
   $('#doc-sheet').innerHTML=`
-    ${_barraEd}
     <div class="ds-head"><div class="ds-emisor"><div class="ds-mk">${marcaActiva().monograma}</div><div><h4>${marcaActiva().nombreDoc}</h4><p>Orden de compra</p></div></div>
       <div class="ds-doctype"><div class="dt">ORDEN DE COMPRA</div><p>CMP-${padn(c.id)}${c.docProv&&c.docProv!=='—'?'<br>Factura: '+c.docProv:''}</p></div></div>
+    ${_barraEd}
     <div class="ds-stamp" style="color:${c.estadoRecepcion==='recibida'?'var(--ok)':'var(--warn)'}">${REC[c.estadoRecepcion].toUpperCase()}${c.facturada?' · FACTURADA':' · SIN FACTURA'}</div>
     <div class="ds-meta"><div><div class="mt-l">Proveedor</div><div class="mt-v">${c.proveedorNombre}</div></div>
       <div style="text-align:right"><div class="mt-l">Fecha</div><div class="mt-v">${fdate(c.fecha)}</div><div class="mt-s">${c.facturada?(c.tipoPago==='credito'?'Crédito '+c.diasCredito+' días':'Contado'):'Pago por definir'}</div></div></div>
     <table class="ds-table"><thead><tr><th>Producto</th><th style="text-align:center">Pedido</th><th style="text-align:center">Recibido</th><th style="text-align:right">Costo</th><th style="text-align:right">Total</th></tr></thead>
-    <tbody>${c.items.map(it=>`<tr><td><b>${it.nombreProveedor||it.nombre}</b><br><span style="font-size:10px;color:var(--muted)">SKU proveedor: ${it.skuProveedor||it.codigo}${it.skuProveedor?` (interno: ${it.codigo})`:''}</span></td><td style="text-align:center" class="num">${it.cantidad}</td><td style="text-align:center" class="num">${it.recibido||0}</td><td style="text-align:right" class="num">${money(it.costo)}</td><td style="text-align:right;font-weight:600" class="num">${money(it.cantidad*it.costo)}</td></tr>`).join('')}</tbody></table>
+    <tbody>${c.items.map(it=>`<tr><td><b>${it.nombre||it.nombreProveedor}</b>${_skuProvOC(it)?`<br><span style="font-size:10px;color:var(--muted)">SKU proveedor: ${_skuProvOC(it)}</span>`:''}</td><td style="text-align:center" class="num">${it.cantidad}</td><td style="text-align:center" class="num">${it.recibido||0}</td><td style="text-align:right" class="num">${money(it.costo)}</td><td style="text-align:right;font-weight:600" class="num">${money(it.cantidad*it.costo)}</td></tr>`).join('')}</tbody></table>
     <div class="ds-tot"><div class="r big"><span>TOTAL</span><b class="num">${money(c.total)}</b></div>
       ${c.facturada&&c.tipoPago==='credito'?`<div class="r"><span>Abonado</span><span class="num">${money(ai.abon)}</span></div><div class="r"><span>Saldo</span><span class="num">${money(ai.saldo)}</span></div>`:''}</div>
     <div class="ds-foot">Orden de compra interna · el inventario sube al recibir</div>`;
