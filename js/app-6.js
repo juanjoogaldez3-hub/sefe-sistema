@@ -30,7 +30,7 @@ function openFacturaProv(id){
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${c.proveedorNombre} · Total: <b style="color:var(--ink)">${money(c.total)}</b></p>
      <div class="row"><div><label>No. de factura del proveedor</label><input id="fp-doc" placeholder="FACT-…"></div><div><label>Fecha</label><input id="fp-fecha" type="date" value="${hoy}"></div></div>
      <div class="row"><div><label>Forma de pago</label><select id="fp-pago"><option value="contado">Contado (pagada)</option><option value="credito" ${prov.diasCredito>0?'selected':''}>Crédito</option></select></div><div id="fp-dias-wrap" style="${prov.diasCredito>0?'':'display:none'}"><label>Días de crédito</label><input id="fp-dias" type="number" value="${prov.diasCredito||30}"></div></div>
-     <div class="row" id="fp-cuenta-wrap" style="${prov.diasCredito>0?'display:none':''}">${selectorCuentaBancoHTML('fp-cuenta','¿De qué cuenta salió el dinero? (contado)',(cuentasActivasBanco()[0]||{}).id)}</div>`,
+     <div class="row" id="fp-cuenta-wrap" style="${prov.diasCredito>0?'display:none':''}">${selectorCuentaBancoHTML('fp-cuenta','¿De qué cuenta salió el dinero? (contado)',(cuentasActivasBanco(c.empresa||'SEFE')[0]||{}).id,c.empresa||'SEFE')}</div>`,
     ()=>{const tipoPago=$('#fp-pago').value;const dias=Number($('#fp-dias').value)||0;const fechaF=$('#fp-fecha').value?new Date($('#fp-fecha').value+'T12:00:00').toISOString():new Date().toISOString();
       const cuentaContado=tipoPago==='contado'?($('#fp-cuenta')?.value||null):null;
       Object.assign(c,{facturada:true,docProv:$('#fp-doc').value||'—',tipoPago,diasCredito:tipoPago==='credito'?dias:0,
@@ -244,8 +244,11 @@ function saldoCuenta(cuentaId){
   return s;
 }
 function nMovsCuenta(cuentaId){return movimientosBanco.filter(m=>!m.anulado&&m.cuentaId===cuentaId).length;}
-function cuentasActivasBanco(){
+function cuentasActivasBanco(emp){
   const todas=(typeof cuentasBanco!=='undefined'?cuentasBanco:[]).filter(c=>c.activo!==false);
+  // Si se pide la de una empresa puntual (la del documento que se cobra o paga),
+  // se filtra por esa, sin importar la empresa activa.
+  if(emp) return todas.filter(c=> !c.empresa || c.empresa===emp );
   // Multiempresa: cada cuenta de banco pertenece a una empresa. En una sola
   // empresa, en consolidado, o si una cuenta no tiene empresa (compartida),
   // se muestran todas; si hay empresa activa, solo las suyas + las compartidas.
@@ -256,8 +259,8 @@ function cuentasActivasBanco(){
 // paréntesis (si tiene). Ej: "MONETARIOS BI (0123456789)".
 function cuentaLabel(c){ return (c&&c.nombre||'')+(c&&c.numero?` (${c.numero})`:''); }
 // Selector reutilizable de cuenta de banco (para cobros, pagos, gastos)
-function selectorCuentaBancoHTML(idSel,label,sel){
-  const cuentas=cuentasActivasBanco();
+function selectorCuentaBancoHTML(idSel,label,sel,emp){
+  const cuentas=cuentasActivasBanco(emp);
   if(!cuentas.length)return `<div><label>${label}</label><div style="font-size:12px;color:var(--muted);padding:9px 0">Sin cuentas — creá una en la sección Bancos para registrar el movimiento.</div></div>`;
   return `<div><label>${label}</label><select id="${idSel}"><option value="">— Sin especificar —</option>${cuentas.map(c=>`<option value="${c.id}"${String(sel)===String(c.id)?' selected':''}>${cuentaLabel(c)}</option>`).join('')}</select></div>`;
 }
@@ -470,7 +473,7 @@ function asignarCuentaContado(compraId,idx){
   if(!cuentasActivasBanco().length){toast('Sin cuentas','Creá primero una cuenta de banco',true);return;}
   openMod('Asignar cuenta · '+c.proveedorNombre,
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Compra CMP-${padn(c.id)} · Pago de contado por <b style="color:var(--ink)">${money(a.monto)}</b> del ${fdate(a.fecha||c.fecha)}.</p>
-     <div class="row">${selectorCuentaBancoHTML('sc-cuenta','¿De qué cuenta salió el dinero?',(cuentasActivasBanco()[0]||{}).id)}</div>
+     <div class="row">${selectorCuentaBancoHTML('sc-cuenta','¿De qué cuenta salió el dinero?',(cuentasActivasBanco(c.empresa||'SEFE')[0]||{}).id,c.empresa||'SEFE')}</div>
      <div class="row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="sc-poliza" checked style="width:auto"> Generar póliza de cheque</label></div>
      <div class="note n-danger" id="sc-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>{
@@ -1430,7 +1433,7 @@ function openAbonoProv(id){
      <div class="row"><div><label>Monto del pago</label><input id="pp-monto" type="number" step="0.01" value="${saldo.toFixed(2)}"></div><div><label>Fecha</label><input id="pp-fecha" type="date" value="${hoy}"></div></div>
      <div class="row"><div><label>No. de comprobante de egreso</label><input id="pp-recibo" value="${recSugerido}"></div><div><label>Método</label><select id="pp-met"><option>Transferencia</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option></select></div></div>
      <div class="row"><div><label>No. cheque / autorización / transferencia</label><input id="pp-ref" placeholder="Según la forma de pago"></div></div>
-     <div class="row">${selectorCuentaBancoHTML('pp-cuenta','¿De qué cuenta salió el dinero?')}</div>
+     <div class="row">${selectorCuentaBancoHTML('pp-cuenta','¿De qué cuenta salió el dinero?',null,c.empresa||'SEFE')}</div>
      ${compFotoHTML()}
      <div class="note n-danger" id="pp-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     async ()=>{const monto=Number($('#pp-monto').value);
@@ -1555,6 +1558,18 @@ window.verCompra=verCompra;
 
 // Nueva compra
 let compraCart=[];
+// Multiempresa: el carrito de "Nueva compra" es de UNA empresa. Al cambiar de
+// empresa se guarda aparte y se trae el de la nueva (vacío si no había), así
+// productos de SEFE no terminan en una compra de LAML ni al revés.
+const _compraCartPorEmp={};
+function _compraAlCambiarEmpresa(empPrev){
+  try{
+    _compraCartPorEmp[empPrev||'SEFE']=compraCart;
+    compraCart=_compraCartPorEmp[empresaActiva||'SEFE']||[];
+    if(document.getElementById('co-prov'))renderCompraForm();
+  }catch(e){}
+}
+window._compraAlCambiarEmpresa=_compraAlCambiarEmpresa;
 function initCompra(){
   $('#co-prov').innerHTML=deEmpresa(proveedores).map(p=>`<option value="${p.id}">${p.nombre}</option>`).join(''); // multiempresa
   // Buscador con dropdown propio (nombres completos), igual que en pedidos
@@ -1640,6 +1655,8 @@ $('#co-go').onclick=async ()=>{
   if(_guardandoCompra)return;              // evita el doble clic que duplicaba la compra
   const prov=proveedores.find(p=>p.id===Number($('#co-prov').value));
   if(!prov){toast('✗ Elegí un proveedor','No hay proveedor seleccionado para esta empresa',true);return;}
+  // Multiempresa: los productos tienen que ser de la empresa del proveedor.
+  if(avisarCruceEmpresa(compraCart,prov.empresa||'SEFE','esta compra'))return;
   const total=compraCart.reduce((s,it)=>s+it.cantidad*it.costo,0);
   const fecha=$('#co-fecha').value?new Date($('#co-fecha').value+'T12:00:00').toISOString():new Date().toISOString();
   const esEspecial=$('#co-especial').checked;

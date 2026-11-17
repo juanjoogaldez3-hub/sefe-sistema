@@ -351,12 +351,32 @@ window.cerrarCotEditor=cerrarCotEditor;
 // cotización a medias no se pierde. Sólo para cotizaciones NUEVAS (las que se
 // están editando ya están guardadas en la base).
 const COT_BORRADOR_KEY='sefe_borrador_cotizacion';
-function _cotGuardarBorrador(){
+// Multiempresa: un borrador por empresa (antes había uno solo y una cotización
+// empezada en SEFE se recuperaba estando en LAML).
+function _cotBorrKey(emp){return COT_BORRADOR_KEY+':'+(emp||empresaActiva||'SEFE');}
+// El borrador viejo (sin empresa) se pasa a la empresa de su cliente o, si es
+// un prospecto, a la de su primer producto.
+function _cotMigrarBorradorViejo(){
+  try{
+    const raw=localStorage.getItem(COT_BORRADOR_KEY); if(!raw)return;
+    const b=JSON.parse(raw);
+    if(b&&b.cart&&b.cart.length){
+      let emp=b.empresa;
+      if(!emp&&b.clienteId){const c=clientes.find(x=>x.id===b.clienteId);emp=c&&c.empresa;}
+      if(!emp){const p=productos.find(x=>x.id===(b.cart[0]||{}).id);emp=p&&p.empresa;}
+      emp=emp||'SEFE';
+      if(!localStorage.getItem(_cotBorrKey(emp)))localStorage.setItem(_cotBorrKey(emp),JSON.stringify(Object.assign({},b,{empresa:emp})));
+    }
+    localStorage.removeItem(COT_BORRADOR_KEY);
+  }catch(e){}
+}
+function _cotGuardarBorrador(emp){
   try{
     if(cotEditId)return;                                   // sólo cotización nueva
-    if(!cotCart.length){localStorage.removeItem(COT_BORRADOR_KEY);return;}
+    const _k=_cotBorrKey(emp);
+    if(!cotCart.length){localStorage.removeItem(_k);return;}
     const g=id=>(document.getElementById(id)||{}).value||'';
-    localStorage.setItem(COT_BORRADOR_KEY,JSON.stringify({
+    localStorage.setItem(_k,JSON.stringify({empresa:emp||empresaActiva||'SEFE',
       cart:cotCart, clienteId:cotClienteSel?cotClienteSel.id:null,
       cliSearch:g('cot-cli-search'), cliNit:g('cot-cli-nit'), cliContacto:g('cot-cli-contacto'),
       cliTel:g('cot-cli-tel'), cliMail:g('cot-cli-mail'),
@@ -366,9 +386,9 @@ function _cotGuardarBorrador(){
   }catch(e){/* si el navegador no permite, no pasa nada */}
 }
 window._cotGuardarBorrador=_cotGuardarBorrador;
-function _cotLimpiarBorrador(){try{localStorage.removeItem(COT_BORRADOR_KEY);}catch(e){}}
+function _cotLimpiarBorrador(){try{localStorage.removeItem(_cotBorrKey());}catch(e){}}
 window._cotLimpiarBorrador=_cotLimpiarBorrador;
-function _cotHayBorrador(){try{const r=localStorage.getItem(COT_BORRADOR_KEY);if(!r)return null;const b=JSON.parse(r);return (b&&b.cart&&b.cart.length)?b:null;}catch(e){return null;}}
+function _cotHayBorrador(){try{_cotMigrarBorradorViejo();const r=localStorage.getItem(_cotBorrKey());if(!r)return null;const b=JSON.parse(r);return (b&&b.cart&&b.cart.length)?b:null;}catch(e){return null;}}
 window._cotHayBorrador=_cotHayBorrador;
 // Pinta (o limpia) el aviso de "cotización sin guardar" arriba de la lista.
 function _cotRenderAviso(){
@@ -407,6 +427,17 @@ function _cotDescartarBorrador(){
   });
 }
 window._cotDescartarBorrador=_cotDescartarBorrador;
+// Al cambiar de empresa: la cotización NUEVA a medias se guarda como borrador
+// de la empresa anterior y el editor se vacía; si se estaba EDITANDO una
+// cotización guardada, se suelta (sigue guardada en su empresa).
+function _cotAlCambiarEmpresa(empPrev){
+  try{
+    if(!cotEditId&&cotCart.length)_cotGuardarBorrador(empPrev);
+    cotEditId=null;cotCart=[];cotClienteSel=null;
+    const cs=document.getElementById('cot-cli-search');if(cs)cs.value='';
+  }catch(e){}
+}
+window._cotAlCambiarEmpresa=_cotAlCambiarEmpresa;
 
 // ===== Asistente de cotización con IA (Paso 1: escrito) =====
 // Abre/cierra la cajita donde se escribe el pedido en lenguaje normal.
@@ -558,6 +589,13 @@ async function guardarCotizacionUI(){
   let cliObj=cotClienteSel;
   if(cliObj){const disp=`${cliObj.nombre} · ${cliObj.nit||''}`.trim();if(txt&&txt!==disp)cliObj=null;}
   if(!cliObj&&!txt){toast('Falta el cliente','Elegí un cliente o escribí el nombre de uno nuevo',true);return;}
+  // Multiempresa: cliente y productos tienen que ser de la empresa de la cotización.
+  {
+    const _empCot=cotEditId?(((cotizaciones.find(c=>c.id===cotEditId)||{}).empresa)||'SEFE'):(empresaActiva||null);
+    if(cliObj&&avisarClienteOtraEmpresa(cliObj,_empCot,'esta cotización'))return;
+    const _empIt=cliObj?(cliObj.empresa||'SEFE'):(_empCot||'SEFE');
+    if(avisarCruceEmpresa(cotCart,_empIt,'esta cotización'))return;
+  }
   let clienteId,clienteNombre,clienteComercial,clienteNit,vend;
   if(cliObj){
     clienteId=cliObj.id;clienteNombre=cliObj.razonSocial||cliObj.nombre;clienteComercial=cliObj.nombre;clienteNit=cliObj.nit;
@@ -614,6 +652,11 @@ function convertirCotizacionAPedido(id){
   const lineasVal=(Array.isArray(c.items)?c.items:[]).filter(it=>it&&it.id!=null&&Number(it.cantidad)>0);
   if(!lineasVal.length){toast('Sin productos','La cotización no tiene productos con cantidad — no se puede pasar a pedido',true);return;}
   if(c.estado==='convertida'){toast('Ya convertida','Esta cotización ya se convirtió en pedido',true);return;}
+  if(c.clienteId){
+    const _cliC=clientes.find(x=>x.id===c.clienteId);
+    const _empC=(_cliC&&_cliC.empresa)||c.empresa||'SEFE';
+    if(avisarCruceEmpresa(lineasVal,_empC,'un pedido'))return;
+  }
   if(!c.clienteId){toast('Cliente no registrado','Esta cotización es para un cliente nuevo (prospecto). Creá el cliente en el sistema y reasignálo en la cotización antes de convertirla en pedido.',true);return;}
   // Validar STOCK antes de convertir. La conversión reserva inventario, y sin
   // este chequeo dejaba el stock en negativo — a diferencia del pedido normal,
@@ -635,7 +678,7 @@ function convertirCotizacionAPedido(id){
   }
   confirmar('Convertir a pedido','Se creará un pedido abierto con los productos de <b>COT-'+padn(c.numero)+'</b>, reservando inventario. ¿Continuar?','Convertir a pedido',async()=>{
     const cli=clientes.find(x=>x.id===c.clienteId);
-    const vend=vendedores.find(v=>v.id===(c.vendedorId||(cli&&cli.vendedorId)))||vendedores[0];
+    const vend=vendedores.find(v=>v.id===(c.vendedorId||(cli&&cli.vendedorId)))||vendedorDefaultDe((cli&&cli.empresa)||c.empresa);
     const items=lineasVal.map(it=>{
       const eff=Math.round(Number(it.precio)*(1-(Number(it.descuento)||0)/100)*100)/100;
       // El modo se deriva del producto real: la cotización usa el precio de caja,

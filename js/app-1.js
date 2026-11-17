@@ -570,6 +570,40 @@ function nombreEmpresa(cod){
   return (e&&e.nombre)||cod;
 }
 if(typeof window!=='undefined') window.nombreEmpresa=nombreEmpresa;
+// ── Candado multiempresa en pantalla (una sola regla para todos los formularios) ──
+// Ítems (de pedido, cotización o compra) cuyo producto es de OTRA empresa.
+function itemsDeOtraEmpresa(items, emp){
+  emp=emp||'SEFE';
+  const prods=(typeof productos!=='undefined'?productos:[]);
+  return (items||[]).filter(it=>{
+    if(!it||it.id==null)return false;
+    const p=prods.find(x=>x.id===it.id);
+    return !!p && (p.empresa||'SEFE')!==emp;
+  });
+}
+// Si hay productos de otra empresa, avisa y devuelve true (el que llama corta).
+function avisarCruceEmpresa(items, emp, queEs){
+  const aj=itemsDeOtraEmpresa(items, emp);
+  if(!aj.length)return false;
+  const nom=aj.slice(0,3).map(it=>it.nombre||it.codigo||('#'+it.id)).join(', ')+(aj.length>3?'…':'');
+  toast('Productos de otra empresa',
+    (aj.length>1?'Estos productos son':'Este producto es')+' de otra empresa y no '+(aj.length>1?'pueden':'puede')+' ir en '+(queEs||'este documento')+' de '+nombreEmpresa(emp)+': '+nom+'. Quitalos y agregalos de nuevo.',true);
+  return true;
+}
+// Si el cliente no es de la empresa esperada, avisa y devuelve true.
+function avisarClienteOtraEmpresa(cli, emp, queEs){
+  if(!cli||!emp)return false;
+  const ec=cli.empresa||'SEFE';
+  if(ec===emp)return false;
+  toast('Cliente de otra empresa','"'+cli.nombre+'" que quedó elegido es el cliente de '+nombreEmpresa(ec)+', y '+(queEs||'este documento')+' es de '+nombreEmpresa(emp)+'. Volvé a buscar y elegir el cliente.',true);
+  return true;
+}
+// Vendedor por defecto que sirve para una empresa (empresa vacía = compartido).
+function vendedorDefaultDe(emp){
+  const vs=(typeof vendedores!=='undefined'?vendedores:[]);
+  return vs.find(v=>!v.empresa||v.empresa===(emp||'SEFE'))||vs[0]||null;
+}
+if(typeof window!=='undefined'){ window.itemsDeOtraEmpresa=itemsDeOtraEmpresa; window.avisarCruceEmpresa=avisarCruceEmpresa; window.avisarClienteOtraEmpresa=avisarClienteOtraEmpresa; window.vendedorDefaultDe=vendedorDefaultDe; }
 // Filtra un array de registros a la empresa activa. Si no hay empresa activa
 // (una sola empresa, u otro cliente del producto), devuelve el array tal cual.
 // Ojo: sólo se usa para LISTAR/agregar; las búsquedas por id siguen usando el
@@ -633,6 +667,11 @@ function cambiarEmpresa(codigo){
   try{ localStorage.setItem(EMPRESA_KEY,codigo); }catch(e){}
   // El pedido a medias no se arrastra a la otra empresa (ver _pedidoAlCambiarEmpresa).
   try{ if(_empPrev!==codigo && typeof _pedidoAlCambiarEmpresa==='function')_pedidoAlCambiarEmpresa(_empPrev); }catch(e){}
+  // Lo mismo para los otros formularios con estado en memoria (cotización y
+  // nueva compra) y para filtros que guardan un id de la otra empresa.
+  try{ if(_empPrev!==codigo && typeof _cotAlCambiarEmpresa==='function')_cotAlCambiarEmpresa(_empPrev); }catch(e){}
+  try{ if(_empPrev!==codigo && typeof _compraAlCambiarEmpresa==='function')_compraAlCambiarEmpresa(_empPrev); }catch(e){}
+  try{ if(typeof _ppProv!=='undefined')_ppProv=''; }catch(e){}
   // Forzar que los filtros con dropdown cacheado (proveedores, clientes, cuentas)
   // se reconstruyan con los datos de la nueva empresa.
   try{ document.querySelectorAll('[data-built]').forEach(el=>{el.dataset.built='';}); }catch(e){}

@@ -492,7 +492,7 @@ function openAbono(id){
      <div class="row"><div><label>Monto del abono</label><input id="ab-monto" type="number" step="0.01" value="${saldo.toFixed(2)}" data-saldo="${saldo.toFixed(2)}" oninput="_abChkExceso()"></div><div><label>Método</label><select id="ab-met"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>Depósito</option><option>Tarjeta</option></select></div></div>
      <div id="ab-exceso" style="display:none;font-size:11.5px;color:#7A4A07;background:var(--warn-bg,#fff8e6);border:1px solid rgba(168,130,0,.2);border-radius:8px;padding:7px 10px;margin:-4px 0 10px"></div>
      <div class="row"><div><label>Referencia / No. boleta / cheque</label><input id="ab-ref" placeholder="Opcional"></div></div>
-     <div class="row">${selectorCuentaBancoHTML('ab-cuenta','¿A qué cuenta entró el dinero?')}</div>
+     <div class="row">${selectorCuentaBancoHTML('ab-cuenta','¿A qué cuenta entró el dinero?',null,f.empresa||'SEFE')}</div>
      ${compFotoHTML()}
      <div class="note n-danger" id="ab-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>{
@@ -640,7 +640,9 @@ window.closePagoGlobal=closePagoGlobal;
 /* cierre por clic afuera desactivado en pago global */
 function pgGetCliId(){
   const v=($pg('#pg-cli-search').value||'').trim();
-  const c=clientes.find(x=>`${x.nombre} · ${x.nit}`===v||x.nit.toLowerCase()===v.toLowerCase()||x.nombre.toLowerCase()===v.toLowerCase());
+  // Multiempresa: resolver SOLO entre los clientes de la empresa activa. Hay
+  // clientes repetidos en las 2 empresas (mismo nombre y NIT, ej. "SEFE, S.A.").
+  const c=deEmpresa(clientes).find(x=>`${x.nombre} · ${x.nit}`===v||(x.nit||'').toLowerCase()===v.toLowerCase()||(x.nombre||'').toLowerCase()===v.toLowerCase());
   return c?c.id:null;
 }
 function pgCargaFacturas(){
@@ -649,9 +651,9 @@ function pgCargaFacturas(){
   const cli=clientes.find(c=>c.id===cliId);
   // Reunir todos los IDs relacionados por NIT (el cliente + sus sedes o su matriz + hermanas)
   const nit=cli.nit;
-  const todosConNit=clientes.filter(c=>c.nit===nit&&c.nit!=='CF').map(c=>c.id);
+  const todosConNit=deEmpresa(clientes).filter(c=>c.nit===nit&&c.nit!=='CF').map(c=>c.id); // multiempresa
   const hayVarias=todosConNit.length>1;
-  const pendientes=documentos.filter(d=>todosConNit.includes(d.clienteId)&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').map(d=>{
+  const pendientes=deEmpresa(documentos).filter(d=>todosConNit.includes(d.clienteId)&&d.tipoDoc==='cambiaria'&&d.estado!=='anulada').map(d=>{
     const sede=clientes.find(c=>c.id===d.clienteId);return {d,sede,...arInfo(d)};
   }).filter(x=>x.saldo>0.001).sort((a,b)=>new Date(a.d.creada)-new Date(b.d.creada));
   if(!pendientes.length){$pg('#pg-facturas-wrap').innerHTML=`<div class="empty">${hayVarias?`Este NIT (${nit}) no tiene facturas pendientes en ninguna sede.`:'Este cliente no tiene facturas pendientes de pago.'}</div>`;pgActualizaTotales();return;}

@@ -132,7 +132,7 @@ function _ctrlCliId(searchId,hiddenId){
   const inp=document.getElementById(searchId);
   const txt=((inp&&inp.value)||'').trim().toLowerCase();
   if(!txt)return null;
-  const cs=(typeof clientes!=='undefined'?clientes:[]);
+  const cs=(typeof clientes!=='undefined'?deEmpresa(clientes):[]); // multiempresa: hay nombres repetidos
   let hit=cs.find(c=>(c.nombre||'').toLowerCase()===txt);
   if(!hit){const part=cs.filter(c=>(c.nombre||'').toLowerCase().includes(txt));if(part.length===1)hit=part[0];}
   return hit?hit.id:null;

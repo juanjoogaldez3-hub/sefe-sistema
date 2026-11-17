@@ -552,6 +552,19 @@ function empresaDeCuenta(id){     return _empPorId(typeof cuentasBanco!=='undefi
 function empresaDeDocumento(id){  return _empPorId(typeof documentos!=='undefined'?documentos:[], id); }
 function empresaDeCompra(id){     return _empPorId(typeof compras!=='undefined'?compras:[], id); }
 
+// Si la BASE rechazó el guardado por mezclar empresas (candado
+// sefe_validar_mezcla_empresa), se avisa en pantalla con el motivo real.
+// Devuelve true si era ese caso. Cualquier otro error sigue como antes.
+function _avisoCandadoEmpresa(error){
+  try{
+    const m=String((error&&(error.message||error.details))||'');
+    if(m.indexOf('Cruce de empresa')<0)return false;
+    if(typeof toast==='function')toast('✗ No se guardó: mezcla de empresas',m.replace(/^.*?Cruce de empresa:\s*/,''),true);
+    return true;
+  }catch(e){return false;}
+}
+if(typeof window!=='undefined')window._avisoCandadoEmpresa=_avisoCandadoEmpresa;
+
 async function guardarDocumento(d){
   // Blindaje: la empresa del documento es la de su cliente (no la que
   // quedó en el formulario). Se fija también en la copia local.
@@ -583,11 +596,11 @@ async function guardarDocumento(d){
     const _numBase = (typeof SEFE_CONFIG!=='undefined' && SEFE_CONFIG.funciones && SEFE_CONFIG.funciones.numeroPorBase===true);
     if(_numBase) delete row.numero;
     const {data,error} = await sb.from('documentos').insert(row).select().single();
-    if(error){console.error('Error guardando documento:',error); d._nuevo=true; return false;}
+    if(error){console.error('Error guardando documento:',error); _avisoCandadoEmpresa(error); d._nuevo=true; return false;}
     d.id = data.id; if(_numBase && data.numero!=null) d.numero = data.numero; return true;
   } else {
     const {error} = await sb.from('documentos').update(row).eq('id', d.id);
-    if(error){console.error('Error actualizando documento:',error); return false;}
+    if(error){console.error('Error actualizando documento:',error); _avisoCandadoEmpresa(error); return false;}
     return true;
   }
 }
@@ -603,7 +616,7 @@ async function guardarAbono(documentoId, ab){
     empresa:ab.empresa
   };
   const {data,error} = await sb.from('abonos').insert(row).select().single();
-  if(error)console.error(error); else ab._id = data.id;
+  if(error){console.error(error); _avisoCandadoEmpresa(error);} else ab._id = data.id;
 }
 
 function mapParadaRutaFromDB(p){
@@ -670,11 +683,11 @@ async function guardarCompra(c){
     // esta marca para reconocer la copia local (su id es provisorio) y no
     // duplicarla. Se borra recién cuando la base confirma el id real.
     const {data,error} = await sb.from('compras').insert(row).select().single();
-    if(error){console.error('Error guardando compra:',error);}
+    if(error){console.error('Error guardando compra:',error); _avisoCandadoEmpresa(error);}
     else { c.id = data.id; delete c._nuevo; }
   } else {
     const {error} = await sb.from('compras').update(row).eq('id', c.id);
-    if(error)console.error('Error actualizando compra:',error);
+    if(error){console.error('Error actualizando compra:',error); _avisoCandadoEmpresa(error);}
   }
 }
 
@@ -695,7 +708,7 @@ async function guardarPagoProveedor(compraId, pago){
     cuenta_banco_id:pago.cuentaBancoId||null, empresa:pago.empresa
   };
   const {data,error} = await sb.from('pagos_proveedor').insert(row).select().single();
-  if(error){console.error('Error guardando pago a proveedor:',error);return false;}
+  if(error){console.error('Error guardando pago a proveedor:',error); _avisoCandadoEmpresa(error); return false;}
   pago._id = data.id; return true;
 }
 
@@ -812,11 +825,11 @@ async function guardarCotizacion(cot){
     const _numBase = (typeof SEFE_CONFIG!=='undefined' && SEFE_CONFIG.funciones && SEFE_CONFIG.funciones.numeroPorBase===true);
     if(_numBase) delete row.numero; // el número lo asigna la base (secuencia)
     const {data,error}=await sb.from('cotizaciones').insert(row).select().single();
-    if(error){console.error('Error guardando cotización:',error); cot._nuevo=true; return false;}
+    if(error){console.error('Error guardando cotización:',error); _avisoCandadoEmpresa(error); cot._nuevo=true; return false;}
     cot.id=data.id; if(_numBase && data.numero!=null) cot.numero=data.numero; return true;
   }else{
     const {error}=await sb.from('cotizaciones').update(row).eq('id',cot.id);
-    if(error){console.error('Error actualizando cotización:',error); return false;}
+    if(error){console.error('Error actualizando cotización:',error); _avisoCandadoEmpresa(error); return false;}
     return true;
   }
 }
@@ -848,7 +861,7 @@ async function guardarCredito(cr){
     empresa:(cr.empresa=empresaDeCliente(cr.clienteId)||cr.empresa||'SEFE') // blindaje: la del cliente
   };
   const {data,error}=await sb.from('creditos_cliente').insert(row).select().single();
-  if(error){console.error('Error guardando saldo a favor:',error);return false;}
+  if(error){console.error('Error guardando saldo a favor:',error); _avisoCandadoEmpresa(error); return false;}
   cr.id=data.id; cr._id=data.id; return true;
 }
 async function anularCreditoDB(cr){

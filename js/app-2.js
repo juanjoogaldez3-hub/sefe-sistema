@@ -1013,7 +1013,7 @@ $('#f-go').onclick=async()=>{
       if(prev.modo===newModo)aplicarStock(p,-(newQ-(prev.q||0)),newModo);
       else{aplicarStock(p,prev.q||0,prev.modo);aplicarStock(p,-newQ,newModo);}
     });
-    const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
+    const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedorDefaultDe(cli.empresa);
     const subVendEd=esVendedorCanal(vend?.nombre)?(cli.subVendedorNombre||null):null;
     Object.assign(f,{clienteId:cli.id,clienteNombre:cli.razonSocial||cli.nombre,clienteComercial:cli.nombre,clienteNit:cli.nit,vendedorId:vend.id,vendedorNombre:vend.nombre,subVendedorNombre:subVendEd,items:itemsPed,totales,ordenCompra:$('#f-oc').value,observaciones:$('#f-obs').value,notaInterna:$('#f-nota')?.value||'',nitFacturado:_nitPed.nit,nombreFacturado:_nitPed.nombre});
     toast('✓ Pedido actualizado',refPed(f)+' · inventario ajustado');
@@ -1022,7 +1022,7 @@ $('#f-go').onclick=async()=>{
     editId=null;editOldMap={};
   }else{
     cart.forEach(it=>{const p=productos.find(x=>x.id===it.id);if(p)aplicarStock(p,-it.cantidad,it.modoVenta);});
-    const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedores[0];
+    const vend=vendedores.find(v=>v.id===cli.vendedorId)||vendedorDefaultDe(cli.empresa);
     const subVend=esVendedorCanal(vend?.nombre)?(cli.subVendedorNombre||null):null;
     // Id temporal NEGATIVO: los ids reales de la base son positivos, así que un
     // temporal nunca puede coincidir con otro documento (evita facturar el equivocado).

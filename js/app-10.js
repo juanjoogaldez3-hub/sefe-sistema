@@ -863,7 +863,7 @@ function renderProvChips(){
 }
 function addProvProd(){
   const inp=$('#p-prov-add');const v=(inp.value||'').trim();if(!v)return;
-  const pv=proveedores.find(x=>x.nombre.toLowerCase()===v.toLowerCase());
+  const pv=deEmpresa(proveedores).find(x=>(x.nombre||'').toLowerCase()===v.toLowerCase()); // multiempresa
   if(!pv){toast('✗ Proveedor no encontrado','Seleccioná uno de la lista',true);return;}
   if(prodProvSel.includes(pv.id)){toast('Ese proveedor ya está asignado');inp.value='';return;}
   prodProvSel.push(pv.id);inp.value='';renderProvChips();
@@ -1622,7 +1622,7 @@ function procesarCobro(id){
      <div class="row"><div><label>No. de recibo</label><input id="ab-recibo" value="${c.noRecibo||''}"></div><div><label>Fecha</label><input id="ab-fecha" type="date" value="${c.fecha?c.fecha.slice(0,10):hoy}"></div></div>
      <div class="row"><div><label>Monto del abono</label><input id="ab-monto" type="number" step="0.01" value="${c.monto.toFixed(2)}"></div><div><label>Método</label><select id="ab-met"><option ${metodoCobro==='Efectivo'?'selected':''}>Efectivo</option><option>Transferencia</option><option ${metodoCobro==='Cheque'?'selected':''}>Cheque</option><option>Depósito</option><option>Tarjeta</option></select></div></div>
      <div class="row"><div><label>Referencia / No. boleta / cheque</label><input id="ab-ref" value="${refDefault}"></div></div>
-     <div class="row">${selectorCuentaBancoHTML('ab-cuenta','¿A qué cuenta entró el dinero?')}</div>
+     <div class="row">${selectorCuentaBancoHTML('ab-cuenta','¿A qué cuenta entró el dinero?',null,d.empresa||'SEFE')}</div>
      ${compFotoHTML()}
      <div class="note n-danger" id="ab-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>{

@@ -46,6 +46,7 @@ function dividirCompraUI(){
 window.dividirCompraUI=dividirCompraUI;
 function registrarCompraDividida(facturas){
   const prov=proveedores.find(p=>p.id===Number($('#co-prov')?.value)); if(!prov)return;
+  if(avisarCruceEmpresa(compraCart,prov.empresa||'SEFE','esta compra'))return; // multiempresa
   const fecha=$('#co-fecha')?.value?new Date($('#co-fecha').value+'T12:00:00').toISOString():new Date().toISOString();
   const ref=($('#co-doc')?.value||'').trim();
   const creadas=[];
