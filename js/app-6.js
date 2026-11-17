@@ -97,6 +97,7 @@ function renderPorPagar(){
         <input type="checkbox" ${_ppEstados.has(v)?'checked':''} onchange="togglePpEstado('${v}')" style="width:auto;margin:0">${l}</label>`).join('')}</div>
     </div>
     <select onchange="setPpPeriodo(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:180px"><option value="">Todo el tiempo</option>${[['mes','Este mes'],['mesant','Mes anterior'],['2m','Últimos 2 meses'],['3m','Últimos 3 meses']].map(([v,l])=>`<option value="${v}"${_ppPeriodo===v?' selected':''}>${l}</option>`).join('')}</select>
+    ${canRegistrarAbono()?`<button class="btn btn-primary btn-sm" onclick="openPagoVariasProv(_ppProv)"><svg viewBox="0 0 24 24" style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Pagar varias facturas</button>`:''}
     <button class="btn btn-ghost btn-sm" onclick="exportarPorPagarExcel()"><svg viewBox="0 0 24 24" style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Excel</button>
   </div>`;
   let info=_ppProv?todas.filter(x=>String(x.c.proveedorId)===String(_ppProv)):todas;
@@ -130,45 +131,163 @@ function _metodoLblProv(m){
   const M={efectivo:'Efectivo',cheque:'Cheque',transferencia:'Transferencia',deposito:'Depósito',tarjeta:'Tarjeta'};
   return M[m]||(String(m).charAt(0).toUpperCase()+String(m).slice(1));
 }
-// Pestaña "Pagos realizados": lista todos los pagos hechos a proveedores (abonos de compras).
+// ══════════ COMPROBANTES DE EGRESO (varias facturas, un solo pago) ══════════
+// Cuando con UN cheque/transferencia se pagan varias facturas de un proveedor,
+// cada factura lleva su propio pago, pero todos comparten el mismo No. de
+// comprobante de egreso. La clave que los une: mismo proveedor + mismo
+// comprobante + misma fecha + misma cuenta. Sin comprobante → pago suelto.
+function _normEG(s){return String(s||'').trim().toUpperCase();}
+function _clavePagoProv(c,a){
+  const r=_normEG(a&&a.noRecibo);
+  if(!r||r==='—'||r==='-'||(a&&a.esCierre))return null;
+  const cta=a.cuentaBancoId?String(Number(a.cuentaBancoId)):'';
+  return [c.proveedorId||'',r,String(a.fecha||'').slice(0,10),cta].join('|');
+}
+// Todos los pagos (no anulados) que salieron en el mismo comprobante que (c,a).
+function _grupoPagoProv(c,a){
+  const solo=[{c,a,idx:(c.abonos||[]).indexOf(a)}];
+  const k=_clavePagoProv(c,a);
+  if(!k)return solo;
+  const out=[];
+  compras.forEach(x=>{
+    if(String(x.proveedorId)!==String(c.proveedorId))return;
+    (x.abonos||[]).forEach((b,idx)=>{ if(!b.anulado&&_clavePagoProv(x,b)===k)out.push({c:x,a:b,idx}); });
+  });
+  return out.length?out:solo;
+}
+window._grupoPagoProv=_grupoPagoProv;
+// El movimiento de banco ÚNICO de un comprobante (salida por el total).
+// Null si no hay (p.ej. pagos viejos registrados uno por uno, cada uno con el suyo).
+function _movDeGrupoProv(items){
+  if(typeof movimientosBanco==='undefined'||!items.length)return null;
+  const a0=items[0].a; if(!a0.cuentaBancoId)return null;
+  const cta=Number(a0.cuentaBancoId);
+  const ids=new Set(items.map(x=>Number(x.c.id)));
+  const total=items.reduce((s,x)=>s+Number(x.a.monto||0),0);
+  return movimientosBanco.find(m=>!m.anulado&&m.origen==='pago_proveedor'&&ids.has(Number(m.origenId))&&Number(m.cuentaId)===cta&&Math.abs(Number(m.monto)-total)<0.01)||null;
+}
+// Próximo comprobante de egreso: el mayor EG-#### ya usado (aunque esté
+// anulado) + 1. Antes se contaban los pagos, y al anular uno se repetía número.
+function _sugerirEgreso(){
+  let max=0;
+  compras.forEach(x=>(x.abonos||[]).forEach(b=>{const m=/^EG-?0*(\d+)$/i.exec(String(b.noRecibo||'').trim());if(m)max=Math.max(max,parseInt(m[1],10));}));
+  return 'EG-'+String(max+1).padStart(4,'0');
+}
+function _escPP(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+function _docCompra(c){return c.docProv||('CMP-'+padn(c.id));}
+
+let _ppBuscar='',_ppGrupos=[],_ppGruposVis=[];
+// Pestaña "Pagos realizados": un renglón por COMPROBANTE (si un cheque pagó
+// 3 facturas, sale una sola fila con las 3), con buscador.
 function renderPpPagos(){
   const _dw=$('#pp-deuda-wrap'),_pw=$('#pp-pagos-wrap'),_tt=$('#pp-title');
   if(_dw)_dw.style.display='none'; if(_pw)_pw.style.display=''; if(_tt)_tt.textContent='Pagos realizados a proveedores';
   // Aplanar los abonos (pagos) de las compras no anuladas de la empresa activa
   const comprasEmp=deEmpresa(compras).filter(c=>!c.anulado); // multiempresa
   let pagos=[];
-  comprasEmp.forEach(c=>(c.abonos||[]).forEach(a=>{ if(!a.anulado) pagos.push({c,a}); }));
-  // Filtros: proveedor + período (reusa el estado _ppProv/_ppPeriodo)
+  comprasEmp.forEach(c=>(c.abonos||[]).forEach((a,idx)=>{ if(!a.anulado) pagos.push({c,a,idx}); }));
+  // Filtros: proveedor + período (reusa el estado _ppProv/_ppPeriodo) + buscador
   const provIds=[...new Set(comprasEmp.map(c=>c.proveedorId))];
   const opts=provIds.map(id=>{const p=proveedores.find(v=>v.id===id);return {v:String(id),l:(p&&p.nombre)||'Sin proveedor'};}).sort((a,b)=>a.l.localeCompare(b.l,'es'));
   const fil=$('#pp-filtros');
   if(fil)fil.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <input id="pp-buscar" type="search" value="${_escPP(_ppBuscar)}" oninput="_ppBuscar=this.value;_ppPagosTabla()" placeholder="Buscar comprobante, cheque, factura o proveedor" style="font-size:12.5px;padding:6px 10px;min-width:240px;flex:1;max-width:340px">
     <select onchange="setPpProv(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:220px"><option value="">Todos los proveedores</option>${opts.map(o=>`<option value="${o.v}"${_ppProv===o.v?' selected':''}>${o.l}</option>`).join('')}</select>
     <select onchange="setPpPeriodo(this.value)" style="font-size:12.5px;padding:6px 10px;max-width:180px"><option value="">Todo el tiempo</option>${[['mes','Este mes'],['mesant','Mes anterior'],['2m','Últimos 2 meses'],['3m','Últimos 3 meses']].map(([v,l])=>`<option value="${v}"${_ppPeriodo===v?' selected':''}>${l}</option>`).join('')}</select>
     <button class="btn btn-ghost btn-sm" onclick="exportarPagosProvExcel()"><svg viewBox="0 0 24 24" style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Excel</button>
   </div>`;
   if(_ppProv)pagos=pagos.filter(p=>String(p.c.proveedorId)===String(_ppProv));
   if(_ppPeriodo)pagos=pagos.filter(p=>ppEnPeriodo(p.a.fecha));
+  const _fd=f=>(typeof _fechaDe==='function')?_fechaDe(f):new Date(f);
+  // Agrupar por comprobante
+  const mapa=new Map(); const grupos=[];
+  pagos.forEach((p,i)=>{
+    const k=_clavePagoProv(p.c,p.a)||('suelto|'+i);
+    let g=mapa.get(k);
+    if(!g){g={key:k,fecha:p.a.fecha,noRecibo:p.a.noRecibo||'',proveedor:p.c.proveedorNombre||'',metodo:p.a.metodo,referencia:p.a.referencia||'',registradoPor:p.a.registradoPor||'',total:0,items:[]};mapa.set(k,g);grupos.push(g);}
+    g.items.push(p); g.total+=Number(p.a.monto||0);
+  });
+  grupos.sort((a,b)=>(_fd(b.fecha)||0)-(_fd(a.fecha)||0));
+  _ppGrupos=grupos;
   const totalPagado=pagos.reduce((s,p)=>s+Number(p.a.monto||0),0);
   const hoy=new Date(fechaHoyGT()+'T00:00:00'); const iniMes=new Date(hoy.getFullYear(),hoy.getMonth(),1);
-  const _fd=f=>(typeof _fechaDe==='function')?_fechaDe(f):new Date(f);
   const pagadoMes=pagos.filter(p=>{const f=_fd(p.a.fecha);return f&&!isNaN(f)&&f>=iniMes;}).reduce((s,p)=>s+Number(p.a.monto||0),0);
   const provsPag=new Set(pagos.map(p=>p.c.proveedorId)).size;
   const k=[
-    {ic:'i-green',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>',lbl:'Total pagado',val:money(totalPagado),sub:pagos.length+' pagos'},
+    {ic:'i-green',svg:'<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>',lbl:'Total pagado',val:money(totalPagado),sub:grupos.length+' comprobante'+(grupos.length!==1?'s':'')+' · '+pagos.length+' factura'+(pagos.length!==1?'s':'')},
     {ic:'i-blue',svg:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Pagado este mes',val:money(pagadoMes),sub:'mes en curso'},
     {ic:'i-lime',svg:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',lbl:'Proveedores pagados',val:provsPag,sub:'distintos'},
   ];
   $('#pp-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
-  pagos.sort((a,b)=>(_fd(b.a.fecha)||0)-(_fd(a.a.fecha)||0));
-  $('#pp-pagos-empty').style.display=pagos.length?'none':'block';
-  _ppPagosExport=pagos.map(p=>({Fecha:fdate(p.a.fecha),Compra:'CMP-'+padn(p.c.id),Proveedor:p.c.proveedorNombre,Factura:p.c.docProv||'',Metodo:_metodoLblProv(p.a.metodo),Referencia:p.a.referencia||p.a.noRecibo||'',Registro:p.a.registradoPor||'',Monto:Number(p.a.monto||0)}));
-  $('#t-pp-pagos').innerHTML=pagos.map(p=>{const c=p.c,a=p.a;
-    return `<tr><td style="color:var(--muted)">${fdate(a.fecha)}</td><td style="font-weight:600">CMP-${padn(c.id)}</td><td>${c.proveedorNombre}</td><td style="color:var(--blue)">${c.docProv||'—'}</td><td>${_metodoLblProv(a.metodo)}</td><td style="color:var(--muted)">${a.referencia||a.noRecibo||'—'}</td><td style="color:var(--muted)">${a.registradoPor||'—'}</td><td class="num" style="font-weight:700;color:var(--ok)">${money(a.monto)}</td></tr>`;
-  }).join('');
-  enhanceTable('t-pp-pagos');
+  _ppPagosTabla();
 }
 window.renderPpPagos=renderPpPagos;
+// Sólo la tabla (para que el buscador no le quite el foco al campo al escribir).
+function _ppPagosTabla(){
+  const q=String(_ppBuscar||'').trim().toLowerCase();
+  const vis=q?_ppGrupos.filter(g=>{
+    const txt=[g.noRecibo,g.referencia,g.proveedor,g.registradoPor,money(g.total),String(Math.round(g.total*100)/100)]
+      .concat(g.items.map(p=>(p.c.docProv||'')+' CMP-'+padn(p.c.id)+' '+String(p.a.monto)))
+      .join(' ').toLowerCase();
+    return txt.includes(q);
+  }):_ppGrupos;
+  _ppGruposVis=vis;
+  const emp=$('#pp-pagos-empty');
+  if(emp){emp.style.display=vis.length?'none':'block';emp.textContent=q?'Ningún pago coincide con la búsqueda.':'No hay pagos registrados.';}
+  // Excel: una fila por FACTURA pagada, con su comprobante (lo que pide contabilidad)
+  _ppPagosExport=[];
+  vis.forEach(g=>g.items.forEach(p=>_ppPagosExport.push({Fecha:fdate(p.a.fecha),Comprobante:p.a.noRecibo||'',Compra:'CMP-'+padn(p.c.id),Proveedor:p.c.proveedorNombre,Factura:p.c.docProv||'',Metodo:_metodoLblProv(p.a.metodo),Referencia:p.a.referencia||'',Registro:p.a.registradoPor||'',Monto:Number(p.a.monto||0)})));
+  $('#t-pp-pagos').innerHTML=vis.map((g,i)=>{
+    const n=g.items.length;
+    const fact=n>1
+      ?`<b style="color:var(--ink)">${n} facturas</b><div style="font-size:11px;color:var(--muted)">${g.items.map(p=>_escPP(_docCompra(p.c))).join(', ')}</div>`
+      :`${_escPP(g.items[0].c.docProv||'—')}<div style="font-size:11px;color:var(--muted)">CMP-${padn(g.items[0].c.id)}</div>`;
+    return `<tr style="cursor:pointer" onclick="verPagoProvGrupo(${i})"><td style="color:var(--muted)">${fdate(g.fecha)}</td><td style="font-weight:700;color:var(--green)">${_escPP(g.noRecibo)||'—'}</td><td>${_escPP(g.proveedor)}</td><td style="color:var(--blue)">${fact}</td><td>${_metodoLblProv(g.metodo)}</td><td style="color:var(--muted)">${_escPP(g.referencia)||'—'}</td><td style="color:var(--muted)">${_escPP(g.registradoPor)||'—'}</td><td class="num" style="font-weight:700;color:var(--ok)">${money(g.total)}</td><td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();verPagoProvGrupo(${i})">Ver</button></td></tr>`;
+  }).join('');
+  enhanceTable('t-pp-pagos',{noSearch:true}); // ya tiene su propio buscador arriba
+}
+window._ppPagosTabla=_ppPagosTabla;
+// Detalle de un comprobante: qué facturas pagó, cuánto a cada una, su póliza.
+function verPagoProvGrupo(i){
+  const g=_ppGruposVis[i]; if(!g)return;
+  const it0=g.items[0];
+  const items=_grupoPagoProv(it0.c,it0.a); // al día (incluye otras empresas/períodos del mismo comprobante)
+  const total=items.reduce((s,x)=>s+Number(x.a.monto||0),0);
+  const mv=_movDeGrupoProv(items)||(items.length===1&&typeof movimientosBanco!=='undefined'?movimientosBanco.find(m=>!m.anulado&&m.origen==='pago_proveedor'&&Number(m.origenId)===Number(it0.c.id)&&Math.abs(Number(m.monto)-Number(it0.a.monto))<0.01):null);
+  const conFoto=items.find(x=>x.a.comprobante);
+  const fila=(l,v)=>`<tr><td style="color:var(--muted);padding:3px 0">${l}</td><td style="text-align:right;font-weight:600">${v}</td></tr>`;
+  const filas=items.map(x=>{const ai=apInfo(x.c);return `<tr><td style="padding:6px 0;font-weight:600;color:var(--blue)">${_escPP(x.c.docProv||'—')}</td><td style="padding:6px 0;color:var(--muted)">CMP-${padn(x.c.id)}</td><td class="num" style="padding:6px 0;font-weight:700;text-align:right">${money(x.a.monto)}</td><td class="num" style="padding:6px 0;color:var(--muted);text-align:right">${money(ai.saldo)}</td><td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="closeMod();verCompra(${x.c.id})">Ver →</button></td></tr>`;}).join('');
+  const cta=it0.a.cuentaBancoId?cuentasBanco.find(c=>Number(c.id)===Number(it0.a.cuentaBancoId)):null;
+  openMod('Comprobante '+(it0.a.noRecibo||'de pago'),
+    `<div style="background:var(--surface-2);border-radius:10px;padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-family:monospace;font-weight:700;font-size:15px;color:#1a7f37">${_escPP(it0.a.noRecibo)||'Sin comprobante'}</span>
+        <span class="badge b-ok">${items.length>1?items.length+' facturas':'1 factura'}</span>
+      </div>
+      <table style="width:100%;font-size:13px">
+        ${fila('Proveedor',_escPP(it0.c.proveedorNombre))}
+        ${fila('Fecha',fdate(it0.a.fecha))}
+        ${fila('Total pagado',`<span style="color:#1a7f37">${money(total)}</span>`)}
+        ${fila('Método',_metodoLblProv(it0.a.metodo))}
+        ${it0.a.referencia?fila('No. cheque / autorización',_escPP(it0.a.referencia)):''}
+        ${cta?fila('Cuenta',_escPP(cuentaLabel(cta))):''}
+        ${mv&&mv.poliza?fila('Póliza','POL-'+String(mv.poliza).padStart(6,'0')):''}
+        ${it0.a.registradoPor?fila('Registrado por',_escPP(it0.a.registradoPor)):''}
+      </table>
+    </div>
+    <div style="overflow-x:auto;margin-top:12px"><table style="width:100%;min-width:420px;font-size:13px">
+      <thead><tr><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Factura</th><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Compra</th><th style="text-align:right;font-size:10.5px;color:var(--muted-2)">Pagado</th><th style="text-align:right;font-size:10.5px;color:var(--muted-2)">Saldo hoy</th><th></th></tr></thead>
+      <tbody>${filas}</tbody>
+    </table></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">
+      ${conFoto?`<button class="btn btn-ghost btn-sm" onclick="verComprobante('compra',${conFoto.c.id},${conFoto.idx})">📷 Ver comprobante</button>`:''}
+      ${mv&&mv.poliza&&typeof polizaChequeUI==='function'?`<button class="btn btn-ghost btn-sm" onclick="polizaChequeUI(${mv.id})">🧾 Póliza</button>`:''}
+      ${canAnular()?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="anularPagoProv(${it0.c.id},${it0.idx})">${items.length>1?'Anular comprobante':'Anular pago'}</button>`:''}
+    </div>`,
+    ()=>closeMod());
+  $('#m-save').textContent='Cerrar';$('#m-save').className='btn btn-ghost';
+}
+window.verPagoProvGrupo=verPagoProvGrupo;
 async function exportarPagosProvExcel(){
   if(!_ppPagosExport.length){toast('Sin datos para exportar',null,true);return;}
   try{
@@ -1425,9 +1544,8 @@ function openAbonoProv(id){
   if(!canRegistrarAbono()){toast('Sin permiso','Solo Admin y Contabilidad registran pagos',true);return;}
   _compFoto=null;
   const c=compras.find(x=>x.id===id);const ai=apInfo(c);const saldo=ai.saldo;const hoy=fechaHoyGT();
-  // Sugerir número de recibo de egreso
-  const totalPagos=compras.reduce((s,x)=>s+(x.abonos||[]).filter(a=>!a.anulado).length,0);
-  const recSugerido='EG-'+String(totalPagos+1).padStart(4,'0');
+  // Sugerir número de comprobante de egreso (el mayor usado + 1)
+  const recSugerido=_sugerirEgreso();
   openMod('Registrar pago · CMP-'+padn(c.id),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${c.proveedorNombre} · Saldo pendiente: <b style="color:var(--ink)">${money(saldo)}</b></p>
      <div class="row"><div><label>Monto del pago</label><input id="pp-monto" type="number" step="0.01" value="${saldo.toFixed(2)}"></div><div><label>Fecha</label><input id="pp-fecha" type="date" value="${hoy}"></div></div>
@@ -1468,9 +1586,20 @@ function histPagosProv(id){
     }
     return `${a.metodo||''}${a.referencia?' · '+a.referencia:''}${a.registradoPor?`<div style="color:var(--muted-2)">por ${a.registradoPor}</div>`:''}`;
   };
+  // Pago hecho en un comprobante junto con otras facturas: decirlo, y que la
+  // foto (guardada sólo en uno de los pagos) se pueda ver desde cualquiera.
+  const conj=a=>{
+    const g=_grupoPagoProv(c,a); if(g.length<2)return '';
+    const otras=g.filter(x=>x.c.id!==c.id).map(x=>_escPP(_docCompra(x.c))).join(', ');
+    return `<div style="color:var(--blue)">Comprobante conjunto · ${money(g.reduce((s,x)=>s+Number(x.a.monto||0),0))} en ${g.length} facturas${otras?' (también '+otras+')':''}</div>`;
+  };
+  const fotoDe=(a,i)=>{
+    if(a.comprobante)return {id:c.id,idx:i};
+    const x=_grupoPagoProv(c,a).find(y=>y.a.comprobante); return x?{id:x.c.id,idx:x.idx}:null;
+  };
   const rows=(c.abonos||[]).map((a,i)=>{
     if(a.anulado)return `<tr style="opacity:.5"><td style="color:var(--muted)">${fdate(a.fecha)}</td><td style="font-weight:600;color:var(--danger)">${a.noRecibo||'—'} · ANULADO</td><td class="num" style="text-decoration:line-through">${money(a.monto)}</td><td style="color:var(--muted);font-size:11.5px">${det(a)}<div style="color:var(--danger)">Motivo: ${a.motivoAnulacion||'—'}</div></td><td></td></tr>`;
-    return `<tr><td style="color:var(--muted)">${fdate(a.fecha)}</td><td style="font-weight:600;color:var(--green)">${a.noRecibo||'—'}</td><td class="num" style="font-weight:600">${money(a.monto)}</td><td style="color:var(--muted);font-size:11.5px">${det(a)}</td><td style="white-space:nowrap;text-align:right">${a.comprobante?`<button class="btn btn-ghost btn-sm" onclick="verComprobante('compra',${id},${i})">📷 Ver</button>`:''}${canAnular()?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="anularPagoProv(${id},${i})">Anular</button>`:''}</td></tr>`;
+    return `<tr><td style="color:var(--muted)">${fdate(a.fecha)}</td><td style="font-weight:600;color:var(--green)">${a.noRecibo||'—'}</td><td class="num" style="font-weight:600">${money(a.monto)}</td><td style="color:var(--muted);font-size:11.5px">${det(a)}${conj(a)}</td><td style="white-space:nowrap;text-align:right">${(f=>f?`<button class="btn btn-ghost btn-sm" onclick="verComprobante('compra',${f.id},${f.idx})">📷 Ver</button>`:'')(fotoDe(a,i))}${canAnular()?`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="anularPagoProv(${id},${i})">Anular</button>`:''}</td></tr>`;
   }).join('');
   openMod('Historial de pagos · CMP-'+padn(c.id),
     `<p style="font-size:12.5px;color:var(--muted);margin-bottom:13px">${c.proveedorNombre} · Total ${money(c.total)} · Abonado ${money(ai.abon)} · Saldo <b style="color:var(--ink)">${money(ai.saldo)}</b></p>
@@ -1499,33 +1628,180 @@ function _anularSalidaBancoDePagoProv(c,a){
   return mv;
 }
 window._anularSalidaBancoDePagoProv=_anularSalidaBancoDePagoProv;
+// ══════════ PAGAR VARIAS FACTURAS CON UN SOLO COMPROBANTE ══════════
+// Igual al "pago global" de Cobros, pero para proveedores: se elige el
+// proveedor, se reparte el monto entre sus facturas pendientes, y se llena UNA
+// vez el comprobante, el cheque/transferencia y la cuenta. Queda un pago por
+// factura (todos con el mismo comprobante) y UN SOLO movimiento de banco por el
+// total: una póliza por cheque, igual que en el estado de cuenta del banco.
+function _pgpPendientes(provId){
+  return deEmpresa(compras)
+    .filter(c=>c.facturada&&c.tipoPago==='credito'&&!c.anulado&&String(c.proveedorId)===String(provId)&&apInfo(c).saldo>0.001)
+    .sort((a,b)=>String(a.vencimiento||a.fecha||'').localeCompare(String(b.vencimiento||b.fecha||'')));
+}
+function openPagoVariasProv(provPre){
+  if(!canRegistrarAbono()){toast('Sin permiso','Solo Admin y Contabilidad registran pagos',true);return;}
+  const pend=deEmpresa(compras).filter(c=>c.facturada&&c.tipoPago==='credito'&&!c.anulado&&apInfo(c).saldo>0.001);
+  const provIds=[...new Set(pend.map(c=>String(c.proveedorId)))];
+  if(!provIds.length){toast('No hay facturas pendientes de pago',null,true);return;}
+  _compFoto=null;
+  const opts=provIds.map(id=>{const p=proveedores.find(v=>String(v.id)===id);const n=pend.filter(c=>String(c.proveedorId)===id).length;return {v:id,l:((p&&p.nombre)||'Sin proveedor')+' ('+n+')'};}).sort((a,b)=>a.l.localeCompare(b.l,'es'));
+  const pre=provPre&&provIds.includes(String(provPre))?String(provPre):'';
+  openMod('Pagar varias facturas · un solo comprobante',
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">Para cuando un mismo cheque o transferencia paga varias facturas del proveedor. Cada factura queda con su pago y en Bancos sale <b>un solo movimiento</b> por el total.</p>
+     <div class="row"><div><label>Proveedor</label><select id="pgp-prov" onchange="_pgpRender()"><option value="">— Elegí el proveedor —</option>${opts.map(o=>`<option value="${o.v}"${pre===o.v?' selected':''}>${_escPP(o.l)}</option>`).join('')}</select></div></div>
+     <div id="pgp-lista"></div>
+     <div id="pgp-datos" style="display:none">
+       <div class="row"><div><label>Fecha</label><input id="pgp-fecha" type="date" value="${fechaHoyGT()}"></div><div><label>No. de comprobante de egreso</label><input id="pgp-recibo" value="${_sugerirEgreso()}"></div></div>
+       <div class="row"><div><label>Método</label><select id="pgp-met"><option>Transferencia</option><option>Cheque</option><option>Efectivo</option><option>Depósito</option></select></div><div><label>No. cheque / autorización / transferencia</label><input id="pgp-ref" placeholder="Según la forma de pago"></div></div>
+       <div class="row" id="pgp-cta-row"></div>
+       ${compFotoHTML()}
+     </div>
+     <div class="note n-danger" id="pgp-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
+    _guardarPagoVariasProv);
+  $('#ov').classList.add('modal-wide');
+  $('#m-save').textContent='Registrar pago';
+  if(pre)_pgpRender();
+}
+window.openPagoVariasProv=openPagoVariasProv;
+function _pgpRender(){
+  const prov=$('#pgp-prov')?.value; const box=$('#pgp-lista'), datos=$('#pgp-datos');
+  if(!box||!datos)return;
+  const e=$('#pgp-err');if(e)e.style.display='none';
+  if(!prov){box.innerHTML='';datos.style.display='none';return;}
+  const lista=_pgpPendientes(prov);
+  const emp=(lista[0]&&lista[0].empresa)||empresaParaNuevo();
+  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px">
+      <div style="font-size:12px;color:var(--muted)">${lista.length} factura${lista.length!==1?'s':''} pendiente${lista.length!==1?'s':''}. Poné cuánto se paga de cada una.</div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="_pgpTodo()">Pagar todo</button></div>
+    <div style="overflow:auto;max-height:300px;border:1px solid var(--line);border-radius:10px">
+    <table style="width:100%;min-width:520px;font-size:13px"><thead><tr><th>Factura</th><th>Compra</th><th>Vence</th><th style="text-align:right">Saldo</th><th style="text-align:right">A pagar</th><th></th></tr></thead><tbody>
+    ${lista.map(c=>{const ai=apInfo(c);return `<tr><td style="font-weight:600;color:var(--blue)">${_escPP(c.docProv||'—')}</td><td>CMP-${padn(c.id)}</td><td style="color:${ai.vencido?'var(--danger)':'var(--muted)'}">${fdate(c.vencimiento)}</td><td class="num">${money(ai.saldo)}</td>
+      <td style="text-align:right"><input class="pgp-monto" type="number" step="0.01" min="0" data-id="${c.id}" data-saldo="${ai.saldo.toFixed(2)}" placeholder="0.00" oninput="_pgpTotal()" style="width:110px;text-align:right;padding:5px 8px"></td>
+      <td style="text-align:right"><button type="button" class="btn btn-ghost btn-sm" onclick="_pgpUna(${c.id})">Todo</button></td></tr>`;}).join('')}
+    </tbody></table></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;align-items:baseline;margin:10px 2px 12px"><span id="pgp-nfact" style="font-size:12px;color:var(--muted)"></span><span style="font-size:12px;color:var(--muted)">Total del comprobante</span><span id="pgp-total" style="font-size:20px;font-weight:800">${money(0)}</span></div>`;
+  const row=$('#pgp-cta-row');
+  if(row)row.innerHTML=selectorCuentaBancoHTML('pgp-cuenta','¿De qué cuenta salió el dinero?',null,emp);
+  datos.style.display='';
+  _pgpTotal();
+}
+window._pgpRender=_pgpRender;
+function _pgpTotal(){
+  const ins=Array.from(document.querySelectorAll('#pgp-lista .pgp-monto'));
+  const conMonto=ins.filter(i=>Number(i.value)>0);
+  const tot=conMonto.reduce((s,i)=>s+Number(i.value),0);
+  const t=$('#pgp-total');if(t)t.textContent=money(Math.round(tot*100)/100);
+  const n=$('#pgp-nfact');if(n)n.textContent=conMonto.length?conMonto.length+' factura'+(conMonto.length!==1?'s':'')+' ·':'';
+}
+window._pgpTotal=_pgpTotal;
+window._pgpTodo=function(){document.querySelectorAll('#pgp-lista .pgp-monto').forEach(i=>{i.value=i.dataset.saldo;});_pgpTotal();};
+window._pgpUna=function(id){const i=document.querySelector('#pgp-lista .pgp-monto[data-id="'+id+'"]');if(i){i.value=i.dataset.saldo;_pgpTotal();}};
+async function _guardarPagoVariasProv(){
+  const err=t=>{const e=$('#pgp-err');if(!e)return;e.style.display='flex';e.querySelector('span').textContent=t;};
+  const provId=$('#pgp-prov')?.value; if(!provId)return err('Elegí el proveedor');
+  const inputs=Array.from(document.querySelectorAll('#pgp-lista .pgp-monto')).filter(i=>Number(i.value)>0);
+  if(!inputs.length)return err('Poné el monto a pagar en al menos una factura');
+  const items=[];
+  for(const inp of inputs){
+    const c=compras.find(x=>x.id===Number(inp.dataset.id)); if(!c)continue;
+    const monto=Math.round(Number(inp.value)*100)/100; const saldo=apInfo(c).saldo;
+    if(monto>saldo+0.001)return err('El pago de '+_docCompra(c)+' supera su saldo ('+money(saldo)+')');
+    items.push({c,monto});
+  }
+  if(!items.length)return err('Poné el monto a pagar en al menos una factura');
+  if(new Set(items.map(x=>x.c.empresa||'SEFE')).size>1)return err('Las facturas son de empresas distintas: pagá las de cada empresa por separado');
+  const noRec=($('#pgp-recibo')?.value||'').trim();
+  if(!noRec)return err('Poné el número de comprobante de egreso');
+  // El comprobante es lo que une a las facturas: no puede repetirse con otro pago.
+  if(compras.some(x=>(x.abonos||[]).some(b=>!b.anulado&&_normEG(b.noRecibo)===_normEG(noRec))))
+    return err('El comprobante '+noRec+' ya se usó en otro pago. Usá otro número (sugerido: '+_sugerirEgreso()+').');
+  const fecha=$('#pgp-fecha')?.value||fechaHoyGT();
+  const metodo=$('#pgp-met')?.value||'';
+  const ref=($('#pgp-ref')?.value||'').trim();
+  const cuenta=$('#pgp-cuenta')?.value||null;
+  const foto=_compFoto; const ahora=new Date().toISOString();
+  // Guardar los pagos uno por uno y esperar cada confirmación. Si uno falla se
+  // para ahí, y el banco registra sólo lo que de verdad quedó guardado.
+  const guardados=[];
+  for(const it of items){
+    const pago={fecha,monto:it.monto,metodo,referencia:ref,noRecibo:noRec,
+      comprobante:guardados.length?null:foto, // la foto va una vez (en el primero), no repetida
+      cuentaBancoId:cuenta,registradoPor:currentUser,registradoEl:ahora,anulado:false,empresa:it.c.empresa||empresaParaNuevo()};
+    let ok=true;
+    if(typeof guardarPagoProveedor==='function')ok=await guardarPagoProveedor(it.c.id,pago);
+    if(ok===false)break;
+    it.c.abonos=it.c.abonos||[]; it.c.abonos.push(pago); guardados.push({c:it.c,pago});
+  }
+  if(!guardados.length)return err('No se pudo guardar el pago. Revisá tu conexión e intentá de nuevo.');
+  const total=Math.round(guardados.reduce((s,g)=>s+g.pago.monto,0)*100)/100;
+  const prov=guardados[0].c.proveedorNombre||'';
+  const facts=guardados.map(g=>_docCompra(g.c)).join(', ');
+  if(cuenta&&typeof registrarMovimientoBanco==='function'){
+    registrarMovimientoBanco({cuentaId:cuenta,tipo:'salida',monto:total,
+      concepto:'Pago a '+prov+' · '+noRec+' · Facturas '+facts,
+      categoria:'proveedor',origen:'pago_proveedor',origenId:guardados[0].c.id,referencia:ref||null,fecha,beneficiario:prov});
+  }
+  logAudit('Pago a proveedor (varias facturas)',noRec+' · '+prov+' · '+money(total)+' · '+guardados.length+' factura'+(guardados.length!==1?'s':'')+': '+facts+(cuenta?'':' · SIN cuenta de banco'));
+  closeMod();renderPorPagar();renderCompras();
+  if(typeof renderBancos==='function'){try{renderBancos();}catch(e){}}
+  const _det=noRec+' · '+money(total)+' en '+guardados.length+' factura'+(guardados.length!==1?'s':'');
+  if(guardados.length<items.length){
+    const falt=items.slice(guardados.length).map(x=>_docCompra(x.c)).join(', ');
+    toast('⚠ Pago registrado a medias',_det+'. NO se guardó: '+falt+'. Registralas aparte.',true);
+  }else if(!cuenta&&cuentasActivasBanco().length){
+    toast('✓ Pago registrado · sin cuenta',_det+'. No se registró en Bancos porque no se eligió cuenta.');
+  }else toast('✓ Pago registrado',_det);
+}
+
 function anularPagoProv(compraId,idx){
   if(!canAnular()){toast('Sin permiso','Tu rol no puede anular',true);return;}
   const c=compras.find(x=>x.id===compraId);if(!c)return;
   const a=c.abonos[idx];if(!a||a.anulado)return;
-  openMod('Anular pago · '+(a.noRecibo||''),
-    `<div class="note n-danger" style="margin-bottom:13px"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>El pago de ${money(a.monto)} se marcará como anulado y el saldo de la cuenta por pagar aumentará.</span></div>
+  // Si el pago salió en un comprobante junto con otras facturas, se anula el
+  // comprobante COMPLETO (un cheque vale entero o no vale): todas las facturas
+  // vuelven a quedar con saldo y se anula su movimiento de banco.
+  const grupo=_grupoPagoProv(c,a);
+  const varios=grupo.length>1;
+  const total=grupo.reduce((s,x)=>s+Number(x.a.monto||0),0);
+  const lista=varios?`<div style="overflow-x:auto;margin-bottom:12px"><table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Factura</th><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Compra</th><th style="text-align:right;font-size:10.5px;color:var(--muted-2)">Monto</th></tr></thead><tbody>${grupo.map(x=>`<tr><td style="padding:4px 0;font-weight:600">${_escPP(x.c.docProv||'—')}</td><td style="color:var(--muted)">CMP-${padn(x.c.id)}</td><td class="num" style="text-align:right">${money(x.a.monto)}</td></tr>`).join('')}</tbody><tfoot><tr><td colspan="2" style="padding-top:6px;font-weight:700;border-top:1px solid var(--line)">Total</td><td class="num" style="padding-top:6px;font-weight:800;border-top:1px solid var(--line);text-align:right">${money(total)}</td></tr></tfoot></table></div>`:'';
+  openMod((varios?'Anular comprobante · ':'Anular pago · ')+(a.noRecibo||''),
+    `<div class="note n-danger" style="margin-bottom:13px"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>${varios
+      ?`El comprobante <b>${_escPP(a.noRecibo)}</b> pagó <b>${grupo.length} facturas</b> juntas por ${money(total)}. Se anula el comprobante completo: las ${grupo.length} facturas vuelven a quedar con saldo y se anula su movimiento de banco. Si sólo una estaba mal, volvé a registrar el pago correcto.`
+      :`El pago de ${money(a.monto)} se marcará como anulado y el saldo de la cuenta por pagar aumentará.`}</span></div>
+     ${lista}
      <label>Motivo de anulación <span style="color:var(--danger)">*</span></label>
      <textarea id="ap-motivo" rows="3" placeholder="Ej. pago duplicado, monto incorrecto, error de proveedor…" style="resize:vertical"></textarea>
      <div class="note n-danger" id="ap-err" style="display:none;margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3l16.94 0a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>El motivo es obligatorio.</span></div>`,
     ()=>{
       const motivo=$('#ap-motivo').value.trim();
       if(!motivo){$('#ap-err').style.display='flex';return;}
-      a.anulado=true;a.anuladoPor=currentUser;a.anuladoFecha=new Date().toISOString();a.motivoAnulacion=motivo;
-      // Anular el pago = borrar también su SALIDA de banco (nunca salió el dinero).
-      const _mvSal=_anularSalidaBancoDePagoProv(c,a);
-      if(_mvSal)logAudit('Banco · salida de pago a proveedor anulada','CMP-'+padn(c.id)+' · cuenta '+_mvSal.cuentaId+' · '+money(_mvSal.monto)+' · por anulación de pago');
-      else if(a.cuentaBancoId){
+      // Banco: primero el movimiento ÚNICO del comprobante (pago de varias
+      // facturas). Si no existe (pagos viejos registrados uno por uno), el de cada pago.
+      const movs=[]; let sinMov=0;
+      const mvG=varios?_movDeGrupoProv(grupo):null;
+      if(mvG){mvG.anulado=true;if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mvG);movs.push(mvG);}
+      const ahora=new Date().toISOString();
+      grupo.forEach(x=>{
+        if(!mvG){
+          const mv=_anularSalidaBancoDePagoProv(x.c,x.a);
+          if(mv)movs.push(mv); else if(x.a.cuentaBancoId)sinMov++;
+        }
+        x.a.anulado=true;x.a.anuladoPor=currentUser;x.a.anuladoFecha=ahora;x.a.motivoAnulacion=motivo;
+      });
+      movs.forEach(mv=>logAudit('Banco · salida de pago a proveedor anulada','CMP-'+padn(Number(mv.origenId))+' · cuenta '+mv.cuentaId+' · '+money(mv.monto)+' · por anulación de pago'));
+      if(sinMov){
         toast('⚠ Revisá Bancos','Anulé el pago, pero no encontré su movimiento de banco para anularlo. Revisá la cuenta y anulá ese movimiento a mano si quedó.',true);
-        logAudit('Banco · movimiento de pago NO hallado al anular pago','CMP-'+padn(c.id)+' · '+money(a.monto)+' · cuenta '+a.cuentaBancoId);
+        logAudit('Banco · movimiento de pago NO hallado al anular pago',grupo.map(x=>'CMP-'+padn(x.c.id)).join(', ')+' · '+money(total)+' · cuenta '+a.cuentaBancoId);
       }
-      logAudit('Pago a proveedor anulado','CMP-'+padn(c.id)+' · '+(a.noRecibo||'')+' · '+money(a.monto)+' · Motivo: '+motivo);
+      if(varios)logAudit('Comprobante de pago a proveedor anulado',(a.noRecibo||'')+' · '+(c.proveedorNombre||'')+' · '+money(total)+' · '+grupo.map(x=>'CMP-'+padn(x.c.id)).join(', ')+' · Motivo: '+motivo);
+      else logAudit('Pago a proveedor anulado','CMP-'+padn(c.id)+' · '+(a.noRecibo||'')+' · '+money(a.monto)+' · Motivo: '+motivo);
       cerrarTodo();renderPorPagar();renderCompras();
       if(typeof renderBancos==='function'){try{renderBancos();}catch(e){}}
-      toast('✓ Pago anulado','Saldo actualizado: '+money(apInfo(c).saldo));
-      if(typeof anularPagoProveedorDB==='function')anularPagoProveedorDB(a);
+      toast(varios?'✓ Comprobante anulado':'✓ Pago anulado',varios?(grupo.length+' facturas vuelven a quedar con saldo'):('Saldo actualizado: '+money(apInfo(c).saldo)));
+      if(typeof anularPagoProveedorDB==='function')grupo.forEach(x=>anularPagoProveedorDB(x.a));
     });
-  $('#m-save').textContent='Anular pago';$('#m-save').className='btn btn-primary';$('#m-save').style.background='var(--danger)';
+  $('#m-save').textContent=varios?'Anular comprobante':'Anular pago';$('#m-save').className='btn btn-primary';$('#m-save').style.background='var(--danger)';
 }
 window.anularPagoProv=anularPagoProv;
 // Orden de compra: se muestra NUESTRO nombre del producto y SOLO el SKU del

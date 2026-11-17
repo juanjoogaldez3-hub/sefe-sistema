@@ -41,6 +41,8 @@ const $ = sel => {
 const ctx = {
   console, Number, String, Date,
   canRegistrarAbono: () => true,
+  _sugerirEgreso: () => 'EG-0001',
+  empresaParaNuevo: () => 'SEFE',
   compras: [], _compFoto: null, currentUser: 'Tester',
   apInfo: () => ({ saldo: 1000 }),
   fechaHoyGT: () => '2026-08-19',

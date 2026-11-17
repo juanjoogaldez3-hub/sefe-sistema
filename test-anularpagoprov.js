@@ -59,8 +59,8 @@ ctx = ctxCon([{ ...salida(), origen: 'cobro' }]);
 ok('origen distinto (cobro) → null', ctx.__f(C, { cuentaBancoId: 4, monto: 600 }) === null);
 
 console.log('\n═══ Cableado: anularPagoProv limpia banco y avisa ═══');
-ok('anularPagoProv llama a la limpieza de banco', /_anularSalidaBancoDePagoProv\(c,a\)/.test(src));
-ok('avisa si tenía cuenta pero no halló el movimiento', /else if\(a\.cuentaBancoId\)\{/.test(src.slice(src.indexOf('function anularPagoProv'))) && /no encontré su movimiento de banco/.test(src));
+ok('anularPagoProv llama a la limpieza de banco', /_anularSalidaBancoDePagoProv\((c,a|x\.c,x\.a)\)/.test(src.slice(src.indexOf('function anularPagoProv'))));
+ok('avisa si tenía cuenta pero no halló el movimiento', /(else if\(a\.cuentaBancoId\)\{|else if\(x\.a\.cuentaBancoId\)sinMov\+\+)/.test(src.slice(src.indexOf('function anularPagoProv'))) && /no encontré su movimiento de banco/.test(src));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);
