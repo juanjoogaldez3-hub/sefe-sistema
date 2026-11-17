@@ -8,7 +8,8 @@
 //  movimiento de ENTRADA original del cobro. Nunca entró, nunca salió. Si el
 //  abono no había entrado a una cuenta, o el monto no coincide con ninguna
 //  entrada, no toca nada (no se lleva por delante un cobro real de otro monto).
-//  Esta prueba carga la función real _anularEntradaBancoDeAbono.
+//  Esta prueba carga la función real _anularEntradaBancoDeAbono (y la
+//  _movBancoDeAbono de la que depende).
 // ============================================================
 const vm = require('vm');
 const src = require('./test-fuente');
@@ -20,7 +21,12 @@ const ini = src.indexOf('function _anularEntradaBancoDeAbono(');
 const finMarca = 'window._anularEntradaBancoDeAbono=_anularEntradaBancoDeAbono;';
 const fin = src.indexOf(finMarca, ini);
 if (ini < 0 || fin < 0) { console.log('✗ no se encontró _anularEntradaBancoDeAbono'); process.exit(1); }
-const fnSrc = src.slice(ini, fin + finMarca.length);
+// _anularEntradaBancoDeAbono usa _movBancoDeAbono (el mismo emparejamiento que
+// al editar un abono): se carga también, tal cual está en el código.
+const iniMv = src.indexOf('function _movBancoDeAbono(');
+const finMv = src.indexOf('function openHistorialAbonos(', iniMv);
+if (iniMv < 0 || finMv < 0) { console.log('✗ no se encontró _movBancoDeAbono'); process.exit(1); }
+const fnSrc = src.slice(iniMv, finMv) + '\n' + src.slice(ini, fin + finMarca.length);
 
 function ctxCon(movs) {
   const guardados = [];

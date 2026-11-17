@@ -73,13 +73,15 @@ ok('despachos muestra empTag(d.empresa)', /\$\{empTag\(d\.empresa\)\}/.test(src)
 
 console.log('\n═══ Escritura (app): el registro nuevo nace con su empresa ═══');
 [
-  ['pedido',        /nombreFacturado:_nitPed\.nombre,empresa:empresaParaNuevo\(\),_nuevo:true/],
+  // pedido y cotización nacen con la empresa de su CLIENTE (y si no, la activa);
+  // la compra con la de su PROVEEDOR (commits 7bda245 / 66ae678).
+  ['pedido',        /nombreFacturado:_nitPed\.nombre,empresa:\(cli&&cli\.empresa\)\|\|empresaParaNuevo\(\),_nuevo:true/],
   ['cliente',       /precios:\{\},empresa:empresaParaNuevo\(\),_nuevo:true/],
   ['sede',          /empresa:padre\.empresa\|\|empresaParaNuevo\(\),_nuevo:true/],
   ['producto',      /activo:true,empresa:empresaParaNuevo\(\),_nuevo:true/],
-  ['cotización',    /convertidoPedidoId:null,empresa:empresaParaNuevo\(\),_nuevo:true/],
-  ['compra (parcial)', /oficializada:false,empresa:empresaParaNuevo\(\),_nuevo:true/],
-  ['compra (normal)',  /oficializada:false,empresa:empresaParaNuevo\(\),_nuevo:true/],
+  ['cotización',    /convertidoPedidoId:null,empresa:\(cliObj&&cliObj\.empresa\)\|\|empresaParaNuevo\(\),_nuevo:true/],
+  ['compra (parcial)', /mes:esEspecial\?mes:null,oficializada:false,empresa:\(prov&&prov\.empresa\)\|\|empresaParaNuevo\(\),_nuevo:true/],
+  ['compra (normal)',  /especial:false,mes:null,oficializada:false,empresa:\(prov&&prov\.empresa\)\|\|empresaParaNuevo\(\),_nuevo:true/],
   ['proveedor',     /const nuevoProv=\{id:provN\+\+,\.\.\.datos,empresa:empresaParaNuevo\(\),_nuevo:true\}/],
   ['cuenta banco',  /activo:true,empresa:empresaParaNuevo\(\),_nuevo:true/],
   ['movimiento banco hereda de la cuenta', /empresa:\(_ctaMov&&_ctaMov\.empresa\)\|\|empresaParaNuevo\(\),_nuevo:true/],
@@ -125,7 +127,8 @@ ok('anular manda empresa', /uuid:f\.autorizacion,motivo,empresa:f\.empresa\|\|'S
 console.log('\n═══ Marca de la barra lateral por empresa ═══');
 ok('aplicarMarcaEmpresa() existe', /function aplicarMarcaEmpresa\(\)\{/.test(src));
 ok('SEFE mantiene la marca del producto', /if\(!e \|\| e\.codigo==='SEFE'\)\{[\s\S]*?SEFE_MARCA\.monograma/.test(src));
-ok('otra empresa usa su nombre y color', /if\(mk\)\{ mk\.textContent=mono; if\(e\.color\)\{mk\.style\.background=e\.color/.test(src));
+// El color sale de la marca de la empresa (sidebarAccent) o, si no tiene, del catálogo.
+ok('otra empresa usa su nombre y color', /if\(mk\)\{ mk\.textContent=mono; const _mkBg=\(_m&&_m\.sidebarAccent\)\|\|e\.color; if\(_mkBg\)\{mk\.style\.background=_mkBg/.test(src));
 ok('se aplica al cambiar de empresa', /renderSelectorEmpresa\(\);\s*\n\s*aplicarMarcaEmpresa\(\);/.test(src));
 ok('se aplica al entrar', /if\(typeof aplicarMarcaEmpresa==='function'\)aplicarMarcaEmpresa\(\)/.test(src));
 

@@ -54,6 +54,9 @@ const ctx = {
   guardarPagoProveedor: (id, pago) => pagosGuardados.push({ id, pago }),
   registrarMovimientoBanco: (mov) => { movimientos.push(mov); return mov; },
   guardarCompra: () => {},
+  // multiempresa: el pago de contado se marca con la empresa de la compra
+  // (o la activa, si la compra no trae).
+  empresaParaNuevo: () => 'SEFE',
 };
 vm.createContext(ctx);
 vm.runInContext(fnSrc + '\n;globalThis.__open=openFacturaProv;', ctx);
@@ -77,6 +80,7 @@ ok('sale de la cuenta elegida', String(m.cuentaId) === '4', 'cuenta=' + m.cuenta
 ok('lleva beneficiario (para que se genere la póliza)', m.beneficiario === 'PROVEEDOR X', 'benef=' + m.beneficiario);
 ok('queda categorizado como pago a proveedor', m.categoria === 'proveedor' && m.origen === 'pago_proveedor');
 ok('el abono guardado lleva la cuenta', pagosGuardados[0] && pagosGuardados[0].pago.cuentaBancoId === '4');
+ok('el abono guardado lleva la empresa (multiempresa)', pagosGuardados[0] && pagosGuardados[0].pago.empresa === 'SEFE', JSON.stringify(pagosGuardados[0] && pagosGuardados[0].pago));
 
 console.log('\n═══ CRÉDITO → no toca el banco ═══');
 correr({ 'fp-pago': 'credito', 'fp-dias': '30', 'fp-fecha': '2026-08-19', 'fp-doc': 'FACT-200', 'fp-cuenta': '4' });

@@ -30,6 +30,8 @@ const ctx = {
   fdate: () => '19-08-2026', money: n => 'Q' + n,
   SEFE_LOGO: 'x', refPed: f => 'NP-' + (f.numero || 0),
   SEFE_MARCA: { logo: 'x', razonSocial: 'SEFE, S.A.', nombre: 'SEFE' },
+  // Multiempresa: el membrete sale de la marca de la empresa activa.
+  marcaActiva: () => ({ logo: 'x', razonSocial: 'SEFE, S.A.', nombre: 'SEFE', membrete: 'SEFE, S.A.', nit: '123', ciudadPais: 'Guatemala' }),
 };
 vm.createContext(ctx);
 vm.runInContext(fnSrc + '\n;globalThis.__np=notaPrestamoHTML;', ctx);

@@ -13,7 +13,16 @@ console.log('\n═══ Una sola campana / popup ═══');
 ok('queda el popup único #recmod y su campana #bell-recmod', /id="recmod"/.test(html) && /id="bell-recmod"/.test(html));
 ok('se eliminó la campana vieja #bell-rec', !/id="bell-rec"/.test(html));
 ok('se eliminó el popup viejo #ov-rec / #rec-body', !/id="ov-rec"/.test(html) && !/id="rec-body"/.test(html));
-ok('la campana quedó en una sola posición (bottom:22px)', /id="bell-recmod"[^>]*bottom:22px/.test(html));
+// La campana tiene UNA posición fija en el HTML y ningún JS la mueve. Ya no
+// está en bottom:22px: ese lugar es del botón del Asistente (#ia-fab, 52px de
+// alto), así que la campana va encima de él, sin taparse.
+{
+  const px = (id) => { const m = new RegExp('id="' + id + '"[^>]*position:fixed;bottom:(\\d+)px;right:(\\d+)px').exec(html); return m ? { b: +m[1], r: +m[2] } : null; };
+  const bell = px('bell-recmod'), ia = px('ia-fab');
+  ok('la campana quedó en una sola posición fija (position:fixed + bottom en el HTML)', !!bell, 'no se encontró su posición');
+  ok('ningún JS le cambia la posición a la campana', !/bell-recmod[^\n]*style\.(bottom|top)\s*=/.test(src));
+  ok('la campana no se tapa con el botón del Asistente (#ia-fab)', bell && (!ia || bell.r !== ia.r || bell.b >= ia.b + 52), JSON.stringify({ bell, ia }));
+}
 
 console.log('\n═══ La campana junta tareas + cobros ═══');
 ok('actualizarBellRec suma tareas y cobros del día', /recordatoriosPendientesHoy\(\)\.length\+\(\(typeof puedeVerRecordatorios==='function'&&puedeVerRecordatorios\(\)\)\?recordatoriosDeHoy\(\)\.length:0\)/.test(src));
