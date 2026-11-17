@@ -224,12 +224,12 @@ function renderPpPagos(){
 window.renderPpPagos=renderPpPagos;
 // Sólo la tabla (para que el buscador no le quite el foco al campo al escribir).
 function _ppPagosTabla(){
-  const q=String(_ppBuscar||'').trim().toLowerCase();
+  const q=_normBusq(String(_ppBuscar||'').trim());
   const vis=q?_ppGrupos.filter(g=>{
     const txt=[g.noRecibo,g.referencia,g.proveedor,g.registradoPor,money(g.total),String(Math.round(g.total*100)/100)]
       .concat(g.items.map(p=>(p.c.docProv||'')+' CMP-'+padn(p.c.id)+' '+String(p.a.monto)))
-      .join(' ').toLowerCase();
-    return txt.includes(q);
+      .join(' ');
+    return _normBusq(txt).includes(q);
   }):_ppGrupos;
   _ppGruposVis=vis;
   const emp=$('#pp-pagos-empty');

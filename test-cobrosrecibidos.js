@@ -29,6 +29,7 @@ const trozo = (ini, fin) => {
   return src.slice(i, j + fin.length);
 };
 const codigo = [
+  trozo('function _normBusq(s){', ';}'),
   trozo('// ══════════ COBROS RECIBIDOS', 'window.verCobroGrupo=verCobroGrupo;'),
   trozo('function _cuentaAbonoHTML(a){', '\n}\n'),
   trozo('function openHistorialAbonos(id){', '\n}\n'),
@@ -102,6 +103,21 @@ console.log('\n═══ 3. Buscador ═══');
   ctx.__set('cli', '2'); ctx.renderCobrosRecibidos();
   h = ctx._els['t-cb-recibidos'].innerHTML;
   ok('filtro por cliente', /Luna/.test(h) && !/El Sol/.test(h));
+}
+
+console.log('\n═══ 3b. Montos con o sin coma ═══');
+{
+  const ctx = nuevoCtx(docs());
+  ctx.renderCobrosRecibidos();
+  const n = q => { ctx.__set('buscar', q); ctx._cbrTabla(); return ctx._els['t-cb-recibidos'].innerHTML.split('<tr').length - 1; };
+  ok('"2050.75" encuentra el recibo', n('2050.75') === 1);
+  ok('"2,050.75" también', n('2,050.75') === 1);
+  ok('"2,050" también', n('2,050') === 1);
+  ok('"850.75" (el abono de una factura) también', n('850.75') === 1);
+  const N = ctx._normBusq, txt = N('Q 1,115.00 · Guatemala, Guatemala');
+  ok('regla general: 1115 / 1,115 / 1115.00 / Q1115 encuentran "Q 1,115.00"', ['1115', '1,115', '1115.00', 'Q1115', 'Q 1,115'].every(q => txt.includes(N(q))));
+  ok('regla general: una coma de texto ("Guatemala, Gua") no se rompe', txt.includes(N('guatemala, gua')));
+  ok('regla general: no inventa coincidencias (2115)', !txt.includes(N('2115')));
 }
 
 console.log('\n═══ 4. Detalle del recibo ═══');

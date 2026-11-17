@@ -493,12 +493,12 @@ function renderCobrosRecibidos(){
 }
 // Sólo la tabla (el buscador no pierde el foco al escribir).
 function _cbrTabla(){
-  const q=String(_cbrBuscar||'').trim().toLowerCase();
+  const q=_normBusq(String(_cbrBuscar||'').trim());
   const vis=q?_cbrGrupos.filter(g=>{
     const txt=['recibo '+g.noRecibo,g.noRecibo,g.referencia,g.cliente,g.registradoPor,g.metodo,money(g.total),String(Math.round(g.total*100)/100)]
       .concat(g.items.map(x=>_refFactCb(x.d)+' '+(x.d.numeroDte||'')+' '+String(x.a.monto)))
-      .join(' ').toLowerCase();
-    return txt.includes(q);
+      .join(' ');
+    return _normBusq(txt).includes(q);
   }):_cbrGrupos;
   _cbrVis=vis;
   const emp=$('#cbr-empty');
