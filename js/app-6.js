@@ -972,7 +972,7 @@ window.conciliarBanco=conciliarBanco;
 // movimiento faltante se puede volver sin re-subir el archivo).
 let _concData=null, _concCuentaId=null, _concTab='conc', _concRes=null,
     _concRechazados=new Set(), _concManuales=[], _concEmparejando=null,
-    _concArchivoNombre='', _concUltimo=null;
+    _concArchivoNombre='', _concUltimo=null, _concBusq='';
 
 // Multiempresa: la conciliación en memoria (cuenta elegida, archivo del banco
 // subido y emparejamientos) es SIEMPRE de una empresa. Al cambiar de empresa
@@ -982,7 +982,7 @@ let _concData=null, _concCuentaId=null, _concTab='conc', _concRes=null,
 function _concReset(){
   _concData=null; _concCuentaId=null; _concTab='conc'; _concRes=null;
   _concRechazados=new Set(); _concManuales=[]; _concEmparejando=null;
-  _concArchivoNombre=''; _concUltimo=null;
+  _concArchivoNombre=''; _concUltimo=null; _concBusq='';
 }
 window._concReset=_concReset;
 
@@ -1038,6 +1038,66 @@ window._concArchivo=_concArchivo;
 window._concSetCuenta=function(id){_concCuentaId=id;_concRender();};
 window._concIrTab=function(t){_concTab=t;_concRender();};
 
+// ── Buscador de la conciliación ──
+// Filtra las filas de la pestaña abierta mientras se escribe (sin redibujar,
+// para no perder el cursor) y muestra en cada pestaña cuántas coincidencias
+// tiene. Busca en fecha, descripción del banco, No. de documento, concepto en
+// el sistema y montos — con o sin coma (misma regla _normBusq del resto).
+// Las filas no se sacan de la lista: se ocultan, así los botones que ubican
+// la fila por su posición (ej. "Registrar") siguen apuntando a la correcta.
+function _concTxtBusq(t,x){
+  const nb=(typeof _normBusq==='function')?_normBusq:(v=>String(v||'').toLowerCase());
+  const mon=v=>money(Number(v)||0)+' '+String(v==null?'':v);
+  const bank=f=>[fdate(f.fecha),f.descripcion,f.noDoc,mon(f.monto),f.tipo].join(' ');
+  const sefe=m=>[fdate(m.fecha),m.concepto,m.referencia,mon(m.monto),m.tipo].join(' ');
+  let txt='';
+  if(t==='banco')txt=bank(x);
+  else if(t==='sefe')txt=sefe(x);
+  else txt=bank(x.banco)+' '+(x.grupo?x.sefes.map(sefe).join(' '):(x.sefe?sefe(x.sefe):''));
+  return nb(txt);
+}
+function _concNumCoinc(r){
+  const q=(typeof _normBusq==='function')?_normBusq((_concBusq||'').trim()):(_concBusq||'').trim().toLowerCase();
+  if(!q||!r)return null;
+  const c=(t,arr)=>arr.filter(x=>_concTxtBusq(t,x).includes(q)).length;
+  return {conc:c('conc',r.conciliados),banco:c('banco',r.soloBanco),sefe:c('sefe',r.soloSEFE)};
+}
+// Oculta las filas de la tabla visible que no coinciden y actualiza los contadores.
+function _concAplicarBusq(){
+  const cont=document.getElementById('conc-tabla'); if(!cont)return;
+  const nb=(typeof _normBusq==='function')?_normBusq:(v=>String(v||'').toLowerCase());
+  const q=nb((_concBusq||'').trim());
+  let vis=0,tot=0;
+  cont.querySelectorAll('tbody > tr').forEach(tr=>{
+    if(tr.dataset.sinCoinc)return;
+    tot++;
+    // Solo el texto que se ve en las celdas de datos (sin botones ni casillas).
+    const txt=nb([...tr.children].filter(td=>!td.querySelector('button,input')).map(td=>td.textContent).join(' '));
+    const ok=!q||txt.includes(q);
+    tr.style.display=ok?'':'none'; if(ok)vis++;
+  });
+  const tb=cont.querySelector('tbody');
+  let aviso=tb&&tb.querySelector('tr[data-sin-coinc]');
+  if(tb&&q&&tot&&!vis){
+    if(!aviso){aviso=document.createElement('tr');aviso.dataset.sinCoinc='1';tb.appendChild(aviso);}
+    aviso.innerHTML='<td colspan="20" class="empty">Nada coincide con “'+escHtml(_concBusq.trim())+'” en esta pestaña.</td>';
+  }else if(aviso)aviso.remove();
+  const n=_concNumCoinc(_concRes);
+  ['conc','banco','sefe'].forEach(t=>{
+    const el=document.getElementById('conc-n-'+t); if(!el)return;
+    const totT=_concRes?(t==='conc'?_concRes.conciliados:t==='banco'?_concRes.soloBanco:_concRes.soloSEFE).length:0;
+    el.textContent='('+(n?(n[t]+' de '+totT):totT)+')';
+  });
+  const info=document.getElementById('conc-busq-info');
+  if(info)info.textContent=q?(vis+' de '+tot+' en esta pestaña'):'';
+  const lim=document.getElementById('conc-busq-limpiar'); if(lim)lim.style.display=q?'':'none';
+  // Con una búsqueda activa, "Marcar todos" marca solo lo que se ve (y lo dice).
+  const mt=document.getElementById('conc-marcar-todos');
+  if(mt){mt.textContent=q?('✔ Marcar los '+vis+' visibles'):'✔ Marcar todos';mt.disabled=!!(q&&!vis);}
+}
+window._concBuscar=function(v){_concBusq=v||'';_concAplicarBusq();};
+window._concLimpiarBusq=function(){_concBusq='';const i=document.getElementById('conc-busq');if(i){i.value='';i.focus();}_concAplicarBusq();};
+
 // Marca/desmarca un movimiento como conciliado (persiste en la base).
 window._concMarcar=function(id,val){
   const m=movimientosBanco.find(x=>String(x.id)===String(id)); if(!m)return;
@@ -1064,8 +1124,17 @@ window._concConciliarSolo=function(id){
 window._concMarcarTodos=function(){
   if(!_concRes||!_concRes.conciliados.length)return;
   // Incluye los cruces 1 a 1 y los grupos (1 banco ↔ varios cobros).
+  // Con una búsqueda activa, solo los que se ven en pantalla (las filas van en
+  // el mismo orden que _concRes.conciliados).
+  let lista=_concRes.conciliados;
+  if(String(_concBusq||'').trim()){
+    const filas=[...document.querySelectorAll('#conc-tabla tbody > tr')].filter(tr=>!tr.dataset.sinCoinc);
+    if(filas.length===lista.length)lista=lista.filter((x,i)=>filas[i].style.display!=='none');
+    else{const q=_normBusq(_concBusq.trim());lista=lista.filter(x=>_concTxtBusq('conc',x).includes(q));}
+    if(!lista.length)return;
+  }
   const ids=[];
-  _concRes.conciliados.forEach(x=>{ if(x.grupo)x.sefes.forEach(m=>ids.push(m.id)); else if(x.sefe)ids.push(x.sefe.id); });
+  lista.forEach(x=>{ if(x.grupo)x.sefes.forEach(m=>ids.push(m.id)); else if(x.sefe)ids.push(x.sefe.id); });
   ids.forEach(id=>{const m=movimientosBanco.find(x=>String(x.id)===String(id));if(m){m.conciliado=true;m.conciliadoEl=new Date().toISOString();}});
   _concRender();
   Promise.resolve(typeof marcarConciliadoBanco==='function'?marcarConciliadoBanco(ids,true):false).then(okr=>{
@@ -1366,8 +1435,18 @@ function _concRender(){
       <span style="flex:1"></span>
       <button class="btn btn-ghost btn-sm" onclick="_concCancelarEmparejar()">Terminar</button></div>`;
   }
-  const tab=(t,txt,n)=>`<button class="btn ${_concTab===t?'btn-primary':'btn-ghost'} btn-sm" onclick="_concIrTab('${t}')">${txt} (${n})</button>`;
-  html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 2px">
+  const tab=(t,txt,n)=>`<button class="btn ${_concTab===t?'btn-primary':'btn-ghost'} btn-sm" onclick="_concIrTab('${t}')">${txt} <span id="conc-n-${t}">(${n})</span></button>`;
+  const _vb=String(_concBusq||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  html+=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0 0">
+    <div style="position:relative;flex:1;min-width:220px;max-width:460px">
+      <input id="conc-busq" type="search" value="${_vb}" oninput="_concBuscar(this.value)" autocomplete="off"
+        placeholder="Buscar: monto, descripción, No. de documento, fecha…" style="width:100%;padding-left:32px">
+      <svg viewBox="0 0 24 24" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;fill:none;stroke:var(--muted);stroke-width:2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    </div>
+    <span id="conc-busq-info" style="font-size:12px;color:var(--muted)"></span>
+    <button id="conc-busq-limpiar" class="btn btn-ghost btn-sm" style="display:none" onclick="_concLimpiarBusq()">Limpiar</button>
+  </div>`;
+  html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 2px">
     ${tab('conc','✅ Conciliados',r.conciliados.length)}
     ${tab('banco','🟡 Sólo en el banco',r.soloBanco.length)}
     ${tab('sefe','🔴 Sólo en '+_concEmp(),r.soloSEFE.length)}
@@ -1375,8 +1454,9 @@ function _concRender(){
     <button class="btn btn-ghost btn-sm" onclick="_concHistorial()">📋 Historial</button>
     <button class="btn btn-primary btn-sm" onclick="_concGuardar()">💾 Guardar conciliación</button>
   </div>
-  <div style="overflow-x:auto">${_concTabla(r)}</div>`;
+  <div id="conc-tabla" style="overflow-x:auto">${_concTabla(r)}</div>`;
   cont.innerHTML=html;
+  _concAplicarBusq(); // reaplicar la búsqueda (al cambiar de pestaña o recalcular)
 }
 
 function _concTabla(r){
@@ -1403,7 +1483,7 @@ function _concTabla(r){
     const head=`<div style="display:flex;align-items:center;gap:10px;margin:6px 0 8px;flex-wrap:wrap">
       <span style="font-size:12.5px;color:var(--muted)">Marcados como conciliados: <b style="color:var(--ink)">${marcados}</b> de ${r.conciliados.length}</span>
       <span style="flex:1"></span>
-      <button class="btn btn-ghost btn-sm" onclick="_concMarcarTodos()">✔ Marcar todos</button></div>`;
+      <button id="conc-marcar-todos" class="btn btn-ghost btn-sm" onclick="_concMarcarTodos()">✔ Marcar todos</button></div>`;
     return head+`<table><thead><tr><th style="width:34px;text-align:center" title="Conciliado">✔</th><th>Fecha</th><th>Descripción (banco)</th><th>Tipo</th><th class="num">Monto</th><th>Coincide con ${_concEmp()}</th><th></th></tr></thead><tbody>`+
       r.conciliados.map(x=>`<tr><td style="text-align:center">${chkCell(x)}</td><td style="white-space:nowrap">${fdate(x.banco.fecha)}</td><td>${escHtml(x.banco.descripcion)}${doc(x.banco.noDoc)}</td><td>${bdg(x.banco.tipo)}</td><td class="num">${money(x.banco.monto)}</td><td style="color:var(--muted);font-size:12px">${coincideCell(x)}</td><td style="text-align:right">${xCell(x)}</td></tr>`).join('')+'</tbody></table>';
   }
