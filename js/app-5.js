@@ -1010,7 +1010,43 @@ function _movBancoDeAbono(f,a){
     const refA=(a.referencia!=null&&a.referencia!=='')?String(a.referencia):null;
     if(refA)mv=cand.filter(m=>String(m.referencia||'')===refA&&Number(m.monto)>=Number(a.monto)-0.01).sort((x,y)=>Number(x.monto)-Number(y.monto))[0]||null;
   }
+  // PAGO GLOBAL (varias facturas, un solo depósito): la entrada del banco se
+  // registra UNA vez por el total y queda ligada al CLIENTE (origenId = id del
+  // cliente), no a cada factura. Se reconoce por: misma cuenta, misma
+  // referencia, concepto "Cobro <recibo> · …" y origenId de un cliente del
+  // mismo NIT (cliente o sus sedes). Antes no se encontraba y al anular los
+  // abonos la entrada quedaba viva (caso recibo 33252, 19-11-2026: Q1,115 de
+  // más en MONETARIOS BI).
+  if(!mv)mv=_movPagoGlobalDeAbono(f,a);
   return mv||null;
+}
+function _movPagoGlobalDeAbono(f,a){
+  if(!a||!a.cuentaBancoId||typeof movimientosBanco==='undefined')return null;
+  const refA=(a.referencia!=null&&a.referencia!=='')?String(a.referencia):null;
+  const rec=(a.noRecibo!=null&&a.noRecibo!=='')?String(a.noRecibo):null;
+  if(!refA&&!rec)return null;
+  const cli=(typeof clientes!=='undefined'?clientes:[]).find(c=>c.id===f.clienteId);
+  const idsCli=new Set([String(f.clienteId)]);
+  if(cli&&cli.nit&&cli.nit!=='CF')clientes.forEach(c=>{if(c.nit===cli.nit)idsCli.add(String(c.id));});
+  const cta=Number(a.cuentaBancoId);
+  return movimientosBanco.filter(m=>!m.anulado&&m.origen==='cobro'&&Number(m.cuentaId)===cta&&idsCli.has(String(m.origenId))
+      &&(!refA||String(m.referencia||'')===refA)
+      &&(!rec||String(m.concepto||'').indexOf('Cobro '+rec+' ')===0)
+      &&Number(m.monto)>=Number(a.monto)-0.01)
+    .sort((x,y)=>Number(x.monto)-Number(y.monto))[0]||null;
+}
+// Otros abonos VIVOS que entraron en el mismo depósito que `a` (pago global):
+// misma cuenta, misma referencia y mismo recibo, en cualquier factura.
+function _abonosMismoDeposito(a){
+  if(!a)return [];
+  const ref=String(a.referencia||''), rec=String(a.noRecibo||''), cta=Number(a.cuentaBancoId);
+  if(!ref&&!rec)return [];
+  const out=[];
+  (typeof documentos!=='undefined'?documentos:[]).forEach(d=>(d.abonos||[]).forEach(b=>{
+    if(b===a||b.anulado)return;
+    if(Number(b.cuentaBancoId)===cta&&String(b.referencia||'')===ref&&String(b.noRecibo||'')===rec)out.push(b);
+  }));
+  return out;
 }
 function openHistorialAbonos(id){
   const f=documentos.find(d=>d.id===id);
@@ -1082,12 +1118,24 @@ function openEditarAbono(facturaId,abonoIdx){
       const cambioFecha=String(fechaVieja||'')!==String(nFecha||'');
       // El movimiento del banco se busca ANTES de tocar el abono (con su cuenta y monto viejos).
       const mvViejo=_movBancoDeAbono(f,a);
+      // Otros abonos vivos del mismo depósito (pago global), contados ANTES de tocar el abono.
+      const _hermanos=mvViejo?_abonosMismoDeposito(a).length:0;
       if(cambioCuenta&&mvViejo&&mvViejo.conciliado){setErr('Ese cobro ya está CONCILIADO en la cuenta actual. Desconciliá el movimiento en la conciliación bancaria antes de cambiarle la cuenta.');return;}
       a.noRecibo=nRec;a.fecha=nFecha;a.monto=nMonto;a.metodo=nMet;a.referencia=nRef;a.cuentaBancoId=nCta;
       // Ajustar el movimiento de banco si cambió la cuenta, el monto o la fecha. Si el
       // banco registró un depósito mayor (sobrepago con saldo a favor), se ajusta por
       // la diferencia y se mueve completo a la cuenta nueva.
-      if(mvViejo&&(cambioCuenta||cambioMonto||cambioFecha)){
+      // Pago global: si el depósito también cubre otros abonos y se cambia la
+      // cuenta de ESTE solo, se le descuenta su parte al depósito viejo y se
+      // registra su entrada en la cuenta nueva (no se arrastra a los demás).
+      const _compartido=!!(mvViejo&&cambioCuenta&&_hermanos>0&&Number(mvViejo.monto)-montoViejo>0.01);
+      if(_compartido){
+        mvViejo.monto=Math.round((Number(mvViejo.monto)-montoViejo)*100)/100;
+        if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mvViejo);
+        if(nCta&&typeof registrarMovimientoBanco==='function')registrarMovimientoBanco({cuentaId:nCta,tipo:'entrada',monto:nMonto,
+          concepto:'Cobro '+(nRec||'')+' · '+(f.clienteComercial||f.clienteNombre),
+          categoria:'cobro',origen:'cobro',origenId:f.id,referencia:nRef,fecha:nFecha});
+      }else if(mvViejo&&(cambioCuenta||cambioMonto||cambioFecha)){
         if(cambioMonto)mvViejo.monto=Math.round((Number(mvViejo.monto)+(nMonto-montoViejo))*100)/100;
         mvViejo.fecha=nFecha;
         if(cambioCuenta)mvViejo.cuentaId=nCta;
@@ -1119,6 +1167,15 @@ function _anularEntradaBancoDeAbono(f,a){
   // referencia si fue un cobro con sobrepago (depósito completo ≥ abono).
   const mv=_movBancoDeAbono(f,a);
   if(!mv)return null;
+  // Si el depósito cubre OTROS abonos que siguen vivos (pago global), no se
+  // anula entero: se le descuenta solo este abono. Se anula completo cuando ya
+  // no le queda ningún abono vivo (o si es un cobro de una sola factura).
+  const resto=Math.round((Number(mv.monto)-Number(a.monto))*100)/100;
+  if(_abonosMismoDeposito(a).length&&resto>0.01){
+    mv.monto=resto;
+    if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mv);
+    return Object.assign({},mv,{_parcial:true,_descontado:Number(a.monto)});
+  }
   mv.anulado=true;
   if(typeof guardarMovimientoBanco==='function')guardarMovimientoBanco(mv);
   return mv;
@@ -1141,7 +1198,8 @@ function openAnularAbono(facturaId,abonoIdx){
       // digitación. Ahora se ANULA la ENTRADA original: nunca entró, nunca salió.
       // (Para correcciones chicas de monto/fecha se EDITA el abono, no se anula.)
       const _mvEnt=_anularEntradaBancoDeAbono(f,a);
-      if(_mvEnt)logAudit('Banco · entrada de cobro anulada','Factura '+f.serie+'-'+f.numeroDte+' · cuenta '+_mvEnt.cuentaId+' · '+money(_mvEnt.monto)+' · por anulación de abono');
+      if(_mvEnt&&_mvEnt._parcial)logAudit('Banco · entrada de cobro reducida','Factura '+f.serie+'-'+f.numeroDte+' · cuenta '+_mvEnt.cuentaId+' · −'+money(_mvEnt._descontado)+' → queda '+money(_mvEnt.monto)+' (depósito de varias facturas) · por anulación de abono');
+      else if(_mvEnt)logAudit('Banco · entrada de cobro anulada','Factura '+f.serie+'-'+f.numeroDte+' · cuenta '+_mvEnt.cuentaId+' · '+money(_mvEnt.monto)+' · por anulación de abono');
       else if(a.cuentaBancoId){
         // El abono decía haber entrado a una cuenta de banco, pero no encontré su
         // movimiento para anularlo: aviso (antes quedaba un Q huérfano en silencio,
