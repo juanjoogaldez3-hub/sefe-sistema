@@ -2,32 +2,48 @@
 
 ## Reparto de tareas (IMPORTANTE)
 
-**El código lo maneja Claude. El SQL lo corre Juanjo.**
+**El código lo maneja Claude. La base la consulta Claude directo; los
+cambios de datos los aprueba Juanjo.**
 
 - Los cambios de código (`index.html`, `db.js`, `realtime.js`, …) se
   commitean y publican sin pedirle a Juanjo que toque GitHub. Él no
   hace merges, ni pull requests, ni usa la terminal.
-- Todo lo que haya que correr en Supabase se le entrega **pegado en el
-  chat, listo para copiar, y partido en pasos numerados**. Un paso a la
-  vez: él lo corre, pega el resultado, y recién ahí viene el siguiente.
-- Nunca decirle "está en el repo" o "mirá el archivo X" para algo que
-  tiene que ejecutar. Si lo tiene que correr él, va pegado en el chat.
+- **Claude tiene acceso directo a Producción** con el conector de
+  Supabase (proyecto `krbyulpmfazntjwnpxnw`, desde el 19-11-2026).
+  - **Consultas** (`select`, diagnósticos): Claude las corre solo, sin
+    pedirle nada a Juanjo.
+  - **Cambios de datos** (`update` / `insert` / `delete`): Claude explica
+    qué va a cambiar y **espera el OK de Juanjo en el chat** antes de
+    correrlo. Siempre con `where` acotado por id y `returning` para
+    mostrar qué cambió.
+  - Si el conector muestra otro proyecto (ej. "dropper-reporteria" de la
+    organización Droppergtm), está conectado con la cuenta equivocada:
+    Juanjo lo reconecta en claude.ai → Conectores → Supabase, entrando
+    con la cuenta dueña del proyecto de SEFE.
+- Si el conector no está disponible, se vuelve al modo anterior: el SQL
+  se le entrega a Juanjo **pegado en el chat, listo para copiar, y
+  partido en pasos numerados**, un paso a la vez. Nunca decirle "está en
+  el repo" o "mirá el archivo X" para algo que tiene que ejecutar.
+- La tabla `auditoria` es una cadena con hash que arma el navegador: **no
+  insertar filas a mano** desde SQL (rompe la cadena). Lo que se corrija
+  por SQL se anota en el campo de motivo del propio registro.
 
 ## Migraciones de base
 
 Cada cambio de base se deja como archivo en `supabase/migrations/`
 (nombrado `AAAAMMDDHHMMSS_descripcion.sql`) para que quede constancia.
 
-**Pero el robot de GitHub Actions que las aplicaría solo todavía NO está
-activo** (faltan cargar las 3 claves — ver `supabase/LEEME.md`). Mientras
-tanto, el SQL de cada cambio va **pegado en el chat y Juanjo lo corre a
-mano, directo en Producción** (Pruebas está fuera de uso). Escribir las
-migraciones con `if not exists` para que sea seguro correrlas de más.
+**El robot de GitHub Actions que las aplicaría solo todavía NO está
+activo** (faltan cargar las 3 claves — ver `supabase/LEEME.md`). Las
+migraciones se aplican directo en Producción (Pruebas está fuera de uso):
+Claude las aplica con el conector **después del OK de Juanjo**, o se las
+pasa pegadas en el chat si el conector no está. Escribir las migraciones
+con `if not exists` para que sea seguro correrlas de más.
 
 - **Nunca editar una migración ya aplicada.** Si algo salió mal, va una
   migración nueva que lo corrija.
-- Lo mismo para cualquier cosa puntual de diagnóstico o emergencia
-  (`supabase/herramientas/`): va pegado en el chat.
+- Lo puntual de diagnóstico o emergencia (`supabase/herramientas/`): las
+  consultas las corre Claude; los cambios, con el OK de Juanjo.
 - **Toda tabla nueva necesita sus políticas RLS.** Este proyecto tiene
   RLS activo (ver `20260812030419_rls.sql`): una tabla sin políticas
   queda *cerrada* y el navegador no puede leer ni escribir en ella —
