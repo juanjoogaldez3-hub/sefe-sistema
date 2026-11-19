@@ -112,8 +112,12 @@ console.log('\n═══ Sólo se saca lo YA conciliado; los pendientes viejos N
 // contra el banco en su mes → está en ambos saldos → se cancela). Los que NO
 // están conciliados —incluso de meses anteriores— SÍ se muestran: son
 // pendientes reales que sostienen la diferencia y no deben perderse.
-ok('_concCalcular saca de "sólo SEFE" SÓLO lo ya conciliado (no por fecha)', /r\.soloSEFE=r\.soloSEFE\.filter\(m=>m\.conciliado!==true\)/.test(src) && !/m\.conciliado===true\|\|\(m\.fecha/.test(src));
-ok('cuenta los ya conciliados y los arrastres de meses anteriores', /const yaConciliados=r\.soloSEFE\.filter\(m=>m\.conciliado===true\)\.length/.test(src) && /const arrastres=r\.soloSEFE\.filter\(m=>\(m\.fecha\|\|''\)\.slice\(0,10\)<desde\)\.length/.test(src));
+// Desde el 09-11 hay UNA excepción: lo ya conciliado que está emparejado A MANO
+// con una línea del estado de cuenta ACTUAL (_enGrupoActual) se queda, para
+// que _concAjustar arme el cruce (si se sacara, la línea del banco quedaba suelta).
+ok('_concCalcular saca de "sólo SEFE" SÓLO lo ya conciliado (no por fecha)', /r\.soloSEFE=r\.soloSEFE\.filter\(m=> m\.conciliado!==true \|\| _enGrupoActual\(m\)\)/.test(src) && !/m\.conciliado===true\|\|\(m\.fecha/.test(src));
+ok('…salvo los emparejados a mano con el estado de cuenta actual (_enGrupoActual)', /const _enGrupoActual=m=> _manualIds\.has\(String\(m\.id\)\) \|\| \(m\.conciliadoRef && _refsArchivo\.has\(m\.conciliadoRef\)\);/.test(src));
+ok('cuenta los ya conciliados y los arrastres de meses anteriores', /const yaConciliados=r\.soloSEFE\.filter\(m=>m\.conciliado===true && !_enGrupoActual\(m\)\)\.length/.test(src) && /const arrastres=r\.soloSEFE\.filter\(m=>\(m\.fecha\|\|''\)\.slice\(0,10\)<desde\)\.length/.test(src));
 ok('_concAjustar propaga _yaConciliados y _arrastres', /_yaConciliados:r\._yaConciliados/.test(src) && /_arrastres:r\._arrastres/.test(src));
 ok('la pantalla avisa de ya conciliados y de arrastres sin conciliar', /ya conciliados no se cuentan acá/.test(src) && /son de un mes anterior y siguen SIN conciliar/.test(src));
 ok('las filas viejas se marcan "mes anterior" en la lista', /⚠ mes anterior/.test(src) && /const viejo=r\._desde&&\(m\.fecha\|\|''\)\.slice\(0,10\)<r\._desde/.test(src));

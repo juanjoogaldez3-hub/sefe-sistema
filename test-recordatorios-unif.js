@@ -13,7 +13,16 @@ console.log('\n═══ Una sola campana / popup ═══');
 ok('queda el popup único #recmod y su campana #bell-recmod', /id="recmod"/.test(html) && /id="bell-recmod"/.test(html));
 ok('se eliminó la campana vieja #bell-rec', !/id="bell-rec"/.test(html));
 ok('se eliminó el popup viejo #ov-rec / #rec-body', !/id="ov-rec"/.test(html) && !/id="rec-body"/.test(html));
-ok('la campana quedó en una sola posición (bottom:22px)', /id="bell-recmod"[^>]*bottom:22px/.test(html));
+// La campana subió a bottom:84px para dejarle la esquina (bottom:22px) al botón
+// del asistente (#ia-fab, 52px de alto). Se verifica que sea UNA sola campana
+// y que no quede encimada sobre el botón del asistente.
+{
+  const px = (id, prop) => { const m = html.match(new RegExp('id="' + id + '"[^>]*?' + prop + ':(\\d+)px')); return m ? Number(m[1]) : null; };
+  const bBell = px('bell-recmod', 'bottom'), bIA = px('ia-fab', 'bottom'), hIA = px('ia-fab', 'height');
+  ok('la campana quedó en una sola posición, arriba del botón del asistente (sin encimarse)',
+    (html.match(/id="bell-recmod"/g) || []).length === 1 && bBell != null && bIA != null && hIA != null && bBell >= bIA + hIA,
+    'campana bottom=' + bBell + ', asistente bottom=' + bIA + ' alto=' + hIA);
+}
 
 console.log('\n═══ La campana junta tareas + cobros ═══');
 ok('actualizarBellRec suma tareas y cobros del día', /recordatoriosPendientesHoy\(\)\.length\+\(\(typeof puedeVerRecordatorios==='function'&&puedeVerRecordatorios\(\)\)\?recordatoriosDeHoy\(\)\.length:0\)/.test(src));

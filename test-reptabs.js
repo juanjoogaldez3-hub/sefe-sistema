@@ -11,9 +11,10 @@
 //  REP_TIPOS tenga su pestaña y que no haya pestañas huérfanas.
 // ============================================================
 const fs = require('fs');
-// Se lee el código ACTUAL de js/ (no test-fuente.js, que es una copia
-// congelada): las pestañas se leen de index.html en vivo, así que la lista
-// de tipos también tiene que ser la de hoy o la comparación no tiene sentido.
+// Se lee el código ACTUAL de js/: las pestañas se leen de index.html en vivo,
+// así que la lista de tipos también tiene que ser la de hoy o la comparación
+// no tiene sentido. (Antes test-fuente.js era una copia congelada; desde el
+// 19-11 también arma el texto en vivo.)
 const src = fs.readdirSync(__dirname + '/js').filter(f => /\.js$/.test(f))
   .map(f => fs.readFileSync(__dirname + '/js/' + f, 'utf8')).join('\n');
 

@@ -20,7 +20,12 @@ const ini = src.indexOf('function _anularEntradaBancoDeAbono(');
 const finMarca = 'window._anularEntradaBancoDeAbono=_anularEntradaBancoDeAbono;';
 const fin = src.indexOf(finMarca, ini);
 if (ini < 0 || fin < 0) { console.log('✗ no se encontró _anularEntradaBancoDeAbono'); process.exit(1); }
-const fnSrc = src.slice(ini, fin + finMarca.length);
+// Desde el 17-11 el emparejamiento abono ↔ movimiento de banco vive en
+// _movBancoDeAbono (lo comparten anular y editar): se carga también, real.
+const iMov = src.indexOf('function _movBancoDeAbono(');
+const jMov = src.indexOf('\n}', iMov);
+if (iMov < 0 || jMov < 0) { console.log('✗ no se encontró _movBancoDeAbono'); process.exit(1); }
+const fnSrc = src.slice(iMov, jMov + 2) + '\n' + src.slice(ini, fin + finMarca.length);
 
 function ctxCon(movs) {
   const guardados = [];

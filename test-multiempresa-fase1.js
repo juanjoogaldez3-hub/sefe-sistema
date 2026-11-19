@@ -73,13 +73,15 @@ ok('despachos muestra empTag(d.empresa)', /\$\{empTag\(d\.empresa\)\}/.test(src)
 
 console.log('\n═══ Escritura (app): el registro nuevo nace con su empresa ═══');
 [
-  ['pedido',        /nombreFacturado:_nitPed\.nombre,empresa:empresaParaNuevo\(\),_nuevo:true/],
+  // Pedido, cotización y compra heredan la empresa de su cliente/proveedor
+  // (blindaje del 03-11): sólo si no hay padre cae en la empresa activa.
+  ['pedido',        /nombreFacturado:_nitPed\.nombre,empresa:\(cli&&cli\.empresa\)\|\|empresaParaNuevo\(\),_nuevo:true/],
   ['cliente',       /precios:\{\},empresa:empresaParaNuevo\(\),_nuevo:true/],
   ['sede',          /empresa:padre\.empresa\|\|empresaParaNuevo\(\),_nuevo:true/],
   ['producto',      /activo:true,empresa:empresaParaNuevo\(\),_nuevo:true/],
-  ['cotización',    /convertidoPedidoId:null,empresa:empresaParaNuevo\(\),_nuevo:true/],
-  ['compra (parcial)', /oficializada:false,empresa:empresaParaNuevo\(\),_nuevo:true/],
-  ['compra (normal)',  /oficializada:false,empresa:empresaParaNuevo\(\),_nuevo:true/],
+  ['cotización',    /convertidoPedidoId:null,empresa:\(cliObj&&cliObj\.empresa\)\|\|empresaParaNuevo\(\),_nuevo:true/],
+  // Las dos compras (parcial y normal) usan el mismo texto: se exige que esté 2 veces.
+  ['compra (parcial y normal)', { test: s => (s.match(/oficializada:false,empresa:\(prov&&prov\.empresa\)\|\|empresaParaNuevo\(\),_nuevo:true/g) || []).length === 2 }],
   ['proveedor',     /const nuevoProv=\{id:provN\+\+,\.\.\.datos,empresa:empresaParaNuevo\(\),_nuevo:true\}/],
   ['cuenta banco',  /activo:true,empresa:empresaParaNuevo\(\),_nuevo:true/],
   ['movimiento banco hereda de la cuenta', /empresa:\(_ctaMov&&_ctaMov\.empresa\)\|\|empresaParaNuevo\(\),_nuevo:true/],
@@ -125,7 +127,9 @@ ok('anular manda empresa', /uuid:f\.autorizacion,motivo,empresa:f\.empresa\|\|'S
 console.log('\n═══ Marca de la barra lateral por empresa ═══');
 ok('aplicarMarcaEmpresa() existe', /function aplicarMarcaEmpresa\(\)\{/.test(src));
 ok('SEFE mantiene la marca del producto', /if\(!e \|\| e\.codigo==='SEFE'\)\{[\s\S]*?SEFE_MARCA\.monograma/.test(src));
-ok('otra empresa usa su nombre y color', /if\(mk\)\{ mk\.textContent=mono; if\(e\.color\)\{mk\.style\.background=e\.color/.test(src));
+// Desde el 10-11 el cuadrito usa el acento de barra de la marca (LAML
+// invertido) y, si no tiene, el color propio de la empresa.
+ok('otra empresa usa su nombre y color', /if\(mk\)\{ mk\.textContent=mono; const _mkBg=\(_m&&_m\.sidebarAccent\)\|\|e\.color; if\(_mkBg\)\{mk\.style\.background=_mkBg/.test(src) && /if\(h2\)h2\.textContent=\(_m&&_m\.nombre\)\|\|e\.nombre\|\|e\.codigo;/.test(src));
 ok('se aplica al cambiar de empresa', /renderSelectorEmpresa\(\);\s*\n\s*aplicarMarcaEmpresa\(\);/.test(src));
 ok('se aplica al entrar', /if\(typeof aplicarMarcaEmpresa==='function'\)aplicarMarcaEmpresa\(\)/.test(src));
 
