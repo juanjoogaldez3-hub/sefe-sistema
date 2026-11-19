@@ -862,6 +862,7 @@ const MODULOS_PERMISOS=[
   {key:'rep_vendedor',lbl:'Ventas por vendedor',grp:'Reportes · Ventas'},
   {key:'rep_producto',lbl:'Ventas por producto',grp:'Reportes · Ventas'},
   {key:'rep_cliprod',lbl:'Ventas cliente/producto',grp:'Reportes · Ventas'},
+  {key:'rep_prodcli',lbl:'Clientes por producto',grp:'Reportes · Ventas'},
   {key:'rep_climes',lbl:'Ventas cliente/mes',grp:'Reportes · Ventas'},
   {key:'rep_climescomp',lbl:'Comparativa cliente/mes',grp:'Reportes · Ventas'},
   {key:'rep_prodmescomp',lbl:'Comparativa producto/mes',grp:'Reportes · Ventas'},
@@ -887,7 +888,7 @@ const MODULOS_PERMISOS=[
 const ROLES_EDIT=['gerencia','ventas','bodega','contabilidad','auditoria','facturador','piloto'];
 
 // Mapa de tipos de reporte a su clave de permiso
-const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','climes','climescomp','prodmescomp','comision','seguimiento','dircli','factem','cardex','invactual','invcosto','invmov','canalvend','cprov','cprod','cxc','estcta','factabo','banco','recibos','pagos','retenciones'];
+const REP_TIPOS=['resumen','costos','vendedor','producto','cliprod','prodcli','climes','climescomp','prodmescomp','comision','seguimiento','dircli','factem','cardex','invactual','invcosto','invmov','canalvend','cprov','cprod','cxc','estcta','factabo','banco','recibos','pagos','retenciones'];
 
 // ¿El rol actual puede ver este reporte?
 function puedeVerReporte(tipo){

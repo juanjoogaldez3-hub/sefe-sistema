@@ -201,6 +201,101 @@ function renderReportes(){
         <th class="num">Costo Unit.</th><th class="num">Costo Total</th><th class="num">Margen Q</th><th class="num">Margen %</th>
       </tr></thead><tbody>${cuerpo}</tbody></table></div>`;
   }
+  else if(repType==='prodcli'){
+    // CLIENTES POR PRODUCTO — jerarquía Producto → Clientes que lo compraron.
+    // Para cada producto vendido en el período: su existencia actual, qué
+    // clientes lo compraron, cuántas unidades, en cuántas facturas y la fecha
+    // de la última compra. Los productos que se venden por caja Y por unidad
+    // (caja_unidad) salen en dos grupos: no se suman cajas con unidades.
+    const _e=s=>(typeof escHtml==='function'?escHtml(s):String(s==null?'':s));
+    const _fmt=n=>(Math.round((Number(n)||0)*100)/100).toLocaleString('es-GT');
+    const prodsMap={}, nomCli={};
+    ventas.forEach(d=>{
+      const ck=(d.clienteId!=null)?('#'+d.clienteId):(d.clienteComercial||d.clienteNombre||'Sin cliente');
+      if(d.clienteComercial)nomCli[ck]=d.clienteComercial; else if(!nomCli[ck])nomCli[ck]=d.clienteNombre||'Sin cliente';
+      (d.items||[]).forEach(it=>{
+        if(repFiltros.producto&&String(it.id)!==String(repFiltros.producto))return;
+        const p=productos.find(x=>x.id===it.id);
+        if(repFiltros.marca_prod&&((p&&p.marca)||'')!==repFiltros.marca_prod)return;
+        const esCU=!!(p&&p.tipoEmpaque==='caja_unidad');
+        const esUni=esCU&&it.modoVenta!=='caja';
+        const pk=String(it.id!=null?it.id:it.codigo)+(esUni?'|u':'|c');
+        if(!prodsMap[pk]){
+          // Existencia actual en la MISMA medida que se vendió (cajas o sueltas)
+          let stock=null;
+          if(p)stock=esCU?(esUni?(Number(p.stock)||0):(Number(p.stockCajas)||0)):(typeof existenciaTotal==='function'?existenciaTotal(p):(Number(p.stock)||0));
+          prodsMap[pk]={pk,codigo:(it.codigo||'')+(esUni?'-U':''),nombre:(p&&p.nombre)||it.nombre||'',marca:(p&&p.marca)||'',
+            medida:esCU?(esUni?'unidad':'caja'):((p&&p.unidad)||it.unidad||''),stock,cant:0,monto:0,docs:new Set(),clis:{}};
+        }
+        const g=prodsMap[pk];
+        const q=Number(it.cantidad)||0, v=q*(Number(it.precio)||0)-(Number(it.descuento)||0);
+        g.cant+=q; g.monto+=v; g.docs.add(d.id);
+        const c=g.clis[ck]||(g.clis[ck]={ck,cant:0,monto:0,docs:new Set(),ultima:null});
+        c.cant+=q; c.monto+=v; c.docs.add(d.id);
+        if(!c.ultima||new Date(d.creada)>new Date(c.ultima))c.ultima=d.creada;
+      });
+    });
+    // Orden: por monto vendido del producto (de mayor a menor), con la caja y la
+    // unidad del mismo producto juntas (primero la caja).
+    const _base=g=>g.pk.replace(/\|[uc]$/,'');
+    const montoBase={}; Object.values(prodsMap).forEach(g=>{montoBase[_base(g)]=(montoBase[_base(g)]||0)+g.monto;});
+    const arr=Object.values(prodsMap).sort((a,b)=>(montoBase[_base(b)]-montoBase[_base(a)])||_base(a).localeCompare(_base(b))||(a.pk.endsWith('|c')?-1:1));
+    const nProd=new Set(arr.map(g=>g.pk.replace(/\|[uc]$/,''))).size; // caja y unidad del mismo producto cuentan como 1
+    // Con muchos productos arranca colapsado (solo los totales de cada producto);
+    // si se eligió un producto o son pocos, arranca abierto.
+    const primeraVez=!gruposColapsados.__inicializado;
+    const abrir=!!repFiltros.producto||arr.length<=5;
+    const totClis=new Set(), totDocs=new Set(); let totMonto=0;
+    const expFilas=[];
+    let cuerpo='';
+    arr.forEach(g=>{
+      const key='V:'+g.pk;
+      if(primeraVez&&gruposColapsados[key]===undefined)gruposColapsados[key]=!abrir;
+      const clis=Object.values(g.clis).sort((a,b)=>(b.cant-a.cant)||(b.monto-a.monto));
+      const sub=[_e(g.codigo),g.marca?_e(g.marca):'',g.medida?('por '+_e(g.medida)):''].filter(Boolean).join(' · ');
+      cuerpo+=`<tr data-grupo-key="${_e(key)}" style="background:var(--green);cursor:pointer" onclick="toggleGrupo('${key.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+        <td style="color:#fff;font-weight:700"><span class="flecha-grupo" style="display:inline-block;width:14px">▾</span>${_e(g.nombre)}<div style="font-size:10.5px;font-weight:400;opacity:.85;padding-left:14px">${sub}</div></td>
+        <td class="num" style="color:#fff">${g.stock==null?'—':_fmt(g.stock)}</td>
+        <td class="num" style="color:#fff">${clis.length}</td>
+        <td class="num" style="color:#fff"></td>
+        <td class="num" style="color:#fff;font-weight:700">${_fmt(g.cant)}</td>
+        <td class="num" style="color:#fff">${g.docs.size}</td>
+        <td style="color:#fff"></td>
+        <td class="num" style="color:#fff;font-weight:700;white-space:nowrap">${money(g.monto)}</td></tr>`;
+      clis.forEach(c=>{
+        const pct=g.cant?(c.cant/g.cant*100):0;
+        const nom=nomCli[c.ck]||c.ck;
+        cuerpo+=`<tr data-pertenece="1" data-vend="${_e(g.pk)}">
+          <td style="padding-left:30px">${_e(nom)}</td>
+          <td></td><td></td>
+          <td class="num" style="color:var(--muted)">${pct.toFixed(1)}%</td>
+          <td class="num" style="font-weight:600">${_fmt(c.cant)}</td>
+          <td class="num">${c.docs.size}</td>
+          <td style="color:var(--muted);white-space:nowrap">${c.ultima?fdate(c.ultima):'—'}</td>
+          <td class="num" style="white-space:nowrap">${money(c.monto)}</td></tr>`;
+        expFilas.push({'Código':g.codigo,Producto:g.nombre,Marca:g.marca,Medida:g.medida,'Existencia actual':g.stock==null?'':g.stock,
+          Cliente:nom,Unidades:c.cant,'% del producto':Math.round(pct*10)/10,Facturas:c.docs.size,'Última compra':c.ultima?fdate(c.ultima):'',Monto:Math.round(c.monto*100)/100});
+        totClis.add(c.ck);
+      });
+      totMonto+=g.monto; g.docs.forEach(x=>totDocs.add(x));
+    });
+    if(!arr.length)cuerpo='<tr><td colspan="8" class="empty">Sin ventas en el período con esos filtros</td></tr>';
+    else cuerpo+=`<tr style="border-top:2px solid var(--line-strong);background:var(--surface-2);font-weight:700">
+        <td>TOTAL GENERAL</td><td></td><td class="num">${totClis.size}</td><td></td><td></td><td class="num">${totDocs.size}</td><td></td><td class="num" style="white-space:nowrap">${money(totMonto)}</td></tr>`;
+    exportData=expFilas;
+    gruposColapsados.__inicializado=true;
+    html+=`<div class="kpis stagger">${kpiHTML([
+      {ic:'i-blue',svg:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',lbl:'Productos vendidos',val:nProd},
+      {ic:'i-lime',svg:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',lbl:'Clientes que compraron',val:totClis.size},
+      {ic:'i-warn',svg:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',lbl:'Facturas',val:totDocs.size},
+      {ic:'i-green',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Monto vendido',val:money(totMonto)}])}</div>
+      <div class="panel"><div class="panel-head"><h3>Clientes por producto</h3><span style="font-size:12px;color:var(--muted)">${nProd} producto${nProd!==1?'s':''} · tocá un producto para ver u ocultar sus clientes</span></div>
+      <div style="padding:0 18px 10px;font-size:11.5px;color:var(--muted)">Unidades en la medida en que se vende cada producto. Los que se venden por caja y por unidad salen por separado. La existencia es la de hoy.</div>
+      <table style="font-size:12.5px"><thead><tr>
+        <th>Producto / Cliente</th><th class="num">Existencia actual</th><th class="num">Clientes</th><th class="num">% del producto</th>
+        <th class="num">Unidades</th><th class="num">Facturas</th><th>Última compra</th><th class="num">Monto</th>
+      </tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+  }
   else if(repType==='climes'){
     // VENTAS POR CLIENTE Y MES — vendedor → clientes, montos por mes (con IVA) + total
     const primeraVezMes=!gruposColapsados.__mesInit;
@@ -1447,7 +1542,7 @@ function renderReportes(){
   try{agregarTotalesReportes();}catch(e){console.error('totales',e);}
   try{prepararOrdenReportes();}catch(e){console.error('orden',e);}
   // Si es el reporte cliente/producto, aplicar el estado de colapso guardado
-  if(repType==='cliprod'||repType==='dircli'||repType==='climes'||repType==='prodmescomp')aplicarColapso();
+  if(repType==='cliprod'||repType==='prodcli'||repType==='dircli'||repType==='climes'||repType==='prodmescomp')aplicarColapso();
   enhanceRepTables();
   _consolidadoScope=false; // fin del render consolidado
 }

@@ -328,6 +328,22 @@ function renderRepFilters(){
     const checks=nombresV.map(n=>`<button class="vend-chk ${repFiltros.vendedores.includes(n)?'on':''}" onclick="toggleVend('${n.replace(/'/g,"\\'")}')">${n}</button>`).join('');
     html=`<div class="rep-filter-bar"><div style="width:100%"><label>Vendedores a comparar <span style="color:var(--muted-2);font-weight:400">(seleccioná uno o más — vacío muestra todos)</span></label><div class="vend-checks">${checks}</div></div></div>`;
   }
+  else if(repType==='prodcli'){
+    const prodOpts=deEmpresa(productos).filter(p=>p.activo!==false).map(p=>({v:String(p.id),l:(p.codigo?p.codigo+' — ':'')+p.nombre}));
+    const marcas=[...new Set(deEmpresa(productos).map(p=>p.marca).filter(m=>m&&m.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
+    const cliOpts=deEmpresa(clientes).map(c=>({v:String(c.id),l:c.nombre}));
+    const vendOpts=(typeof vendedoresEmp==='function'?vendedoresEmp():vendedores).map(v=>({v:v.nombre,l:v.nombre}));
+    html=`<div class="rep-filter-bar">
+      ${sel('rf-prod-pc','Producto',prodOpts,repFiltros.producto||'','producto')}
+      ${sel('rf-marca-pc','Marca',marcas.map(m=>({v:m,l:m})),repFiltros.marca_prod,'marca_prod')}
+      ${sel('rf-cli-pc','Cliente',cliOpts,repFiltros.cliente,'cliente')}
+      ${sel('rf-vend-pc','Vendedor',vendOpts,repFiltros.vendedor_simple||'','vendedor_simple')}
+      <div style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(true)" title="Expandir todo">⊞ Expandir</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleTodosGrupos(false)" title="Colapsar todo">⊟ Colapsar</button>
+      </div>
+    </div>`;
+  }
   else if(repType==='cprov'||repType==='cprod'){
     const provOpts=deEmpresa(proveedores).map(p=>({v:String(p.id),l:p.nombre}));
     html=`<div class="rep-filter-bar">${sel('rf-prov','Proveedor',provOpts,repFiltros.proveedor,'proveedor')}</div>`;
@@ -538,7 +554,7 @@ function _movsInvDespuesDe(corte){
 // Agrega un buscador ("Buscar en la tabla…") a cada tabla de reporte. Se omite en los
 // reportes agrupados/colapsables (cliprod, dircli, climes), donde chocaría con expandir/colapsar.
 function enhanceRepTables(){
-  if(['cliprod','dircli','climes','estcta','vendedor','climescomp','prodmescomp'].includes(repType))return;
+  if(['cliprod','prodcli','dircli','climes','estcta','vendedor','climescomp','prodmescomp'].includes(repType))return;
   const body=document.getElementById('rep-body');if(!body)return;
   let i=0;
   body.querySelectorAll('table').forEach(table=>{
