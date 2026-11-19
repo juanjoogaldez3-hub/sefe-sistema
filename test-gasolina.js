@@ -48,12 +48,20 @@ ok('el reporte por unidad existe (reemplaza al de piloto)', /window\._reporteGas
 
 (() => {
   const ctx = { Math, Number, String, Set }; vm.createContext(ctx);
+  // Multiempresa (desde nov-2026): el resumen filtra con deEmpresa() — se carga
+  // la función REAL, parados en SEFE, y se agrega una carga de LAML que NO
+  // debe entrar en el resumen.
+  const iDe = src.indexOf('function deEmpresa(');
+  const jDe = src.indexOf('\n}', iDe);
+  if (iDe < 0 || jDe < 0) { ok('existe deEmpresa()', false, 'no se encontró'); return; }
+  vm.runInContext('var _consolidadoScope=false, empresaActiva="SEFE";' + src.slice(iDe, jDe + 2), ctx);
   const i = src.indexOf('function _gasResumenUnidad(');
   const j = src.indexOf('async function _reporteGasUnidad(');
   const datos = [
     { id: 1, pilotoId: 'edwin', vehiculo: '804GYQ', kilometraje: 251726, galones: 10, monto: 435.38 },
     { id: 2, pilotoId: 'eduardo', vehiculo: '804GYQ', kilometraje: 251337, galones: 10.8, monto: 465.03 },
     { id: 3, pilotoId: 'edwin', vehiculo: '936LBB', kilometraje: 299, galones: 10.1, monto: 426.34 },
+    { id: 4, pilotoId: 'edwin', vehiculo: '804GYQ', kilometraje: 251900, galones: 50, monto: 2000, empresa: 'LAML' },
   ];
   // Stubear _batNombrePiloto (nombres de piloto)
   vm.runInContext('function _batNombrePiloto(id){return ({edwin:"Edwin Tuez",eduardo:"Eduardo Ramirez"})[id]||id;}var gasolina=' + JSON.stringify(datos) + ';' + src.slice(i, j) + ';globalThis.__u=_gasResumenUnidad;', ctx);
@@ -66,6 +74,7 @@ ok('el reporte por unidad existe (reemplaza al de piloto)', /window\._reporteGas
   ok('804GYQ rendimiento = 389 / 10 = 38.9 km/gal', g804 && g804.rend === 38.9, 'dio ' + (g804 && g804.rend));
   ok('804GYQ lista los dos pilotos que la manejaron', g804 && /Eduardo Ramirez/.test(g804.pilotos) && /Edwin Tuez/.test(g804.pilotos));
   ok('936LBB con una sola carga → sin rendimiento', g936 && g936.rend === null);
+  ok('una carga de OTRA empresa (LAML) no entra en el resumen de SEFE', g804 && g804.cargas === 2 && Math.round(g804.galones * 10) / 10 === 20.8);
 })();
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');

@@ -30,6 +30,9 @@ const ctx = {
   fdate: () => '19-08-2026', money: n => 'Q' + n,
   SEFE_LOGO: 'x', refPed: f => 'NP-' + (f.numero || 0),
   SEFE_MARCA: { logo: 'x', razonSocial: 'SEFE, S.A.', nombre: 'SEFE' },
+  // Desde nov-2026 la NP sale con la marca de la empresa activa (multiempresa).
+  marcaActiva: () => ctx._marca,
+  _marca: { logo: 'logo-sefe.png', membrete: 'SEFE, S.A.', nit: '123', ciudadPais: 'Guatemala' },
 };
 vm.createContext(ctx);
 vm.runInContext(fnSrc + '\n;globalThis.__np=notaPrestamoHTML;', ctx);
@@ -49,6 +52,13 @@ ok('NO agrega el separador " · " del nombre', !html.includes('GRUPO GECKO · ')
 console.log('\n═══ La sede se escapa ═══');
 html = notaPrestamoHTML({ ...base, sede: '<b>x</b>' });
 ok('no inyecta HTML crudo de la sede', !html.includes('<b>x</b>') && html.includes('&lt;b&gt;'), 'la sede no se escapó');
+
+console.log('\n═══ Marca de la empresa activa ═══');
+html = notaPrestamoHTML({ ...base });
+ok('SEFE: sale su logo y membrete', html.includes('logo-sefe.png') && html.includes('SEFE, S.A.'));
+ctx._marca = { logo: 'logo-laml.png', membrete: 'Soluciones Efectivas', nit: '999', ciudadPais: 'Guatemala' };
+html = notaPrestamoHTML({ ...base });
+ok('otra empresa: sale SU logo y membrete, no los de SEFE', html.includes('logo-laml.png') && html.includes('Soluciones Efectivas') && !html.includes('logo-sefe.png'));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

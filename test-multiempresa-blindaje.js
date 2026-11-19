@@ -21,9 +21,9 @@
 //    · el desplegable de proveedor de "Nueva compra" se reconstruye
 //      cada vez que se dibuja el formulario (no queda cacheado).
 //
-//  A DIFERENCIA de las otras pruebas, ésta lee los ARCHIVOS REALES
-//  (db.js, js/app-*.js), no el snapshot test-fuente.js, así siempre
-//  refleja el código que está publicado.
+//  Lee los ARCHIVOS REALES (db.js, js/app-*.js) directamente. (Desde el
+//  19-11 test-fuente.js también arma el texto en vivo; antes era una
+//  copia congelada.)
 // ============================================================
 const fs = require('fs');
 const path = require('path');

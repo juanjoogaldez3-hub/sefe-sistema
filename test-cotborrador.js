@@ -37,9 +37,11 @@ const ctx = {
   document: { getElementById: id => (id in campos ? { value: campos[id] } : { value: '' }) },
   window: {},
   cotEditId: null, cotCart: [], cotClienteSel: null,
+  // Multiempresa (desde el 17-11): un borrador POR EMPRESA.
+  empresaActiva: 'SEFE', clientes: [], productos: [],
 };
 vm.createContext(ctx);
-vm.runInContext(bloque + '\n;globalThis.__api={_cotGuardarBorrador,_cotLimpiarBorrador,_cotHayBorrador};', ctx);
+vm.runInContext(bloque + '\n;globalThis.__api={_cotGuardarBorrador,_cotLimpiarBorrador,_cotHayBorrador,COT_BORRADOR_KEY};', ctx);
 const A = ctx.__api;
 
 console.log('\n═══ Guardar y leer el borrador ═══');
@@ -73,6 +75,34 @@ A._cotGuardarBorrador();
 ok('hay borrador antes de limpiar', A._cotHayBorrador() !== null);
 A._cotLimpiarBorrador();
 ok('se limpia con _cotLimpiarBorrador', A._cotHayBorrador() === null);
+
+console.log('\n═══ Multiempresa: un borrador por empresa ═══');
+ctx.empresaActiva = 'SEFE';
+ctx.cotCart = [{ id: 1, nombre: 'PAPEL SEFE', cantidad: 1, precio: 10 }];
+A._cotGuardarBorrador();
+ctx.empresaActiva = 'LAML';
+ok('estando en LAML NO se ve el borrador de SEFE', A._cotHayBorrador() === null);
+ctx.cotCart = [{ id: 2, nombre: 'PAPEL LAML', cantidad: 1, precio: 10 }];
+A._cotGuardarBorrador();
+ok('LAML guarda su propio borrador', (A._cotHayBorrador() || {}).empresa === 'LAML');
+ctx.empresaActiva = 'SEFE';
+const bS = A._cotHayBorrador();
+ok('al volver a SEFE sigue SU borrador (no lo pisó LAML)', bS && bS.cart[0].nombre === 'PAPEL SEFE', JSON.stringify(bS && bS.cart));
+A._cotLimpiarBorrador();
+ctx.empresaActiva = 'LAML';
+ok('limpiar el de SEFE no borra el de LAML', A._cotHayBorrador() !== null);
+A._cotLimpiarBorrador();
+
+console.log('\n═══ Borrador viejo (sin empresa) → va a la empresa de su cliente ═══');
+ctx.clientes = [{ id: 50, empresa: 'LAML' }];
+store[A.COT_BORRADOR_KEY] = JSON.stringify({ cart: [{ id: 3, nombre: 'X', cantidad: 1, precio: 1 }], clienteId: 50, ts: 1 });
+ctx.empresaActiva = 'SEFE';
+ok('en SEFE no aparece (era de un cliente de LAML)', A._cotHayBorrador() === null);
+ok('la llave vieja (sin empresa) se borra', !(A.COT_BORRADOR_KEY in store));
+ctx.empresaActiva = 'LAML';
+ok('en LAML sí aparece', (A._cotHayBorrador() || {}).clienteId === 50);
+A._cotLimpiarBorrador();
+ctx.empresaActiva = 'SEFE'; ctx.clientes = [];
 
 console.log('\n═══ Cableado ═══');
 ok('index.html tiene el contenedor del aviso (#cot-borrador-aviso)', /id="cot-borrador-aviso"/.test(html));

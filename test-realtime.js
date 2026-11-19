@@ -279,17 +279,33 @@ console.log('\n═══ 11. LO MISMO EN DOCUMENTOS (id provisorio negativo) ═
 estadoDOM.vistaActiva = 'documentos';
 ctx.documentos.length = 0;
 const selloDoc = '2026-08-12T09:15:33.512Z';
-// Así crea la app un pedido: id negativo provisorio hasta que llega el real
+// Así crea la app un pedido: id negativo provisorio hasta que llega el real.
+// La identidad es hora de creación + CLIENTE (desde el 03-11: con sólo la
+// hora, dos pedidos del mismo milisegundo se confundían).
 ctx.documentos.push({ id:-1755000000000, numero:1500, tipoDoc:'pedido',
-  clienteNombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
+  clienteId:31, clienteNombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
   creada:selloDoc, abonos:[] });
 emitir('documentos','INSERT',{ id:4321, numero:1500, tipo_doc:'pedido',
-  cliente_nombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
+  cliente_id:31, cliente_nombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
   creada:selloDoc });
 await esperar(600);
 ok('NO se duplica el pedido', ctx.documentos.length===1,
    'quedaron ' + ctx.documentos.length);
 ok('reemplaza el id provisorio por el real', ctx.documentos[0].id===4321);
+
+// Otro vendedor crea un pedido en el MISMO milisegundo pero para OTRO
+// cliente: no debe adoptar el id de ese pedido ajeno.
+ctx.documentos.length = 0;
+ctx.documentos.push({ id:-1755000000002, numero:1501, tipoDoc:'pedido',
+  clienteId:31, clienteNombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
+  creada:selloDoc, abonos:[] });
+emitir('documentos','INSERT',{ id:4322, numero:1502, tipo_doc:'pedido',
+  cliente_id:77, cliente_nombre:'Otro cliente', items:[], totales:{total:90}, estado:'abierto',
+  creada:selloDoc });
+await esperar(600);
+ok('mismo milisegundo, OTRO cliente: no adopta el id ajeno',
+   ctx.documentos.length===2 && ctx.documentos.some(d=>d.id===-1755000000002) && ctx.documentos.some(d=>d.id===4322),
+   'ids: ' + ctx.documentos.map(d=>d.id).join(', '));
 
 console.log('\n═══ 12. LA CREDENCIAL VA ANTES DE SUSCRIBIRSE ═══');
 // Con RLS activo el websocket tiene que decirle a la base quién sos.
@@ -360,7 +376,7 @@ console.log('\n═══ 15. EL ECO DEL PROPIO GUARDADO NO REDIBUJA ═══');
 // cerraba el editor.
 ctx.cotizaciones.length = 0;
 const selloCot = '2026-08-12T21:30:00.000Z';
-const filaCot = { id:77, numero:4, cliente_nombre:'Mi cliente', items:[],
+const filaCot = { id:77, numero:4, cliente_id:31, cliente_nombre:'Mi cliente', items:[],
   estado:'borrador', creada:selloCot };
 // La copia local con el mismo contenido, pero con id provisorio: es lo
 // que hay en pantalla justo después de guardar y antes de que llegue

@@ -30,7 +30,9 @@ ok('facturar: toma el candado antes de la red y lo libera en finally', /_felLock
 const fe = src.slice(src.indexOf('async function facturarPedidoExento('), src.indexOf('window.facturarPedidoExento='));
 ok('facturar exento: toma el candado y lo libera en finally', /_felLock\('Emitiendo factura exenta…'/.test(fe) && /\}finally\{_felUnlock\(\);\}/.test(fe));
 // anular
-const an = src.slice(src.indexOf('async function anularFacturaReal('), src.indexOf('async function anularFacturaReal(') + 2600);
+// Hasta el `window.anularFacturaReal=` (antes eran 2600 caracteres fijos y la
+// función creció: el finally quedó afuera del recorte).
+const an = src.slice(src.indexOf('async function anularFacturaReal('), src.indexOf('\nwindow.anularFacturaReal='));
 ok('anular: toma el candado y lo libera en finally', /_felLock\('Anulando factura…'/.test(an) && /\}finally\{_felUnlock\(\);\}/.test(an));
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');

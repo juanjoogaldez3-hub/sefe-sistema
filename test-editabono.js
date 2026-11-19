@@ -22,7 +22,12 @@ const ok = (t, c, e) => { pruebas++; console.log((c ? '  ✓ ' : '  ✗ ') + t +
 const i = src.indexOf('function openEditarAbono(facturaId,abonoIdx){');
 const j = src.indexOf('\nwindow.openEditarAbono=openEditarAbono;');
 if (i < 0 || j < 0) { console.log('✗ no se encontró openEditarAbono'); process.exit(1); }
-const fnSrc = src.slice(i, j);
+// Desde el 17-11 el movimiento de banco del abono se busca con
+// _movBancoDeAbono (compartida con anular): se carga también, real.
+const iMov = src.indexOf('function _movBancoDeAbono(');
+const jMov = src.indexOf('\n}', iMov);
+if (iMov < 0 || jMov < 0) { console.log('✗ no se encontró _movBancoDeAbono'); process.exit(1); }
+const fnSrc = src.slice(iMov, jMov + 2) + '\n' + src.slice(i, j);
 
 let saveCb = null, campos = {}, guardados = [];
 const elErr = { style: {}, querySelector: () => ({ textContent: '' }) };
@@ -42,6 +47,9 @@ const ctx = {
   actualizarAbonoDB: () => {}, guardarDocumento: () => {},
   guardarMovimientoBanco: (m) => guardados.push(m),
   documentos: [], movimientosBanco: [],
+  // Desde el 17-11 el abono se puede pasar a otra cuenta (selector #ea-cuenta).
+  cuentasBanco: [{ id: 4, nombre: 'Bi Monetaria' }, { id: 9, nombre: 'BAM Ahorro' }],
+  cuentasActivasBanco: () => ctx.cuentasBanco,
 };
 vm.createContext(ctx);
 vm.runInContext(fnSrc + '\n;globalThis.__e=openEditarAbono;', ctx);
@@ -76,6 +84,26 @@ console.log('\n═══ No cambiar nada relevante → no toca el movimiento ═
 campos = { 'ea-recibo': '31494', 'ea-fecha': '2026-08-03', 'ea-monto': '250', 'ea-met': 'Transferencia', 'ea-ref': '' };
 saveCb();
 ok('no se guarda el movimiento si no cambió fecha ni monto', guardados.length === 0);
+
+console.log('\n═══ Cambiar la CUENTA acreditada → el movimiento se va con ella ═══');
+({ abono, mov } = escenario());
+campos = { 'ea-recibo': '31494', 'ea-fecha': '2026-08-03', 'ea-monto': '250', 'ea-met': 'Transferencia', 'ea-ref': '', 'ea-cuenta': '9' };
+saveCb();
+ok('el abono queda en la cuenta nueva', abono.cuentaBancoId === 9, 'quedó ' + abono.cuentaBancoId);
+ok('el movimiento de banco se mueve a la cuenta nueva (no se duplica)', mov.cuentaId === 9 && guardados.length === 1, 'cuenta ' + mov.cuentaId + ' / guardados ' + guardados.length);
+
+console.log('\n═══ Abono con cuenta → no se puede dejar SIN cuenta ═══');
+({ abono, mov } = escenario());
+campos = { 'ea-recibo': '31494', 'ea-fecha': '2026-08-03', 'ea-monto': '250', 'ea-met': 'Transferencia', 'ea-ref': '', 'ea-cuenta': '' };
+saveCb();
+ok('no guarda: la cuenta sigue igual', abono.cuentaBancoId === 4 && mov.cuentaId === 4 && guardados.length === 0);
+
+console.log('\n═══ Movimiento ya CONCILIADO → no se cambia de cuenta ═══');
+({ abono, mov } = escenario());
+mov.conciliado = true;
+campos = { 'ea-recibo': '31494', 'ea-fecha': '2026-08-03', 'ea-monto': '250', 'ea-met': 'Transferencia', 'ea-ref': '', 'ea-cuenta': '9' };
+saveCb();
+ok('no mueve un cobro conciliado', abono.cuentaBancoId === 4 && mov.cuentaId === 4 && guardados.length === 0);
 
 console.log('\n' + (fallos === 0 ? `✓ TODO BIEN — ${pruebas} pruebas pasaron` : `✗ ${fallos} de ${pruebas} fallaron`) + '\n');
 process.exit(fallos ? 1 : 0);

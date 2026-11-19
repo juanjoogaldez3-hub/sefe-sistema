@@ -54,6 +54,8 @@ const ctx = {
   guardarPagoProveedor: (id, pago) => pagosGuardados.push({ id, pago }),
   registrarMovimientoBanco: (mov) => { movimientos.push(mov); return mov; },
   guardarCompra: () => {},
+  // Multiempresa (desde nov-2026): el abono nace con la empresa de la compra.
+  empresaParaNuevo: () => 'SEFE',
 };
 vm.createContext(ctx);
 vm.runInContext(fnSrc + '\n;globalThis.__open=openFacturaProv;', ctx);
