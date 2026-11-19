@@ -217,9 +217,15 @@ function enhanceTable(tbodyId,opts){
   }
   if(!_noSearch)applyTableFilter(table);
 }
+// Texto para BUSCAR: minúsculas y sin la coma de miles, para que un monto se
+// encuentre igual escrito "1115", "1,115" o "1,115.00" (la tabla lo muestra
+// "Q 1,115.00"). También junta "Q 1115" → "q1115". Se aplica a lo que se
+// escribe Y a lo que se compara, así que no cambia otras búsquedas.
+function _normBusq(s){return String(s==null?'':s).toLowerCase().replace(/(\d),(?=\d)/g,'$1').replace(/q\s+(?=\d)/g,'q');}
+window._normBusq=_normBusq;
 function applyTableFilter(table){
   const wrap=table.previousElementSibling;if(!wrap||!wrap.classList.contains('tbl-toolbar'))return;
-  const q=(wrap.querySelector('.tbl-search').value||'').toLowerCase().trim();
+  const q=_normBusq((wrap.querySelector('.tbl-search').value||'').trim());
   const tbody=table.querySelector('tbody');
   const tbodyId=tbody?tbody.id:null;
   const st=tbodyId?_paginadores[tbodyId]:null;
@@ -229,7 +235,7 @@ function applyTableFilter(table){
     const btnRow=tbody.querySelector('.fila-vermas');if(btnRow)btnRow.remove();
     if(q){
       // Renderizar todas las filas que coincidan
-      const coinciden=st.filas.filter(f=>f.toLowerCase().includes(q));
+      const coinciden=st.filas.filter(f=>_normBusq(f).includes(q));
       tbody.innerHTML=coinciden.length?coinciden.join(''):`<tr><td colspan="20" class="empty">Sin coincidencias</td></tr>`;
       wrap.querySelector('.tbl-count').textContent=`${coinciden.length} de ${st.filas.length}`;
       return;
@@ -243,7 +249,7 @@ function applyTableFilter(table){
   // Tabla no paginada: filtrado normal sobre el DOM
   let visible=0;
   Array.from(tbody.querySelectorAll('tr')).forEach(r=>{
-    const show=!q||r.textContent.toLowerCase().includes(q);
+    const show=!q||_normBusq(r.textContent).includes(q);
     r.style.display=show?'':'none';if(show)visible++;
   });
   const total=tbody.querySelectorAll('tr').length;

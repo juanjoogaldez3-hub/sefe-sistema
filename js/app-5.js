@@ -331,6 +331,16 @@ function renderLlamarHoy(ars){
 }
 window.renderLlamarHoy=renderLlamarHoy;
 function renderCobros(){
+  // Pestañas: "Por cobrar" (cartera) y "Cobros recibidos" (abonos por recibo)
+  const _tabs=$('#cb-tabs');
+  if(_tabs)_tabs.querySelectorAll('.ct-tab').forEach(b=>b.classList.toggle('on',b.dataset.t===_cbTab));
+  const _rec=_cbTab==='recibidos';
+  ['#cobros-llamar','#cobros-aging','#cb-cartera-wrap'].forEach(id=>{const e=$(id);if(e&&_rec)e.style.display='none';});
+  const _cw=$('#cb-cartera-wrap'),_rw=$('#cb-recibidos-wrap');
+  if(_rw)_rw.style.display=_rec?'':'none';
+  if(_rec){renderCobrosRecibidos();return;}
+  if(_cw)_cw.style.display='';
+  const _ag=$('#cobros-aging');if(_ag)_ag.style.display='';
   const btnPG=$('#btn-pago-global');
   if(btnPG)btnPG.style.display=canRegistrarAbono()?'':'none';
   const ars=deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'); // multiempresa
@@ -379,11 +389,14 @@ function renderCobros(){
   $('#t-cobros').innerHTML=info.sort((a,b)=>(b.vencido?1:0)-(a.vencido?1:0)).map(x=>{
     const f=x.f;const [en,ec]=x.vencido?['Vencido','b-danger']:EST[x.estado];
     const nAbonos=(f.abonos||[]).filter(a=>!a.anulado).length;
+    // Números de recibo de sus abonos (ocultos): así el buscador de la tabla
+    // encuentra la factura escribiendo el No. de recibo.
+    const _recs=(f.abonos||[]).filter(a=>!a.anulado&&a.noRecibo).map(a=>'recibo '+String(a.noRecibo).replace(/[<>&"]/g,'')).join(' ');
     let acts=`<button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button>`;
     acts+=`<button class="btn btn-ghost btn-sm" onclick="openHistorialAbonos(${f.id})">Abonos${nAbonos?' ('+nAbonos+')':''}</button>`;
     if(x.saldo>0.001&&canRegistrarAbono())acts=`<button class="btn btn-primary btn-sm" onclick="openAbono(${f.id})">Registrar abono</button> <button class="btn btn-ghost btn-sm" style="color:#7A4A9E" onclick="openRetencion(${f.id})" title="Registrar retención de IVA o ISR">Retención</button>`+acts;
     return `<tr>
-      <td style="font-weight:600">${f.serie}-${f.numeroDte}</td>
+      <td style="font-weight:600">${f.serie}-${f.numeroDte}${_recs?`<span style="display:none"> ${_recs}</span>`:''}</td>
       <td>${f.clienteComercial||f.clienteNombre}</td>
       <td style="color:var(--muted)">${fdate(f.creada)}</td>
       <td style="color:${x.vencido?'var(--danger)':'var(--muted)'};font-weight:${x.vencido?'600':'400'}">${fdate(f.vencimiento||x.venc)}</td>
@@ -400,6 +413,143 @@ $('#cb-estado').onchange=renderCobros;
 $('#cb-metodo').onchange=renderCobros;
 $('#cb-desde').onchange=renderCobros;
 $('#cb-hasta').onchange=renderCobros;
+
+// ══════════ COBROS RECIBIDOS (agrupados por recibo) ══════════
+// Pestaña de Cobros con todos los abonos ya registrados, UN renglón por
+// recibo: si un recibo pagó 3 facturas (pago global), sale una sola fila con
+// las 3. Con buscador por recibo, factura, cliente o referencia.
+let _cbTab='cartera',_cbrBuscar='',_cbrCli='',_cbrPeriodo='',_cbrGrupos=[],_cbrVis=[];
+function setCbTab(t){_cbTab=t;renderCobros();}
+window.setCbTab=setCbTab;
+function _escCb(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+function _refFactCb(d){return d.serie&&d.numeroDte?`${d.serie}-${d.numeroDte}`:refPed(d);}
+// Abonos del mismo recibo: mismo No. de recibo y mismo cliente. Sin recibo
+// (p.ej. retenciones) → abono suelto.
+function _claveReciboCobro(d,a){
+  const r=String(a&&a.noRecibo||'').trim().toUpperCase();
+  if(!r||r==='—'||r==='-')return null;
+  return [d.clienteId||d.clienteNombre||'',r].join('|');
+}
+function _grupoReciboCobro(d,a){
+  const solo=[{d,a,idx:(d.abonos||[]).indexOf(a)}];
+  const k=_claveReciboCobro(d,a); if(!k)return solo;
+  const out=[];
+  documentos.forEach(x=>{
+    if(x.estado==='anulada')return;
+    (x.abonos||[]).forEach((b,idx)=>{ if(!b.anulado&&_claveReciboCobro(x,b)===k)out.push({d:x,a:b,idx}); });
+  });
+  return out.length?out:solo;
+}
+window._grupoReciboCobro=_grupoReciboCobro;
+function _cbrEnPeriodo(fecha){
+  if(!_cbrPeriodo)return true;
+  const f=(typeof _fechaDe==='function')?_fechaDe(fecha):new Date(fecha); if(!f||isNaN(f))return true;
+  const hoy=new Date(fechaHoyGT()+'T00:00:00');const y=hoy.getFullYear(),m=hoy.getMonth();
+  if(_cbrPeriodo==='mes')return f>=new Date(y,m,1);
+  if(_cbrPeriodo==='mesant')return f>=new Date(y,m-1,1)&&f<new Date(y,m,1);
+  if(_cbrPeriodo==='2m')return f>=new Date(y,m-1,1);
+  if(_cbrPeriodo==='3m')return f>=new Date(y,m-2,1);
+  return true;
+}
+function renderCobrosRecibidos(){
+  const docs=deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada'); // multiempresa
+  let abonos=[];
+  docs.forEach(d=>(d.abonos||[]).forEach((a,idx)=>{ if(!a.anulado)abonos.push({d,a,idx}); }));
+  // Filtros: cliente + período + buscador
+  const cliIds=[...new Set(abonos.map(x=>String(x.d.clienteId)))];
+  const opts=cliIds.map(id=>{const c=clientes.find(v=>String(v.id)===id);const d0=abonos.find(x=>String(x.d.clienteId)===id).d;return {v:id,l:(c&&c.nombre)||d0.clienteComercial||d0.clienteNombre||'—'};}).sort((a,b)=>a.l.localeCompare(b.l,'es'));
+  const fil=$('#cbr-filtros');
+  if(fil)fil.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <input id="cbr-buscar" type="search" value="${_escCb(_cbrBuscar)}" oninput="_cbrBuscar=this.value;_cbrTabla()" placeholder="Buscar recibo, factura, cliente o referencia" style="font-size:12.5px;padding:6px 10px;min-width:240px;flex:1;max-width:340px">
+    <select onchange="_cbrCli=this.value;renderCobros()" style="font-size:12.5px;padding:6px 10px;max-width:220px"><option value="">Todos los clientes</option>${opts.map(o=>`<option value="${o.v}"${_cbrCli===o.v?' selected':''}>${_escCb(o.l)}</option>`).join('')}</select>
+    <select onchange="_cbrPeriodo=this.value;renderCobros()" style="font-size:12.5px;padding:6px 10px;max-width:180px"><option value="">Todo el tiempo</option>${[['mes','Este mes'],['mesant','Mes anterior'],['2m','Últimos 2 meses'],['3m','Últimos 3 meses']].map(([v,l])=>`<option value="${v}"${_cbrPeriodo===v?' selected':''}>${l}</option>`).join('')}</select>
+  </div>`;
+  if(_cbrCli)abonos=abonos.filter(x=>String(x.d.clienteId)===String(_cbrCli));
+  if(_cbrPeriodo)abonos=abonos.filter(x=>_cbrEnPeriodo(x.a.fecha));
+  const _fd=f=>(typeof _fechaDe==='function')?_fechaDe(f):new Date(f);
+  // Agrupar por recibo
+  const mapa=new Map(),grupos=[];
+  abonos.forEach((x,i)=>{
+    const k=_claveReciboCobro(x.d,x.a)||('suelto|'+i);
+    let g=mapa.get(k);
+    if(!g){g={fecha:x.a.fecha,noRecibo:x.a.noRecibo||'',cliente:x.d.clienteComercial||x.d.clienteNombre||'—',metodo:x.a.metodo||'',referencia:x.a.referencia||'',registradoPor:x.a.registradoPor||'',total:0,items:[]};mapa.set(k,g);grupos.push(g);}
+    g.items.push(x); g.total+=Number(x.a.monto||0);
+  });
+  const _nrec=g=>{const d=String(g.noRecibo||'').replace(/\D/g,'');return d?parseInt(d,10):-1;};
+  grupos.sort((a,b)=>((_fd(b.fecha)||0)-(_fd(a.fecha)||0))||(_nrec(b)-_nrec(a)));
+  _cbrGrupos=grupos;
+  const total=abonos.reduce((s,x)=>s+Number(x.a.monto||0),0);
+  const hoy=new Date(fechaHoyGT()+'T00:00:00'); const iniMes=new Date(hoy.getFullYear(),hoy.getMonth(),1);
+  const mes=abonos.filter(x=>{const f=_fd(x.a.fecha);return f&&!isNaN(f)&&f>=iniMes;}).reduce((s,x)=>s+Number(x.a.monto||0),0);
+  const nRec=grupos.filter(g=>g.noRecibo).length, nMulti=grupos.filter(g=>g.items.length>1).length;
+  const k=[
+    {ic:'i-green',svg:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',lbl:'Total abonado',val:money(total),sub:abonos.length+' abono'+(abonos.length!==1?'s':'')},
+    {ic:'i-blue',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'Abonado este mes',val:money(mes),sub:'mes en curso'},
+    {ic:'i-lime',svg:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',lbl:'Recibos',val:nRec,sub:nMulti?(nMulti+' con varias facturas'):'uno por factura'},
+    {ic:'i-warn',svg:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',lbl:'Clientes',val:new Set(abonos.map(x=>String(x.d.clienteId))).size,sub:'que abonaron'},
+  ];
+  $('#cobros-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
+  _cbrTabla();
+}
+// Sólo la tabla (el buscador no pierde el foco al escribir).
+function _cbrTabla(){
+  const q=_normBusq(String(_cbrBuscar||'').trim());
+  const vis=q?_cbrGrupos.filter(g=>{
+    const txt=['recibo '+g.noRecibo,g.noRecibo,g.referencia,g.cliente,g.registradoPor,g.metodo,money(g.total),String(Math.round(g.total*100)/100)]
+      .concat(g.items.map(x=>_refFactCb(x.d)+' '+(x.d.numeroDte||'')+' '+String(x.a.monto)))
+      .join(' ');
+    return _normBusq(txt).includes(q);
+  }):_cbrGrupos;
+  _cbrVis=vis;
+  const emp=$('#cbr-empty');
+  if(emp){emp.style.display=vis.length?'none':'block';emp.textContent=q?'Ningún cobro coincide con la búsqueda.':'No hay cobros registrados.';}
+  const tb=$('#t-cb-recibidos'); if(!tb)return;
+  tb.innerHTML=vis.map((g,i)=>{
+    const n=g.items.length;
+    const fact=n>1
+      ?`<b style="color:var(--ink)">${n} facturas</b><div style="font-size:11px;color:var(--muted)">${g.items.map(x=>_escCb(_refFactCb(x.d))).join(', ')}</div>`
+      :_escCb(_refFactCb(g.items[0].d));
+    return `<tr style="cursor:pointer" onclick="verCobroGrupo(${i})"><td style="color:var(--muted)">${fdate(g.fecha)}</td><td style="font-weight:700;color:var(--green)">${_escCb(g.noRecibo)||'<span style="color:var(--muted-2);font-weight:400">—</span>'}</td><td>${_escCb(g.cliente)}</td><td style="color:var(--blue)">${fact}</td><td>${_escCb(g.metodo)||'—'}</td><td style="color:var(--muted)">${_escCb(g.referencia)||'—'}</td><td style="color:var(--muted)">${_escCb(g.registradoPor)||'—'}</td><td class="num" style="font-weight:700;color:var(--ok)">${money(g.total)}</td><td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();verCobroGrupo(${i})">Ver</button></td></tr>`;
+  }).join('');
+  enhanceTable('t-cb-recibidos',{noSearch:true}); // ya tiene su propio buscador arriba
+}
+window._cbrTabla=_cbrTabla;
+// Detalle de un recibo: qué facturas pagó, cuánto a cada una y cuánto les queda.
+function verCobroGrupo(i){
+  const g=_cbrVis[i]; if(!g)return;
+  const it0=g.items[0];
+  const items=_grupoReciboCobro(it0.d,it0.a); // al día
+  const a0=it0.a;
+  const total=items.reduce((s,x)=>s+Number(x.a.monto||0),0);
+  const conFoto=items.find(x=>x.a.comprobante);
+  const fila=(l,v)=>`<tr><td style="color:var(--muted);padding:3px 0">${l}</td><td style="text-align:right;font-weight:600">${v}</td></tr>`;
+  const filas=items.map(x=>{const ai=arInfo(x.d);return `<tr><td style="padding:6px 0;font-family:monospace">${_escCb(_refFactCb(x.d))}</td><td style="padding:6px 0;color:var(--muted);font-size:12px">${fdate(x.a.fecha)}</td><td class="num" style="padding:6px 0;font-weight:700;color:#1a7f37;text-align:right">${money(x.a.monto)}</td><td class="num" style="padding:6px 0;color:var(--muted);text-align:right">${money(ai.saldo)}</td><td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="closeMod();openHistorialAbonos(${x.d.id})">Abonos</button> <button class="btn btn-ghost btn-sm" onclick="closeMod();verDoc(${x.d.id})">Ver →</button></td></tr>`;}).join('');
+  openMod(a0.noRecibo?('Recibo '+a0.noRecibo):'Detalle del abono',
+    `<div style="background:var(--surface-2);border-radius:10px;padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-family:monospace;font-weight:700;font-size:15px;color:#1a7f37">${a0.noRecibo?'Recibo '+_escCb(a0.noRecibo):'Sin No. de recibo'}</span>
+        <span class="badge b-ok">${items.length>1?items.length+' facturas':'1 factura'}</span>
+      </div>
+      <table style="width:100%;font-size:13px">
+        ${fila('Cliente',_escCb(it0.d.clienteComercial||it0.d.clienteNombre||'—'))}
+        ${fila('Total del recibo',`<span style="color:#1a7f37">${money(total)}</span>`)}
+        ${fila('Método',_escCb(a0.metodo)||'—')}
+        ${a0.referencia?fila('Referencia',_escCb(a0.referencia)):''}
+        ${fila('Cuenta',_cuentaAbonoHTML(a0))}
+        ${a0.registradoPor?fila('Registrado por',_escCb(a0.registradoPor)):''}
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px">${items.length>1?'Facturas pagadas con este recibo':'Factura'}</div>
+    <div style="overflow-x:auto"><table style="width:100%;min-width:460px;font-size:13px;margin-top:4px">
+      <thead><tr><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Factura</th><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Fecha</th><th style="text-align:right;font-size:10.5px;color:var(--muted-2)">Abono</th><th style="text-align:right;font-size:10.5px;color:var(--muted-2)">Saldo hoy</th><th></th></tr></thead>
+      <tbody>${filas}</tbody>
+      ${items.length>1?`<tfoot><tr><td colspan="2" style="padding-top:8px;font-weight:700;border-top:1px solid var(--line)">Total</td><td class="num" style="padding:8px 0 0;font-weight:800;color:#1a7f37;border-top:1px solid var(--line);text-align:right">${money(total)}</td><td colspan="2" style="border-top:1px solid var(--line)"></td></tr></tfoot>`:''}
+    </table></div>
+    ${conFoto?`<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="verComprobante('doc',${conFoto.d.id},${conFoto.idx})">📷 Ver comprobante</button></div>`:''}`,
+    ()=>closeMod());
+  $('#m-save').textContent='Cerrar';$('#m-save').className='btn btn-ghost';
+}
+window.verCobroGrupo=verCobroGrupo;
 // ---- Widget de foto de comprobante (reutilizable) ----
 let _compFoto=null; // dataURL temporal de la foto cargada
 function compFotoHTML(){
@@ -870,6 +1020,13 @@ function openHistorialAbonos(id){
     let extra='';
     if(a.anulado)extra=`<div style="font-size:10.5px;color:var(--danger);margin-top:3px">Anulado por ${a.anuladoPor} el ${fdate(a.anuladoFecha)} · ${a.motivoAnulacion}</div>`;
     else extra=`<div style="font-size:10.5px;color:var(--muted-2);margin-top:3px">Registrado por ${a.registradoPor||'—'}</div>`;
+    if(!a.anulado){
+      const g=_grupoReciboCobro(f,a);
+      if(g.length>1){
+        const otras=g.filter(x=>x.d.id!==f.id).map(x=>_escCb(_refFactCb(x.d))).join(', ');
+        extra+=`<div style="font-size:10.5px;color:var(--blue);margin-top:3px">Recibo conjunto · ${money(g.reduce((s,x)=>s+Number(x.a.monto||0),0))} en ${g.length} facturas${otras?' (también '+otras+')':''}</div>`;
+      }
+    }
     return `<tr>
       <td style="${tachado};font-weight:700;color:var(--green)">${a.noRecibo||'<span style="color:var(--muted-2);font-weight:400">—</span>'}</td>
       <td style="${tachado}">${fdate(a.fecha)}</td>

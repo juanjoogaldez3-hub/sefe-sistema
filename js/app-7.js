@@ -708,65 +708,77 @@ window.reactivarRecibo=async function(num,id,talId){
   }else{toast('Error','No se pudo quitar la anulación',true);}
 };
 
-// Muestra el detalle del abono asociado a un número de recibo (desde el cuadre)
+// Muestra el detalle de un número de recibo (desde el cuadre o el buscador).
+// Un mismo recibo puede cubrir VARIAS facturas (pago global en Cobros): se
+// juntan TODOS los abonos con ese número, no sólo el primero que aparezca.
 window.verAbonoPorRecibo=function(num){
-  // Buscar el abono con ese número de recibo
-  let encontrado=null;
+  const abonosRec=[];
   for(const d of documentos){
     for(const a of (d.abonos||[])){
       if(a.anulado)continue;
       const n=parseInt(String(a.noRecibo||'').replace(/\D/g,''),10);
-      if(n===num){encontrado={doc:d,abono:a};break;}
-    }
-    if(encontrado)break;
-  }
-  // Buscar también en cobros en ruta
-  if(!encontrado&&typeof cobrosRuta!=='undefined'){
-    for(const c of cobrosRuta){
-      const n=parseInt(String(c.noRecibo||'').replace(/\D/g,''),10);
-      if(n===num){encontrado={cobroRuta:c};break;}
+      if(n===num)abonosRec.push({doc:d,abono:a});
     }
   }
-  if(!encontrado){toast('Recibo no encontrado','No se halló el abono '+num,true);return;}
+  // Cobro en ruta (sólo si el recibo todavía no se aplicó como abono)
+  let cobroRuta=null;
+  if(!abonosRec.length&&typeof cobrosRuta!=='undefined'){
+    cobroRuta=cobrosRuta.find(c=>parseInt(String(c.noRecibo||'').replace(/\D/g,''),10)===num)||null;
+  }
+  if(!abonosRec.length&&!cobroRuta){toast('Recibo no encontrado','No se halló el abono '+num,true);return;}
 
-  let cuerpo,docId=null;
-  if(encontrado.abono){
-    const d=encontrado.doc,a=encontrado.abono;docId=d.id;
-    const facturaRef=d.serie&&d.numeroDte?`${d.serie}-${d.numeroDte}`:`${refPed(d)}`;
+  const fila=(l,v)=>`<tr><td style="color:var(--muted);padding:3px 0">${l}</td><td style="text-align:right;font-weight:600">${v}</td></tr>`;
+  let cuerpo;
+  if(abonosRec.length){
+    const a0=abonosRec[0].abono;
+    const total=abonosRec.reduce((s,x)=>s+Number(x.abono.monto||0),0);
+    const clientesRec=[...new Set(abonosRec.map(x=>x.doc.clienteComercial||x.doc.clienteNombre||'—'))].join(', ');
+    const nF=abonosRec.length;
+    const filasFact=abonosRec.map(x=>{
+      const d=x.doc;
+      const ref=d.serie&&d.numeroDte?`${d.serie}-${d.numeroDte}`:`${refPed(d)}`;
+      return `<tr>
+        <td style="padding:6px 0;font-family:monospace">${ref}</td>
+        <td style="padding:6px 0;color:var(--muted);font-size:12px">${fdate(x.abono.fecha)}</td>
+        <td class="num" style="padding:6px 0;font-weight:700;color:#1a7f37;text-align:right">${money(x.abono.monto)}</td>
+        <td style="padding:6px 0;text-align:right"><button class="btn btn-ghost btn-sm" onclick="irAFacturaDesdeRecibo(${d.id})">Ver →</button></td></tr>`;
+    }).join('');
     cuerpo=`<div style="background:var(--surface-2);border-radius:10px;padding:14px 16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <span style="font-family:monospace;font-weight:700;font-size:15px;color:#1a7f37">Recibo ${a.noRecibo||num}</span>
-        <span class="badge b-ok">Procesado</span>
+        <span style="font-family:monospace;font-weight:700;font-size:15px;color:#1a7f37">Recibo ${a0.noRecibo||num}</span>
+        <span class="badge b-ok">Procesado${nF>1?' · '+nF+' facturas':''}</span>
       </div>
       <table style="width:100%;font-size:13px">
-        <tr><td style="color:var(--muted);padding:3px 0">Cliente</td><td style="text-align:right;font-weight:600">${d.clienteComercial||d.clienteNombre||'—'}</td></tr>
-        <tr><td style="color:var(--muted);padding:3px 0">Factura</td><td style="text-align:right;font-family:monospace">${facturaRef}</td></tr>
-        <tr><td style="color:var(--muted);padding:3px 0">Monto</td><td style="text-align:right;font-weight:700;color:#1a7f37">${money(a.monto)}</td></tr>
-        <tr><td style="color:var(--muted);padding:3px 0">Fecha</td><td style="text-align:right">${fdate(a.fecha)}</td></tr>
-        <tr><td style="color:var(--muted);padding:3px 0">Método</td><td style="text-align:right">${a.metodo||'—'}</td></tr>
-        ${a.referencia?`<tr><td style="color:var(--muted);padding:3px 0">Referencia</td><td style="text-align:right">${a.referencia}</td></tr>`:''}
-        ${a.registradoPor?`<tr><td style="color:var(--muted);padding:3px 0">Registrado por</td><td style="text-align:right">${a.registradoPor}</td></tr>`:''}
+        ${fila(nF>1&&clientesRec.includes(',')?'Clientes':'Cliente',clientesRec)}
+        ${fila('Total del recibo',`<span style="color:#1a7f37">${money(total)}</span>`)}
+        ${fila('Método',a0.metodo||'—')}
+        ${a0.referencia?fila('Referencia',a0.referencia):''}
+        ${a0.registradoPor?fila('Registrado por',a0.registradoPor):''}
       </table>
-    </div>`;
+    </div>
+    <div style="margin-top:12px;font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px">${nF>1?'Facturas pagadas con este recibo':'Factura'}</div>
+    <table style="width:100%;font-size:13px;margin-top:4px">
+      <thead><tr><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Factura</th><th style="text-align:left;font-size:10.5px;color:var(--muted-2)">Fecha</th><th style="text-align:right;font-size:10.5px;color:var(--muted-2)">Abono</th><th></th></tr></thead>
+      <tbody>${filasFact}</tbody>
+      ${nF>1?`<tfoot><tr><td colspan="2" style="padding-top:8px;font-weight:700;border-top:1px solid var(--line)">Total</td><td class="num" style="padding:8px 0 0;font-weight:800;color:#1a7f37;border-top:1px solid var(--line);text-align:right">${money(total)}</td><td style="border-top:1px solid var(--line)"></td></tr></tfoot>`:''}
+    </table>`;
   } else {
-    const c=encontrado.cobroRuta;
+    const c=cobroRuta;
     cuerpo=`<div style="background:var(--surface-2);border-radius:10px;padding:14px 16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-family:monospace;font-weight:700;font-size:15px;color:#1a7f37">Recibo ${c.noRecibo||num}</span>
         <span class="badge b-info">Cobro en ruta</span>
       </div>
       <table style="width:100%;font-size:13px">
-        <tr><td style="color:var(--muted);padding:3px 0">Cliente</td><td style="text-align:right;font-weight:600">${c.cliente||'—'}</td></tr>
-        <tr><td style="color:var(--muted);padding:3px 0">Monto</td><td style="text-align:right;font-weight:700;color:#1a7f37">${money(c.monto)}</td></tr>
-        <tr><td style="color:var(--muted);padding:3px 0">Fecha</td><td style="text-align:right">${fdate(c.fecha)}</td></tr>
-        <tr><td style="color:var(--muted);padding:3px 0">Piloto</td><td style="text-align:right">${c.piloto||'—'}</td></tr>
+        ${fila('Cliente',c.cliente||'—')}
+        ${fila('Monto',`<span style="color:#1a7f37">${money(c.monto)}</span>`)}
+        ${fila('Fecha',fdate(c.fecha))}
+        ${fila('Piloto',c.piloto||'—')}
       </table>
     </div>`;
   }
 
-  openMod('Detalle del recibo',
-    cuerpo+(docId?`<div style="margin-top:14px;text-align:right"><button class="btn btn-primary btn-sm" onclick="irAFacturaDesdeRecibo(${docId})">Ver factura completa →</button></div>`:''),
-    null);
+  openMod('Detalle del recibo',cuerpo,null);
   const sv=$('#m-save');if(sv)sv.style.display='none';
 };
 

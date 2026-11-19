@@ -6,11 +6,11 @@
 <title>SEFE · Pedidos y Facturación</title>
 <!-- Versión de la app (se sube en cada publicación junto con los ?v=). Sirve para
      avisar a quien tenga la pantalla abierta que hay una versión nueva. -->
-<script>window.APP_VERSION='v=20261117c';</script>
+<script>window.APP_VERSION='v=20261117f';</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/estilos.css?v=20261117c">
+<link rel="stylesheet" href="css/estilos.css?v=20261117f">
 <!-- PWA: instalable como app (ícono propio, pantalla completa) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#173916">
@@ -33,11 +33,11 @@
 <!-- Librería de Supabase (conexión a la base de datos) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tus credenciales (editás este archivo una sola vez) -->
-<script src="config.js?v=20261117c"></script>
+<script src="config.js?v=20261117f"></script>
 <!-- Lógica de conexión (este lo puedo actualizar sin que pierdas credenciales) -->
-<script src="db.js?v=20261117c"></script>
+<script src="db.js?v=20261117f"></script>
 <!-- Sincronización en vivo: evita tener que dar F5 para ver los cambios de los demás -->
-<script src="realtime.js?v=20261117c"></script>
+<script src="realtime.js?v=20261117f"></script>
 </head>
 <body>
 <!-- ══════════ PANTALLA DE CARGA (oculta hasta que se necesite) ══════════ -->
@@ -426,10 +426,14 @@
       </section>
 
       <section class="view" id="v-cobros">
+        <div class="ct-tabs" id="cb-tabs" style="padding:0 2px">
+          <button class="ct-tab on" data-t="cartera" onclick="setCbTab('cartera')">Por cobrar</button>
+          <button class="ct-tab" data-t="recibidos" onclick="setCbTab('recibidos')">Cobros recibidos</button>
+        </div>
         <div class="kpis stagger" id="cobros-kpis"></div>
         <div class="panel" id="cobros-llamar" style="display:none"></div>
         <div class="panel" id="cobros-aging"></div>
-        <div class="panel">
+        <div class="panel" id="cb-cartera-wrap">
           <div class="panel-head"><h3>Cuentas por cobrar</h3><button class="btn btn-primary btn-sm" id="btn-pago-global" onclick="openPagoGlobal()" style="display:none"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pago global</button></div>
           <div class="tbl-toolbar" style="border-bottom:1px solid var(--line);flex-wrap:wrap">
             <label style="margin:0;font-size:11.5px;white-space:nowrap">Cliente</label>
@@ -448,6 +452,12 @@
           </div>
           <table><thead><tr><th>Factura Cambiaria</th><th>Cliente</th><th>Emisión</th><th>Vence</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Estado</th><th></th></tr></thead><tbody id="t-cobros"></tbody></table>
           <div class="empty" id="cobros-empty">No hay cuentas por cobrar.</div>
+        </div>
+        <div class="panel" id="cb-recibidos-wrap" style="display:none">
+          <div class="panel-head"><h3>Cobros recibidos</h3><span style="font-size:12px;color:var(--muted)">Un renglón por recibo</span></div>
+          <div id="cbr-filtros" style="padding:2px 16px 12px"></div>
+          <table><thead><tr><th>Fecha</th><th>Recibo</th><th>Cliente</th><th>Factura(s)</th><th>Método</th><th>Referencia</th><th>Registró</th><th>Monto</th><th></th></tr></thead><tbody id="t-cb-recibidos"></tbody></table>
+          <div class="empty" id="cbr-empty" style="display:none">No hay cobros registrados.</div>
         </div>
       </section>
 
@@ -759,7 +769,7 @@
             <div class="empty" id="pp-empty">No hay cuentas por pagar.</div>
           </div>
           <div id="pp-pagos-wrap" style="display:none">
-            <table><thead><tr><th>Fecha</th><th>Compra</th><th>Proveedor</th><th>Factura</th><th>Método</th><th>Referencia</th><th>Registró</th><th>Monto</th></tr></thead><tbody id="t-pp-pagos"></tbody></table>
+            <table><thead><tr><th>Fecha</th><th>Comprobante</th><th>Proveedor</th><th>Factura(s)</th><th>Método</th><th>No. cheque / aut.</th><th>Registró</th><th>Monto</th><th></th></tr></thead><tbody id="t-pp-pagos"></tbody></table>
             <div class="empty" id="pp-pagos-empty">No hay pagos registrados.</div>
           </div>
         </div>
@@ -913,19 +923,19 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/marca-laml.js?v=20261117c"></script>
-<script src="js/app-1.js?v=20261117c"></script>
-<script src="js/app-2.js?v=20261117c"></script>
-<script src="js/app-3.js?v=20261117c"></script>
-<script src="js/app-4.js?v=20261117c"></script>
-<script src="js/app-5.js?v=20261117c"></script>
-<script src="js/app-6.js?v=20261117c"></script>
-<script src="js/app-7.js?v=20261117c"></script>
-<script src="js/app-8.js?v=20261117c"></script>
-<script src="js/app-9.js?v=20261117c"></script>
-<script src="js/app-10.js?v=20261117c"></script>
-<script src="js/app-11.js?v=20261117c"></script>
-<script src="js/app-12.js?v=20261117c"></script>
-<script src="js/app-13.js?v=20261117c"></script>
+<script src="js/marca-laml.js?v=20261117f"></script>
+<script src="js/app-1.js?v=20261117f"></script>
+<script src="js/app-2.js?v=20261117f"></script>
+<script src="js/app-3.js?v=20261117f"></script>
+<script src="js/app-4.js?v=20261117f"></script>
+<script src="js/app-5.js?v=20261117f"></script>
+<script src="js/app-6.js?v=20261117f"></script>
+<script src="js/app-7.js?v=20261117f"></script>
+<script src="js/app-8.js?v=20261117f"></script>
+<script src="js/app-9.js?v=20261117f"></script>
+<script src="js/app-10.js?v=20261117f"></script>
+<script src="js/app-11.js?v=20261117f"></script>
+<script src="js/app-12.js?v=20261117f"></script>
+<script src="js/app-13.js?v=20261117f"></script>
 </body>
 </html>
