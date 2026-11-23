@@ -1,27 +1,89 @@
+// Recibir mercadería de una orden de compra. Se puede recibir en TODOS los
+// cargamentos que haga falta: mientras quede algo pendiente, la orden sigue en
+// "Parcial" y el botón Recibir sigue disponible.
+// "Llega ahora" arranca en 0 (antes venía lleno con todo lo pendiente, y en la
+// 2.ª recepción, al cambiar solo lo que llegó y dejar lo demás como venía, se
+// recibía TODO y la orden se cerraba: por eso "solo dejaba 2 recepciones").
 function openRecibir(id){
-  const c=compras.find(x=>x.id===id);
-  openMod('Recibir mercadería · CMP-'+padn(c.id),
-    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">${c.proveedorNombre} · Indicá cuánto llega ahora de cada producto.</p>
-     <div class="li head" style="grid-template-columns:1fr 70px 70px 80px"><span>Producto</span><span>Pedido</span><span>Recibido</span><span>Llega ahora</span></div>
-     ${c.items.map((it,i)=>{const pend=it.cantidad-(it.recibido||0);const prod=productos.find(x=>x.id===it.id);const esCaja=prod&&prod.tipoEmpaque==='caja_unidad';return `<div class="li" style="grid-template-columns:1fr 70px 70px 80px">
-       <div><div class="nm">${it.nombre}${esCaja?' <span class="badge b-info" style="font-size:9px">en cajas</span>':''}</div><div class="sk">${it.codigo}</div></div>
+  const c=compras.find(x=>x.id===id); if(!c)return;
+  if(c.estadoRecepcion==='recibida'){toast('Orden ya recibida completa','CMP-'+padn(c.id)+' no tiene nada pendiente',true);return;}
+  const _e=s=>(typeof escHtml==='function'?escHtml(s):String(s==null?'':s));
+  const _fh=f=>{try{return (typeof fdatehora==='function')?fdatehora(new Date(f)):fdate(f);}catch(e){return fdate(f);}};
+  // Recepciones anteriores, agrupadas por momento (cada cargamento)
+  const hist={};
+  c.items.forEach(it=>(it.recepciones||[]).forEach(r=>{
+    const k=String(r.fecha||'').slice(0,19); // una recepción = un mismo segundo (las viejas guardaban la hora por producto)
+    (hist[k]=hist[k]||{fecha:r.fecha,por:r.recibidoPor,lineas:[]}).lineas.push(_e(it.nombre||it.codigo)+' × <b>'+r.cantidad+'</b>');
+  }));
+  const histArr=Object.values(hist).sort((x,y)=>String(x.fecha).localeCompare(String(y.fecha)));
+  const histHTML=histArr.length?`<div style="background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:12px">
+      <div style="font-weight:700;margin-bottom:4px">Recepciones anteriores (${histArr.length})</div>
+      ${histArr.map((h,i)=>`<div style="margin:3px 0"><b>${i+1}.</b> ${_fh(h.fecha)}${h.por?' · '+_e(h.por):''} — ${h.lineas.join(', ')}</div>`).join('')}
+    </div>`:'';
+  const filas=c.items.map((it,i)=>{
+    const pend=Math.max(0,(Number(it.cantidad)||0)-(Number(it.recibido)||0));
+    const prod=productos.find(x=>x.id===it.id);const esCaja=prod&&prod.tipoEmpaque==='caja_unidad';
+    return `<div class="li" style="grid-template-columns:1fr 62px 62px 62px 84px">
+       <div><div class="nm">${_e(it.nombre)}${esCaja?' <span class="badge b-info" style="font-size:9px">en cajas</span>':''}</div><div class="sk">${_e(it.codigo)}</div></div>
        <div class="num" style="text-align:center">${it.cantidad}</div>
        <div class="num" style="text-align:center;color:var(--muted)">${it.recibido||0}</div>
-       <input type="number" min="0" max="${pend}" value="${pend}" data-i="${i}" class="rec-in" style="text-align:center"></div>`;}).join('')}`,
-    ()=>{let algo=false;
-      document.querySelectorAll('#m-body .rec-in').forEach(inp=>{const i=Number(inp.dataset.i);let q=Number(inp.value)||0;const it=c.items[i];const pend=it.cantidad-(it.recibido||0);if(q>pend)q=pend;if(q>0){const p=productos.find(x=>x.id===it.id);if(p){if(p.tipoEmpaque==='caja_unidad')p.stockCajas=(p.stockCajas||0)+q;else p.stock+=q;if(typeof guardarProducto==='function')guardarProducto(p);}it.recibido=(it.recibido||0)+q;
-        // Registrar quién y cuándo recibió (historial de recepciones para el cardex)
-        it.recepciones=it.recepciones||[];
-        it.recepciones.push({cantidad:q,fecha:new Date().toISOString(),recibidoPor:currentUser});
-        algo=true;}});
-      if(!algo){toast('No ingresaste cantidades a recibir',null,true);return;}
+       <div class="num" style="text-align:center;font-weight:700;color:${pend?'var(--warn)':'var(--ok)'}">${pend||'✓'}</div>
+       ${pend?`<input type="number" min="0" max="${pend}" value="0" data-i="${i}" data-pend="${pend}" class="rec-in" style="text-align:center" oninput="_recResumen()">`:'<div style="text-align:center;font-size:11px;color:var(--ok)">completo</div>'}
+     </div>`;}).join('');
+  openMod('Recibir mercadería · CMP-'+padn(c.id),
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">${_e(c.proveedorNombre)} · Indicá cuánto llega en <b>este</b> cargamento. Lo que no llegue queda pendiente y lo recibís en el próximo.</p>
+     ${histHTML}
+     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+       <button class="btn btn-ghost btn-sm" type="button" onclick="_recLlenar(true)">Llenar con todo lo pendiente</button>
+       <button class="btn btn-ghost btn-sm" type="button" onclick="_recLlenar(false)">Poner todo en 0</button>
+     </div>
+     <div class="li head" style="grid-template-columns:1fr 62px 62px 62px 84px"><span>Producto</span><span>Pedido</span><span>Recibido</span><span>Falta</span><span>Llega ahora</span></div>
+     ${filas}
+     <div id="rec-resumen" style="margin-top:10px;font-size:12.5px;border-radius:8px;padding:8px 11px;background:var(--surface-2)"></div>`,
+    ()=>{let algo=false,n=0;
+      const _ahora=new Date().toISOString(); // misma hora para todos los productos de ESTA recepción
+      document.querySelectorAll('#m-body .rec-in').forEach(inp=>{const i=Number(inp.dataset.i);let q=Number(inp.value)||0;const it=c.items[i];const pend=Math.max(0,it.cantidad-(it.recibido||0));if(q>pend)q=pend;if(q<0)q=0;
+        if(q>0){const p=productos.find(x=>x.id===it.id);
+          if(p){
+            // Ajuste SEGURO (atómico): suma en la base en vez de pisar el stock
+            // completo; así una venta simultánea no se pierde.
+            const campo=(p.tipoEmpaque==='caja_unidad')?'stockCajas':'stock';
+            p[campo]=(Number(p[campo])||0)+q;
+            if(typeof ajustarStockDB==='function')ajustarStockDB(p,q,campo);
+            else if(typeof guardarProducto==='function')guardarProducto(p);
+          }
+          it.recibido=(it.recibido||0)+q;
+          // Registrar quién y cuándo recibió (historial de recepciones para el cardex)
+          it.recepciones=it.recepciones||[];
+          it.recepciones.push({cantidad:q,fecha:_ahora,recibidoPor:currentUser});
+          algo=true;n++;}});
+      if(!algo){toast('No ingresaste cantidades a recibir','Poné cuánto llegó de cada producto en este cargamento',true);return;}
       const totRec=recRecibido(c),totPed=recTotal(c);
       c.estadoRecepcion=totRec>=totPed?'recibida':'parcial';
+      const nRec=histArr.length+1;
       closeMod();renderCompras();renderProd();
-      toast('✓ Mercadería recibida','Inventario actualizado'+(c.estadoRecepcion==='recibida'?'':' (recepción parcial)'));
-      logAudit('Mercadería recibida','CMP-'+padn(c.id)+' · '+c.proveedorNombre);
+      toast('✓ Recepción '+nRec+' registrada',c.estadoRecepcion==='recibida'?'Orden completa · inventario actualizado':('Inventario actualizado · queda pendiente '+(totPed-totRec)+' u.'));
+      logAudit('Mercadería recibida','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · recepción '+nRec+' · '+n+' producto'+(n!==1?'s':'')+(c.estadoRecepcion==='recibida'?' · orden completa':' · queda pendiente '+(totPed-totRec)));
       if(typeof guardarCompra==='function')guardarCompra(c);});
+  $('#m-save').textContent='Registrar recepción';
+  _recResumen();
 }
+// Llena "Llega ahora" con todo lo pendiente (o lo pone en 0).
+function _recLlenar(todo){document.querySelectorAll('#m-body .rec-in').forEach(inp=>{inp.value=todo?inp.dataset.pend:'0';});_recResumen();}
+window._recLlenar=_recLlenar;
+// Resumen en vivo: cuánto entra ahora y si la orden queda completa o pendiente.
+function _recResumen(){
+  const box=document.getElementById('rec-resumen'); if(!box)return;
+  let ahora=0,falta=0,prodsPend=0;
+  document.querySelectorAll('#m-body .rec-in').forEach(inp=>{
+    const pend=Number(inp.dataset.pend)||0; let q=Math.min(Math.max(Number(inp.value)||0,0),pend);
+    ahora+=q; if(pend-q>0){falta+=pend-q;prodsPend++;}
+  });
+  if(!ahora){box.style.color='var(--muted)';box.innerHTML='Todavía no indicaste cantidades para este cargamento.';return;}
+  if(!falta){box.style.color='var(--ok)';box.innerHTML='Con esta recepción entran <b>'+ahora+'</b> u. y la orden queda <b>COMPLETA</b>.';return;}
+  box.style.color='#7A4A07';box.innerHTML='Con esta recepción entran <b>'+ahora+'</b> u. Queda <b>pendiente '+falta+' u.</b> en '+prodsPend+' producto'+(prodsPend!==1?'s':'')+' para el próximo cargamento.';
+}
+window._recResumen=_recResumen;
 window.openRecibir=openRecibir;
 function openFacturaProv(id){
   const c=compras.find(x=>x.id===id);const hoy=fechaHoyGT();
