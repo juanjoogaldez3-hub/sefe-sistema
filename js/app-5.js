@@ -1345,6 +1345,8 @@ function renderCompras(){
     }
     if(!c.especial&&c.estadoRecepcion==='recibida'&&!c.facturada)acts=`<button class="btn btn-primary btn-sm" onclick="openFacturaProv(${c.id})">Registrar factura</button>`+acts;
     if(!c.especial&&c.estadoRecepcion!=='recibida')acts=`<button class="btn btn-primary btn-sm" onclick="openRecibir(${c.id})">Recibir</button>`+acts;
+    // Parcial: el proveedor mandó menos y ya no llega el resto → cerrar con lo recibido
+    if(!c.especial&&c.estadoRecepcion==='parcial'&&!c.anulado)acts+=`<button class="btn btn-ghost btn-sm" onclick="openCerrarCompra(${c.id})" title="Lo que falta ya no va a llegar">Cerrar con lo recibido</button>`;
     // Editar sólo mientras la orden esté PENDIENTE (sin recibir). Una vez recibida, inamovible.
     if(!c.especial&&c.estadoRecepcion==='pendiente'&&!c.anulado)acts=`<button class="btn btn-ghost btn-sm" onclick="editarCompraPendiente(${c.id})">Editar</button>`+acts;
     // Eliminar (sin inventario afectado) solo si no se ha recibido nada

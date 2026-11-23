@@ -39,6 +39,10 @@ function openRecibir(id){
      </div>
      <div class="li head" style="grid-template-columns:1fr 62px 62px 62px 84px"><span>Producto</span><span>Pedido</span><span>Recibido</span><span>Falta</span><span>Llega ahora</span></div>
      ${filas}
+     <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:12.5px;cursor:pointer;font-weight:400">
+       <input type="checkbox" id="rec-cerrar" onchange="_recResumen()" style="width:auto;margin-top:2px">
+       <span>Lo que falta <b>ya no va a llegar</b> (el proveedor mandó menos y ya lo facturó): <b>cerrar la orden con lo recibido</b>.</span>
+     </label>
      <div id="rec-resumen" style="margin-top:10px;font-size:12.5px;border-radius:8px;padding:8px 11px;background:var(--surface-2)"></div>`,
     ()=>{let algo=false,n=0;
       const _ahora=new Date().toISOString(); // misma hora para todos los productos de ESTA recepción
@@ -57,15 +61,22 @@ function openRecibir(id){
           it.recepciones=it.recepciones||[];
           it.recepciones.push({cantidad:q,fecha:_ahora,recibidoPor:currentUser});
           algo=true;n++;}});
-      if(!algo){toast('No ingresaste cantidades a recibir','Poné cuánto llegó de cada producto en este cargamento',true);return;}
+      const _cerrar=!!($('#rec-cerrar')&&$('#rec-cerrar').checked);
+      if(!algo&&!_cerrar){toast('No ingresaste cantidades a recibir','Poné cuánto llegó de cada producto en este cargamento',true);return;}
+      if(!algo&&_cerrar&&!recRecibido(c)){toast('No se puede cerrar sin nada recibido','Si no llegó nada, eliminá la orden',true);return;}
       const totRec=recRecibido(c),totPed=recTotal(c);
       c.estadoRecepcion=totRec>=totPed?'recibida':'parcial';
-      const nRec=histArr.length+1;
+      // Cerrar con lo recibido: lo pendiente se cancela y la orden queda por lo que llegó.
+      let _cierre=null;
+      if(_cerrar&&c.estadoRecepcion==='parcial')_cierre=_cerrarCompraConRecibido(c,'Cerrada al recibir: lo pendiente ya no llega');
+      const nRec=histArr.length+(algo?1:0);
       closeMod();renderCompras();renderProd();
-      toast('✓ Recepción '+nRec+' registrada',c.estadoRecepcion==='recibida'?'Orden completa · inventario actualizado':('Inventario actualizado · queda pendiente '+(totPed-totRec)+' u.'));
-      logAudit('Mercadería recibida','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · recepción '+nRec+' · '+n+' producto'+(n!==1?'s':'')+(c.estadoRecepcion==='recibida'?' · orden completa':' · queda pendiente '+(totPed-totRec)));
+      if(_cierre)toast('✓ Orden cerrada con lo recibido','CMP-'+padn(c.id)+' · nuevo total '+money(c.total)+' · se cancelaron '+_cierre.cancelado+' u.');
+      else toast('✓ Recepción '+nRec+' registrada',c.estadoRecepcion==='recibida'?'Orden completa · inventario actualizado':('Inventario actualizado · queda pendiente '+(totPed-totRec)+' u.'));
+      if(algo)logAudit('Mercadería recibida','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · recepción '+nRec+' · '+n+' producto'+(n!==1?'s':'')+(_cierre?' · orden cerrada con lo recibido':(c.estadoRecepcion==='recibida'?' · orden completa':' · queda pendiente '+(totPed-totRec))));
       if(typeof guardarCompra==='function')guardarCompra(c);});
   $('#m-save').textContent='Registrar recepción';
+  window._recCompra=c;
   _recResumen();
 }
 // Llena "Llega ahora" con todo lo pendiente (o lo pone en 0).
@@ -79,11 +90,71 @@ function _recResumen(){
     const pend=Number(inp.dataset.pend)||0; let q=Math.min(Math.max(Number(inp.value)||0,0),pend);
     ahora+=q; if(pend-q>0){falta+=pend-q;prodsPend++;}
   });
+  const cerrar=!!(document.getElementById('rec-cerrar')||{}).checked;
+  const c=window._recCompra;
+  if(cerrar&&c){
+    // Total nuevo = lo ya recibido + lo que entra ahora, al costo de cada línea
+    let nuevo=0;
+    document.querySelectorAll('#m-body .rec-in').forEach(inp=>{const it=c.items[Number(inp.dataset.i)];const pend=Number(inp.dataset.pend)||0;const q=Math.min(Math.max(Number(inp.value)||0,0),pend);nuevo+=((Number(it.recibido)||0)+q)*(Number(it.costo)||0);});
+    c.items.forEach(it=>{if(Math.max(0,(Number(it.cantidad)||0)-(Number(it.recibido)||0))===0)nuevo+=(Number(it.cantidad)||0)*(Number(it.costo)||0);});
+    box.style.color='#7A4A07';
+    box.innerHTML=(ahora?'Entran <b>'+ahora+'</b> u. ':'')+'La orden se <b>cierra con lo recibido</b>: se cancelan <b>'+falta+'</b> u. que no llegaron. Total de la orden: <s>'+money(c.total)+'</s> → <b>'+money(Math.round(nuevo*100)/100)+'</b>.';
+    return;
+  }
   if(!ahora){box.style.color='var(--muted)';box.innerHTML='Todavía no indicaste cantidades para este cargamento.';return;}
   if(!falta){box.style.color='var(--ok)';box.innerHTML='Con esta recepción entran <b>'+ahora+'</b> u. y la orden queda <b>COMPLETA</b>.';return;}
   box.style.color='#7A4A07';box.innerHTML='Con esta recepción entran <b>'+ahora+'</b> u. Queda <b>pendiente '+falta+' u.</b> en '+prodsPend+' producto'+(prodsPend!==1?'s':'')+' para el próximo cargamento.';
 }
 window._recResumen=_recResumen;
+
+// Cierra una orden PARCIAL con lo recibido: cada línea queda con pedido =
+// recibido (se guarda la cantidad original en cantidadOriginal), el total se
+// recalcula y la orden pasa a "Recibida", lista para registrar la factura del
+// proveedor por lo que realmente llegó. No toca inventario (lo recibido ya
+// entró). Devuelve {cancelado, totalAntes}.
+function _cerrarCompraConRecibido(c,motivo){
+  const totalAntes=Number(c.total)||0; let cancelado=0; const det=[];
+  c.items.forEach(it=>{
+    const rec=Number(it.recibido)||0, ped=Number(it.cantidad)||0;
+    if(rec<ped){
+      if(it.cantidadOriginal==null)it.cantidadOriginal=ped;
+      cancelado+=ped-rec; det.push((it.nombre||it.codigo)+' '+ped+'→'+rec);
+      it.cantidad=rec;
+    }
+  });
+  c.total=Math.round(c.items.reduce((s,it)=>s+(Number(it.cantidad)||0)*(Number(it.costo)||0),0)*100)/100;
+  c.estadoRecepcion='recibida';
+  logAudit('Orden de compra · cerrada con lo recibido','CMP-'+padn(c.id)+' · '+c.proveedorNombre+' · '+det.join(', ')+' · total '+money(totalAntes)+' → '+money(c.total)+' · motivo: '+motivo);
+  return {cancelado,totalAntes};
+}
+function openCerrarCompra(id){
+  const c=compras.find(x=>x.id===id); if(!c)return;
+  if(c.estadoRecepcion!=='parcial'){toast('Solo órdenes en recepción parcial',c.estadoRecepcion==='pendiente'?'No ha llegado nada: si no va a llegar, eliminá la orden':'La orden ya está completa',true);return;}
+  const _e=s=>(typeof escHtml==='function'?escHtml(s):String(s==null?'':s));
+  let nuevo=0,cancel=0;
+  const filas=c.items.map(it=>{
+    const rec=Number(it.recibido)||0, ped=Number(it.cantidad)||0, can=Math.max(0,ped-rec);
+    nuevo+=rec*(Number(it.costo)||0); cancel+=can;
+    return `<tr><td>${_e(it.nombre||it.codigo)}</td><td class="num">${ped}</td><td class="num">${rec}</td><td class="num" style="color:${can?'var(--danger)':'var(--muted)'}">${can?'−'+can:'—'}</td></tr>`;
+  }).join('');
+  nuevo=Math.round(nuevo*100)/100;
+  openMod('Cerrar con lo recibido · CMP-'+padn(c.id),
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">${_e(c.proveedorNombre)} · Lo que falta <b>ya no va a llegar</b>. La orden queda por lo recibido y lista para registrar la factura del proveedor.</p>
+     <table style="width:100%;font-size:12.5px"><thead><tr><th>Producto</th><th class="num">Pedido</th><th class="num">Recibido</th><th class="num">Se cancela</th></tr></thead><tbody>${filas}</tbody></table>
+     <div style="margin:12px 0;font-size:13px">Total de la orden: <s>${money(c.total)}</s> → <b>${money(nuevo)}</b> · se cancelan <b>${cancel}</b> u.</div>
+     <label>Motivo (obligatorio)</label><input id="cc-motivo" placeholder="Ej. el proveedor mandó 50 de 60 y ya facturó eso" style="width:100%">
+     <div class="note n-danger" id="cc-err" style="display:none;margin-top:10px;margin-bottom:0"><span>Escribí el motivo</span></div>`,
+    ()=>{
+      const mot=($('#cc-motivo').value||'').trim();
+      if(!mot){$('#cc-err').style.display='flex';return;}
+      const r=_cerrarCompraConRecibido(c,mot);
+      closeMod();renderCompras();
+      toast('✓ Orden cerrada con lo recibido','CMP-'+padn(c.id)+' · nuevo total '+money(c.total)+' · se cancelaron '+r.cancelado+' u.');
+      if(typeof guardarCompra==='function')guardarCompra(c);
+    });
+  $('#m-save').textContent='Cerrar la orden';
+}
+window.openCerrarCompra=openCerrarCompra;
 window.openRecibir=openRecibir;
 function openFacturaProv(id){
   const c=compras.find(x=>x.id===id);const hoy=fechaHoyGT();
@@ -1978,7 +2049,7 @@ function verCompra(id){
     <div class="ds-meta"><div><div class="mt-l">Proveedor</div><div class="mt-v">${c.proveedorNombre}</div></div>
       <div style="text-align:right"><div class="mt-l">Fecha</div><div class="mt-v">${fdate(c.fecha)}</div><div class="mt-s">${c.facturada?(c.tipoPago==='credito'?'Crédito '+c.diasCredito+' días':'Contado'):'Pago por definir'}</div></div></div>
     <table class="ds-table"><thead><tr><th>Producto</th><th style="text-align:center">Pedido</th><th style="text-align:center">Recibido</th><th style="text-align:right">Costo</th><th style="text-align:right">Total</th></tr></thead>
-    <tbody>${c.items.map(it=>`<tr><td><b>${it.nombre||it.nombreProveedor}</b>${_skuProvOC(it)?`<br><span style="font-size:10px;color:var(--muted)">SKU proveedor: ${_skuProvOC(it)}</span>`:''}</td><td style="text-align:center" class="num">${it.cantidad}</td><td style="text-align:center" class="num">${it.recibido||0}</td><td style="text-align:right" class="num">${money(it.costo)}</td><td style="text-align:right;font-weight:600" class="num">${money(it.cantidad*it.costo)}</td></tr>`).join('')}</tbody></table>
+    <tbody>${c.items.map(it=>`<tr><td><b>${it.nombre||it.nombreProveedor}</b>${_skuProvOC(it)?`<br><span style="font-size:10px;color:var(--muted)">SKU proveedor: ${_skuProvOC(it)}</span>`:''}</td><td style="text-align:center" class="num">${it.cantidad}${(it.cantidadOriginal!=null&&Number(it.cantidadOriginal)!==Number(it.cantidad))?`<div style="font-size:10px;color:var(--muted);font-weight:400">de ${it.cantidadOriginal} pedidos</div>`:''}</td><td style="text-align:center" class="num">${it.recibido||0}</td><td style="text-align:right" class="num">${money(it.costo)}</td><td style="text-align:right;font-weight:600" class="num">${money(it.cantidad*it.costo)}</td></tr>`).join('')}</tbody></table>
     <div class="ds-tot"><div class="r big"><span>TOTAL</span><b class="num">${money(c.total)}</b></div>
       ${c.facturada&&c.tipoPago==='credito'?`<div class="r"><span>Abonado</span><span class="num">${money(ai.abon)}</span></div><div class="r"><span>Saldo</span><span class="num">${money(ai.saldo)}</span></div>`:''}</div>
     <div class="ds-foot">Orden de compra interna · el inventario sube al recibir</div>`;
