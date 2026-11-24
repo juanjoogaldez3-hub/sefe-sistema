@@ -432,8 +432,8 @@ function selPago(tipo,saldoForzado){
 }
 window.selPago=selPago;
 
-// Color de la firma: azul de bolígrafo (como firman en papel / OneDrive).
-const FIRMA_TINTA='#1b3a8f';
+// Color de la firma: azul pavo real, como lapicero (lo mismo en el PDF).
+const FIRMA_TINTA='#00509E'; // azul pavo real profundo (elegido por Juanjo)
 function initFirma(){
   _firmaCanvas=$('#firma-canvas');if(!_firmaCanvas)return;
   // Tamaño REAL del lienzo: offsetWidth no se ve afectado por la animación de

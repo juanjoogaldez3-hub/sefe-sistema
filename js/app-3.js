@@ -683,8 +683,8 @@ function _recortarFirma(dataUrl){
       const m=4;x0=Math.max(0,x0-m);y0=Math.max(0,y0-m);x1=Math.min(cv.width-1,x1+m);y1=Math.min(cv.height-1,y1+m);
       const out=document.createElement('canvas');out.width=x1-x0+1;out.height=y1-y0+1;
       const oc=out.getContext('2d');oc.drawImage(cv,x0,y0,out.width,out.height,0,0,out.width,out.height);
-      // Teñir de azul bolígrafo (las firmas viejas se guardaron en verde oscuro)
-      oc.globalCompositeOperation='source-in';oc.fillStyle='#1b3a8f';oc.fillRect(0,0,out.width,out.height);
+      // Teñir de azul pavo real #00509E (las firmas viejas se guardaron en otro color)
+      oc.globalCompositeOperation='source-in';oc.fillStyle='#00509E';oc.fillRect(0,0,out.width,out.height);
       ok({url:out.toDataURL('image/png'),w:out.width,h:out.height});
     };
     img.src=dataUrl;
@@ -706,7 +706,7 @@ async function pdfFirmadoDe(f){
     const doc=await PDFDocument.load(_b64aBytes(f.pdfBase64),{ignoreEncryption:true});
     const pags=doc.getPages(); const pg=pags[pags.length-1]; // el pie va en la última hoja
     const {width,height}=pg.getSize(); const kx=width/612, ky=height/792;
-    const tinta=rgb(0.08,0.12,0.32); // azul de lapicero
+    const tinta=rgb(0,80/255,158/255); // #00509E, el mismo azul de la firma
     const font=await doc.embedFont(StandardFonts.Helvetica);
     // Fecha de entrega (hora de Guatemala), dd/mm/aa
     const fl=fechaLocalDe(ei.fecha)||fechaHoyGT();
