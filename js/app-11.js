@@ -356,7 +356,7 @@ function marcarEntregado(id){
       <div class="firma-wrap"><canvas id="firma-canvas" class="firma-canvas"></canvas>
         <div class="firma-foot"><span>Firmá con el dedo o el mouse</span><button class="btn btn-ghost btn-sm" type="button" onclick="limpiarFirma()">Borrar</button></div></div>
       <div class="row" style="margin-top:11px"><div><label>¿Quién recibió? <span style="color:var(--danger)">*</span></label><input id="ent-recibe" placeholder="Nombre de quien firma"></div></div>
-      <label>Foto <span style="font-weight:400;color:var(--muted-2)">(opcional: mercadería entregada, factura sellada…)</span></label>
+      <label>Foto <span style="font-weight:400;color:var(--muted-2)">(opcional: mercadería entregada, factura sellada… se guarda 30 días)</span></label>
       <input type="file" id="ent-foto-file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoEntrega(this)">
       <div id="ent-foto-zone" style="margin-bottom:12px"><button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('ent-foto-file').click()">📷 Tomar foto</button></div>
     </div>

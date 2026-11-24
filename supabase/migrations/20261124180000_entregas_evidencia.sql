@@ -14,7 +14,12 @@
 --
 -- Incluye SUS POLÍTICAS RLS (el proyecto tiene RLS activo: una tabla sin
 -- políticas queda cerrada al navegador). Mismo modelo que las demás.
--- Seguro de correr de más: 'if not exists' / 'drop policy if exists'.
+-- Las FOTOS se borran solas al mes (ver abajo, purga diaria): pesan ~150 KB
+-- cada una y la base se llenaría de fotos. La firma y el nombre de quien
+-- recibió se quedan para siempre (pesan poco y son la prueba de entrega).
+--
+-- Seguro de correr de más: 'if not exists' / 'drop policy if exists' /
+-- reprogramar la tarea de cero.
 -- ============================================================
 
 create table if not exists public.entregas_evidencia (
@@ -46,3 +51,52 @@ create policy sefe_borrar on public.entregas_evidencia for delete to authenticat
   using ((select public.sefe_es_admin()));
 
 grant select, insert, update, delete on public.entregas_evidencia to authenticated;
+
+
+-- ── Fotos: se borran solas después de 1 mes ──────────────────
+-- Sólo vacía la columna `foto`; la firma, el nombre de quien recibió y la
+-- fecha se quedan. Devuelve cuántas fotos borró.
+create or replace function public.sefe_purgar_fotos_entrega(retener_dias int default 30)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  borradas integer;
+begin
+  update public.entregas_evidencia
+     set foto = null
+   where foto is not null
+     and registrado_el < now() - make_interval(days => greatest(retener_dias, 1));
+  get diagnostics borradas = row_count;
+  return borradas;
+end;
+$$;
+
+-- Que NO la pueda ejecutar la app ni nadie con la anon key.
+revoke all on function public.sefe_purgar_fotos_entrega(int) from public, anon, authenticated;
+
+-- Programarla todos los días a las 03:30 de Guatemala (09:30 UTC: pg_cron
+-- usa hora UTC). Diaria, para que cada foto dure su mes y no hasta fin de mes.
+create extension if not exists pg_cron;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    if exists (select 1 from cron.job where jobname = 'sefe_purga_fotos_entrega') then
+      perform cron.unschedule('sefe_purga_fotos_entrega');
+    end if;
+    perform cron.schedule(
+      'sefe_purga_fotos_entrega',
+      '30 9 * * *',                                 -- 09:30 UTC = 03:30 Guatemala
+      'select public.sefe_purgar_fotos_entrega(30);'
+    );
+    raise notice 'Purga de fotos de entrega programada: diaria 03:30 Guatemala (retención 30 días).';
+  else
+    raise notice 'pg_cron no está disponible: activá la extensión y volvé a correr esta migración.';
+  end if;
+end $$;
+
+-- VERIFICACIÓN:
+--   select jobname, schedule, command from cron.job where jobname = 'sefe_purga_fotos_entrega';

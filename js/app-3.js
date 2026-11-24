@@ -773,7 +773,7 @@ function reciboEntregaHTML(f){
       ${fotoSrc?`<div style="text-align:center">
         <img src="${fotoSrc}" style="max-width:200px;max-height:150px;border-radius:6px;border:1px solid var(--line)">
         <div style="font-size:10px;color:var(--muted-2);margin-top:3px">Foto de la entrega</div>
-      </div>`:''}
+      </div>`:((ei.conFoto&&f._evid!==undefined)?`<div style="align-self:center;font-size:11px;color:var(--muted-2);max-width:170px">📷 Tuvo foto, pero ya se borró (las fotos se guardan 30 días).</div>`:'')}
     </div>
   </div>`;
 }
