@@ -1010,9 +1010,19 @@ function renderCliDet(){
       const col=pct<0?'var(--danger)':(pct<15?'var(--warn)':'var(--ok)');
       return `<td class="num" style="font-weight:600;color:${col}">${pct.toFixed(1)}%</td>`;
     };
-    body=`<div class="panel"><div class="panel-head"><h3>Facturas Cambiarias emitidas</h3></div>
-      <table><thead><tr><th>No.</th><th>Tipo</th><th>Fecha</th><th>Total</th>${esAdmin?'<th>Ganancia</th>':''}<th>Estado</th><th></th></tr></thead><tbody>
-      ${facturas.length?facturas.slice().reverse().map(f=>`<tr><td style="font-weight:600">${f.serie}-${f.numeroDte}</td><td><span class="pill ${(TIPO_LBL[f.tipoDoc]||["","p-ped"])[1]}">${(TIPO_LBL[f.tipoDoc]||["Documento"])[0]}</span></td><td style="color:var(--muted)">${fdate(f.creada)}</td><td class="num" style="font-weight:600">${money(f.totales.total)}</td>${gananciaTd(f)}<td><span class="badge b-ok">${f.estado}</span></td><td><button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button></td></tr>`).join(''):`<tr><td colspan="${esAdmin?7:6}" class="empty">Sin Facturas Cambiarias emitidas</td></tr>`}
+    // Saldo de cada factura (mismo cálculo que Cobros: total − notas de crédito − abonos).
+    const _conSaldo=f=>f.tipoDoc==='cambiaria'&&f.estado!=='anulada'&&!f.anulado;
+    const saldoTd=f=>{
+      if(!_conSaldo(f))return '<td class="num" style="color:var(--muted-2)">—</td>';
+      const ai=arInfo(f);
+      if(ai.saldo<=0.001)return '<td class="num"><span class="badge b-ok">Pagada</span></td>';
+      const col=ai.vencido?'var(--danger)':'var(--warn)';
+      return `<td class="num" style="font-weight:700;color:${col}">${money(ai.saldo)}${ai.vencido?'<div style="font-size:10px;font-weight:600">vencida</div>':''}</td>`;
+    };
+    const _saldoTot=facturas.filter(_conSaldo).reduce((t,f)=>t+Math.max(0,arInfo(f).saldo),0);
+    body=`<div class="panel"><div class="panel-head"><h3>Facturas Cambiarias emitidas</h3><span style="font-size:12.5px;color:var(--muted)">Saldo pendiente: <b style="color:${_saldoTot>0.001?'var(--warn)':'var(--ok)'}">${money(_saldoTot)}</b></span></div>
+      <table><thead><tr><th>No.</th><th>Tipo</th><th>Fecha</th><th>Total</th><th>Saldo</th>${esAdmin?'<th>Ganancia</th>':''}<th>Estado</th><th></th></tr></thead><tbody>
+      ${facturas.length?facturas.slice().reverse().map(f=>`<tr><td style="font-weight:600">${f.serie}-${f.numeroDte}</td><td><span class="pill ${(TIPO_LBL[f.tipoDoc]||["","p-ped"])[1]}">${(TIPO_LBL[f.tipoDoc]||["Documento"])[0]}</span></td><td style="color:var(--muted)">${fdate(f.creada)}</td><td class="num" style="font-weight:600">${money(f.totales.total)}</td>${saldoTd(f)}${gananciaTd(f)}<td><span class="badge b-ok">${f.estado}</span></td><td><button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button></td></tr>`).join(''):`<tr><td colspan="${esAdmin?8:7}" class="empty">Sin Facturas Cambiarias emitidas</td></tr>`}
       </tbody></table></div>`;
   }else if(cliTab==='factabonos'){
     // Estado de cuenta ordenado por EMISIÓN DE FACTURA: cada factura y,
