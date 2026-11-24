@@ -646,6 +646,33 @@ async function borrarParadaRuta(id){
   const {error} = await sb.from('paradas_ruta').delete().eq('id', id);
   if(error)console.error('Error borrando parada de ruta:',error);
 }
+// ── Prueba de entrega: firma y foto en la tabla APARTE entregas_evidencia ──
+// (no dentro de documentos.entrega_info, que se baja en cada login). Una
+// fila por documento; si se vuelve a entregar, se reemplaza. Devuelve true
+// si quedó guardada; false si falló (p.ej. la tabla todavía no existe): en
+// ese caso quien llama guarda la firma a la antigua para no perderla.
+async function guardarEvidenciaEntrega(docId,ev){
+  try{
+    const row={documento_id:docId,firma:ev.firma||null,foto:ev.foto||null,recibe:ev.recibe||null,
+      registrado_por:ev.registradoPor||null,registrado_el:ev.registradoEl||new Date().toISOString()};
+    const {error}=await sb.from('entregas_evidencia').upsert(row,{onConflict:'documento_id'});
+    if(error){console.warn('Evidencia de entrega no guardada:',error);return false;}
+    return true;
+  }catch(e){console.warn('Evidencia de entrega no guardada:',e);return false;}
+}
+// Trae firma/foto de UNA entrega sólo cuando se va a mirar, y la deja
+// cacheada en el documento (f._evid). null si no hay o no se pudo leer.
+async function traerEvidenciaEntrega(f){
+  if(!f)return null;
+  if(f._evid!==undefined)return f._evid;
+  try{
+    const {data,error}=await sb.from('entregas_evidencia').select('firma,foto,recibe').eq('documento_id',f.id).maybeSingle();
+    if(error){console.warn('No se pudo leer la evidencia de entrega:',error);return null;}
+    f._evid=data||null; return f._evid;
+  }catch(e){console.warn('No se pudo leer la evidencia de entrega:',e);return null;}
+}
+if(typeof window!=='undefined'){window.guardarEvidenciaEntrega=guardarEvidenciaEntrega;window.traerEvidenciaEntrega=traerEvidenciaEntrega;}
+
 async function guardarCobroRuta(c){
   c.empresa = empresaDeDocumento(c.docId) || c.empresa || 'SEFE'; // blindaje: la del documento
   const row = {

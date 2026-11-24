@@ -891,6 +891,46 @@ function docsDespachables(){
   );
 }
 function estadoEntrega(d){return d.estadoEntrega||'sin';}
+// Nombre del repartidor de un documento (usuario ligado a ese piloto, o la
+// ficha de piloto vieja).
+function _nombreRepartidor(pid){
+  if(pid==null)return '';
+  const u=(typeof usuarios!=='undefined'?usuarios:[]).find(x=>String(x.pilotoId)===String(pid));
+  if(u)return u.nombre;
+  const p=(typeof pilotos!=='undefined'?pilotos:[]).find(x=>String(x.id)===String(pid));
+  return p?p.nombre:'';
+}
+// Etiqueta corta del estado de entrega para mostrar FUERA de Despachos
+// (Documentos, Cobros, ficha del cliente). Vacía si no va a despacho.
+// Entregado → se puede tocar para ver el comprobante (firma/foto).
+function badgeEntregaHTML(d){
+  if(!d||d.paraDespacho!==true||d.estado==='anulada')return '';
+  const est=estadoEntrega(d);
+  const st='font-size:10px;margin-top:4px;display:inline-block;white-space:nowrap';
+  const quien=_nombreRepartidor(d.pilotoId);
+  if(est==='entregado'){
+    const ei=d.entregaInfo||{};
+    const cuando=ei.fecha?fdatehora(ei.fecha):'';
+    return `<div><span class="badge b-ok" style="${st};cursor:pointer" title="Ver comprobante de entrega" onclick="event.stopPropagation();verComprobanteEntrega(${d.id})">✓ Entregado${cuando?' '+cuando:''}${ei.recibe?' · '+escHtml(ei.recibe):''}</span></div>`;
+  }
+  const txt={sin:'🚚 Por asignar',asignado:'🚚 Asignado',preparado:'📦 Preparado',ruta:'🚚 En ruta'}[est]||'🚚 Despacho';
+  const cls={sin:'b-muted',asignado:'b-info',preparado:'b-prep',ruta:'b-warn'}[est]||'b-muted';
+  return `<div><span class="badge ${cls}" style="${st}">${txt}${quien&&est!=='sin'?' · '+escHtml(quien):''}</span></div>`;
+}
+window.badgeEntregaHTML=badgeEntregaHTML;
+// Comprobante de entrega (quién llevó, cuándo, quién recibió, cómo pagó,
+// firma y foto). La firma/foto se trae de la tabla aparte al abrir.
+async function verComprobanteEntrega(id){
+  const d=documentos.find(x=>x.id===id); if(!d||!d.entregaInfo){toast('Sin comprobante de entrega',null,true);return;}
+  if(d.entregaInfo.evidencia&&typeof traerEvidenciaEntrega==='function')await traerEvidenciaEntrega(d);
+  const ref=d.serie?d.serie+'-'+d.numeroDte:refPed(d);
+  openMod('Comprobante de entrega · '+ref,
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:4px">${escHtml(d.clienteComercial||d.clienteNombre||'')} · ${money(d.totales.total)}</p>`+
+    (typeof reciboEntregaHTML==='function'?reciboEntregaHTML(d):''),
+    ()=>closeMod());
+  $('#m-save').textContent='Cerrar';$('#m-save').className='btn btn-ghost';
+}
+window.verComprobanteEntrega=verComprobanteEntrega;
 function dirEntrega(d){
   const cli=clientes.find(c=>c.id===d.clienteId);
   return cli?.direccion||'—';
@@ -1188,7 +1228,7 @@ function ordenarCercaniaDespachos(){
 window.ordenarCercaniaDespachos=ordenarCercaniaDespachos;
 // Desde Mis entregas: navega la ruta del piloto que se está viendo (sin entregados).
 function abrirRutaMisEntregas(){
-  const pid=esPiloto()?miPilotoId():(_verPilotoId!==''?Number(_verPilotoId):null);
+  const pid=_pidMisEntregas();
   if(pid==null){toast('Elegí un piloto','Seleccioná un piloto para navegar su ruta.',false);return;}
   const mias=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
   _abrirRutaPiloto(mias,_paradasPiloto(pid));
@@ -1694,12 +1734,22 @@ function asignarDespacho(id){
 window.asignarDespacho=asignarDespacho;
 
 // ---- Vista del Piloto ----
+// "Mis entregas" muestra la ruta PROPIA (sin selector) al piloto y al
+// personal de apoyo que reparte. Admin/logística (los que asignan) ven un
+// selector para revisar la ruta de cualquiera; si además reparten, arranca
+// en la suya.
+function _misEntregasPropia(){ return esPiloto() || (soyRepartidor() && !canAsignarPiloto()); }
+function _pidMisEntregas(){
+  if(_misEntregasPropia())return miPilotoId();
+  if(_verPilotoId===''&&soyRepartidor()&&miPilotoId()!=null)_verPilotoId=String(miPilotoId());
+  return _verPilotoId!==''?Number(_verPilotoId):null;
+}
 // Qué piloto se está viendo: el propio si es piloto; el elegido en el selector si es admin/supervisor.
 let _verPilotoId='';
 function pilSelVer(v){ _verPilotoId=v; renderMisEntregas(); }
 window.pilSelVer=pilSelVer;
 function renderMisEntregas(){
-  const esPil=esPiloto();
+  const esPil=_misEntregasPropia(); // ruta propia (piloto o personal de apoyo)
   // Selector de piloto SOLO para quien no es piloto (admin/supervisor)
   const sel=document.getElementById('pil-selector');
   if(sel){
@@ -1712,7 +1762,7 @@ function renderMisEntregas(){
       </div></div>`;
     }
   }
-  const pid=esPil?miPilotoId():(_verPilotoId!==''?Number(_verPilotoId):null);
+  const pid=_pidMisEntregas();
   // Piloto sin usuario ligado: no mostrarle nada ajeno.
   if(esPil&&pid==null){
     $('#pil-kpis').innerHTML='';
@@ -1727,7 +1777,11 @@ function renderMisEntregas(){
     $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-body"><div class="empty">Elegí un piloto arriba para ver su ruta del día.</div></div></div>`;
     return;
   }
-  const mias=docsDespachables().filter(d=>d.pilotoId===pid);
+  // Lo pendiente + lo entregado HOY. Las entregadas de días anteriores ya no
+  // se listan: con todas las facturas yendo a despacho, la ruta se llenaría
+  // de tarjetas viejas en pocos días.
+  const _hoyME=fechaHoyGT();
+  const mias=docsDespachables().filter(d=>String(d.pilotoId)===String(pid)&&(estadoEntrega(d)!=='entregado'||fechaLocalDe(d.entregaInfo?.fecha)===_hoyME));
   const misParadas=(typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>String(p.pilotoId||'')===String(pid)&&!p.hecha);
   // KPIs del piloto
   const pendientes=mias.filter(d=>estadoEntrega(d)!=='entregado').length;
@@ -1736,7 +1790,7 @@ function renderMisEntregas(){
   const k=[
     {ic:'i-warn',svg:'<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',lbl:'Por entregar',val:pendientes,sub:esPil?'asignadas a mí':'asignadas'},
     {ic:'i-blue',svg:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',lbl:'En ruta',val:enRuta,sub:'cargadas'},
-    {ic:'i-green',svg:'<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/>',lbl:'Entregadas',val:entregadas,sub:'completadas'},
+    {ic:'i-green',svg:'<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/>',lbl:'Entregadas hoy',val:entregadas,sub:'completadas'},
   ];
   $('#pil-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
   // Ordenar por ruta
@@ -1746,7 +1800,8 @@ function renderMisEntregas(){
   const docNum=d=>d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
   const tipoCorto={cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'};
   if(!mias.length&&!misParadas.length){
-    $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-body"><div class="empty">${esPil?'No tenés entregas asignadas en este momento.':'Este piloto no tiene entregas asignadas.'}</div></div></div>`;
+    // Aunque no queden entregas, el corte del día sigue: ahí se anota la boleta.
+    $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-body"><div class="empty">${esPil?'No tenés entregas asignadas en este momento.':'Este piloto no tiene entregas asignadas.'}</div></div></div>`+corteCajaHTML(mias,pid,esPil);
     return;
   }
   // Lista unificada: entregas + paradas manuales, ordenadas por nº de ruta.
@@ -1807,7 +1862,7 @@ function renderMisEntregas(){
         </div>
         <div style="margin-top:11px">${btn}</div>
       </div>`;
-    }).join('')+`</div></div>`+corteCajaHTML(mias);
+    }).join('')+`</div></div>`+corteCajaHTML(mias,pid,esPil);
 }
 window.renderMisEntregas=renderMisEntregas;
 // ---- Mapa de la ruta del piloto (colapsable, mobile-friendly) ----
@@ -1848,11 +1903,20 @@ async function _pilInitMapa(pts){
 }
 
 // ---- Corte de caja del piloto (del día) ----
-function corteCajaHTML(entregas){
+function corteCajaHTML(entregas,pid,propia){
   const hoy=fechaHoyGT();
-  const pilName=esPiloto()?currentUser:null;
-  // Cobros en ruta de hoy (de este piloto si es piloto, o todos si es logística/contabilidad)
-  const cobrosHoy=cobrosRuta.filter(c=>c.fecha.slice(0,10)===hoy&&(!pilName||c.piloto===pilName));
+  // Cobros del repartidor que se está viendo. El cobro guarda el NOMBRE de
+  // quien lo hizo: en la ruta propia es el usuario actual; si logística está
+  // viendo la ruta de otro, se buscan los nombres ligados a ese piloto.
+  const nombres=new Set();
+  if(propia)nombres.add(currentUser);
+  else if(pid!=null){
+    (typeof usuarios!=='undefined'?usuarios:[]).filter(u=>String(u.pilotoId)===String(pid)).forEach(u=>nombres.add(u.nombre));
+    const _p=(typeof pilotos!=='undefined'?pilotos:[]).find(p=>String(p.id)===String(pid)); if(_p)nombres.add(_p.nombre);
+  }
+  // Los de hoy (fecha de Guatemala, no UTC: un cobro a las 7 pm ya es "mañana"
+  // en UTC) + los de días anteriores que siguen sin depositar.
+  const cobrosHoy=cobrosRuta.filter(c=>nombres.has(c.piloto)&&(fechaLocalDe(c.fecha)===hoy||c.estado==='cobrado'));
   // Contraseñas y créditos de hoy desde entregaInfo
   const entregadasHoy=entregas.filter(d=>estadoEntrega(d)==='entregado'&&fechaLocalDe(d.entregaInfo?.fecha)===hoy);
   const contrasenas=[],credito=[];
@@ -1861,33 +1925,36 @@ function corteCajaHTML(entregas){
     else if(ei.modoPago==='credito')credito.push({dn,cliente:d.clienteComercial||d.clienteNombre,recibe:ei.recibe});
   });
   if(!cobrosHoy.length&&!contrasenas.length&&!credito.length)return '';
-  const efectivo=cobrosHoy.filter(c=>c.modo==='efectivo');
-  const cheques=cobrosHoy.filter(c=>c.modo==='cheque');
+  // Totales: sólo lo cobrado HOY (lo atrasado sin depositar se lista aparte).
+  const cobrosDia=cobrosHoy.filter(c=>fechaLocalDe(c.fecha)===hoy);
+  const efectivo=cobrosDia.filter(c=>c.modo==='efectivo');
+  const cheques=cobrosDia.filter(c=>c.modo==='cheque');
   const totalEf=efectivo.reduce((s,c)=>s+c.monto,0);
   const totalCh=cheques.reduce((s,c)=>s+c.monto,0);
   const EST_COBRO={cobrado:['Por depositar','b-warn'],depositado:['Depositado','b-info'],recibido:['Recibido por logística','b-info'],procesado:['Procesado','b-ok']};
   const fila=(lbl,val,color)=>`<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)"><span style="font-size:13px">${lbl}</span><span class="num" style="font-weight:700;${color?'color:'+color:''}">${val}</span></div>`;
-  const esMiCorte=esPiloto();
+  const esMiCorte=!!propia;
   const cobroRow=c=>{const [en,ec]=EST_COBRO[c.estado];
     const btnBoleta=(c.estado==='cobrado'&&esMiCorte)?`<button class="btn btn-primary btn-sm" style="margin-top:6px;padding:5px 10px;font-size:11px" onclick="agregarBoleta(${c.id})">+ Agregar boleta de depósito</button>`:'';
     return `<div style="padding:9px 0;border-bottom:1px solid var(--line);font-size:12px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-      <div><b>${c.docNum}</b> · ${c.cliente}<div style="color:var(--muted-2);font-size:10.5px">${c.modo==='efectivo'?'💵 Efectivo':'🏦 Cheque '+(c.cheque||'')} · Recibo ${c.noRecibo}${c.noBoleta?' · Boleta '+c.noBoleta:''}</div></div>
+      <div><b>${c.docNum}</b> · ${c.cliente}${fechaLocalDe(c.fecha)!==hoy?` <span class="badge b-warn" style="font-size:9.5px">del ${fdate(c.fecha)}</span>`:''}<div style="color:var(--muted-2);font-size:10.5px">${c.modo==='efectivo'?'💵 Efectivo':'🏦 Cheque '+(c.cheque||'')} · Recibo ${c.noRecibo}${c.noBoleta?' · Boleta '+c.noBoleta:''}</div></div>
       <div style="text-align:right;white-space:nowrap"><div class="num" style="font-weight:700">${money(c.monto)}</div><span class="badge ${ec}" style="font-size:9.5px">${en}</span></div>
     </div>${btnBoleta}
   </div>`;};
   const porDepositar=cobrosHoy.filter(c=>c.estado==='cobrado');
   return `<div class="panel" style="margin-top:16px">
     <div class="panel-head"><h3>💰 Corte del día</h3><span style="font-size:12px;color:var(--muted)">${fdate(new Date())}</span></div>
+    ${(esMiCorte&&porDepositar.length>=2)?`<div style="padding:12px 18px 0"><button class="btn btn-primary btn-sm" onclick="agregarBoletaVarios()">🏦 Deposité varios con una sola boleta</button></div>`:''}
     <div class="panel-body">
       ${fila('💵 Efectivo cobrado ('+efectivo.length+')',money(totalEf),'var(--green)')}
       ${fila('🏦 Cheques cobrados ('+cheques.length+')',money(totalCh))}
       ${fila('📄 Contraseñas de pago',contrasenas.length)}
-      ${fila('✍️ Entregas a crédito (firmadas)',credito.length)}
+      ${fila('✍️ Entregas a crédito',credito.length)}
       <div style="display:flex;justify-content:space-between;padding:12px 0 4px"><span style="font-weight:700">Total cobrado</span><span class="num" style="font-weight:700;font-size:17px">${money(totalEf+totalCh)}</span></div>
       ${cobrosHoy.length?`<div style="margin-top:14px"><div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Cobros del día</div>${cobrosHoy.map(cobroRow).join('')}</div>`:''}
       ${contrasenas.length?`<div style="margin-top:12px"><div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Contraseñas para seguimiento</div>${contrasenas.map(c=>`<div style="font-size:12px;color:var(--muted);padding:3px 0">${c.contra} — ${c.cliente}</div>`).join('')}</div>`:''}
-      <div class="note" style="background:${porDepositar.length?'var(--warn-bg)':'var(--ok-bg)'};color:${porDepositar.length?'#7A4A07':'var(--ok)'};border-color:rgba(168,130,0,.2);margin-top:14px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>${porDepositar.length?`Tenés <b>${porDepositar.length} cobro(s) por depositar</b>. Depositá en el banco y agregá la boleta a cada uno.`:'Todos tus cobros tienen boleta. Entregá las boletas y recibos a logística.'}</span></div>
+      <div class="note" style="background:${porDepositar.length?'var(--warn-bg)':'var(--ok-bg)'};color:${porDepositar.length?'#7A4A07':'var(--ok)'};border-color:rgba(168,130,0,.2);margin-top:14px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>${porDepositar.length?`Tenés <b>${porDepositar.length} cobro(s) por depositar</b>. Depositá en el banco y anotá la boleta (si fue un solo depósito, usá «Deposité varios con una sola boleta»).`:'Todos tus cobros tienen boleta. Entregá las boletas y recibos a logística.'}</span></div>
     </div>
   </div>`;
 }

@@ -12,8 +12,8 @@ function abrirFacturarExenta(id){
     <label>Escenario de exención <span style="color:var(--danger)">*</span></label>
     <select id="ex-esc" style="margin-bottom:0"><option value="">— Seleccioná el escenario que aplica —</option>${opts}</select>${selectorNitHTML(f,clientes.find(c=>c.id===f.clienteId))}
     <label style="display:flex;align-items:center;gap:9px;margin-top:14px;padding:11px 13px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:13px">
-      <input type="checkbox" id="fac-despacho" style="width:17px;height:17px;flex:none">
-      <span>🚚 <b>Entregar a domicilio</b> — mandar esta factura a Despachos</span>
+      <input type="checkbox" id="fac-despacho" checked style="width:17px;height:17px;flex:none">
+      <span>🚚 <b>Entregar a domicilio</b> — mandar esta factura a Despachos<span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">Desmarcalo si el cliente se lleva el producto en mostrador.</span></span>
     </label>
     <div style="margin-top:16px;padding-top:13px;border-top:1px solid var(--line);text-align:center"><button class="btn btn-ghost btn-sm" onclick="cerrarTodo();editarPedido(${f.id})">✏️ Editar pedido antes de facturar</button></div>`,
     ()=>{
@@ -492,6 +492,8 @@ async function verDoc(id){
   // El PDF oficial ya no viene en la carga inicial (pesaba 24 MB): si esta
   // factura tiene uno, se trae a pedido antes de decidir cómo mostrarla.
   if(f && !f.pdfBase64 && f.autorizacion && typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
+  // Firma/foto de la entrega: viven en una tabla aparte; se traen al abrir.
+  if(f && f.entregaInfo && f.entregaInfo.evidencia && typeof traerEvidenciaEntrega==='function')await traerEvidenciaEntrega(f);
 
   // Si la factura tiene el PDF oficial de EcoFactura, mostrarlo directamente
   if(f.pdfBase64){
@@ -747,6 +749,11 @@ function nombreArchivoFactura(f){
 // Bloque de comprobante de recepción / entrega en el PDF
 function reciboEntregaHTML(f){
   const ei=f.entregaInfo;if(!ei)return '';
+  // Firma/foto: de la tabla aparte (f._evid, traída al abrir) o, en entregas
+  // viejas / si la tabla no estaba, guardada dentro de la entrega.
+  const _ev=f._evid||{};
+  const firmaSrc=_ev.firma||ei.firma||'';
+  const fotoSrc=_ev.foto||'';
   const fechaEnt=fdatehora(ei.fecha);
   const modoTxt={efectivo:'Pagado en efectivo'+(ei.monto?' · '+money(ei.monto):''),cheque:'Pagado con cheque '+(ei.cheque||'')+(ei.banco?' ('+ei.banco+')':'')+(ei.monto?' · '+money(ei.monto):''),contrasena:'Contraseña de pago No. '+(ei.contrasena||''),credito:'Recibido a crédito'}[ei.modoPago]||'';
   return `<div style="margin-top:22px;border-top:1.5px dashed var(--line-strong);padding-top:16px">
@@ -759,9 +766,13 @@ function reciboEntregaHTML(f){
         ${ei.recibe?`<div>Recibió: <b style="color:var(--ink)">${ei.recibe}</b></div>`:''}
         ${ei.observacion?`<div>Obs.: ${ei.observacion}</div>`:''}
       </div>
-      ${ei.firma?`<div style="text-align:center">
-        <img src="${ei.firma}" style="max-width:170px;max-height:75px;border-bottom:1.5px solid var(--ink)">
+      ${firmaSrc?`<div style="text-align:center">
+        <img src="${firmaSrc}" style="max-width:170px;max-height:75px;border-bottom:1.5px solid var(--ink)">
         <div style="font-size:10px;color:var(--muted-2);margin-top:3px">Firma de recepción</div>
+      </div>`:''}
+      ${fotoSrc?`<div style="text-align:center">
+        <img src="${fotoSrc}" style="max-width:200px;max-height:150px;border-radius:6px;border:1px solid var(--line)">
+        <div style="font-size:10px;color:var(--muted-2);margin-top:3px">Foto de la entrega</div>
       </div>`:''}
     </div>
   </div>`;

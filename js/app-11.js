@@ -16,6 +16,50 @@ function agregarBoleta(cobroId){
 }
 window.agregarBoleta=agregarBoleta;
 
+// Una boleta para VARIOS cobros: cuando el repartidor deposita todo lo del día
+// junto. Se marcan los cobros que entraron en esa boleta (vienen todos
+// marcados) y a cada uno se le anota el mismo número.
+function agregarBoletaVarios(){
+  const mios=cobrosRuta.filter(c=>c.estado==='cobrado'&&c.piloto===currentUser)
+    .sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+  if(!mios.length){toast('No hay cobros por depositar',null,true);return;}
+  const fila=c=>`<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px">
+      <input type="checkbox" class="bolv-chk" data-id="${c.id}" data-monto="${c.monto}" checked onchange="_bolvTotal()" style="width:17px;height:17px;flex:none;margin:0">
+      <span style="flex:1"><b>${escHtml(c.docNum)}</b> · ${escHtml(c.cliente)}<span style="display:block;color:var(--muted-2);font-size:11px">${c.modo==='efectivo'?'💵 Efectivo':'🏦 Cheque '+escHtml(c.cheque||'')} · Recibo ${escHtml(c.noRecibo||'')} · ${fdate(c.fecha)}</span></span>
+      <span class="num" style="font-weight:700">${money(c.monto)}</span></label>`;
+  openMod('Depositar varios con una boleta',`
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Marcá los cobros que entraron en el depósito y anotá el número de la boleta del banco.</p>
+    <div style="max-height:300px;overflow:auto;margin-bottom:10px">${mios.map(fila).join('')}</div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;align-items:baseline;margin-bottom:12px"><span id="bolv-n" style="font-size:12px;color:var(--muted)"></span><span style="font-size:12px;color:var(--muted)">Total del depósito</span><span id="bolv-total" class="num" style="font-size:19px;font-weight:800"></span></div>
+    <div class="row"><div><label>No. de boleta de depósito</label><input id="bolv-num" placeholder="No. boleta del banco"></div></div>
+    <div class="note n-danger" id="bolv-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
+    ()=>{
+      const err=t=>{const e=$('#bolv-err');e.style.display='flex';e.querySelector('span').textContent=t;};
+      const ids=Array.from(document.querySelectorAll('.bolv-chk')).filter(x=>x.checked).map(x=>Number(x.dataset.id));
+      if(!ids.length)return err('Marcá al menos un cobro');
+      const bol=$('#bolv-num').value.trim();
+      if(!bol)return err('Ingresá el No. de boleta');
+      const ahora=new Date().toISOString();
+      const sel=cobrosRuta.filter(c=>ids.includes(c.id)&&c.estado==='cobrado');
+      sel.forEach(c=>{c.noBoleta=bol;c.estado='depositado';c.depositadoFecha=ahora;});
+      const tot=sel.reduce((s,c)=>s+Number(c.monto||0),0);
+      logAudit('Cobros depositados (una boleta)','Boleta '+bol+' · '+money(tot)+' · '+sel.map(c=>c.docNum).join(', '));
+      closeMod();renderMisEntregas();
+      toast('✓ Boleta agregada',sel.length+' cobro'+(sel.length!==1?'s':'')+' · '+money(tot)+' · pasa a logística');
+      if(typeof guardarCobroRuta==='function')sel.forEach(c=>guardarCobroRuta(c));
+    });
+  $('#m-save').textContent='Guardar boleta';
+  _bolvTotal();
+}
+window.agregarBoletaVarios=agregarBoletaVarios;
+function _bolvTotal(){
+  const chk=Array.from(document.querySelectorAll('.bolv-chk')).filter(x=>x.checked);
+  const t=chk.reduce((s,x)=>s+Number(x.dataset.monto||0),0);
+  const e=$('#bolv-total');if(e)e.textContent=money(t);
+  const n=$('#bolv-n');if(n)n.textContent=chk.length+' cobro'+(chk.length!==1?'s':'')+' ·';
+}
+window._bolvTotal=_bolvTotal;
+
 function marcarEnRuta(id){
   const d=documentos.find(x=>x.id===id);if(!d)return;
   d.estadoEntrega='ruta';
@@ -39,7 +83,7 @@ function regresarEntrega(id){
     ? 'Vas a regresar '+ref+' a "Asignado". OJO: esto NO borra cobros o abonos que se hayan registrado en la entrega — revisalos aparte si corresponde.'
     : 'Vas a regresar '+ref+' a "Asignado" y se borra el avance de preparación.';
   confirmar('Regresar entrega',aviso,'Regresar',()=>{
-    d.estadoEntrega='asignado'; d.preparacion=null; d.entregaInfo=null;
+    d.estadoEntrega='asignado'; d.preparacion=null; d.entregaInfo=null; d._evid=undefined; // la próxima entrega reemplaza firma/foto
     if(typeof guardarDocumento==='function')guardarDocumento(d);
     logAudit('Entrega regresada a Asignado',ref+' · '+(d.clienteComercial||d.clienteNombre));
     if(typeof renderDespachos==='function')renderDespachos();
@@ -306,11 +350,63 @@ function marcarEntregado(id){
       <div class="pay-btn" data-pago="credito" onclick="selPago('credito')"><span class="pi">✍️</span>Queda a crédito</div>
     </div>
     <div id="pay-detalle"></div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line-strong)">
+      <div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Prueba de entrega</div>
+      <label>Firma de quien recibe <span style="color:var(--danger)">*</span></label>
+      <div class="firma-wrap"><canvas id="firma-canvas" class="firma-canvas"></canvas>
+        <div class="firma-foot"><span>Firmá con el dedo o el mouse</span><button class="btn btn-ghost btn-sm" type="button" onclick="limpiarFirma()">Borrar</button></div></div>
+      <div class="row" style="margin-top:11px"><div><label>¿Quién recibió? <span style="color:var(--danger)">*</span></label><input id="ent-recibe" placeholder="Nombre de quien firma"></div></div>
+      <label>Foto <span style="font-weight:400;color:var(--muted-2)">(opcional: mercadería entregada, factura sellada…)</span></label>
+      <input type="file" id="ent-foto-file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoEntrega(this)">
+      <div id="ent-foto-zone" style="margin-bottom:12px"><button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('ent-foto-file').click()">📷 Tomar foto</button></div>
+    </div>
     <div class="row"><div><label>Observación <span style="font-weight:400;color:var(--muted-2)">(opcional)</span></label><input id="ent-obs" placeholder="Ej. dejado en recepción"></div></div>
     <div class="note n-danger" id="ent-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>confirmarEntrega(id));
+  _fotoEntrega=null;
   selPago('efectivo',saldo);
+  setTimeout(initFirma,50);
 }
+// ── Foto de la entrega: se achica en el celular antes de guardarla ──
+// (una foto de teléfono pesa 3-5 MB; achicada a 1280 px en JPG queda en
+// ~150 KB, suficiente para ver la mercadería o el sello).
+let _fotoEntrega=null;
+function _achicarFoto(file,maxLado,calidad){
+  return new Promise((ok,mal)=>{
+    const fr=new FileReader();
+    fr.onerror=()=>mal(new Error('No se pudo leer la foto'));
+    fr.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>mal(new Error('Formato de foto no soportado'));
+      img.onload=()=>{
+        const k=Math.min(1,maxLado/Math.max(img.width,img.height));
+        const cv=document.createElement('canvas');
+        cv.width=Math.max(1,Math.round(img.width*k));cv.height=Math.max(1,Math.round(img.height*k));
+        cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+        ok(cv.toDataURL('image/jpeg',calidad));
+      };
+      img.src=fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+async function cargarFotoEntrega(input){
+  const file=input.files&&input.files[0];if(!file)return;
+  const z=$('#ent-foto-zone');
+  try{
+    if(z)z.innerHTML='<span style="font-size:12px;color:var(--muted)">Preparando foto…</span>';
+    _fotoEntrega=await _achicarFoto(file,1280,0.6);
+    if(z)z.innerHTML=`<div class="comp-preview"><img src="${_fotoEntrega}" alt="Foto de la entrega"><button class="comp-x" onclick="quitarFotoEntrega()" type="button">×</button></div>`;
+  }catch(e){_fotoEntrega=null;toast('No se pudo cargar la foto',e.message||String(e),true);quitarFotoEntrega();}
+  input.value='';
+}
+window.cargarFotoEntrega=cargarFotoEntrega;
+function quitarFotoEntrega(){
+  _fotoEntrega=null;
+  const z=$('#ent-foto-zone');
+  if(z)z.innerHTML=`<button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('ent-foto-file').click()">📷 Tomar foto</button>`;
+}
+window.quitarFotoEntrega=quitarFotoEntrega;
 window.marcarEntregado=marcarEntregado;
 
 function selPago(tipo,saldoForzado){
@@ -330,13 +426,8 @@ function selPago(tipo,saldoForzado){
     det.innerHTML=`<div class="row"><div><label>No. de contraseña de pago</label><input id="ent-contra" placeholder="No. de contraseña"></div></div>
       <div class="row"><div><label>Fecha prometida de pago <span style="font-weight:400;color:var(--muted-2)">(opcional)</span></label><input id="ent-fechaprom" type="date"></div></div>
       <div class="note" style="background:#E6EEF6;color:var(--blue);border-color:rgba(68,96,132,.2);margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La factura queda pendiente de cobro. Cobros le da seguimiento con el número de contraseña.</span></div>`;
-  }else{ // crédito → firma
-    det.innerHTML=`<label>Firma de recepción <span style="color:var(--danger)">*</span></label>
-      <div class="firma-wrap"><canvas id="firma-canvas" class="firma-canvas"></canvas>
-        <div class="firma-foot"><span>Firmá con el dedo o el mouse</span><button class="btn btn-ghost btn-sm" type="button" onclick="limpiarFirma()">Borrar</button></div></div>
-      <div class="row" style="margin-top:11px"><div><label>¿Quién recibió?</label><input id="ent-recibe" placeholder="Nombre de quien firma"></div></div>
-      <div class="note" style="background:#E6EEF6;color:var(--blue);border-color:rgba(68,96,132,.2);margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La firma y la fecha quedan estampadas en el PDF de la factura como comprobante de recepción. La factura sigue como cuenta por cobrar.</span></div>`;
-    setTimeout(initFirma,50);
+  }else{ // crédito: la firma (abajo, en "Prueba de entrega") es la constancia
+    det.innerHTML=`<div class="note" style="background:#E6EEF6;color:var(--blue);border-color:rgba(68,96,132,.2);margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La factura queda a crédito. La firma de abajo y la fecha quedan como comprobante de recepción en la factura.</span></div>`;
   }
 }
 window.selPago=selPago;
@@ -358,7 +449,7 @@ function initFirma(){
 function limpiarFirma(){if(_firmaCtx&&_firmaCanvas){_firmaCtx.clearRect(0,0,_firmaCanvas.width,_firmaCanvas.height);_firmaVacia=true;}}
 window.limpiarFirma=limpiarFirma;
 
-function confirmarEntrega(id){
+async function confirmarEntrega(id){
   const d=documentos.find(x=>x.id===id);if(!d)return;
   const docNum=d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
   const err=$('#ent-err');const errTxt=err.querySelector('span');
@@ -367,6 +458,11 @@ function confirmarEntrega(id){
   const tipo=_entregaPago;
   let entregaInfo={fecha,piloto:currentUser,observacion:obs,modoPago:tipo};
   let _cobroNuevo=null;
+  // Prueba de entrega (en cualquier forma de pago): firma + quién recibió.
+  if(_firmaVacia||!_firmaCanvas){err.style.display='flex';errTxt.textContent='Falta la firma de quien recibe';return;}
+  const recibe=$('#ent-recibe')?.value.trim();
+  if(!recibe){err.style.display='flex';errTxt.textContent='Indicá quién recibió';return;}
+  entregaInfo.recibe=recibe;
 
   if(tipo==='efectivo'||tipo==='cheque'){
     const monto=Number($('#ent-monto').value);
@@ -386,20 +482,26 @@ function confirmarEntrega(id){
       monto,modo:tipo,noBoleta:'',noRecibo:recibo,
       cheque,banco,piloto:currentUser,fecha,estado:'cobrado',empresa:d.empresa||empresaParaNuevo(),_nuevo:true
     };
-    cobrosRuta.push(_cobroNuevo);
   }else if(tipo==='contrasena'){
     const contra=$('#ent-contra').value.trim();
     if(!contra){err.style.display='flex';errTxt.textContent='Ingresá el número de contraseña';return;}
     entregaInfo.contrasena=contra;entregaInfo.fechaPromesa=$('#ent-fechaprom').value||null;
-  }else{ // crédito → firma
-    if(_firmaVacia){err.style.display='flex';errTxt.textContent='Falta la firma de recepción';return;}
-    const recibe=$('#ent-recibe')?.value.trim();
-    if(!recibe){err.style.display='flex';errTxt.textContent='Indicá quién recibió';return;}
-    entregaInfo.recibe=recibe;entregaInfo.firma=_firmaCanvas.toDataURL('image/png');
   }
+  // Firma y foto van a la tabla aparte (no se bajan en cada login). Si esa
+  // tabla todavía no existe o falla, la firma se guarda como antes dentro de
+  // la entrega para no perderla (la foto, que pesa, no).
+  const firma=_firmaCanvas.toDataURL('image/png');
+  const _ev={firma,foto:_fotoEntrega,recibe,registradoPor:currentUser,registradoEl:fecha};
+  const _okEv=(typeof guardarEvidenciaEntrega==='function')?await guardarEvidenciaEntrega(d.id,_ev):false;
+  if(_okEv){entregaInfo.evidencia=true;entregaInfo.conFoto=!!_fotoEntrega;d._evid={firma,foto:_fotoEntrega,recibe};}
+  else{
+    entregaInfo.firma=firma;
+    if(_fotoEntrega)toast('⚠ La foto no se guardó','La entrega y la firma sí quedaron registradas.',true);
+  }
+  if(_cobroNuevo)cobrosRuta.push(_cobroNuevo);
   d.estadoEntrega='entregado';
   d.entregaInfo=entregaInfo;
-  const resumenPago={efectivo:'Efectivo '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),cheque:'Cheque '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),contrasena:'Contraseña '+entregaInfo.contrasena,credito:'A crédito (firmado)'}[tipo];
+  const resumenPago={efectivo:'Efectivo '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),cheque:'Cheque '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),contrasena:'Contraseña '+entregaInfo.contrasena,credito:'A crédito'}[tipo]+' · recibió '+recibe;
   logAudit('Entrega confirmada',docNum+' · '+(d.clienteComercial||d.clienteNombre)+' · '+resumenPago);
   closeMod();renderMisEntregas();
   toast('✓ Entrega confirmada',resumenPago);

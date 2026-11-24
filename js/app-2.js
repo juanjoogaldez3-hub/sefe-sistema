@@ -1105,7 +1105,7 @@ function rowDoc(withActions){
       ${withActions?`<td style="color:var(--muted)">${fdate(fechaDoc(f))}</td>`:''}
       <td class="num" style="font-weight:600">${money(f.totales.total)}</td>
       ${withActions?`<td class="num">${(f.tipoDoc==='cambiaria'&&f.estado!=='anulada')?(()=>{const _inf=arInfo(f);const _c=_inf.saldo<=0.001?'var(--ok)':(_inf.abon>0?'var(--warn)':'var(--danger)');return `<span style="color:${_c};font-weight:700">${money(_inf.saldo)}</span>`;})():'<span style="color:var(--muted)">—</span>'}</td>`:''}
-      <td><span class="badge ${ec}">${en}</span></td>
+      <td><span class="badge ${ec}">${en}</span>${typeof badgeEntregaHTML==='function'?badgeEntregaHTML(f):''}</td>
       ${withActions?`<td><div class="acts"><button class="acts-btn" onclick="toggleDrop('${dropId}',event)">Acciones<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><div class="acts-drop" id="${dropId}">${items.join('')}</div></div></td>`:''}
     </tr>`;
   };
@@ -1127,6 +1127,7 @@ function accionesFacturaHTML(f,pref){
   const desc=f.tipoDoc==='cambiaria'?'Descargar factura (PDF)':'Descargar PDF';
   const items=[`<button class="act-primary" onclick="verDoc(${f.id})">Ver ${f.tipoDoc==='cambiaria'?'factura':'documento'}</button>`];
   if(f.numeroDte||f.pdfBase64)items.push(`<button onclick="descargarFacturaPDF(${f.id})">⬇ ${desc}</button>`);
+  if(f.entregaInfo&&f.estadoEntrega==='entregado')items.push(`<button onclick="verComprobanteEntrega(${f.id})">✍️ Comprobante de entrega</button>`);
   return `<div class="acts"><button class="acts-btn" onclick="toggleDrop('${id}',event)">Acciones<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><div class="acts-drop" id="${id}">${items.join('')}</div></div>`;
 }
 window.accionesFacturaHTML=accionesFacturaHTML;
@@ -1247,8 +1248,8 @@ function abrirFacturar(id){
        <div style="font-weight:600;color:var(--ink);margin-top:2px">${creditoTxt}</div>
      </div>${selectorNit}${selectorSubVend}
      <label style="display:flex;align-items:center;gap:9px;margin-top:14px;padding:11px 13px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:13px">
-       <input type="checkbox" id="fac-despacho" style="width:17px;height:17px;flex:none">
-       <span>🚚 <b>Entregar a domicilio</b> — mandar esta factura a Despachos</span>
+       <input type="checkbox" id="fac-despacho" checked style="width:17px;height:17px;flex:none">
+       <span>🚚 <b>Entregar a domicilio</b> — mandar esta factura a Despachos<span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">Desmarcalo si el cliente se lleva el producto en mostrador.</span></span>
      </label>
      <div style="margin-top:16px;padding-top:13px;border-top:1px solid var(--line);text-align:center"><button class="btn btn-ghost btn-sm" onclick="cerrarTodo();editarPedido(${f.id})">✏️ Editar pedido antes de facturar</button></div>`,
     ()=>facturarPedido(id,dias));

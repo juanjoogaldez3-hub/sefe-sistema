@@ -874,12 +874,20 @@ function _optRepartidores(selPid){
 // ¿El usuario actual tiene al menos una entrega asignada (no entregada)?
 // Con esto se le habilita "Mis entregas" aunque su rol no lo incluya.
 function tieneEntregasAsignadas(){
-  const pid=(typeof miPilotoId==='function')?miPilotoId():null;
-  if(pid==null)return false;
-  if(typeof docsDespachables!=='function')return false;
-  return docsDespachables().some(d=>String(d.pilotoId)===String(pid)&&(d.estadoEntrega||'sin')!=='entregado');
+  // Un repartidor (rol Piloto o "Puede repartir") SIEMPRE ve "Mis entregas",
+  // aunque ya no le queden entregas: ahí hace su corte del día y anota la
+  // boleta de depósito de lo que cobró. Antes el menú se le escondía al
+  // terminar la ruta y sus cobros quedaban trabados en "Por depositar".
+  return soyRepartidor();
 }
-if(typeof window!=='undefined'){ window.repartidores=repartidores; window._optRepartidores=_optRepartidores; window.tieneEntregasAsignadas=tieneEntregasAsignadas; }
+// ¿El usuario actual sale a repartir? Rol Piloto, o un usuario de otro rol
+// (personal de apoyo) marcado "Puede repartir" con su identidad de reparto.
+function soyRepartidor(){
+  if(typeof currentRole!=='undefined'&&currentRole==='piloto')return true;
+  const u=(typeof usuarios!=='undefined'?usuarios:[]).find(x=>x.nombre===currentUser);
+  return !!(u&&u.activo!==false&&u.puedeRepartir===true&&u.pilotoId!=null);
+}
+if(typeof window!=='undefined'){ window.repartidores=repartidores; window._optRepartidores=_optRepartidores; window.tieneEntregasAsignadas=tieneEntregasAsignadas; window.soyRepartidor=soyRepartidor; }
 function canConvertir(){return (currentRole==='admin'||ROLES[currentRole]?.convertirCajas===true)&&!soloLectura();}
 let proveedores=[];
 let compras=[];

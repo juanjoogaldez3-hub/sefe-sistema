@@ -403,7 +403,7 @@ function renderCobros(){
       <td class="num">${money(f.totales.total)}</td>
       <td class="num" style="color:var(--ok)">${money(x.abon)}</td>
       <td class="num" style="font-weight:700">${money(x.saldo)}</td>
-      <td><span class="badge ${ec}">${en}</span></td>
+      <td><span class="badge ${ec}">${en}</span>${typeof badgeEntregaHTML==='function'?badgeEntregaHTML(f):''}</td>
       <td><div class="acts">${acts}</div></td></tr>`;
   }).join('');
   enhanceTable('t-cobros');
