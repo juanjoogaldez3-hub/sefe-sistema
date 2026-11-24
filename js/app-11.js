@@ -432,15 +432,28 @@ function selPago(tipo,saldoForzado){
 }
 window.selPago=selPago;
 
+// Color de la firma: azul de bolígrafo (como firman en papel / OneDrive).
+const FIRMA_TINTA='#1b3a8f';
 function initFirma(){
   _firmaCanvas=$('#firma-canvas');if(!_firmaCanvas)return;
-  const rect=_firmaCanvas.getBoundingClientRect();
-  _firmaCanvas.width=rect.width;_firmaCanvas.height=160;
+  // Tamaño REAL del lienzo: offsetWidth no se ve afectado por la animación de
+  // la ventana (arranca al 96%). Antes se medía con getBoundingClientRect en
+  // plena animación y el lienzo quedaba 4% más angosto: lo que se firmaba
+  // cerca del borde derecho se perdía (firmas incompletas).
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const w=_firmaCanvas.offsetWidth||_firmaCanvas.getBoundingClientRect().width||360;
+  const h=_firmaCanvas.offsetHeight||160;
+  _firmaCanvas.width=Math.round(w*dpr);_firmaCanvas.height=Math.round(h*dpr);
   _firmaCtx=_firmaCanvas.getContext('2d');
-  _firmaCtx.strokeStyle='#163916';_firmaCtx.lineWidth=2.2;_firmaCtx.lineCap='round';_firmaCtx.lineJoin='round';
+  _firmaCtx.strokeStyle=FIRMA_TINTA;_firmaCtx.fillStyle=FIRMA_TINTA;_firmaCtx.lineWidth=2.2*dpr;_firmaCtx.lineCap='round';_firmaCtx.lineJoin='round';
   _firmaVacia=true;
-  const pos=e=>{const r=_firmaCanvas.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return {x:t.clientX-r.left,y:t.clientY-r.top};};
-  const start=e=>{e.preventDefault();_firmando=true;_firmaVacia=false;const p=pos(e);_firmaCtx.beginPath();_firmaCtx.moveTo(p.x,p.y);};
+  // Punto del dedo/mouse → coordenadas del lienzo (con su escala real, aunque
+  // la ventana todavía se esté animando o el lienzo esté estirado).
+  const pos=e=>{const r=_firmaCanvas.getBoundingClientRect();const t=e.touches?e.touches[0]:e;
+    return {x:(t.clientX-r.left)*(_firmaCanvas.width/(r.width||1)),y:(t.clientY-r.top)*(_firmaCanvas.height/(r.height||1))};};
+  const start=e=>{e.preventDefault();_firmando=true;_firmaVacia=false;const p=pos(e);
+    _firmaCtx.beginPath();_firmaCtx.arc(p.x,p.y,_firmaCtx.lineWidth/2,0,Math.PI*2);_firmaCtx.fill(); // un toque también marca
+    _firmaCtx.beginPath();_firmaCtx.moveTo(p.x,p.y);};
   const move=e=>{if(!_firmando)return;e.preventDefault();const p=pos(e);_firmaCtx.lineTo(p.x,p.y);_firmaCtx.stroke();};
   const end=()=>{_firmando=false;};
   _firmaCanvas.onmousedown=start;_firmaCanvas.onmousemove=move;_firmaCanvas.onmouseup=end;_firmaCanvas.onmouseleave=end;
