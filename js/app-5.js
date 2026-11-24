@@ -392,7 +392,7 @@ function renderCobros(){
     // Números de recibo de sus abonos (ocultos): así el buscador de la tabla
     // encuentra la factura escribiendo el No. de recibo.
     const _recs=(f.abonos||[]).filter(a=>!a.anulado&&a.noRecibo).map(a=>'recibo '+String(a.noRecibo).replace(/[<>&"]/g,'')).join(' ');
-    let acts=`<button class="btn btn-ghost btn-sm" onclick="verDoc(${f.id})">Ver</button>`;
+    let acts=accionesFacturaHTML(f,'dropcb-'); // Ver + Descargar factura
     acts+=`<button class="btn btn-ghost btn-sm" onclick="openHistorialAbonos(${f.id})">Abonos${nAbonos?' ('+nAbonos+')':''}</button>`;
     if(x.saldo>0.001&&canRegistrarAbono())acts=`<button class="btn btn-primary btn-sm" onclick="openAbono(${f.id})">Registrar abono</button> <button class="btn btn-ghost btn-sm" style="color:#7A4A9E" onclick="openRetencion(${f.id})" title="Registrar retención de IVA o ISR">Retención</button>`+acts;
     return `<tr>

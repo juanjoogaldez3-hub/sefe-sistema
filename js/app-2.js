@@ -1118,6 +1118,18 @@ function toggleDrop(id,e){
   if(!isOpen)drop.classList.add('open');
 }
 window.toggleDrop=toggleDrop;
+// Botón "Acciones" de una factura (Cobros y ficha del cliente): Ver y
+// Descargar. 'pref' es el prefijo del id del menú, DISTINTO por tabla:
+// Documentos usa 'drop-'+id y sigue en la página aunque esté oculto, así que
+// con el mismo id el botón abriría el menú de la otra tabla.
+function accionesFacturaHTML(f,pref){
+  const id=(pref||'dropf-')+f.id;
+  const desc=f.tipoDoc==='cambiaria'?'Descargar factura (PDF)':'Descargar PDF';
+  const items=[`<button class="act-primary" onclick="verDoc(${f.id})">Ver ${f.tipoDoc==='cambiaria'?'factura':'documento'}</button>`];
+  if(f.numeroDte||f.pdfBase64)items.push(`<button onclick="descargarFacturaPDF(${f.id})">⬇ ${desc}</button>`);
+  return `<div class="acts"><button class="acts-btn" onclick="toggleDrop('${id}',event)">Acciones<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><div class="acts-drop" id="${id}">${items.join('')}</div></div>`;
+}
+window.accionesFacturaHTML=accionesFacturaHTML;
 document.addEventListener('click',e=>{
   if(e.target.closest('.acts-drop'))document.querySelectorAll('.acts-drop.open').forEach(d=>d.classList.remove('open'));
   else if(!e.target.closest('.acts-btn'))document.querySelectorAll('.acts-drop.open').forEach(d=>d.classList.remove('open'));
