@@ -669,6 +669,71 @@ async function descargarFacturaPDF(id){
 }
 window.descargarFacturaPDF=descargarFacturaPDF;
 
+// ══════════ DESCARGAR TODAS LAS PENDIENTES EN UN SOLO PDF ══════════
+// Junta en UN PDF las facturas cambiarias con saldo (para mandarle al
+// cliente o imprimir de un solo). Usa los PDF oficiales de EcoFactura, uno
+// detrás de otro, ordenados por vencimiento. Se usa desde Cobros ("Por
+// cobrar", respeta los filtros) y desde la ficha del cliente.
+function _pendientesDe(docs){
+  return (docs||[]).filter(f=>f.tipoDoc==='cambiaria'&&f.estado!=='anulada'&&!f.anulado&&arInfo(f).saldo>0.001)
+    .sort((a,b)=>String(a.vencimiento||a.creada||'').localeCompare(String(b.vencimiento||b.creada||''))||((a.id||0)-(b.id||0)));
+}
+let _descargandoPend=false;
+async function descargarPendientesPDF(facturas,nombre){
+  if(_descargandoPend){toast('Ya se está armando el PDF','Esperá a que termine');return;}
+  const lista=_pendientesDe(facturas);
+  if(!lista.length){toast('No hay facturas pendientes','No hay facturas con saldo en lo que estás viendo',true);return;}
+  if(lista.length>40&&!confirm('Vas a descargar '+lista.length+' facturas en un solo PDF. Puede tardar un poco. ¿Seguir?'))return;
+  _descargandoPend=true;
+  const sinPdf=[];
+  try{
+    toast('Armando el PDF…',lista.length+' factura'+(lista.length!==1?'s':'')+' pendiente'+(lista.length!==1?'s':''));
+    const {PDFDocument}=await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
+    const final=await PDFDocument.create();
+    for(const f of lista){
+      try{
+        if(!f.pdfBase64&&typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
+        if(!f.pdfBase64){sinPdf.push(f);continue;}
+        const bin=atob(f.pdfBase64); const arr=new Uint8Array(bin.length);
+        for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+        const src=await PDFDocument.load(arr,{ignoreEncryption:true});
+        const pags=await final.copyPages(src,src.getPageIndices());
+        pags.forEach(p=>final.addPage(p));
+      }catch(e){console.error('PDF de',f.serie+'-'+f.numeroDte,e);sinPdf.push(f);}
+    }
+    const nOk=lista.length-sinPdf.length;
+    if(!nOk){toast('No se pudo armar el PDF','Ninguna de las facturas tiene PDF disponible',true);return;}
+    const bytes=await final.save();
+    const limpio=String(nombre||'Cobros').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9 ]/g,'').trim().replace(/\s+/g,'_').slice(0,40)||'Cobros';
+    const blob=new Blob([bytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='Facturas-pendientes-'+limpio+'-'+fechaHoyGT()+'.pdf';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+    if(sinPdf.length)toast('⚠ PDF descargado con '+nOk+' de '+lista.length,'Sin PDF: '+sinPdf.map(f=>f.serie?f.serie+'-'+f.numeroDte:refPed(f)).join(', '),true);
+    else toast('✓ PDF descargado',nOk+' factura'+(nOk!==1?'s':'')+' pendiente'+(nOk!==1?'s':'')+' en un solo archivo');
+  }catch(e){console.error(e);toast('No se pudo armar el PDF',e.message||String(e),true);}
+  finally{_descargandoPend=false;}
+}
+window.descargarPendientesPDF=descargarPendientesPDF;
+// Cobros → "Por cobrar": las pendientes de lo que se está viendo (filtros).
+function descargarPendientesCobros(){
+  const ars=deEmpresa(documentos).filter(d=>d.tipoDoc==='cambiaria'&&d.estado!=='anulada');
+  const vis=ars.filter(f=>cobrosEnFiltro(f,{...arInfo(f)}));
+  const cliId=$('#cb-cliente')?.value;
+  const cli=cliId?clientes.find(c=>String(c.id)===String(cliId)):null;
+  descargarPendientesPDF(vis,cli?cli.nombre:'Cobros');
+}
+window.descargarPendientesCobros=descargarPendientesCobros;
+// Ficha del cliente: todas las pendientes de ese cliente.
+function descargarPendientesCliente(id){
+  const c=clientes.find(x=>x.id===id); if(!c)return;
+  const facturas=(typeof clienteStats==='function')?clienteStats(c).facturas:documentos.filter(d=>d.clienteId===id);
+  descargarPendientesPDF(facturas,c.nombre);
+}
+window.descargarPendientesCliente=descargarPendientesCliente;
+
 // Arma el nombre del archivo: Factura-SERIE-CLIENTE.pdf (limpio para nombre de archivo)
 function nombreArchivoFactura(f){
   const cli=(f.clienteComercial||f.clienteNombre||'Cliente')
