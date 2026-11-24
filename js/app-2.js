@@ -1054,6 +1054,7 @@ function rowDoc(withActions){
     if(withActions){
       // Ver siempre visible
       items.push(`<button class="act-primary" onclick="verDoc(${f.id})">Ver documento</button>`);
+      items.push(...itemsDescargaDoc(f)); // Descargar (firmada si se entregó con firma)
       if(f.clienteId)items.push(`<button onclick="abrirCliente(${f.clienteId})">Ver cliente</button>`);
       items.push(`<button onclick="recordatorioDesdeDoc(${f.id})">Recordatorio</button>`);
 
@@ -1122,14 +1123,24 @@ window.toggleDrop=toggleDrop;
 // Descargar. 'pref' es el prefijo del id del menú, DISTINTO por tabla:
 // Documentos usa 'drop-'+id y sigue en la página aunque esté oculto, así que
 // con el mismo id el botón abriría el menú de la otra tabla.
+// Opciones de DESCARGA de un documento con PDF oficial, iguales en los tres
+// menús "Acciones" (Documentos, Cobros y ficha del cliente). Si la entrega
+// tiene firma: "Descargar factura firmada" (con fecha, firma y quién recibió
+// estampados) + "Descargar sin firma" + el comprobante de entrega.
+function itemsDescargaDoc(f){
+  const items=[];
+  if(!f||!(f.numeroDte||f.autorizacion||f.pdfBase64))return items; // pedidos: sin PDF oficial
+  const desc=f.tipoDoc==='cambiaria'?'Descargar factura (PDF)':'Descargar PDF';
+  const firmada=f.estado!=='anulada'&&f.estadoEntrega==='entregado'&&f.entregaInfo&&(f.entregaInfo.evidencia||f.entregaInfo.firma);
+  items.push(`<button onclick="descargarFacturaPDF(${f.id})">⬇ ${firmada?'Descargar factura firmada':desc}</button>`);
+  if(firmada)items.push(`<button onclick="descargarFacturaPDF(${f.id},true)">⬇ Descargar sin firma</button>`);
+  if(f.entregaInfo&&f.estadoEntrega==='entregado')items.push(`<button onclick="verComprobanteEntrega(${f.id})">✍️ Comprobante de entrega</button>`);
+  return items;
+}
+window.itemsDescargaDoc=itemsDescargaDoc;
 function accionesFacturaHTML(f,pref){
   const id=(pref||'dropf-')+f.id;
-  const desc=f.tipoDoc==='cambiaria'?'Descargar factura (PDF)':'Descargar PDF';
-  const items=[`<button class="act-primary" onclick="verDoc(${f.id})">Ver ${f.tipoDoc==='cambiaria'?'factura':'documento'}</button>`];
-  const _firmada=f.estadoEntrega==='entregado'&&f.entregaInfo&&(f.entregaInfo.evidencia||f.entregaInfo.firma);
-  if(f.numeroDte||f.pdfBase64)items.push(`<button onclick="descargarFacturaPDF(${f.id})">⬇ ${_firmada?'Descargar factura firmada':desc}</button>`);
-  if(_firmada)items.push(`<button onclick="descargarFacturaPDF(${f.id},true)">⬇ Descargar sin firma</button>`);
-  if(f.entregaInfo&&f.estadoEntrega==='entregado')items.push(`<button onclick="verComprobanteEntrega(${f.id})">✍️ Comprobante de entrega</button>`);
+  const items=[`<button class="act-primary" onclick="verDoc(${f.id})">Ver ${f.tipoDoc==='cambiaria'?'factura':'documento'}</button>`].concat(itemsDescargaDoc(f));
   return `<div class="acts"><button class="acts-btn" onclick="toggleDrop('${id}',event)">Acciones<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><div class="acts-drop" id="${id}">${items.join('')}</div></div>`;
 }
 window.accionesFacturaHTML=accionesFacturaHTML;
