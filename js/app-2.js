@@ -1126,7 +1126,9 @@ function accionesFacturaHTML(f,pref){
   const id=(pref||'dropf-')+f.id;
   const desc=f.tipoDoc==='cambiaria'?'Descargar factura (PDF)':'Descargar PDF';
   const items=[`<button class="act-primary" onclick="verDoc(${f.id})">Ver ${f.tipoDoc==='cambiaria'?'factura':'documento'}</button>`];
-  if(f.numeroDte||f.pdfBase64)items.push(`<button onclick="descargarFacturaPDF(${f.id})">⬇ ${desc}</button>`);
+  const _firmada=f.estadoEntrega==='entregado'&&f.entregaInfo&&(f.entregaInfo.evidencia||f.entregaInfo.firma);
+  if(f.numeroDte||f.pdfBase64)items.push(`<button onclick="descargarFacturaPDF(${f.id})">⬇ ${_firmada?'Descargar factura firmada':desc}</button>`);
+  if(_firmada)items.push(`<button onclick="descargarFacturaPDF(${f.id},true)">⬇ Descargar sin firma</button>`);
   if(f.entregaInfo&&f.estadoEntrega==='entregado')items.push(`<button onclick="verComprobanteEntrega(${f.id})">✍️ Comprobante de entrega</button>`);
   return `<div class="acts"><button class="acts-btn" onclick="toggleDrop('${id}',event)">Acciones<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><div class="acts-drop" id="${id}">${items.join('')}</div></div>`;
 }

@@ -501,7 +501,8 @@ async function verDoc(id){
     const esAnulada=f.estado==='anulada';
     $('#doc-bar-t').textContent=TIPO_TIT[f.tipoDoc]+'  ·  '+numeroTit+(esAnulada?'  ·  ANULADA':'');
     // Si está anulada y EcoFactura devolvió el PDF de anulación, mostrar ese; si no, el original con aviso
-    const pdfMostrar=(esAnulada&&f.pdfAnulacionBase64)?f.pdfAnulacionBase64:f.pdfBase64;
+    const _firm=esAnulada?null:await pdfFirmadoDe(f); // entrega firmada → la factura se ve firmada
+    const pdfMostrar=_firm||((esAnulada&&f.pdfAnulacionBase64)?f.pdfAnulacionBase64:f.pdfBase64);
     const pdfUrl='data:application/pdf;base64,'+pdfMostrar;
     const nombreArch=(esAnulada?'Anulacion-':'Factura-')+(f.serie||'')+'-'+(f.numeroDte||f.numero)+'.pdf';
     const bannerAnulada=esAnulada?`<div style="background:#FDECEA;border:1.5px solid var(--danger);color:#B3261E;border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
@@ -515,7 +516,7 @@ async function verDoc(id){
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;flex-wrap:wrap">
         <span style="font-size:12px;color:var(--muted)">${esAnulada&&f.pdfAnulacionBase64?'Documento de anulación certificado por EcoFactura ante SAT':'Documento oficial certificado por EcoFactura ante SAT'} · Aut.: ${f.autorizacion}</span>
-        <button class="btn btn-primary btn-sm" onclick="descargarFacturaPDF(${f.id})">⬇ Descargar PDF</button>
+        <span style="display:flex;gap:8px;flex-wrap:wrap">${_firm?`<button class="btn btn-ghost btn-sm" onclick="descargarFacturaPDF(${f.id},true)">⬇ Sin firma</button>`:''}<button class="btn btn-primary btn-sm" onclick="descargarFacturaPDF(${f.id})">⬇ Descargar PDF${_firm?' firmado':''}</button></span>
       </div>
       ${f.entregaInfo?`<div style="background:#fff;border-radius:10px;padding:20px 24px;margin-top:14px;color:#1a1a17">${reciboEntregaHTML(f)}</div>`:''}`;
     // Guardar referencia para imprimir/descargar
@@ -648,11 +649,95 @@ async function imprimirDoc(){
 }
 window.imprimirDoc=imprimirDoc;
 
-// Descargar el PDF oficial de EcoFactura como archivo
-async function descargarFacturaPDF(id){
+// ══════════ FACTURA FIRMADA (lo que hoy se hace a mano en OneDrive) ══════════
+// Cuando la entrega tiene firma, la factura se ve y se descarga con:
+//   · la FECHA de entrega (dd/mm/aa) en "LUGAR Y FECHA ACEPTACIÓN",
+//   · la FIRMA en "FIRMA Y SELLO DE ACEPTANTE… RECIBÍ CONFORME",
+//   · "Recibió: <nombre>" en el renglón de OBSERVACIONES (a la derecha, para
+//     no pisar observaciones impresas).
+// El PDF OFICIAL certificado no se toca en la base: la versión firmada se arma
+// al verla/descargarla y queda en memoria. Medidas tomadas del formato de
+// EcoFactura (carta 612×792 pt, origen abajo-izquierda) y de cómo lo firman
+// hoy en OneDrive.
+const _SELLO_FACT={
+  fecha:{cx:300,y:62,size:32},              // centrada en el recuadro del medio
+  firma:{x:428,y:46,w:156,h:64},            // recuadro derecho (puede pisar la leyenda, como hoy)
+  nombre:{xDer:585,y:617,size:11}           // renglón OBSERVACIONES (línea base, desde ARRIBA)
+};
+function _b64aBytes(b64){const bin=atob(b64);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a;}
+// Helvetica estándar sólo escribe Latin-1: lo demás se cambia por '?' (no rompe el PDF).
+function _textoPdf(s){return String(s||'').normalize('NFC').replace(/[^ -~ -ÿ]/g,'?');}
+// Recorta los márgenes transparentes de la firma (el lienzo es ancho y la
+// firma ocupa una parte): así sale del tamaño correcto en el recuadro.
+function _recortarFirma(dataUrl){
+  return new Promise((ok,mal)=>{
+    const img=new Image();
+    img.onerror=()=>mal(new Error('Firma ilegible'));
+    img.onload=()=>{
+      const cv=document.createElement('canvas');cv.width=img.width;cv.height=img.height;
+      const cx=cv.getContext('2d');cx.drawImage(img,0,0);
+      const px=cx.getImageData(0,0,cv.width,cv.height).data;
+      let x0=cv.width,y0=cv.height,x1=-1,y1=-1;
+      for(let y=0;y<cv.height;y++)for(let x=0;x<cv.width;x++){if(px[(y*cv.width+x)*4+3]>20){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}}
+      if(x1<0){ok(null);return;}
+      const m=4;x0=Math.max(0,x0-m);y0=Math.max(0,y0-m);x1=Math.min(cv.width-1,x1+m);y1=Math.min(cv.height-1,y1+m);
+      const out=document.createElement('canvas');out.width=x1-x0+1;out.height=y1-y0+1;
+      out.getContext('2d').drawImage(cv,x0,y0,out.width,out.height,0,0,out.width,out.height);
+      ok({url:out.toDataURL('image/png'),w:out.width,h:out.height});
+    };
+    img.src=dataUrl;
+  });
+}
+// Devuelve el PDF firmado (base64) o null si la factura no tiene entrega
+// firmada / PDF oficial. Se cachea por entrega.
+async function pdfFirmadoDe(f){
+  if(!f||f.estado==='anulada'||f.estadoEntrega!=='entregado'||!f.entregaInfo)return null;
+  const ei=f.entregaInfo;
+  if(ei.evidencia&&typeof traerEvidenciaEntrega==='function')await traerEvidenciaEntrega(f);
+  const firma=(f._evid&&f._evid.firma)||ei.firma;
+  if(!firma)return null;
+  if(f._pdfFirmado&&f._pdfFirmadoClave===ei.fecha)return f._pdfFirmado;
+  if(!f.pdfBase64&&typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
+  if(!f.pdfBase64)return null;
+  try{
+    const {PDFDocument,StandardFonts,rgb}=await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
+    const doc=await PDFDocument.load(_b64aBytes(f.pdfBase64),{ignoreEncryption:true});
+    const pags=doc.getPages(); const pg=pags[pags.length-1]; // el pie va en la última hoja
+    const {width,height}=pg.getSize(); const kx=width/612, ky=height/792;
+    const tinta=rgb(0.08,0.12,0.32); // azul de lapicero
+    const font=await doc.embedFont(StandardFonts.Helvetica);
+    // Fecha de entrega (hora de Guatemala), dd/mm/aa
+    const fl=fechaLocalDe(ei.fecha)||fechaHoyGT();
+    const txtF=fl.slice(8,10)+'/'+fl.slice(5,7)+'/'+fl.slice(2,4);
+    const S=_SELLO_FACT, sz=S.fecha.size*ky;
+    pg.drawText(txtF,{x:S.fecha.cx*kx-font.widthOfTextAtSize(txtF,sz)/2,y:S.fecha.y*ky,size:sz,font,color:tinta});
+    // Firma, ajustada al recuadro sin deformarla
+    const rec=await _recortarFirma(firma);
+    if(rec){
+      const png=await doc.embedPng(rec.url);
+      const k=Math.min(S.firma.w*kx/rec.w,S.firma.h*ky/rec.h);
+      const w=rec.w*k,h=rec.h*k;
+      pg.drawImage(png,{x:S.firma.x*kx+(S.firma.w*kx-w)/2,y:S.firma.y*ky+(S.firma.h*ky-h)/2,width:w,height:h});
+    }
+    // Quién recibió
+    const recibe=(f._evid&&f._evid.recibe)||ei.recibe;
+    if(recibe){
+      const t=_textoPdf('Recibió: '+recibe), sn=S.nombre.size*ky;
+      pg.drawText(t,{x:S.nombre.xDer*kx-font.widthOfTextAtSize(t,sn),y:height-S.nombre.y*ky,size:sn,font,color:tinta});
+    }
+    f._pdfFirmado=await doc.saveAsBase64(); f._pdfFirmadoClave=ei.fecha;
+    return f._pdfFirmado;
+  }catch(e){console.error('No se pudo firmar el PDF',e);return null;}
+}
+window.pdfFirmadoDe=pdfFirmadoDe;
+
+// Descargar la factura como archivo. Si la entrega tiene firma, baja la
+// versión FIRMADA; con sinFirma=true, el PDF oficial tal cual.
+async function descargarFacturaPDF(id,sinFirma){
   const f=documentos.find(d=>d.id===id);
   if(f && !(f.estado==='anulada' && f.pdfAnulacionBase64) && typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
-  const pdf=(f && f.estado==='anulada' && f.pdfAnulacionBase64)?f.pdfAnulacionBase64:(f&&f.pdfBase64);
+  const firmado=(!sinFirma&&f)?await pdfFirmadoDe(f):null;
+  const pdf=firmado||((f && f.estado==='anulada' && f.pdfAnulacionBase64)?f.pdfAnulacionBase64:(f&&f.pdfBase64));
   if(!f||!pdf){toast('Esta factura no tiene PDF',null,true);return;}
   try{
     const bytes=atob(pdf);
@@ -662,7 +747,7 @@ async function descargarFacturaPDF(id){
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
     a.href=url;
-    a.download=nombreArchivoFactura(f);
+    a.download=firmado?nombreArchivoFactura(f).replace(/\.pdf$/,'-firmada.pdf'):nombreArchivoFactura(f);
     document.body.appendChild(a);a.click();
     document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -696,7 +781,8 @@ async function descargarPendientesPDF(facturas,nombre){
       try{
         if(!f.pdfBase64&&typeof asegurarPdfDoc==='function')await asegurarPdfDoc(f);
         if(!f.pdfBase64){sinPdf.push(f);continue;}
-        const bin=atob(f.pdfBase64); const arr=new Uint8Array(bin.length);
+        const _b64=(await pdfFirmadoDe(f))||f.pdfBase64; // firmada si se entregó con firma
+        const bin=atob(_b64); const arr=new Uint8Array(bin.length);
         for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
         const src=await PDFDocument.load(arr,{ignoreEncryption:true});
         const pags=await final.copyPages(src,src.getPageIndices());
