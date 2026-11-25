@@ -281,10 +281,10 @@ ctx.documentos.length = 0;
 const selloDoc = '2026-08-12T09:15:33.512Z';
 // Así crea la app un pedido: id negativo provisorio hasta que llega el real
 ctx.documentos.push({ id:-1755000000000, numero:1500, tipoDoc:'pedido',
-  clienteNombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
+  clienteId:12, clienteNombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
   creada:selloDoc, abonos:[] });
 emitir('documentos','INSERT',{ id:4321, numero:1500, tipo_doc:'pedido',
-  cliente_nombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
+  cliente_id:12, cliente_nombre:'Tienda', items:[], totales:{total:500}, estado:'abierto',
   creada:selloDoc });
 await esperar(600);
 ok('NO se duplica el pedido', ctx.documentos.length===1,
@@ -360,7 +360,7 @@ console.log('\n═══ 15. EL ECO DEL PROPIO GUARDADO NO REDIBUJA ═══');
 // cerraba el editor.
 ctx.cotizaciones.length = 0;
 const selloCot = '2026-08-12T21:30:00.000Z';
-const filaCot = { id:77, numero:4, cliente_nombre:'Mi cliente', items:[],
+const filaCot = { id:77, numero:4, cliente_id:12, cliente_nombre:'Mi cliente', items:[],
   estado:'borrador', creada:selloCot };
 // La copia local con el mismo contenido, pero con id provisorio: es lo
 // que hay en pantalla justo después de guardar y antes de que llegue

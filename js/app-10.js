@@ -2596,3 +2596,173 @@ function renderPanelPiloto(){
     <button class="btn btn-primary" style="justify-content:center;min-height:48px" onclick="go('misentregas')">🚚 Abrir mi ruta completa</button>`;
 }
 window.renderPanelPiloto=renderPanelPiloto;
+
+// =====================================================================
+//  CUADRE DE REPARTIDORES — lo que cada uno tiene que entregar en el día
+// =====================================================================
+// Por repartidor y por día junta: efectivo y cheques cobrados (o su
+// boleta), contraseñas de pago, facturas/notas firmadas (a crédito,
+// parciales, préstamos), lo que regresa sin entregar y lo recogido en
+// recolectas. Cada cosa se marca "✓ Recibido" en su propio registro, y al
+// final se cierra el cuadre (tabla cuadres_ruta): quién lo recibió, el
+// efectivo contado y la diferencia.
+let _cuadreFecha=null, _cuadrePid='', _cuadresDia={}, _cuadresCargados=null;
+function _cuadreNombres(pid){
+  const s=new Set();
+  (typeof usuarios!=='undefined'?usuarios:[]).filter(u=>String(u.pilotoId)===String(pid)).forEach(u=>s.add(u.nombre));
+  const p=(pilotos||[]).find(x=>String(x.id)===String(pid)); if(p)s.add(p.nombre);
+  return s;
+}
+// Lista de cosas que el repartidor pid tiene que entregar el día `dia`.
+function _cuadreItems(pid,dia){
+  const nombres=_cuadreNombres(pid); const items=[];
+  const refDoc=d=>(d.serie&&d.numeroDte)?(d.serie+'-'+d.numeroDte):refPed(d);
+  const enDia=f=>f&&fechaLocalDe(f)===dia;
+  // Dinero: cobros del día + los de antes que siguen sin entregar/depositar.
+  (cobrosRuta||[]).filter(c=>nombres.has(c.piloto)&&(enDia(c.fecha)||enDia(c.recibidoFecha)||['cobrado','depositado'].includes(c.estado))).forEach(c=>{
+    const ok=['recibido','procesado'].includes(c.estado);
+    items.push({grupo:c.modo==='cheque'?'cheque':'efectivo',key:'c'+c.id,cobroId:c.id,monto:Number(c.monto)||0,
+      titulo:(c.modo==='cheque'?'Cheque '+(c.cheque||'')+(c.banco?' ('+c.banco+')':''):'Efectivo')+' · '+c.docNum,
+      sub:c.cliente+' · recibo '+(c.noRecibo||'—')+(c.noBoleta?' · boleta '+c.noBoleta:' · sin boleta')+(!enDia(c.fecha)?' · del '+fdate(c.fecha):''),
+      estado:{cobrado:'Por depositar',depositado:'Depositado (con boleta)',recibido:'Recibido',procesado:'Procesado por contabilidad'}[c.estado]||c.estado,
+      recibido:ok,bloqueado:c.estado==='procesado',fisico:c.modo!=='cheque'&&!c.noBoleta});
+  });
+  (documentos||[]).forEach(d=>{
+    const ei=d.entregaInfo; if(!ei)return;
+    const cli=d.clienteComercial||d.clienteNombre||'';
+    if(d.estadoEntrega==='entregado'&&enDia(ei.fecha)&&nombres.has(ei.piloto)){
+      const g={contrasena:'contrasena',credito:'firmada',prestamo:'firmada'}[ei.modoPago];
+      if(g)items.push({grupo:g,key:'d'+d.id,docId:d.id,where:'final',titulo:(g==='contrasena'?'Contraseña '+(ei.contrasena||''):(ei.modoPago==='prestamo'?'Nota de préstamo firmada':'Factura firmada (crédito)'))+' · '+refDoc(d),sub:cli+(ei.recibe?' · recibió '+ei.recibe:''),recibido:!!ei.cuadreRec});
+    }
+    (Array.isArray(ei.parciales)?ei.parciales:[]).forEach((p,i)=>{
+      if(enDia(p.fecha)&&nombres.has(p.piloto))items.push({grupo:'firmada',key:'p'+d.id+'_'+i,docId:d.id,where:'parcial',idx:i,titulo:'Copia firmada (entrega parcial) · '+refDoc(d),sub:cli+(p.recibe?' · recibió '+p.recibe:''),recibido:!!p.cuadreRec});
+    });
+    (Array.isArray(ei.intentos)?ei.intentos:[]).forEach((x,i)=>{
+      if(enDia(x.fecha)&&nombres.has(x.piloto))items.push({grupo:'regresa',key:'i'+d.id+'_'+i,docId:d.id,where:'intento',idx:i,titulo:'Regresa sin entregar · '+refDoc(d),sub:cli+' · '+(x.motivo||'')+(x.comentario?' — '+x.comentario:''),recibido:!!x.cuadreRec});
+    });
+  });
+  (typeof paradasRuta!=='undefined'?paradasRuta:[]).forEach(p=>{
+    const hi=p.hechaInfo||{};
+    if(p.hecha&&p.motivo==='Recolecta'&&String(p.pilotoId)===String(pid)&&enDia(p.hechaFecha))
+      items.push({grupo:'recolecta',key:'r'+p.id,paradaId:p.id,titulo:'Lo recogido · '+p.titulo,sub:hi.resultado||'',recibido:!!hi.cuadreRec});
+  });
+  return items;
+}
+const _CUADRE_GRUPOS=[['efectivo','💵 Efectivo'],['cheque','🏦 Cheques'],['contrasena','📄 Contraseñas de pago'],['firmada','✍️ Documentos firmados'],['regresa','↩️ Regresa sin entregar'],['recolecta','📦 Recolectas (lo recogido)']];
+async function _cuadreCargar(dia){
+  if(_cuadresCargados===dia)return;
+  _cuadresCargados=dia; _cuadresDia={};
+  try{
+    const {data,error}=await sb.from('cuadres_ruta').select('*').eq('fecha',dia);
+    if(error){_cuadresDia={_sinTabla:true};return;}
+    (data||[]).forEach(r=>{_cuadresDia[String(r.piloto_id)]=r;});
+  }catch(e){_cuadresDia={_sinTabla:true};}
+}
+async function renderCuadre(){
+  const box=document.getElementById('cuadre-body'); if(!box)return;
+  if(!_cuadreFecha)_cuadreFecha=fechaHoyGT();
+  const dia=_cuadreFecha;
+  await _cuadreCargar(dia);
+  // Repartidores con algo que cuadrar ese día (o con un cuadre ya cerrado).
+  const reps=(typeof repartidores==='function'?repartidores():[]).map(r=>({id:r.pilotoId!=null?r.pilotoId:r.id,nombre:r.nombre}));
+  (pilotos||[]).forEach(p=>{if(!reps.some(r=>String(r.id)===String(p.id)))reps.push({id:p.id,nombre:p.nombre});});
+  const filas=reps.map(r=>{const it=_cuadreItems(r.id,dia);return {...r,items:it,pend:it.filter(x=>!x.recibido).length,cerrado:_cuadresDia[String(r.id)]};})
+    .filter(r=>r.items.length||r.cerrado).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+  if(_cuadrePid&&!filas.some(r=>String(r.id)===String(_cuadrePid)))_cuadrePid='';
+  if(!_cuadrePid&&filas.length)_cuadrePid=String(filas[0].id);
+  const sel=filas.find(r=>String(r.id)===String(_cuadrePid));
+  const tarjeta=r=>`<button class="cq-rep${String(r.id)===String(_cuadrePid)?' on':''}" onclick="_cuadreVer('${r.id}')">
+      <b>${escHtml(r.nombre)}</b><span>${r.cerrado?'<span class="badge b-ok">✓ Cuadrado</span>':(r.pend?`<span class="badge b-warn">${r.pend} pendiente${r.pend!==1?'s':''}</span>`:'<span class="badge b-info">Listo para cerrar</span>')}</span></button>`;
+  let detalle='<div class="empty">No hay nada que cuadrar ese día.</div>';
+  if(sel){
+    const its=sel.items;
+    const esperadoEf=its.filter(x=>x.grupo==='efectivo'&&x.fisico).reduce((s,x)=>s+x.monto,0);
+    const totCob=its.filter(x=>x.grupo==='efectivo'||x.grupo==='cheque').reduce((s,x)=>s+x.monto,0);
+    const cerr=sel.cerrado;
+    const puede=canAsignarPiloto()||currentRole==='admin';
+    const grupos=_CUADRE_GRUPOS.map(([g,lbl])=>{const xs=its.filter(x=>x.grupo===g); if(!xs.length)return '';
+      const sub=(g==='efectivo'||g==='cheque')?' · '+money(xs.reduce((s,x)=>s+x.monto,0)):'';
+      return `<div class="cq-grupo"><div class="cq-gh">${lbl} <span>${xs.length}${sub}</span></div>${xs.map(x=>`<label class="cq-item${x.recibido?' ok':''}">
+        <input type="checkbox" ${x.recibido?'checked':''} ${(!puede||cerr||x.bloqueado)?'disabled':''} onchange="_cuadreMarcar('${x.key}',this.checked)">
+        <div style="flex:1;min-width:0"><div class="cq-t">${escHtml(x.titulo)}</div><div class="cq-s">${escHtml(x.sub||'')}${x.estado?' · <b>'+escHtml(x.estado)+'</b>':''}</div></div>
+        ${x.monto?`<b class="num">${money(x.monto)}</b>`:''}</label>`).join('')}</div>`;}).join('');
+    const pend=its.filter(x=>!x.recibido).length;
+    detalle=`<div class="panel-head"><h3>${escHtml(sel.nombre)} · ${fdate(dia+'T12:00:00')}</h3><span style="font-size:12px;color:var(--muted)">${its.length} cosa${its.length!==1?'s':''} · cobrado ${money(totCob)}</span></div>
+      <div class="panel-body">
+        ${cerr?`<div class="note n-ok" style="margin:0 0 12px"><span>✓ Cuadre cerrado por <b>${escHtml(cerr.cerrado_por||'')}</b> el ${escHtml(fdatehora(cerr.cerrado_el))}${cerr.efectivo_contado!=null?` · efectivo contado ${money(cerr.efectivo_contado)}`:''}${Number(cerr.diferencia)?` · <b style="color:var(--danger)">${Number(cerr.diferencia)>0?'sobraron':'faltaron'} ${money(Math.abs(cerr.diferencia))}</b>`:' · cuadró'}${cerr.nota?' · '+escHtml(cerr.nota):''}</span></div>`:''}
+        ${grupos||'<div class="empty">Nada que entregar.</div>'}
+        ${(!cerr&&puede&&its.length)?`<div class="cq-cierre">
+          <div><label>Efectivo que entrega (contado)</label><input type="number" step="0.01" id="cq-contado" value="${esperadoEf.toFixed(2)}" oninput="_cuadreDif(${esperadoEf})"><div style="font-size:11.5px;color:var(--muted);margin-top:3px">Efectivo en mano (sin boleta): <b>${money(esperadoEf)}</b> · <span id="cq-dif"></span></div></div>
+          <div style="flex:1;min-width:200px"><label>Nota <span style="font-weight:400;color:var(--muted-2)">(opcional)</span></label><input id="cq-nota" placeholder="Ej. faltó la contraseña de ECOVIS, la trae mañana"></div>
+          <button class="btn btn-primary" onclick="cerrarCuadre('${sel.id}')">✓ Cerrar cuadre${pend?` (${pend} sin marcar)`:''}</button>
+        </div>`:''}
+        ${_cuadresDia._sinTabla?'<div class="note" style="margin-top:10px"><span>El cierre del cuadre todavía no se puede guardar: falta activar la tabla en la base. Lo marcado como recibido sí se guarda.</span></div>':''}
+      </div>`;
+  }
+  box.innerHTML=`<div class="panel"><div class="panel-body" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div><label>Día</label><input type="date" value="${dia}" onchange="_cuadreDia(this.value)"></div>
+      <button class="btn btn-ghost btn-sm" onclick="_cuadreDia(fechaHoyGT())">Hoy</button>
+      <div style="font-size:12px;color:var(--muted);flex:1;min-width:220px">Marcá ✓ cada cosa que el repartidor te entrega. Cuando esté todo, cerrá el cuadre.</div>
+    </div></div>
+    <div class="cq-wrap">
+      <div class="cq-lista">${filas.length?filas.map(tarjeta).join(''):'<div class="empty">Ningún repartidor tiene nada que cuadrar ese día.</div>'}</div>
+      <div class="panel cq-det">${detalle}</div>
+    </div>`;
+  if(document.getElementById('cq-contado'))_cuadreDif(sel?sel.items.filter(x=>x.grupo==='efectivo'&&x.fisico).reduce((s,x)=>s+x.monto,0):0);
+}
+window.renderCuadre=renderCuadre;
+function _cuadreVer(pid){_cuadrePid=String(pid);renderCuadre();}
+function _cuadreDia(v){_cuadreFecha=v||fechaHoyGT();_cuadresCargados=null;renderCuadre();}
+function _cuadreDif(esp){const i=document.getElementById('cq-contado'),o=document.getElementById('cq-dif');if(!i||!o)return;const d=Math.round(((Number(i.value)||0)-esp)*100)/100;o.innerHTML=d===0?'<span style="color:var(--ok)">cuadra ✓</span>':`<b style="color:var(--danger)">${d>0?'sobra':'falta'} ${money(Math.abs(d))}</b>`;}
+Object.assign(window,{_cuadreVer,_cuadreDia,_cuadreDif});
+// Marcar / desmarcar una cosa como recibida (se guarda en su registro).
+function _cuadreMarcar(key,on){
+  if(!(canAsignarPiloto()||currentRole==='admin')){toast('Sin permiso','Solo logística recibe el cuadre',true);renderCuadre();return;}
+  const it=_cuadreItems(_cuadrePid,_cuadreFecha).find(x=>x.key===key); if(!it)return;
+  const marca=on?{por:currentUser,fecha:new Date().toISOString()}:undefined;
+  if(it.cobroId!=null){
+    const c=cobrosRuta.find(x=>x.id===it.cobroId); if(!c||c.estado==='procesado')return;
+    if(on){c.estado='recibido';c.recibidoPor=currentUser;c.recibidoFecha=new Date().toISOString();}
+    else{c.estado=c.noBoleta?'depositado':'cobrado';c.recibidoPor=null;c.recibidoFecha=null;}
+    logAudit(on?'Cuadre: cobro recibido':'Cuadre: cobro desmarcado',c.docNum+' · '+c.cliente+' · '+money(c.monto)+(c.noBoleta?' · boleta '+c.noBoleta:' · en efectivo/cheque físico'));
+    if(typeof guardarCobroRuta==='function')guardarCobroRuta(c);
+  }else if(it.docId!=null){
+    const d=documentos.find(x=>x.id===it.docId); if(!d||!d.entregaInfo)return;
+    const ei=d.entregaInfo;
+    const obj=it.where==='final'?ei:(it.where==='parcial'?(ei.parciales||[])[it.idx]:(ei.intentos||[])[it.idx]); if(!obj)return;
+    if(on)obj.cuadreRec=marca; else delete obj.cuadreRec;
+    logAudit(on?'Cuadre: recibido':'Cuadre: desmarcado',it.titulo+' · '+(d.clienteComercial||d.clienteNombre||''));
+    if(typeof guardarDocumento==='function')guardarDocumento(d);
+  }else if(it.paradaId!=null){
+    const p=paradasRuta.find(x=>x.id===it.paradaId); if(!p)return;
+    p.hechaInfo=p.hechaInfo||{}; if(on)p.hechaInfo.cuadreRec=marca; else delete p.hechaInfo.cuadreRec;
+    logAudit(on?'Cuadre: recibido':'Cuadre: desmarcado',it.titulo);
+    if(typeof guardarParadaRuta==='function')guardarParadaRuta(p);
+  }
+  renderCuadre();
+}
+window._cuadreMarcar=_cuadreMarcar;
+async function cerrarCuadre(pid){
+  const dia=_cuadreFecha; const its=_cuadreItems(pid,dia);
+  const nombre=((pilotos||[]).find(p=>String(p.id)===String(pid))||{}).nombre||_nombreRepartidor(pid)||'';
+  const esperado=its.filter(x=>x.grupo==='efectivo'&&x.fisico).reduce((s,x)=>s+x.monto,0);
+  const contado=Number(document.getElementById('cq-contado')?.value)||0;
+  const dif=Math.round((contado-esperado)*100)/100;
+  const nota=(document.getElementById('cq-nota')?.value||'').trim();
+  const pend=its.filter(x=>!x.recibido);
+  const hacer=async()=>{
+    const row={piloto_id:Number(pid),piloto_nombre:nombre,fecha:dia,resumen:{items:its.map(x=>({grupo:x.grupo,titulo:x.titulo,monto:x.monto||0,recibido:!!x.recibido}))},
+      efectivo_esperado:esperado,efectivo_contado:contado,diferencia:dif,nota:nota||null,cerrado_por:currentUser,cerrado_el:new Date().toISOString()};
+    let ok=false;
+    try{const {error}=await sb.from('cuadres_ruta').upsert(row,{onConflict:'piloto_id,fecha'});ok=!error;if(error)console.warn('Cuadre no guardado:',error);}catch(e){console.warn(e);}
+    logAudit('Cuadre cerrado',nombre+' · '+fdate(dia+'T12:00:00')+' · efectivo contado '+money(contado)+(dif?' · '+(dif>0?'sobraron ':'faltaron ')+money(Math.abs(dif)):' · cuadró')+(pend.length?' · '+pend.length+' sin marcar':'')+(nota?' · '+nota:''));
+    closeMod&&document.getElementById('m-save')&&closeMod();
+    _cuadresCargados=null;
+    toast(ok?'✓ Cuadre cerrado':'⚠ Cuadre registrado solo en la bitácora',ok?nombre+(dif?' · '+(dif>0?'sobraron ':'faltaron ')+money(Math.abs(dif)):' · cuadró'):'Falta activar la tabla de cuadres en la base',!ok);
+    renderCuadre();
+  };
+  if(pend.length||dif){
+    confirmar('Cerrar cuadre',`${pend.length?`Hay <b>${pend.length}</b> cosa${pend.length!==1?'s':''} sin marcar como recibida${pend.length!==1?'s':''}.<br>`:''}${dif?`El efectivo ${dif>0?'sobra':'falta'} <b>${money(Math.abs(dif))}</b>.<br>`:''}¿Cerrar el cuadre igual? Queda registrado así.`,'Cerrar igual',hacer);
+  }else hacer();
+}
+window.cerrarCuadre=cerrarCuadre;
