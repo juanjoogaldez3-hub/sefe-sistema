@@ -12,10 +12,30 @@ cambios de datos los aprueba Juanjo.**
   Supabase (proyecto `krbyulpmfazntjwnpxnw`, desde el 19-11-2026).
   - **Consultas** (`select`, diagnósticos): Claude las corre solo, sin
     pedirle nada a Juanjo.
-  - **Cambios de datos** (`update` / `insert` / `delete`): Claude explica
-    qué va a cambiar y **espera el OK de Juanjo en el chat** antes de
-    correrlo. Siempre con `where` acotado por id y `returning` para
-    mostrar qué cambió.
+  - **Cambios de datos chicos** (`update` / `insert`): Claude los hace
+    solo y **le avisa a Juanjo después**, mostrando qué cambió. Ej.:
+    corregir un nombre, una nota, el vendedor de un documento, apuntar
+    una línea al producto correcto con su ajuste de stock chico, o un
+    dato que Juanjo ya confirmó en el chat. (Regla acordada con Juanjo
+    el 25-11-2026: "a menos que sea un cambio muy grande o importante".)
+  - **Cambios grandes o importantes**: Claude explica qué va a cambiar y
+    **espera el OK de Juanjo en el chat** antes de correrlo. Cuenta como
+    grande o importante:
+    - lo que toca **dinero**: montos, saldos, abonos, pagos, notas de
+      crédito, movimientos de banco, conciliaciones;
+    - **anular o borrar** registros (`delete`), o lo que no se puede
+      deshacer;
+    - **muchos registros a la vez** (más de ~5) o un `where` que no es
+      por id;
+    - **pasar registros de una empresa a otra** (SEFE ↔ LAML);
+    - lo que tiene que ver con **SAT / FEL** (facturas certificadas,
+      NIT, serie, número);
+    - cuando la respuesta depende de **una decisión del negocio** que
+      solo Juanjo sabe (de qué empresa es, a qué vendedor le toca…);
+    - cambios de estructura de la base (migraciones).
+  - En todos los casos: `where` acotado por id, todo en una sola
+    sentencia (si algo falla no cambia nada) y `returning` para mostrar
+    qué cambió. Ante la duda, se pregunta.
   - Si el conector muestra otro proyecto (ej. "dropper-reporteria" de la
     organización Droppergtm), está conectado con la cuenta equivocada:
     Juanjo lo reconecta en claude.ai → Conectores → Supabase, entrando
@@ -43,7 +63,9 @@ con `if not exists` para que sea seguro correrlas de más.
 - **Nunca editar una migración ya aplicada.** Si algo salió mal, va una
   migración nueva que lo corrija.
 - Lo puntual de diagnóstico o emergencia (`supabase/herramientas/`): las
-  consultas las corre Claude; los cambios, con el OK de Juanjo.
+  consultas las corre Claude; los cambios, según la regla de arriba
+  (chicos: se hacen y se avisa; grandes o importantes: con el OK de
+  Juanjo).
 - **Toda tabla nueva necesita sus políticas RLS.** Este proyecto tiene
   RLS activo (ver `20260812030419_rls.sql`): una tabla sin políticas
   queda *cerrada* y el navegador no puede leer ni escribir en ella —
