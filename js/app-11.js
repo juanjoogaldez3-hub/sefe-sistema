@@ -975,6 +975,8 @@ function entrarVistaInicial(){
   // primera vista (con una sola empresa, no hace nada visible).
   try{ if(typeof iniciarEmpresaActiva==='function')iniciarEmpresaActiva(); if(typeof renderSelectorEmpresa==='function')renderSelectorEmpresa(); if(typeof aplicarMarcaEmpresa==='function')aplicarMarcaEmpresa(); if(typeof cargarEmpresasFEL==='function')cargarEmpresasFEL(); }catch(e){}
   const v=(location.hash||'').replace('#','');
+  // El repartidor entra directo a su ruta (Mis entregas).
+  if(currentRole==='piloto'&&(!v||v==='panel')&&tienePermiso('misentregas')){ window.go('misentregas'); return; }
   if(v && VISTAS_VALIDAS.includes(v) && tienePermiso(v)){
     window.go(v);
   }else{

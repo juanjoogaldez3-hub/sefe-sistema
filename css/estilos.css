@@ -614,3 +614,11 @@
   .evid-cards{display:flex;flex-direction:column;gap:10px;padding:12px}
   .evid-botones .btn{flex:1 1 auto;justify-content:center}
 }
+
+/* ===== Dashboard del repartidor ===== */
+#v-panel.modo-piloto>*:not(#panel-piloto){display:none!important}
+#v-panel.modo-piloto>#panel-piloto{display:flex!important;flex-direction:column;gap:14px}
+.pp-aviso{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.pp-aviso:last-child{border-bottom:none}
+.pp-cobro{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+@media(max-width:600px){#panel-piloto .rd-grid{grid-template-columns:repeat(2,1fr)}}

@@ -150,6 +150,10 @@ function dashReset(){
 window.dashReset=dashReset;
 
 function renderPanel(){
+  // Repartidor: tablero propio (su ruta del día), no el de ventas/cobros.
+  const _vp=document.getElementById('v-panel');
+  if(currentRole==='piloto'&&typeof renderPanelPiloto==='function'){ if(_vp)_vp.classList.add('modo-piloto'); renderPanelPiloto(); return; }
+  if(_vp)_vp.classList.remove('modo-piloto');
   _consolidadoScope=esConsolidadoVista(); // vista consolidada: no filtra por empresa mientras dibuja
   const hoy=new Date();hoy.setHours(0,0,0,0);
   const semana=new Date(hoy);semana.setDate(semana.getDate()+7);

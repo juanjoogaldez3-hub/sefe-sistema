@@ -2523,3 +2523,76 @@ function exportarEvidencias(){
   toast('✓ Excel descargado',fn);
 }
 window.exportarEvidencias=exportarEvidencias;
+
+// =====================================================================
+//  DASHBOARD DEL REPARTIDOR — su ruta del día de un vistazo
+// =====================================================================
+function _ppDestino(it){
+  // Punto para navegar: pin del cliente/parada, o su dirección escrita.
+  if(it.t==='d'){ const r=_rutaParadaDe(it.o); return r?{q:r,ll:/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(r)?r:null}:null; }
+  const p=it.o; if(p.lat!=null&&p.lng!=null){const ll=Number(p.lat)+','+Number(p.lng);return {q:ll,ll};}
+  return p.direccion?{q:p.direccion+', Guatemala',ll:null}:null;
+}
+function renderPanelPiloto(){
+  const box=document.getElementById('panel-piloto'); if(!box)return;
+  const pid=miPilotoId();
+  const hoy=fechaHoyGT();
+  const h=new Date().getHours(); const saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
+  const fechaLarga=new Date().toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'});
+  const docsMios=pid==null?[]:docsDespachables().filter(d=>String(d.pilotoId)===String(pid));
+  const pend=docsMios.filter(d=>estadoEntrega(d)!=='entregado');
+  const enRuta=pend.filter(d=>estadoEntrega(d)==='ruta').length;
+  const entHoy=docsMios.filter(d=>estadoEntrega(d)==='entregado'&&fechaLocalDe(d.entregaInfo?.fecha)===hoy).length;
+  const pars=pid==null?[]:_paradasPiloto(pid);
+  // Próxima parada: la de menor número de ruta (sin número, al final).
+  const todo=pend.map(d=>({t:'d',o:d})).concat(pars.map(p=>({t:'p',o:p}))).sort((a,b)=>(a.o.ordenRuta??999)-(b.o.ordenRuta??999));
+  const sig=todo[0];
+  let sigHTML='<div class="empty" style="padding:18px">🎉 No tenés entregas ni paradas pendientes.</div>';
+  if(sig){
+    const o=sig.o, esD=sig.t==='d';
+    const nombre=esD?(o.clienteComercial||o.clienteNombre||''):o.titulo;
+    const dir=esD?dirEntrega(o):(o.direccion||'—');
+    const hora=esD?_horaLimTxtDoc(o):o.horaLimite;
+    const tipo=esD?(((o.serie&&o.numeroDte)?o.serie+'-'+o.numeroDte:refPed(o))+' · '+({cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'}[o.tipoDoc]||'')+' · '+money(o.totales.total)):('Parada · '+(o.motivo||'Otro'));
+    const dest=_ppDestino(sig);
+    const gUrl=dest?'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(dest.q):'';
+    const wUrl=dest?(dest.ll?'https://waze.com/ul?ll='+dest.ll+'&navigate=yes':'https://waze.com/ul?q='+encodeURIComponent(dest.q)+'&navigate=yes'):'';
+    sigHTML=`<div class="ent-card" style="border:none;padding:4px 0 0">
+      <div class="ent-top">${o.ordenRuta!=null?`<span class="ent-num">${o.ordenRuta}</span>`:''}<div class="ent-nombre">${escHtml(nombre)}</div></div>
+      <div class="ent-meta"><span>${escHtml(tipo)}</span></div>
+      <div class="ent-dir">📍 ${escHtml(dir)}</div>
+      ${hora?`<div class="ent-linea"><span style="font-size:12px;font-weight:700;color:var(--warn)">⏰ antes de ${escHtml(hora)}</span></div>`:''}
+      <div class="ent-acts">
+        ${gUrl?`<a class="btn btn-primary btn-sm" style="text-decoration:none" href="${gUrl}" target="_blank" rel="noopener">🧭 Navegar</a><a class="btn btn-ghost btn-sm" style="text-decoration:none" href="${wUrl}" target="_blank" rel="noopener">Waze</a>`:'<span style="font-size:12px;color:var(--muted-2)">Sin dirección para navegar</span>'}
+        <button class="btn btn-ghost btn-sm" onclick="go('misentregas')">Abrir mi ruta</button>
+      </div></div>`;
+  }
+  // Avisos
+  const avisos=[];
+  pend.filter(d=>d.entregaInfo&&d.entregaInfo.noEntregado).forEach(d=>avisos.push(`<span style="color:var(--danger)">✕</span><span><b>${escHtml(d.clienteComercial||d.clienteNombre||'')}</b>: no se pudo entregar (${escHtml(d.entregaInfo.noEntregado.motivo||'')}). Sigue en tu ruta.</span>`));
+  pars.filter(p=>p.hechaInfo&&p.hechaInfo.noHecha).forEach(p=>avisos.push(`<span style="color:var(--danger)">✕</span><span><b>${escHtml(p.titulo)}</b>: no se pudo hacer (${escHtml(p.hechaInfo.noHecha.motivo||'')}). Sigue en tu ruta.</span>`));
+  try{ const risk=_riesgosHora(pend.slice().sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999))); pend.filter(d=>risk.has(d.id)).forEach(d=>avisos.push(`<span>⏰</span><span><b>${escHtml(d.clienteComercial||d.clienteNombre||'')}</b> recibe antes de ${escHtml(_horaLimTxtDoc(d))} y quedó tarde en tu ruta. Avisale a logística.</span>`)); }catch(e){}
+  pend.filter(d=>d.preparacion&&d.preparacion.parcial).forEach(d=>avisos.push(`<span>📦</span><span><b>${escHtml(d.clienteComercial||d.clienteNombre||'')}</b>: llevás solo una parte del pedido.</span>`));
+  // Cobrado sin depositar
+  const cob=(typeof cobrosRuta!=='undefined'?cobrosRuta:[]).filter(c=>c.piloto===currentUser&&c.estado==='cobrado');
+  const ef=cob.filter(c=>c.modo==='efectivo'), ch=cob.filter(c=>c.modo==='cheque');
+  const sum=a=>a.reduce((s,c)=>s+(Number(c.monto)||0),0);
+  box.innerHTML=`
+    <div class="resumen-dia">
+      <div class="rd-hi">${saludo}, ${escHtml(String(currentUser||'').split(' ')[0])}</div>
+      <div class="rd-fecha">${escHtml(fechaLarga.charAt(0).toUpperCase()+fechaLarga.slice(1))} · tu ruta de hoy</div>
+      <div class="rd-grid">
+        <div class="rd-item"><div class="rd-lbl">Por entregar</div><div class="rd-val">${pend.length}</div><div class="rd-sub">entregas</div></div>
+        <div class="rd-item"><div class="rd-lbl">En ruta</div><div class="rd-val">${enRuta}</div><div class="rd-sub">cargadas</div></div>
+        <div class="rd-item"><div class="rd-lbl">Entregadas hoy</div><div class="rd-val">${entHoy}</div><div class="rd-sub">completadas</div></div>
+        <div class="rd-item"><div class="rd-lbl">Paradas</div><div class="rd-val">${pars.length}</div><div class="rd-sub">pendientes</div></div>
+      </div>
+    </div>
+    <div class="panel"><div class="panel-head"><h3>➡️ Tu próxima parada</h3>${todo.length>1?`<span style="font-size:12px;color:var(--muted)">y ${todo.length-1} más</span>`:''}</div><div class="panel-body">${sigHTML}</div></div>
+    ${avisos.length?`<div class="panel"><div class="panel-head"><h3>⚠️ Avisos</h3></div><div class="panel-body">${avisos.map(a=>`<div class="pp-aviso">${a}</div>`).join('')}</div></div>`:''}
+    <div class="panel"><div class="panel-head"><h3>💵 Cobrado sin depositar</h3><button class="btn btn-ghost btn-sm" onclick="go('misentregas')">Ver mi corte</button></div><div class="panel-body">
+      ${cob.length?`<div class="pp-cobro"><span>Efectivo (${ef.length})</span><b>${money(sum(ef))}</b></div><div class="pp-cobro"><span>Cheques (${ch.length})</span><b>${money(sum(ch))}</b></div><div class="pp-cobro" style="border:none"><span>Total</span><b>${money(sum(cob))}</b></div>`:'<div style="font-size:13px;color:var(--muted)">No tenés cobros pendientes de depositar.</div>'}
+    </div></div>
+    <button class="btn btn-primary" style="justify-content:center;min-height:48px" onclick="go('misentregas')">🚚 Abrir mi ruta completa</button>`;
+}
+window.renderPanelPiloto=renderPanelPiloto;
