@@ -1966,6 +1966,7 @@ function renderMisEntregas(){
             </div>
             <div style="font-size:12px;color:var(--muted);margin-bottom:3px">${docNum(d)} · ${tipoCorto[d.tipoDoc]} · ${money(d.totales.total)}</div>
             <div style="font-size:12.5px;color:var(--ink);margin-bottom:3px">📍 ${dirEntrega(d)}</div>
+            ${cli&&(cli.lat==null||cli.lng==null)&&est!=='entregado'?`<div style="margin:4px 0 6px"><button class="btn btn-ghost btn-sm" onclick="_entGuardarUbic(${cli.id})" title="Estando en el cliente, guarda tu ubicación GPS como la del cliente">📍 Guardar ubicación del cliente</button> <span style="font-size:11px;color:var(--muted-2)">sin ubicación en el mapa</span></div>`:''}
             ${(()=>{const b=_horaBadge(d,_riskPil),e=_etaBadge(d);return (b||e)?`<div style="margin-bottom:3px;display:flex;gap:10px;flex-wrap:wrap">${b}${e}</div>`:'';})()}
             ${tel?`<div style="font-size:12px"><a href="tel:${tel}" style="color:var(--blue);text-decoration:none">☎ ${tel}</a></div>`:''}
             <div style="font-size:11.5px;color:var(--muted-2);margin-top:6px">${items}</div>
@@ -1977,6 +1978,49 @@ function renderMisEntregas(){
     }).join('')+`</div></div>`+corteCajaHTML(mias,pid,esPil);
 }
 window.renderMisEntregas=renderMisEntregas;
+// ---- Guardar la ubicación del cliente desde la entrega (GPS del repartidor) ----
+// Para clientes sin pin en el mapa: el repartidor, parado en el cliente, toma
+// su ubicación GPS y se guarda como la del cliente (lat/lng). Si el cliente
+// tampoco tiene dirección escrita, se intenta llenar con la de Google.
+function _entGuardarUbic(cliId){
+  const c=clientes.find(x=>x.id===cliId); if(!c)return;
+  if(!navigator.geolocation){toast('Sin GPS','Este dispositivo no permite ubicación',true);return;}
+  toast('📍 Obteniendo ubicación…','Permití el acceso si te lo pide el navegador');
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat=Math.round(pos.coords.latitude*1e6)/1e6, lng=Math.round(pos.coords.longitude*1e6)/1e6;
+    const prec=Math.round(pos.coords.accuracy||0);
+    const aviso=prec>100?`<div class="note n-danger" style="margin:10px 0 0"><span>La precisión es baja (±${prec} m). Si podés, salí a un lugar abierto y volvé a intentar.</span></div>`:'';
+    openMod('📍 Guardar ubicación del cliente',`
+      <p style="font-size:13.5px;margin-bottom:6px">¿Estás en <b>${escHtml(c.nombre||'')}</b>? Se va a guardar tu ubicación actual como la del cliente.</p>
+      <p style="font-size:12.5px;color:var(--muted)">${lat}, ${lng}${prec?` · precisión ±${prec} m`:''} · <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener">ver en el mapa</a></p>${aviso}`,
+      async ()=>{
+        c.lat=lat; c.lng=lng;
+        if(!c.direccion||String(c.direccion).trim().toLowerCase()==='ciudad'){
+          const dir=await _dirDeCoordenadas(lat,lng);
+          if(dir)c.direccion=dir;
+        }
+        const ok=await (typeof guardarCliente==='function'?guardarCliente(c):Promise.resolve());
+        if(ok===false){toast('No se pudo guardar','Intentá de nuevo',true);return;}
+        logAudit('Ubicación de cliente (desde entrega)',(c.nombre||'#'+c.id)+' · '+lat+', '+lng+(prec?' · ±'+prec+' m':''));
+        closeMod();
+        toast('✓ Ubicación guardada',c.nombre+' ya sale en el mapa y la navegación');
+        if(typeof renderMisEntregas==='function')renderMisEntregas();
+      });
+  },err=>{
+    toast('No se pudo obtener la ubicación',err&&err.code===1?'Diste que no al permiso de ubicación':(err&&err.message)||'Intentá de nuevo',true);
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+}
+window._entGuardarUbic=_entGuardarUbic;
+// Dirección escrita a partir de coordenadas (Google, mejor esfuerzo) o null.
+async function _dirDeCoordenadas(lat,lng){
+  try{
+    if(typeof _cargarGoogleMaps!=='function'||(typeof _gmapsAuthFail!=='undefined'&&_gmapsAuthFail))return null;
+    const gm=await _cargarGoogleMaps(); if(!gm||!gm.Geocoder)return null;
+    const g=new gm.Geocoder();
+    const r=await new Promise(ok=>g.geocode({location:{lat,lng}},(x,st)=>ok(st==='OK'&&x&&x[0]?x[0]:null)));
+    return r?r.formatted_address.replace(/, Guatemala$/,''):null;
+  }catch(e){return null;}
+}
 // ---- Mapa de la ruta del piloto (colapsable, mobile-friendly) ----
 let _pilMapaAbierto=false;
 function _pilToggleMapa(){_pilMapaAbierto=!_pilMapaAbierto;renderMisEntregas();}
