@@ -921,7 +921,7 @@ window.badgeEntregaHTML=badgeEntregaHTML;
 // Comprobante de entrega (quién llevó, cuándo, quién recibió, cómo pagó,
 // firma y foto). La firma/foto se trae de la tabla aparte al abrir.
 async function verComprobanteEntrega(id){
-  const d=documentos.find(x=>x.id===id); if(!d||!d.entregaInfo){toast('Sin comprobante de entrega',null,true);return;}
+  const d=documentos.find(x=>x.id===id); if(!d||!d.entregaInfo||estadoEntrega(d)!=='entregado'){toast('Sin comprobante de entrega',null,true);return;}
   if(d.entregaInfo.evidencia&&typeof traerEvidenciaEntrega==='function')await traerEvidenciaEntrega(d);
   const ref=d.serie?d.serie+'-'+d.numeroDte:refPed(d);
   openMod('Comprobante de entrega · '+ref,
@@ -1291,7 +1291,9 @@ function marcarEntregadosMasivo(){
     const fecha=new Date().toISOString();
     sel.forEach(d=>{
       d.estadoEntrega='entregado';
+      const _int=(d.entregaInfo&&Array.isArray(d.entregaInfo.intentos))?d.entregaInfo.intentos:null;
       d.entregaInfo={fecha,modo:'masivo',piloto:currentUser,nota:'Marcado entregado en masa'};
+      if(_int&&_int.length)d.entregaInfo.intentos=_int;
       logAudit('Entrega marcada (masiva)',(d.serie?d.serie+'-'+d.numeroDte:refPed(d))+' · '+(d.clienteComercial||d.clienteNombre));
       if(typeof guardarDocumento==='function')guardarDocumento(d);
     });
@@ -1690,11 +1692,12 @@ function renderDespachos(){
     _grupoPrev=k;
     const gAll=_grupos[k], g=gAll.filter(x=>!x._parada), nPar=gAll.length-g.length, tot=g.reduce((s,x)=>s+(x.totales?.total||0),0);
     const enR=g.filter(x=>estadoEntrega(x)==='ruta').length, entr=g.filter(x=>estadoEntrega(x)==='entregado').length;
+    const noE=g.filter(x=>estadoEntrega(x)!=='entregado'&&x.entregaInfo&&x.entregaInfo.noEntregado).length;
     const sinA=d.pilotoId==null;
     return `<tr class="desp-grupo" data-grupo-key="pil:${k}"><td colspan="9" style="background:${sinA?'#fdf3d8':'var(--surface-2,#f4f7ef)'};padding:9px 14px;border-top:2px solid var(--line-strong)">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <span style="font-weight:800;font-size:13.5px">${sinA?'⏳ Sin asignar':'🚚 '+escHtml(_nomPil(d.pilotoId))}</span>
-        <span style="font-size:12px;color:var(--muted)">${g.length} entrega${g.length!==1?'s':''}${nPar?' + '+nPar+' parada'+(nPar!==1?'s':''):''} · ${money(tot)}${enR?' · '+enR+' en ruta':''}${entr?' · '+entr+' entregada'+(entr!==1?'s':''):''}</span>
+        <span style="font-size:12px;color:var(--muted)">${g.length} entrega${g.length!==1?'s':''}${nPar?' + '+nPar+' parada'+(nPar!==1?'s':''):''} · ${money(tot)}${enR?' · '+enR+' en ruta':''}${entr?' · '+entr+' entregada'+(entr!==1?'s':''):''}${noE?` · <b style="color:var(--danger)">${noE} no se pudo entregar</b>`:''}</span>
         ${canAsignarPiloto()?`<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
           ${!sinA?`<button class="btn btn-primary btn-sm" onclick="openOrdenRuta(${d.pilotoId})" title="Poner el orden de visita de este piloto (subir/bajar)">↕ Ordenar ruta</button>
           <button class="btn btn-ghost btn-sm" onclick="ordenarCercaniaDespachos(${d.pilotoId})" title="Numerar automáticamente de la más cercana a la más lejana (solo clientes con ubicación en el mapa)">🧭 Por cercanía</button>`:''}
@@ -1731,7 +1734,7 @@ function renderDespachos(){
       <td style="text-align:center">${chk}</td>
       <td class="num" style="font-weight:700;color:var(--green)">${d.ordenRuta!=null?'#'+d.ordenRuta:'—'}</td>
       <td style="font-weight:600">${docNum(d)}<div style="font-size:10.5px;color:var(--muted)">${tipoCorto[d.tipoDoc]}</div>${empTag(d.empresa)}</td>
-      <td>${d.clienteComercial||d.clienteNombre}${(()=>{const b=_horaBadge(d,_riskDesp),e=_etaBadge(d);return (b||e)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${b}${e}</div>`:'';})()}</td>
+      <td>${d.clienteComercial||d.clienteNombre}${(()=>{const b=_horaBadge(d,_riskDesp),e=_etaBadge(d);return (b||e)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${b}${e}</div>`:'';})()}${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}</td>
       <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${dirEntrega(d)}</td>
       <td class="num" style="font-weight:600">${money(d.totales.total)}</td>
       <td>${piloto?piloto.nombre:'<span style="color:var(--muted-2)">—</span>'}</td>
@@ -2080,7 +2083,7 @@ function renderMisEntregas(){
       let btn='';
       if(est==='asignado'){const _dn=_prepPacked(d),_tt=_prepTotal(d);btn=`<button class="btn btn-primary btn-sm" onclick="abrirPreparacion(${d.id})">📦 Preparar${_tt?` (${_dn}/${_tt})`:''}</button>`;}
       else if(est==='preparado')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEnRuta(${d.id})">📦 Cargado, voy en ruta</button>`;
-      else if(est==='ruta')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEntregado(${d.id})">✓ Marcar entregado</button>`;
+      else if(est==='ruta')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEntregado(${d.id})">✓ Marcar entregado</button> <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="noEntregado(${d.id})">✕ No se pudo entregar</button>`;
       else if(est==='entregado')btn=`<span class="badge b-ok">✓ Entregado a ${d.entregaInfo?.recibe||'—'}</span>`;
       return `<div style="border:1.5px solid var(--line-strong);border-radius:12px;padding:14px 16px;${est==='entregado'?'opacity:.65':''}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
@@ -2092,6 +2095,7 @@ function renderMisEntregas(){
             </div>
             <div style="font-size:12px;color:var(--muted);margin-bottom:3px">${docNum(d)} · ${tipoCorto[d.tipoDoc]} · ${money(d.totales.total)}</div>
             <div style="font-size:12.5px;color:var(--ink);margin-bottom:3px">📍 ${dirEntrega(d)}</div>
+            ${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}
             ${cli&&(cli.lat==null||cli.lng==null)&&est!=='entregado'?`<div style="margin:4px 0 6px"><button class="btn btn-ghost btn-sm" onclick="_entGuardarUbic(${cli.id})" title="Estando en el cliente, guarda tu ubicación GPS como la del cliente">📍 Guardar ubicación del cliente</button> <span style="font-size:11px;color:var(--muted-2)">sin ubicación en el mapa</span></div>`:''}
             ${(()=>{const b=_horaBadge(d,_riskPil),e=_etaBadge(d);return (b||e)?`<div style="margin-bottom:3px;display:flex;gap:10px;flex-wrap:wrap">${b}${e}</div>`:'';})()}
             ${tel?`<div style="font-size:12px"><a href="tel:${tel}" style="color:var(--blue);text-decoration:none">☎ ${tel}</a></div>`:''}

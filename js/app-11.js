@@ -334,6 +334,65 @@ let _firmaCanvas=null,_firmaCtx=null,_firmando=false,_firmaVacia=true;
 let _curEntregaId=null;
 function _entregaDocId(){return _curEntregaId;}
 
+// ---- No se pudo entregar ----
+// El repartidor llegó pero no pudo entregar (cerrado, no recibió, etc.).
+// Queda registrado el intento (motivo, comentario, quién y cuándo) dentro de
+// entregaInfo.intentos, y la entrega vuelve a "Preparado" (sigue cargada):
+// el repartidor puede reintentar y logística la ve marcada en rojo en
+// Despachos para reprogramarla, reasignarla o regresarla.
+const MOTIVOS_NO_ENTREGA=['Cliente cerrado','No estaba quien recibe','No tenía para pagar','Dirección incorrecta / no se encontró','No quiso recibir el pedido','Otro'];
+let _noEntMotivo='';
+function noEntregado(id){
+  const d=documentos.find(x=>x.id===id);if(!d)return;
+  _noEntMotivo='';
+  const ref=d.serie?d.serie+'-'+d.numeroDte:(typeof refPed==='function'?refPed(d):'PED-'+padn(d.numero));
+  openMod('No se pudo entregar · '+ref,`
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">${escHtml(d.clienteComercial||d.clienteNombre||'')}</p>
+    <label>¿Qué pasó? <span style="color:var(--danger)">*</span></label>
+    <div id="ne-motivos" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px">${MOTIVOS_NO_ENTREGA.map(m=>`<button type="button" class="btn btn-ghost btn-sm ne-mot" data-m="${escHtml(m)}" onclick="_neMotivo(this)">${escHtml(m)}</button>`).join('')}</div>
+    <label>Comentario <span id="ne-com-req" style="font-weight:400;color:var(--muted-2)">(opcional)</span></label>
+    <textarea id="ne-com" rows="3" placeholder="Ej. regreso a las 3 pm · el guardia dice que el encargado llega mañana"></textarea>
+    <div class="note" style="margin:10px 0 0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La entrega sigue en tu ruta para reintentar, y en la oficina la ven marcada en rojo para reprogramarla.</span></div>
+    <div class="note n-danger" id="ne-err" style="display:none;margin:10px 0 0"><span></span></div>`,
+    ()=>confirmarNoEntregado(id));
+  const sv=document.getElementById('m-save'); if(sv){sv.textContent='Registrar';}
+}
+window.noEntregado=noEntregado;
+function _neMotivo(btn){
+  _noEntMotivo=btn.dataset.m;
+  document.querySelectorAll('#ne-motivos .ne-mot').forEach(b=>{const on=b===btn;b.style.background=on?'var(--danger,#c0392b)':'';b.style.color=on?'#fff':'';b.style.borderColor=on?'var(--danger,#c0392b)':'';});
+  const err=document.getElementById('ne-err'); if(err)err.style.display='none';
+  const req=document.getElementById('ne-com-req'); if(req)req.textContent=_noEntMotivo==='Otro'?'*':'(opcional)';
+  if(req)req.style.color=_noEntMotivo==='Otro'?'var(--danger)':'var(--muted-2)';
+}
+window._neMotivo=_neMotivo;
+function confirmarNoEntregado(id){
+  const d=documentos.find(x=>x.id===id);if(!d)return;
+  const err=document.getElementById('ne-err'), errTxt=err&&err.querySelector('span');
+  const com=(document.getElementById('ne-com')?.value||'').trim();
+  if(!_noEntMotivo){err.style.display='flex';errTxt.textContent='Elegí qué pasó';return;}
+  if(_noEntMotivo==='Otro'&&!com){err.style.display='flex';errTxt.textContent='Contá qué pasó en el comentario';return;}
+  const intento={fecha:new Date().toISOString(),piloto:currentUser,motivo:_noEntMotivo,comentario:com};
+  const prev=(d.entregaInfo&&Array.isArray(d.entregaInfo.intentos))?d.entregaInfo.intentos:[];
+  d.entregaInfo={intentos:prev.concat([intento]),noEntregado:intento};
+  d.estadoEntrega='preparado'; d.etaEntrega=null;
+  const ref=d.serie?d.serie+'-'+d.numeroDte:(typeof refPed==='function'?refPed(d):'PED-'+padn(d.numero));
+  logAudit('No se pudo entregar',ref+' · '+(d.clienteComercial||d.clienteNombre||'')+' · '+_noEntMotivo+(com?' · '+com:''));
+  closeMod();
+  if(typeof renderMisEntregas==='function')renderMisEntregas();
+  if(typeof renderDespachos==='function'&&document.getElementById('v-despachos')?.classList.contains('active'))renderDespachos();
+  toast('Registrado: no se entregó',_noEntMotivo+' · sigue en tu ruta para reintentar');
+  if(typeof guardarDocumento==='function')guardarDocumento(d);
+}
+window.confirmarNoEntregado=confirmarNoEntregado;
+// Texto corto del último intento fallido (o '' si no hay / ya se entregó).
+function noEntregadoTxt(d){
+  const ne=d&&estadoEntrega(d)!=='entregado'&&d.entregaInfo&&d.entregaInfo.noEntregado;
+  if(!ne)return '';
+  const f=typeof fdatehora==='function'?fdatehora(ne.fecha):ne.fecha;
+  return `<div style="margin-top:3px;font-size:11.5px;font-weight:600;color:var(--danger)">✕ No se entregó: ${escHtml(ne.motivo||'')}${ne.comentario?' — '+escHtml(ne.comentario):''}<span style="font-weight:400;color:var(--muted)"> · ${escHtml(f||'')}${ne.piloto?' · '+escHtml(ne.piloto):''}</span></div>`;
+}
+window.noEntregadoTxt=noEntregadoTxt;
 function marcarEntregado(id){
   _entregaPago='efectivo';_firmaVacia=true;_curEntregaId=id;
   const d=documentos.find(x=>x.id===id);if(!d)return;
@@ -518,6 +577,8 @@ async function confirmarEntrega(id){
     if(_fotoEntrega)toast('⚠ La foto no se guardó','La entrega y la firma sí quedaron registradas.',true);
   }
   if(_cobroNuevo)cobrosRuta.push(_cobroNuevo);
+  // Conservar el historial de intentos fallidos (si los hubo).
+  if(d.entregaInfo&&Array.isArray(d.entregaInfo.intentos)&&d.entregaInfo.intentos.length)entregaInfo.intentos=d.entregaInfo.intentos;
   d.estadoEntrega='entregado';
   d.entregaInfo=entregaInfo;
   const resumenPago={efectivo:'Efectivo '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),cheque:'Cheque '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),contrasena:'Contraseña '+entregaInfo.contrasena,credito:'A crédito',prestamo:'Instalación (equipo en préstamo)'}[tipo]+' · recibió '+recibe;

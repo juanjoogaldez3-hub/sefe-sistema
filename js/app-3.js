@@ -518,7 +518,7 @@ async function verDoc(id){
         <span style="font-size:12px;color:var(--muted)">${esAnulada&&f.pdfAnulacionBase64?'Documento de anulación certificado por EcoFactura ante SAT':'Documento oficial certificado por EcoFactura ante SAT'} · Aut.: ${f.autorizacion}</span>
         <span style="display:flex;gap:8px;flex-wrap:wrap">${_firm?`<button class="btn btn-ghost btn-sm" onclick="descargarFacturaPDF(${f.id},true)">⬇ Sin firma</button>`:''}<button class="btn btn-primary btn-sm" onclick="descargarFacturaPDF(${f.id})">⬇ Descargar PDF${_firm?' firmado':''}</button></span>
       </div>
-      ${f.entregaInfo?`<div style="background:#fff;border-radius:10px;padding:20px 24px;margin-top:14px;color:#1a1a17">${reciboEntregaHTML(f)}</div>`:''}`;
+      ${(f.entregaInfo&&(f.estadoEntrega==='entregado'||(f.entregaInfo.intentos&&f.entregaInfo.intentos.length)))?`<div style="background:#fff;border-radius:10px;padding:20px 24px;margin-top:14px;color:#1a1a17">${reciboEntregaHTML(f)}</div>`:''}`;
     // Guardar referencia para imprimir/descargar
     window._pdfActual=pdfUrl;
     window._pdfNombre=nombreArch;
@@ -835,8 +835,16 @@ function nombreArchivoFactura(f){
 }
 
 // Bloque de comprobante de recepción / entrega en el PDF
+// Intentos de entrega que no se pudieron completar (motivo, comentario, quién).
+function _intentosEntregaHTML(ei){
+  const its=(ei&&Array.isArray(ei.intentos))?ei.intentos:[];
+  if(!its.length)return '';
+  return `<div style="margin-top:12px;font-size:11.5px;color:var(--muted)"><div style="font-weight:700;color:var(--danger);margin-bottom:4px">Intentos sin entregar (${its.length})</div>${its.map(x=>`<div>✕ ${fdatehora(x.fecha)} · ${escHtml(x.piloto||'—')} · <b style="color:var(--ink)">${escHtml(x.motivo||'')}</b>${x.comentario?' — '+escHtml(x.comentario):''}</div>`).join('')}</div>`;
+}
 function reciboEntregaHTML(f){
   const ei=f.entregaInfo;if(!ei)return '';
+  // Todavía sin entregar (solo hubo intentos fallidos): mostrar solo eso.
+  if(f.estadoEntrega!=='entregado')return `<div style="font-size:10px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px">Entrega pendiente</div>${_intentosEntregaHTML(ei)}`;
   // Firma/foto: de la tabla aparte (f._evid, traída al abrir) o, en entregas
   // viejas / si la tabla no estaba, guardada dentro de la entrega.
   const _ev=f._evid||{};
@@ -852,7 +860,8 @@ function reciboEntregaHTML(f){
         <div>Piloto: <b style="color:var(--ink)">${ei.piloto||'—'}</b></div>
         ${modoTxt?`<div>Pago: <b style="color:var(--ink)">${modoTxt}</b></div>`:''}
         ${ei.recibe?`<div>Recibió: <b style="color:var(--ink)">${ei.recibe}</b></div>`:''}
-        ${ei.observacion?`<div>Obs.: ${ei.observacion}</div>`:''}
+        ${ei.observacion?`<div>Obs.: ${escHtml(ei.observacion)}</div>`:''}
+        ${_intentosEntregaHTML(ei)}
       </div>
       ${firmaSrc?`<div style="text-align:center">
         <img src="${firmaSrc}" style="max-width:170px;max-height:75px;border-bottom:1.5px solid var(--ink)">
