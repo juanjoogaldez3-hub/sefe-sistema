@@ -1639,8 +1639,14 @@ function renderDespachos(){
     {ic:'i-blue',svg:'<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/>',lbl:'Total a despachar',val:activos.length,sub:'documentos activos'},
   ];
   $('#desp-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
-  // Ordenar por ruta (los que tienen orden primero, luego por número)
+  // Agrupar por piloto: primero los "Sin asignar", luego cada piloto por
+  // nombre; dentro de cada grupo, por orden de ruta y luego por número.
+  const _nomPil=pid=>{if(pid==null)return '';const pl=pilotos.find(p=>p.id===pid);return (pl&&pl.nombre)||_nombreRepartidor(pid)||('Piloto #'+pid);};
   lista.sort((a,b)=>{
+    const ga=a.pilotoId==null?0:1, gb=b.pilotoId==null?0:1;
+    if(ga!==gb)return ga-gb;
+    const na=_nomPil(a.pilotoId), nb=_nomPil(b.pilotoId);
+    if(na!==nb)return na.localeCompare(nb,'es');
     const ra=a.ordenRuta??999,rb=b.ordenRuta??999;
     if(ra!==rb)return ra-rb;
     return (a.numeroDte||a.numero||0)-(b.numeroDte||b.numero||0);
@@ -1652,8 +1658,26 @@ function renderDespachos(){
   const _riskDesp=new Set();
   {const porPil={};lista.forEach(d=>{const k=d.pilotoId||'_';(porPil[k]=porPil[k]||[]).push(d);});
    Object.values(porPil).forEach(g=>_riesgosHora(g).forEach(id=>_riskDesp.add(id)));}
+  // Encabezado de cada grupo (piloto): cantidad, total y cuántas van en ruta.
+  const _grupos={};lista.forEach(d=>{const k=d.pilotoId==null?'_':String(d.pilotoId);(_grupos[k]=_grupos[k]||[]).push(d);});
+  let _grupoPrev=null;
+  const _encabezado=d=>{
+    const k=d.pilotoId==null?'_':String(d.pilotoId);
+    if(k===_grupoPrev)return '';
+    _grupoPrev=k;
+    const g=_grupos[k], tot=g.reduce((s,x)=>s+(x.totales?.total||0),0);
+    const enR=g.filter(x=>estadoEntrega(x)==='ruta').length, entr=g.filter(x=>estadoEntrega(x)==='entregado').length;
+    const sinA=d.pilotoId==null;
+    return `<tr class="desp-grupo" data-grupo-key="pil:${k}"><td colspan="9" style="background:${sinA?'#fdf3d8':'var(--surface-2,#f4f7ef)'};padding:9px 14px;border-top:2px solid var(--line-strong)">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-weight:800;font-size:13.5px">${sinA?'⏳ Sin asignar':'🚚 '+escHtml(_nomPil(d.pilotoId))}</span>
+        <span style="font-size:12px;color:var(--muted)">${g.length} entrega${g.length!==1?'s':''} · ${money(tot)}${enR?' · '+enR+' en ruta':''}${entr?' · '+entr+' entregada'+(entr!==1?'s':''):''}</span>
+        ${canAsignarPiloto()?`<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="despSelGrupo('${k}')" title="Marcar todas las entregas de este grupo">Seleccionar grupo</button>`:''}
+      </div></td></tr>`;
+  };
   $('#t-despachos').innerHTML=lista.map(d=>{
     const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];
+    const _enc=_encabezado(d);
     const piloto=pilotos.find(p=>p.id===d.pilotoId);
     let acts='';
     acts+=`<button class="btn btn-ghost btn-sm" onclick="verDoc(${d.id})">Ver</button>`;
@@ -1661,7 +1685,7 @@ function renderDespachos(){
     if(canAsignarPiloto()&&d.pilotoId!=null)acts+=`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="desasignarDespacho(${d.id})" title="Quitar el piloto y la ruta (vuelve a Sin asignar)">✕ Desasignar</button>`;
     if(est!=='entregado')acts=`<button class="btn btn-primary btn-sm" onclick="asignarDespacho(${d.id})">${d.pilotoId?'Reasignar':'Asignar'}</button>`+acts;
     const chk=(canAsignarPiloto()&&est!=='entregado')?`<input type="checkbox" class="desp-chk" data-id="${d.id}" ${_despSel.has(d.id)?'checked':''} onclick="despToggleSel(${d.id},this.checked)">`:'';
-    return `<tr>
+    return _enc+`<tr data-desp-grupo="${d.pilotoId==null?'_':d.pilotoId}">
       <td style="text-align:center">${chk}</td>
       <td class="num" style="font-weight:700;color:var(--green)">${d.ordenRuta!=null?'#'+d.ordenRuta:'—'}</td>
       <td style="font-weight:600">${docNum(d)}<div style="font-size:10.5px;color:var(--muted)">${tipoCorto[d.tipoDoc]}</div>${empTag(d.empresa)}</td>
@@ -1680,6 +1704,14 @@ function renderDespachos(){
   renderConciliacion();
 }
 window.renderDespachos=renderDespachos;
+// Marca (o desmarca, si ya estaban todas) las entregas de un grupo de piloto.
+function despSelGrupo(k){
+  const chks=[...document.querySelectorAll('#t-despachos tr[data-desp-grupo="'+k+'"] .desp-chk')].filter(c=>c.closest('tr').style.display!=='none');
+  if(!chks.length)return;
+  const marcar=chks.some(c=>!c.checked);
+  chks.forEach(c=>{c.checked=marcar;despToggleSel(Number(c.dataset.id),marcar);});
+}
+window.despSelGrupo=despSelGrupo;
 
 // ---- Panel de paradas manuales (banco, recolección, etc.) para logística/admin ----
 function renderParadasPanel(){
