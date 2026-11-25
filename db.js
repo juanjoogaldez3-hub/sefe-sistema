@@ -620,7 +620,7 @@ async function guardarAbono(documentoId, ab){
 }
 
 function mapParadaRutaFromDB(p){
-  return { id:p.id, pilotoId:p.piloto_id, titulo:p.titulo||'', nota:p.nota||'', direccion:p.direccion||'',
+  return { id:p.id, pilotoId:p.piloto_id, motivo:p.motivo||'', titulo:p.titulo||'', nota:p.nota||'', direccion:p.direccion||'',
     lat:(p.lat!=null?Number(p.lat):null), lng:(p.lng!=null?Number(p.lng):null),
     horaLimite:p.hora_limite||'', ordenRuta:p.orden_ruta, hecha:p.hecha===true, hechaFecha:p.hecha_fecha,
     creada:p.creada, creadaPor:p.creada_por, eta:p.eta||null };
@@ -632,13 +632,20 @@ async function guardarParadaRuta(p){
     orden_ruta:(p.ordenRuta!=null?p.ordenRuta:null), hecha:p.hecha===true, hecha_fecha:p.hechaFecha||null,
     creada_por:p.creadaPor||null
   };
+  // Motivo (Recolecta/Entrega/Instalación/Otro). Si la columna todavía no
+  // existe en la base (migración 20261125150000 sin correr), se reintenta
+  // sin ella para que la parada se guarde igual.
+  if (p.motivo) row.motivo = p.motivo;
+  const _sinMotivo = e => e && row.motivo!==undefined && /motivo/i.test(String(e.message||'')+String(e.details||''));
   if (p._nuevo) {
     delete p._nuevo;
-    const {data,error} = await sb.from('paradas_ruta').insert(row).select().single();
+    let {data,error} = await sb.from('paradas_ruta').insert(row).select().single();
+    if(_sinMotivo(error)){ delete row.motivo; ({data,error} = await sb.from('paradas_ruta').insert(row).select().single()); }
     if(error){console.error('Error guardando parada de ruta:',error); p._nuevo=true;}
     else p.id = data.id;
   } else {
-    const {error} = await sb.from('paradas_ruta').update(row).eq('id', p.id);
+    let {error} = await sb.from('paradas_ruta').update(row).eq('id', p.id);
+    if(_sinMotivo(error)){ delete row.motivo; ({error} = await sb.from('paradas_ruta').update(row).eq('id', p.id)); }
     if(error)console.error('Error actualizando parada de ruta:',error);
   }
 }

@@ -1310,10 +1310,21 @@ async function _geocodeGoogle(dir){
     if(!res)return null; const loc=res.geometry.location; return {lat:loc.lat(),lng:loc.lng()};
   }catch(e){ return null; }
 }
+// Motivos de una parada manual de ruta.
+const PARADA_MOTIVOS=['Recolecta','Entrega','Instalación','Otro'];
+const _PARADA_MOT_COLOR={'Recolecta':'#8a5a00;background:#fbecb4','Entrega':'#1e4d1b;background:#dcefd5','Instalación':'#1f4e79;background:#dbe8f5','Otro':'#555;background:#eee'};
+// Etiqueta de color con el motivo ('' si la parada no tiene motivo: las viejas).
+function paradaMotivoTag(p){
+  const m=p&&p.motivo; if(!m)return '';
+  const c=_PARADA_MOT_COLOR[m]||_PARADA_MOT_COLOR['Otro'];
+  return `<span style="display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:9px;color:${c};vertical-align:middle">${escHtml(m)}</span>`;
+}
+window.paradaMotivoTag=paradaMotivoTag;
 function openParadaRuta(pidPre){
   if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede agregar paradas',true);return;}
   openMod('➕ Agregar parada a la ruta',`
     <div class="row"><div style="flex:1"><label>Repartidor</label><select id="pr-piloto">${_optRepartidores(pidPre)}</select></div></div>
+    <div class="row"><div><label>Motivo</label><select id="pr-motivo"><option value="">— Elegí el motivo —</option>${PARADA_MOTIVOS.map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div></div>
     <div class="row"><div><label>Nombre <span style="color:var(--muted);font-weight:400">(escribí un cliente o proveedor, o un texto libre)</span></label><input id="pr-tit" autocomplete="off" placeholder="Ej. nombre del cliente o proveedor · Ir al banco · Cargar combustible"></div></div>
     <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" placeholder="Dirección o nombre del lugar"></div></div>
     <div class="row"><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px"></div></div>
@@ -1323,9 +1334,11 @@ function openParadaRuta(pidPre){
       const pid=$('#pr-piloto').value?Number($('#pr-piloto').value):null;
       const tit=$('#pr-tit').value.trim();
       if(!pid){toast('Elegí un piloto',null,true);return;}
-      if(!tit){toast('Ponele un título a la parada',null,true);return;}
+      const motivo=$('#pr-motivo').value;
+      if(!motivo){toast('Elegí el motivo de la parada','Recolecta, Entrega, Instalación u Otro',true);return;}
+      if(!tit){toast('Ponele un nombre a la parada',null,true);return;}
       const dir=$('#pr-dir').value.trim();
-      const nueva={pilotoId:pid,titulo:tit,nota:$('#pr-nota').value.trim(),direccion:dir,horaLimite:$('#pr-hora').value||'',hecha:false,creadaPor:currentUser,_nuevo:true};
+      const nueva={pilotoId:pid,motivo,titulo:tit,nota:$('#pr-nota').value.trim(),direccion:dir,horaLimite:$('#pr-hora').value||'',hecha:false,creadaPor:currentUser,_nuevo:true};
       // Si se eligió un cliente con pin en el mapa y no se cambió la dirección,
       // se usa su ubicación guardada (más exacta que buscar la dirección).
       const _sel=window._prSel;
@@ -1333,7 +1346,7 @@ function openParadaRuta(pidPre){
       else if(dir){const g=await _geocodeGoogle(dir); if(g){nueva.lat=g.lat;nueva.lng=g.lng;}}
       paradasRuta.push(nueva);
       if(typeof guardarParadaRuta==='function')await guardarParadaRuta(nueva);
-      logAudit('Parada de ruta creada',tit+' · '+(pilotos.find(p=>p.id===pid)?.nombre||''));
+      logAudit('Parada de ruta creada',motivo+' · '+tit+' · '+(pilotos.find(p=>p.id===pid)?.nombre||''));
       closeMod();renderDespachos();
       toast('✓ Parada agregada',tit+(nueva.lat!=null?' · ubicada en el mapa':' · sin ubicación (solo en la lista)'));
     });
@@ -1364,6 +1377,8 @@ function _wireParadaNombre(){
     (item)=>{
       if(!item||!item.valor){window._prSel=null;return;}
       const v=item.valor, dirEl=document.getElementById('pr-dir');
+      const mot=document.getElementById('pr-motivo');
+      if(mot&&!mot.value)mot.value=(v.tipo==='prov')?'Recolecta':'Entrega';
       if(v.tipo==='cli'){
         const c=clientes.find(x=>x.id===v.id); if(!c)return;
         const dir=c.direccionEntrega||c.direccion||'';
@@ -1628,7 +1643,7 @@ function renderParadasPanel(){
     const ubic=p.lat!=null?'📍 en mapa':'<span style="color:var(--muted-2)">sin ubicación</span>';
     return `<tr>
       <td class="num" style="font-weight:700;color:var(--green)">${p.ordenRuta!=null?'#'+p.ordenRuta:'—'}</td>
-      <td style="font-weight:600">${escHtml(p.titulo)}${p.nota?`<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.nota)}</div>`:''}${(hora||eta)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${hora}${eta}</div>`:''}</td>
+      <td style="font-weight:600">${paradaMotivoTag(p)?paradaMotivoTag(p)+' ':''}${escHtml(p.titulo)}${p.nota?`<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.nota)}</div>`:''}${(hora||eta)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${hora}${eta}</div>`:''}</td>
       <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${p.direccion?escHtml(p.direccion):'—'}</td>
       <td style="font-size:12px">${ubic}</td>
       <td>${pil?escHtml(pil.nombre):'<span style="color:var(--muted-2)">—</span>'}</td>
@@ -1864,7 +1879,7 @@ function renderMisEntregas(){
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             ${p.ordenRuta!=null?`<span style="background:#6A3FB5;color:#fff;font-weight:700;font-size:12px;width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center">${p.ordenRuta}</span>`:''}
             <span style="font-weight:700;font-size:15px">📌 ${escHtml(p.titulo)}</span>
-            <span class="badge b-prep">Parada</span>
+            ${paradaMotivoTag(p)||'<span class="badge b-prep">Parada</span>'}
           </div>
           ${dir}
           ${(hora||eta)?`<div style="margin-bottom:3px;display:flex;gap:10px;flex-wrap:wrap">${hora}${eta}</div>`:''}
@@ -1916,7 +1931,7 @@ function _pilRenderMapa(mias,paradas){
   const wrap=document.getElementById('pil-mapa-wrap'); if(!wrap)return;
   const dLoc=(mias||[]).filter(d=>{const c=clientes.find(x=>x.id===d.clienteId);return c&&c.lat!=null&&c.lng!=null&&estadoEntrega(d)!=='entregado';})
     .map(d=>{const c=clientes.find(x=>x.id===d.clienteId);return {lat:Number(c.lat),lng:Number(c.lng),n:d.ordenRuta,nombre:d.clienteComercial||d.clienteNombre,parada:false};});
-  const pLoc=(paradas||[]).filter(p=>p.lat!=null&&p.lng!=null).map(p=>({lat:Number(p.lat),lng:Number(p.lng),n:p.ordenRuta,nombre:'📌 '+p.titulo,parada:true}));
+  const pLoc=(paradas||[]).filter(p=>p.lat!=null&&p.lng!=null).map(p=>({lat:Number(p.lat),lng:Number(p.lng),n:p.ordenRuta,nombre:'📌 '+(p.motivo?p.motivo+' · ':'')+p.titulo,parada:true}));
   const pts=[...dLoc,...pLoc].sort((a,b)=>(a.n??999)-(b.n??999));
   if(!pts.length){wrap.innerHTML='';return;}
   wrap.innerHTML=`<div class="panel" style="margin-bottom:14px"><div class="panel-head"><h3>Mapa de la ruta</h3><button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="_pilToggleMapa()">${_pilMapaAbierto?'Ocultar mapa':'🗺️ Ver mapa ('+pts.length+')'}</button></div>${_pilMapaAbierto?'<div id="pil-mapa" style="height:46vh;min-height:280px;border-top:1px solid var(--line);background:#eef1ea"></div>':''}</div>`;
