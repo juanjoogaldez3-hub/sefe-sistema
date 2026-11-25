@@ -2056,20 +2056,16 @@ function renderMisEntregas(){
     const eta=p.eta?`<span style="font-size:11px;color:var(--muted)">🕐 llega ~${p.eta}</span>`:'';
     const hora=p.horaLimite?`<span style="font-size:11px;font-weight:700;color:var(--warn)">⏰ antes de ${p.horaLimite}</span>`:'';
     const dir=p.direccion?`<div style="font-size:12.5px;color:var(--ink);margin-bottom:3px">📍 ${escHtml(p.direccion)}</div>`:'';
-    return `<div style="border:1.5px dashed #6A3FB5;border-radius:12px;padding:14px 16px;background:#F7F4FC">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-        <div style="flex:1;min-width:200px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            ${p.ordenRuta!=null?`<span style="background:#6A3FB5;color:#fff;font-weight:700;font-size:12px;width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center">${p.ordenRuta}</span>`:''}
-            <span style="font-weight:700;font-size:15px">📌 ${escHtml(p.titulo)}</span>
-            ${paradaMotivoTag(p)||'<span class="badge b-prep">Parada</span>'}
-          </div>
-          ${dir}
-          ${(hora||eta)?`<div style="margin-bottom:3px;display:flex;gap:10px;flex-wrap:wrap">${hora}${eta}</div>`:''}
-          ${p.nota?`<div style="font-size:11.5px;color:var(--muted-2);margin-top:6px">${escHtml(p.nota)}</div>`:''}
-        </div>
+    return `<div class="ent-card ent-parada">
+      <div class="ent-top">
+        ${p.ordenRuta!=null?`<span class="ent-num" style="background:#6A3FB5">${p.ordenRuta}</span>`:''}
+        <div class="ent-nombre">📌 ${escHtml(p.titulo)}</div>
       </div>
-      <div style="margin-top:11px"><button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Marcar hecha</button></div>
+      <div class="ent-meta">${paradaMotivoTag(p)||'<span class="badge b-prep">Parada</span>'}<span>Parada de ruta</span></div>
+      ${p.direccion?`<div class="ent-dir">📍 ${escHtml(p.direccion)}</div>`:''}
+      ${(hora||eta)?`<div class="ent-linea">${hora}${eta}</div>`:''}
+      ${p.nota?`<div class="ent-items">${escHtml(p.nota)}</div>`:''}
+      <div class="ent-acts"><button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Marcar hecha</button></div>
     </div>`;
   };
   $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-head"><h3>Mi ruta de hoy</h3><div style="display:flex;align-items:center;gap:10px;margin-left:auto"><span style="font-size:12px;color:var(--muted)">${combinada.length} parada${combinada.length!==1?'s':''} · ordenadas por ruta</span>${nNav?`<button class="btn btn-primary btn-sm" onclick="abrirRutaMisEntregas()" title="Abrir toda la ruta en Google Maps para navegar">🗺️ Navegar mi ruta</button>`:''}</div></div><div class="panel-body" style="display:flex;flex-direction:column;gap:11px">`+
@@ -2085,25 +2081,21 @@ function renderMisEntregas(){
       else if(est==='preparado')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEnRuta(${d.id})">📦 Cargado, voy en ruta</button>`;
       else if(est==='ruta')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEntregado(${d.id})">✓ Marcar entregado</button> <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="noEntregado(${d.id})">✕ No se pudo entregar</button>`;
       else if(est==='entregado')btn=`<span class="badge b-ok">✓ Entregado a ${d.entregaInfo?.recibe||'—'}</span>`;
-      return `<div style="border:1.5px solid var(--line-strong);border-radius:12px;padding:14px 16px;${est==='entregado'?'opacity:.65':''}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-          <div style="flex:1;min-width:200px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-              ${d.ordenRuta!=null?`<span style="background:var(--green);color:#fff;font-weight:700;font-size:12px;width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center">${d.ordenRuta}</span>`:''}
-              <span style="font-weight:700;font-size:15px">${d.clienteComercial||d.clienteNombre}</span>
-              <span class="badge ${ec}">${en}</span>
-            </div>
-            <div style="font-size:12px;color:var(--muted);margin-bottom:3px">${docNum(d)} · ${tipoCorto[d.tipoDoc]} · ${money(d.totales.total)}</div>
-            <div style="font-size:12.5px;color:var(--ink);margin-bottom:3px">📍 ${dirEntrega(d)}</div>
-            ${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}
-            ${cli&&(cli.lat==null||cli.lng==null)&&est!=='entregado'?`<div style="margin:4px 0 6px"><button class="btn btn-ghost btn-sm" onclick="_entGuardarUbic(${cli.id})" title="Estando en el cliente, guarda tu ubicación GPS como la del cliente">📍 Guardar ubicación del cliente</button> <span style="font-size:11px;color:var(--muted-2)">sin ubicación en el mapa</span></div>`:''}
-            ${(()=>{const b=_horaBadge(d,_riskPil),e=_etaBadge(d);return (b||e)?`<div style="margin-bottom:3px;display:flex;gap:10px;flex-wrap:wrap">${b}${e}</div>`:'';})()}
-            ${tel?`<div style="font-size:12px"><a href="tel:${tel}" style="color:var(--blue);text-decoration:none">☎ ${tel}</a></div>`:''}
-            <div style="font-size:11.5px;color:var(--muted-2);margin-top:6px">${items}</div>
-          </div>
-          <button class="btn btn-ghost btn-sm" onclick="verDoc(${d.id})">Ver doc</button>
+      // Tarjeta pensada para el celular: el nombre del cliente arriba a todo
+      // el ancho; estado y documento abajo; botones (incluido Ver doc) al pie.
+      return `<div class="ent-card${est==='entregado'?' ent-hecha':''}">
+        <div class="ent-top">
+          ${d.ordenRuta!=null?`<span class="ent-num">${d.ordenRuta}</span>`:''}
+          <div class="ent-nombre">${escHtml(d.clienteComercial||d.clienteNombre||'')}</div>
         </div>
-        <div style="margin-top:11px">${btn}</div>
+        <div class="ent-meta"><span class="badge ${ec}">${en}</span><span>${docNum(d)} · ${tipoCorto[d.tipoDoc]} · <b>${money(d.totales.total)}</b></span></div>
+        <div class="ent-dir">📍 ${escHtml(dirEntrega(d))}</div>
+        ${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}
+        ${(()=>{const b=_horaBadge(d,_riskPil),e=_etaBadge(d);return (b||e)?`<div class="ent-linea">${b}${e}</div>`:'';})()}
+        ${tel?`<div class="ent-linea"><a href="tel:${tel}" style="color:var(--blue);text-decoration:none;font-size:13px">☎ ${tel}</a></div>`:''}
+        <div class="ent-items">${escHtml(items)}</div>
+        ${cli&&(cli.lat==null||cli.lng==null)&&est!=='entregado'?`<div class="ent-ubic"><button class="btn btn-ghost btn-sm" onclick="_entGuardarUbic(${cli.id})" title="Estando en el cliente, guarda tu ubicación GPS como la del cliente">📍 Guardar ubicación del cliente</button><span>sin ubicación en el mapa</span></div>`:''}
+        <div class="ent-acts">${btn}<button class="btn btn-ghost btn-sm" onclick="verDoc(${d.id})">Ver doc</button></div>
       </div>`;
     }).join('')+`</div></div>`+corteCajaHTML(mias,pid,esPil);
 }
