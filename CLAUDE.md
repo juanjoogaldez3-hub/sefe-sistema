@@ -3,7 +3,8 @@
 ## Reparto de tareas (IMPORTANTE)
 
 **El código lo maneja Claude. La base la consulta Claude directo; los
-cambios de datos los aprueba Juanjo.**
+cambios de datos chicos los hace Claude y avisa, los grandes los aprueba
+Juanjo.**
 
 - Los cambios de código (`index.html`, `db.js`, `realtime.js`, …) se
   commitean y publican sin pedirle a Juanjo que toque GitHub. Él no
