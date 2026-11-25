@@ -1,3 +1,19 @@
+// Reporte por vendedor: qué vendedores tienen abiertas sus facturas (se
+// recuerda al cambiar filtros o período mientras no se recargue la página).
+const _repVendAbiertos={};
+function _repVendToggle(i){
+  const det=document.querySelector('#rep-body tr[data-rv-det="'+i+'"]'); if(!det)return;
+  const abrir=det.style.display==='none';
+  det.style.display=abrir?'':'none';
+  const n=det.getAttribute('data-rv-nom'); if(n!=null){ if(abrir)_repVendAbiertos[n]=true; else delete _repVendAbiertos[n]; }
+  const fl=document.querySelector('#rep-body tr[data-rv="'+i+'"] .rv-flecha'); if(fl)fl.style.transform='rotate('+(abrir?90:0)+'deg)';
+}
+function _repVendTodos(abrir){
+  document.querySelectorAll('#rep-body tr[data-rv-det]').forEach(det=>{
+    if((det.style.display==='none')===abrir)_repVendToggle(det.getAttribute('data-rv-det'));
+  });
+}
+if(typeof window!=='undefined'){ window._repVendToggle=_repVendToggle; window._repVendTodos=_repVendTodos; }
 function renderReportes(){
   _consolidadoScope=esConsolidadoVista(); // vista consolidada: no filtra por empresa mientras dibuja
   bindRep();renderRepFilters();
@@ -79,8 +95,22 @@ function renderReportes(){
     html+=compBarras;
     html+=`<div class="panel"><div class="panel-head"><h3>Resumen por vendedor</h3></div>
       <div class="panel-body">${hbars(arr.map(([n,o])=>({n,v:o.v,c:colores[n]})))}</div></div>
-      <div class="panel"><table><thead><tr><th>Vendedor</th><th>Ventas</th><th>Costos</th><th>Ganancia</th><th>Comisión</th></tr></thead><tbody>
-      ${arr.map(([n,o])=>`<tr><td style="font-weight:600;display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:3px;background:${colores[n]};flex-shrink:0"></span>${n}</td><td class="num">${money(o.v)}</td><td class="num" style="color:var(--muted)">${money(o.c)}</td><td class="num" style="font-weight:700;color:var(--green)">${money(o.v-o.c)}</td><td class="num" style="font-weight:600;color:var(--blue)">${money(comisionDe(o.v))}</td></tr>`).join('')}
+      <div class="panel"><div class="panel-head"><h3>Detalle por vendedor</h3>
+        <div style="display:flex;gap:6px"><button type="button" class="btn btn-ghost btn-sm" onclick="_repVendTodos(true)">Ver todas las facturas</button><button type="button" class="btn btn-ghost btn-sm" onclick="_repVendTodos(false)">Ocultar</button></div></div>
+      <table data-ordenable="1"><thead><tr><th>Vendedor</th><th>Ventas</th><th>Costos</th><th>Ganancia</th><th>Comisión</th></tr></thead><tbody>
+      ${arr.map(([n,o],i)=>{
+        // Fila del vendedor (clic = abre/cierra sus facturas) + fila de detalle
+        // con las ventas que forman ese total. El detalle va en una tabla
+        // anidada dentro de la celda, así los ordenadores/totales automáticos
+        // de reportería no la tocan.
+        const abierto=!!_repVendAbiertos[n];
+        const docsV=ventas.filter(d=>(d.vendedorNombre||'Sin asignar')===n).sort((a,b)=>String(b.creada).localeCompare(String(a.creada)));
+        const _nd=d=>d.serie?(d.serie+'-'+d.numeroDte):('PED-'+padn(d.numero));
+        const det=docsV.map(d=>{const c=costoDoc(d),v=d.totales.total;return `<tr style="cursor:pointer" onclick="verDoc(${d.id})" title="Abrir el documento"><td style="color:var(--muted);white-space:nowrap">${fdate(d.creada)}</td><td style="font-weight:600;white-space:nowrap">${escHtml(_nd(d))}</td><td>${escHtml(d.clienteComercial||d.clienteNombre||'—')}</td><td class="num">${money(v)}</td><td class="num" style="color:var(--muted)">${money(c)}</td><td class="num" style="color:var(--green)">${money(v-c)}</td></tr>`;}).join('');
+        return `<tr data-rv="${i}" style="cursor:pointer" onclick="_repVendToggle(${i})" title="Ver las facturas de este vendedor"><td style="font-weight:600;display:flex;align-items:center;gap:8px"><span class="rv-flecha" style="display:inline-block;width:10px;color:var(--muted);transition:transform .15s;transform:rotate(${abierto?90:0}deg)">▸</span><span style="width:10px;height:10px;border-radius:3px;background:${colores[n]};flex-shrink:0"></span>${escHtml(n)} <span style="font-weight:400;font-size:11.5px;color:var(--muted)">· ${o.n} factura${o.n!==1?'s':''}</span></td><td class="num">${money(o.v)}</td><td class="num" style="color:var(--muted)">${money(o.c)}</td><td class="num" style="font-weight:700;color:var(--green)">${money(o.v-o.c)}</td><td class="num" style="font-weight:600;color:var(--blue)">${money(comisionDe(o.v))}</td></tr>
+        <tr class="rv-det" data-rv-det="${i}" data-rv-nom="${escHtml(n)}" style="display:${abierto?'':'none'}"><td colspan="5" style="padding:4px 12px 14px 32px;background:rgba(0,0,0,.02)">
+          <table style="font-size:12.5px;width:100%"><thead><tr><th>Fecha</th><th>Documento</th><th>Cliente</th><th class="num">Venta</th><th class="num">Costo</th><th class="num">Ganancia</th></tr></thead><tbody>${det||'<tr><td colspan="6" class="empty">Sin ventas</td></tr>'}</tbody></table></td></tr>`;
+      }).join('')}
       <tr style="border-top:2px solid var(--line-strong);font-weight:700"><td>Total</td><td class="num">${money(arr.reduce((s,[,o])=>s+o.v,0))}</td><td class="num">${money(arr.reduce((s,[,o])=>s+o.c,0))}</td><td class="num" style="color:var(--green)">${money(arr.reduce((s,[,o])=>s+(o.v-o.c),0))}</td><td class="num" style="color:var(--blue)">${money(arr.reduce((s,[,o])=>s+comisionDe(o.v),0))}</td></tr></tbody></table></div>
       <div class="note" style="margin-top:12px"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La comisión es el 5% sobre las ventas sin IVA (ventas ÷ 1.12 × 5%).</span></div>`;
   }
