@@ -843,7 +843,7 @@ function reciboEntregaHTML(f){
   const firmaSrc=_ev.firma||ei.firma||'';
   const fotoSrc=_ev.foto||'';
   const fechaEnt=fdatehora(ei.fecha);
-  const modoTxt={efectivo:'Pagado en efectivo'+(ei.monto?' · '+money(ei.monto):''),cheque:'Pagado con cheque '+(ei.cheque||'')+(ei.banco?' ('+ei.banco+')':'')+(ei.monto?' · '+money(ei.monto):''),contrasena:'Contraseña de pago No. '+(ei.contrasena||''),credito:'Recibido a crédito'}[ei.modoPago]||'';
+  const modoTxt={efectivo:'Pagado en efectivo'+(ei.monto?' · '+money(ei.monto):''),cheque:'Pagado con cheque '+(ei.cheque||'')+(ei.banco?' ('+ei.banco+')':'')+(ei.monto?' · '+money(ei.monto):''),contrasena:'Contraseña de pago No. '+(ei.contrasena||''),credito:'Recibido a crédito',prestamo:'Instalación · equipo en préstamo (no se cobra)'}[ei.modoPago]||'';
   return `<div style="margin-top:22px;border-top:1.5px dashed var(--line-strong);padding-top:16px">
     <div style="font-size:10px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Comprobante de recepción</div>
     <div style="display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap">

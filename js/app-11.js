@@ -339,9 +339,14 @@ function marcarEntregado(id){
   const d=documentos.find(x=>x.id===id);if(!d)return;
   const docNum=d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
   const saldo=arInfo(d).saldo;
-  openMod('Confirmar entrega · '+docNum,`
+  // Nota de préstamo: es equipo prestado (instalación), no se cobra. Se pide
+  // solo la prueba de entrega (firma + quién recibió + foto opcional).
+  const _esPrest=d.tipoDoc==='prestamo';
+  openMod((_esPrest?'Confirmar instalación · ':'Confirmar entrega · ')+(_esPrest?refPed(d):docNum),`
     <p style="font-size:12.5px;color:var(--muted);margin-bottom:6px">${d.clienteComercial||d.clienteNombre}</p>
-    <p style="font-size:13px;margin-bottom:14px">Total: <b>${money(d.totales.total)}</b>${saldo<d.totales.total?` · Saldo pendiente: <b>${money(saldo)}</b>`:''}</p>
+    ${_esPrest?`<p style="font-size:13px;margin-bottom:14px">Nota de préstamo · equipo propiedad de la empresa. <b>No se cobra.</b> El cliente firma de recibido.</p>`:
+    `<p style="font-size:13px;margin-bottom:14px">Total: <b>${money(d.totales.total)}</b>${saldo<d.totales.total?` · Saldo pendiente: <b>${money(saldo)}</b>`:''}</p>`}
+    <div style="${_esPrest?'display:none':''}">
     <label>¿Cómo se resolvió el pago?</label>
     <div class="pay-opt" id="pay-opt">
       <div class="pay-btn on" data-pago="efectivo" onclick="selPago('efectivo')"><span class="pi">💵</span>Efectivo</div>
@@ -350,6 +355,7 @@ function marcarEntregado(id){
       <div class="pay-btn" data-pago="credito" onclick="selPago('credito')"><span class="pi">✍️</span>Queda a crédito</div>
     </div>
     <div id="pay-detalle"></div>
+    </div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line-strong)">
       <div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Prueba de entrega</div>
       <label>Firma de quien recibe <span style="color:var(--danger)">*</span></label>
@@ -364,7 +370,7 @@ function marcarEntregado(id){
     <div class="note n-danger" id="ent-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>confirmarEntrega(id));
   _fotoEntrega=null;
-  selPago('efectivo',saldo);
+  if(_esPrest)_entregaPago='prestamo'; else selPago('efectivo',saldo);
   setTimeout(initFirma,50);
 }
 // ── Foto de la entrega: se achica en el celular antes de guardarla ──
@@ -464,7 +470,7 @@ window.limpiarFirma=limpiarFirma;
 
 async function confirmarEntrega(id){
   const d=documentos.find(x=>x.id===id);if(!d)return;
-  const docNum=d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
+  const docNum=d.serie?d.serie+'-'+d.numeroDte:(typeof refPed==='function'?refPed(d):'PED-'+padn(d.numero));
   const err=$('#ent-err');const errTxt=err.querySelector('span');
   const obs=$('#ent-obs')?.value.trim()||'';
   const fecha=new Date().toISOString();
@@ -514,7 +520,7 @@ async function confirmarEntrega(id){
   if(_cobroNuevo)cobrosRuta.push(_cobroNuevo);
   d.estadoEntrega='entregado';
   d.entregaInfo=entregaInfo;
-  const resumenPago={efectivo:'Efectivo '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),cheque:'Cheque '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),contrasena:'Contraseña '+entregaInfo.contrasena,credito:'A crédito'}[tipo]+' · recibió '+recibe;
+  const resumenPago={efectivo:'Efectivo '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),cheque:'Cheque '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),contrasena:'Contraseña '+entregaInfo.contrasena,credito:'A crédito',prestamo:'Instalación (equipo en préstamo)'}[tipo]+' · recibió '+recibe;
   logAudit('Entrega confirmada',docNum+' · '+(d.clienteComercial||d.clienteNombre)+' · '+resumenPago);
   closeMod();renderMisEntregas();
   toast('✓ Entrega confirmada',resumenPago);

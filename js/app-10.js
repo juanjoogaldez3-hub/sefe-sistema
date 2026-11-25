@@ -1325,6 +1325,7 @@ function openParadaRuta(pidPre){
   openMod('➕ Agregar parada a la ruta',`
     <div class="row"><div style="flex:1"><label>Repartidor</label><select id="pr-piloto">${_optRepartidores(pidPre)}</select></div></div>
     <div class="row"><div><label>Motivo</label><select id="pr-motivo"><option value="">— Elegí el motivo —</option>${PARADA_MOTIVOS.map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div></div>
+    <div class="row" id="pr-np-wrap" style="display:none"><div><label>Nota de préstamo <span style="color:var(--muted);font-weight:400">(opcional — el repartidor la firma al instalar)</span></label><select id="pr-np"></select></div></div>
     <div class="row"><div><label>Nombre <span style="color:var(--muted);font-weight:400">(escribí un cliente o proveedor, o un texto libre)</span></label><input id="pr-tit" autocomplete="off" placeholder="Ej. nombre del cliente o proveedor · Ir al banco · Cargar combustible"></div></div>
     <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" placeholder="Dirección o nombre del lugar"></div></div>
     <div class="row"><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px"></div></div>
@@ -1337,6 +1338,22 @@ function openParadaRuta(pidPre){
       const motivo=$('#pr-motivo').value;
       if(!motivo){toast('Elegí el motivo de la parada','Recolecta, Entrega, Instalación u Otro',true);return;}
       if(!tit){toast('Ponele un nombre a la parada',null,true);return;}
+      // Instalación con nota de préstamo: la nota misma entra a la ruta del
+      // repartidor (como cualquier entrega) y él la firma al instalar. No se
+      // crea una parada aparte para no duplicar la visita.
+      const npId=(motivo==='Instalación'&&$('#pr-np')&&$('#pr-np').value)?Number($('#pr-np').value):null;
+      if(npId){
+        const d=documentos.find(x=>x.id===npId);
+        if(!d){toast('No encontré la nota de préstamo',null,true);return;}
+        d.paraDespacho=true; d.pilotoId=pid;
+        if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';
+        if(typeof guardarDocumento==='function')await guardarDocumento(d);
+        const pil=_nombreRepartidor(pid)||'';
+        logAudit('Instalación asignada',refPed(d)+' · '+(d.clienteComercial||d.clienteNombre||'')+' · '+pil);
+        closeMod();renderDespachos();
+        toast('✓ Nota de préstamo en la ruta',refPed(d)+' → '+pil+'. La firma al instalar.');
+        return;
+      }
       const dir=$('#pr-dir').value.trim();
       const nueva={pilotoId:pid,motivo,titulo:tit,nota:$('#pr-nota').value.trim(),direccion:dir,horaLimite:$('#pr-hora').value||'',hecha:false,creadaPor:currentUser,_nuevo:true};
       // Si se eligió un cliente con pin en el mapa y no se cambió la dirección,
@@ -1351,8 +1368,29 @@ function openParadaRuta(pidPre){
       toast('✓ Parada agregada',tit+(nueva.lat!=null?' · ubicada en el mapa':' · sin ubicación (solo en la lista)'));
     });
   window._prSel=null;
-  setTimeout(_wireParadaNombre,0);
+  setTimeout(()=>{
+    _wireParadaNombre();
+    const mot=document.getElementById('pr-motivo');
+    if(mot)mot.addEventListener('change',_prNotasPrestamo);
+  },0);
 }
+// Notas de préstamo que todavía se pueden llevar a instalar: vigentes (en
+// préstamo) y sin entregar. Si ya se eligió un cliente, solo las de él.
+function _prNotasPrestamo(){
+  const wrap=document.getElementById('pr-np-wrap'), sel=document.getElementById('pr-np');
+  const mot=document.getElementById('pr-motivo'); if(!wrap||!sel||!mot)return;
+  if(mot.value!=='Instalación'){wrap.style.display='none';sel.value='';return;}
+  const cliId=window._prSel&&window._prSel.cliId;
+  const notas=documentos.filter(d=>d.tipoDoc==='prestamo'&&d.estado==='pendiente'&&!d.anulado&&estadoEntrega(d)!=='entregado'&&(!cliId||d.clienteId===cliId))
+    .sort((a,b)=>String(b.creada).localeCompare(String(a.creada)));
+  const prev=sel.value;
+  sel.innerHTML=`<option value="">${notas.length?'— Sin nota de préstamo —':(cliId?'Este cliente no tiene notas de préstamo pendientes':'No hay notas de préstamo pendientes')}</option>`+
+    notas.map(d=>`<option value="${d.id}">${escHtml(refPed(d)+' · '+(d.clienteComercial||d.clienteNombre||'')+' · '+fdate(d.creada)+(d.pilotoId!=null?' · ya asignada a '+(_nombreRepartidor(d.pilotoId)||'otro'):''))}</option>`).join('');
+  if(prev&&notas.some(d=>String(d.id)===prev))sel.value=prev;
+  else if(cliId&&notas.length===1)sel.value=String(notas[0].id);
+  wrap.style.display='';
+}
+window._prNotasPrestamo=_prNotasPrestamo;
 window.openParadaRuta=openParadaRuta;
 // Buscador del campo "Nombre" de la parada: sugiere clientes y proveedores
 // (de las dos empresas: despachos es compartido). Al elegir un cliente llena
@@ -1375,7 +1413,7 @@ function _wireParadaNombre(){
       return cli.concat(prov).sort((a,b)=>emp(a)-emp(b));
     },
     (item)=>{
-      if(!item||!item.valor){window._prSel=null;return;}
+      if(!item||!item.valor){window._prSel=null;_prNotasPrestamo();return;}
       const v=item.valor, dirEl=document.getElementById('pr-dir');
       const mot=document.getElementById('pr-motivo');
       if(mot&&!mot.value)mot.value=(v.tipo==='prov')?'Recolecta':'Entrega';
@@ -1383,11 +1421,13 @@ function _wireParadaNombre(){
         const c=clientes.find(x=>x.id===v.id); if(!c)return;
         const dir=c.direccionEntrega||c.direccion||'';
         if(dirEl&&dir)dirEl.value=dir;
-        window._prSel={dir:dirEl?dirEl.value.trim():dir,lat:c.lat!=null?Number(c.lat):null,lng:c.lng!=null?Number(c.lng):null};
+        window._prSel={cliId:c.id,dir:dirEl?dirEl.value.trim():dir,lat:c.lat!=null?Number(c.lat):null,lng:c.lng!=null?Number(c.lng):null};
+        _prNotasPrestamo();
         const hl=document.getElementById('pr-hora');
         if(hl&&!hl.value&&/^\d{1,2}:\d{2}$/.test(c.horaLimiteEntrega||''))hl.value=c.horaLimiteEntrega.padStart(5,'0');
       }else{
         window._prSel=null;
+        _prNotasPrestamo();
         if(dirEl)dirEl.focus();
       }
     });
