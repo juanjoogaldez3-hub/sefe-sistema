@@ -1292,8 +1292,10 @@ function marcarEntregadosMasivo(){
     sel.forEach(d=>{
       d.estadoEntrega='entregado';
       const _int=(d.entregaInfo&&Array.isArray(d.entregaInfo.intentos))?d.entregaInfo.intentos:null;
+      const _parcPrev=(typeof _parcialesDe==='function')?_parcialesDe(d):[];
       d.entregaInfo={fecha,modo:'masivo',piloto:currentUser,nota:'Marcado entregado en masa'};
       if(_int&&_int.length)d.entregaInfo.intentos=_int;
+      if(typeof _parcialesDe==='function'&&_parcPrev.length)d.entregaInfo.parciales=_parcPrev;
       logAudit('Entrega marcada (masiva)',(d.serie?d.serie+'-'+d.numeroDte:refPed(d))+' · '+(d.clienteComercial||d.clienteNombre));
       if(typeof guardarDocumento==='function')guardarDocumento(d);
     });
@@ -1693,11 +1695,12 @@ function renderDespachos(){
     const gAll=_grupos[k], g=gAll.filter(x=>!x._parada), nPar=gAll.length-g.length, tot=g.reduce((s,x)=>s+(x.totales?.total||0),0);
     const enR=g.filter(x=>estadoEntrega(x)==='ruta').length, entr=g.filter(x=>estadoEntrega(x)==='entregado').length;
     const noE=g.filter(x=>estadoEntrega(x)!=='entregado'&&x.entregaInfo&&x.entregaInfo.noEntregado).length;
+    const parc=g.filter(x=>typeof tieneParcial==='function'&&tieneParcial(x)).length;
     const sinA=d.pilotoId==null;
     return `<tr class="desp-grupo" data-grupo-key="pil:${k}"><td colspan="9" style="background:${sinA?'#fdf3d8':'var(--surface-2,#f4f7ef)'};padding:9px 14px;border-top:2px solid var(--line-strong)">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <span style="font-weight:800;font-size:13.5px">${sinA?'⏳ Sin asignar':'🚚 '+escHtml(_nomPil(d.pilotoId))}</span>
-        <span style="font-size:12px;color:var(--muted)">${g.length} entrega${g.length!==1?'s':''}${nPar?' + '+nPar+' parada'+(nPar!==1?'s':''):''} · ${money(tot)}${enR?' · '+enR+' en ruta':''}${entr?' · '+entr+' entregada'+(entr!==1?'s':''):''}${noE?` · <b style="color:var(--danger)">${noE} no se pudo entregar</b>`:''}</span>
+        <span style="font-size:12px;color:var(--muted)">${g.length} entrega${g.length!==1?'s':''}${nPar?' + '+nPar+' parada'+(nPar!==1?'s':''):''} · ${money(tot)}${enR?' · '+enR+' en ruta':''}${entr?' · '+entr+' entregada'+(entr!==1?'s':''):''}${noE?` · <b style="color:var(--danger)">${noE} no se pudo entregar</b>`:''}${parc?` · <b style="color:#a35a00">${parc} con entrega parcial</b>`:''}</span>
         ${canAsignarPiloto()?`<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
           ${!sinA?`<button class="btn btn-primary btn-sm" onclick="openOrdenRuta(${d.pilotoId})" title="Poner el orden de visita de este piloto (subir/bajar)">↕ Ordenar ruta</button>
           <button class="btn btn-ghost btn-sm" onclick="ordenarCercaniaDespachos(${d.pilotoId})" title="Numerar automáticamente de la más cercana a la más lejana (solo clientes con ubicación en el mapa)">🧭 Por cercanía</button>`:''}
@@ -1734,7 +1737,7 @@ function renderDespachos(){
       <td style="text-align:center">${chk}</td>
       <td class="num" style="font-weight:700;color:var(--green)">${d.ordenRuta!=null?'#'+d.ordenRuta:'—'}</td>
       <td style="font-weight:600">${docNum(d)}<div style="font-size:10.5px;color:var(--muted)">${tipoCorto[d.tipoDoc]}</div>${empTag(d.empresa)}</td>
-      <td>${d.clienteComercial||d.clienteNombre}${(()=>{const b=_horaBadge(d,_riskDesp),e=_etaBadge(d);return (b||e)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${b}${e}</div>`:'';})()}${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}</td>
+      <td>${d.clienteComercial||d.clienteNombre}${(()=>{const b=_horaBadge(d,_riskDesp),e=_etaBadge(d);return (b||e)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${b}${e}</div>`:'';})()}${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}${typeof parcialTxt==='function'?parcialTxt(d):''}</td>
       <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${dirEntrega(d)}</td>
       <td class="num" style="font-weight:600">${money(d.totales.total)}</td>
       <td>${piloto?piloto.nombre:'<span style="color:var(--muted-2)">—</span>'}</td>
@@ -2075,7 +2078,10 @@ function renderMisEntregas(){
       const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];
       const cli=clientes.find(c=>c.id===d.clienteId);
       const tel=cli?.contactoCompras?.telefono||cli?.contactoPagos?.telefono||'';
-      const items=d.items.map(it=>`${it.cantidad}× ${it.nombre}`).join(', ');
+      // Si ya hubo entregas parciales, solo lo que FALTA entregar.
+      const items=(typeof _parcialesDe==='function'&&_parcialesDe(d).length&&est!=='entregado')
+        ? 'Faltan: '+_faltanTxt(d)
+        : d.items.map(it=>`${it.cantidad}× ${it.nombre}`).join(', ');
       let btn='';
       if(est==='asignado'){const _dn=_prepPacked(d),_tt=_prepTotal(d);btn=`<button class="btn btn-primary btn-sm" onclick="abrirPreparacion(${d.id})">📦 Preparar${_tt?` (${_dn}/${_tt})`:''}</button>`;}
       else if(est==='preparado')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEnRuta(${d.id})">📦 Cargado, voy en ruta</button>`;
@@ -2091,6 +2097,7 @@ function renderMisEntregas(){
         <div class="ent-meta"><span class="badge ${ec}">${en}</span><span>${docNum(d)} · ${tipoCorto[d.tipoDoc]} · <b>${money(d.totales.total)}</b></span></div>
         <div class="ent-dir">📍 ${escHtml(dirEntrega(d))}</div>
         ${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}
+        ${typeof parcialTxt==='function'?parcialTxt(d):''}
         ${(()=>{const b=_horaBadge(d,_riskPil),e=_etaBadge(d);return (b||e)?`<div class="ent-linea">${b}${e}</div>`:'';})()}
         ${tel?`<div class="ent-linea"><a href="tel:${tel}" style="color:var(--blue);text-decoration:none;font-size:13px">☎ ${tel}</a></div>`:''}
         <div class="ent-items">${escHtml(items)}</div>

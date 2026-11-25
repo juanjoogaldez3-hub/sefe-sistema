@@ -83,7 +83,9 @@ function regresarEntrega(id){
     ? 'Vas a regresar '+ref+' a "Asignado". OJO: esto NO borra cobros o abonos que se hayan registrado en la entrega — revisalos aparte si corresponde.'
     : 'Vas a regresar '+ref+' a "Asignado" y se borra el avance de preparación.';
   confirmar('Regresar entrega',aviso,'Regresar',()=>{
-    d.estadoEntrega='asignado'; d.preparacion=null; d.entregaInfo=null; d._evid=undefined; // la próxima entrega reemplaza firma/foto
+    // Las entregas PARCIALES ya hechas (mercadería que el cliente sí recibió) se conservan.
+    const _parcAnt=_parcialesDe(d);
+    d.estadoEntrega='asignado'; d.preparacion=null; d.entregaInfo=_parcAnt.length?{parciales:_parcAnt}:null; d._evid=undefined; // la próxima entrega reemplaza firma/foto
     if(typeof guardarDocumento==='function')guardarDocumento(d);
     logAudit('Entrega regresada a Asignado',ref+' · '+(d.clienteComercial||d.clienteNombre));
     if(typeof renderDespachos==='function')renderDespachos();
@@ -251,13 +253,43 @@ function escanearBarrasProducto(){
 }
 window.escanearBarrasProducto=escanearBarrasProducto;
 
+// ================= ENTREGA PARCIAL =================
+// Cuando se entrega solo una parte, cada entrega parcial queda en
+// entregaInfo.parciales = [{fecha,piloto,recibe,firma,lineas:{idx:cant},…}].
+// Lo pendiente de cada línea = cantidad − lo ya entregado en parciales.
+function _parcialesDe(d){ return (d&&d.entregaInfo&&Array.isArray(d.entregaInfo.parciales))?d.entregaInfo.parciales:[]; }
+function _entregadoLinea(d,idx){ return _parcialesDe(d).reduce((s,p)=>s+(Number(p.lineas&&p.lineas[idx])||0),0); }
+function _pendLinea(d,idx){ const it=(d.items||[])[idx]; const c=Number(it&&it.cantidad)||0; return Math.max(0,Math.round((c-_entregadoLinea(d,idx))*1000)/1000); }
+function tieneParcial(d){ return _parcialesDe(d).length>0&&estadoEntrega(d)!=='entregado'; }
+// Valor (con descuento prorrateado) de q unidades de la línea idx.
+function _valorLinea(d,idx,q){ const it=(d.items||[])[idx]; if(!it)return 0; const c=Number(it.cantidad)||0; if(!c)return 0; const tot=c*(Number(it.precio)||0)-(Number(it.descuento)||0); return tot*q/c; }
+// Texto "faltan …" de lo pendiente.
+function _faltanTxt(d){ return (d.items||[]).map((it,i)=>{const p=_pendLinea(d,i);return p>0?p+'× '+it.nombre:'';}).filter(Boolean).join(', '); }
+// Avisos naranjas para Despachos / Mis entregas.
+function parcialTxt(d){
+  let h='';
+  if(tieneParcial(d)){
+    const ps=_parcialesDe(d), ult=ps[ps.length-1];
+    h+=`<div style="margin-top:3px;font-size:11.5px;font-weight:600;color:#a35a00">◐ Entrega parcial (${ps.length}) · faltan: ${escHtml(_faltanTxt(d)||'—')}<span style="font-weight:400;color:var(--muted)"> · última: ${escHtml(typeof fdatehora==='function'?fdatehora(ult.fecha):ult.fecha)}${ult.recibe?' · recibió '+escHtml(ult.recibe):''}</span></div>`;
+  }
+  if(_prepDe(d).parcial&&['preparado','ruta'].includes(estadoEntrega(d))){
+    const lleva=(d.items||[]).map((it,i)=>{const q=_prepCant(d,i),m=_prepMetaD(d,i);return m>0?q+' de '+m+'× '+it.nombre:'';}).filter(Boolean).join(', ');
+    h+=`<div style="margin-top:3px;font-size:11.5px;font-weight:600;color:#a35a00">📦 Lleva solo una parte: ${escHtml(lleva)}</div>`;
+  }
+  return h;
+}
+if(typeof window!=='undefined'){ Object.assign(window,{_parcialesDe,_entregadoLinea,_pendLinea,tieneParcial,_valorLinea,_faltanTxt,parcialTxt}); }
+
 // ================= PREPARACIÓN DE ENTREGA (checklist del piloto) =================
-function _prepDe(d){ const p=(d.preparacion&&typeof d.preparacion==='object')?d.preparacion:{}; return {packed:(p.packed&&typeof p.packed==='object')?p.packed:{},por:p.por,fecha:p.fecha}; }
+function _prepDe(d){ const p=(d.preparacion&&typeof d.preparacion==='object')?d.preparacion:{}; return {packed:(p.packed&&typeof p.packed==='object')?p.packed:{},por:p.por,fecha:p.fecha,parcial:p.parcial===true}; }
 // Cuántas unidades hay que empacar en esa línea (cantidad entera; si es rara, 1).
 function _prepMeta(it){ const c=Number(it&&it.cantidad); return (isFinite(c)&&c>=1)?Math.max(1,Math.round(c)):1; }
 // Cuántas unidades lleva empacadas la línea idx (true viejo = completa).
-function _prepCant(d,idx){ const v=_prepDe(d).packed[idx]; const meta=_prepMeta((d.items||[])[idx]); if(v===true)return meta; const n=Number(v)||0; return Math.max(0,Math.min(n,meta)); }
-function _prepLineaLista(d,idx){ return _prepCant(d,idx)>=_prepMeta((d.items||[])[idx]); }
+// Meta de la línea para ESTA preparación: si ya hubo entregas parciales, solo
+// lo que falta (0 = esa línea ya se entregó completa).
+function _prepMetaD(d,idx){ if(!_parcialesDe(d).length)return _prepMeta((d.items||[])[idx]); const p=_pendLinea(d,idx); return p>0?Math.max(1,Math.round(p)):0; }
+function _prepCant(d,idx){ const v=_prepDe(d).packed[idx]; const meta=_prepMetaD(d,idx); if(v===true)return meta; const n=Number(v)||0; return Math.max(0,Math.min(n,meta)); }
+function _prepLineaLista(d,idx){ return _prepCant(d,idx)>=_prepMetaD(d,idx); }
 function _prepPacked(d){ return (d.items||[]).reduce((n,_,i)=>n+(_prepLineaLista(d,i)?1:0),0); } // líneas completas
 function _prepTotal(d){ return (d.items||[]).length; }
 function _prepCompleta(d){ const t=_prepTotal(d); if(t<=0)return false; for(let i=0;i<t;i++)if(!_prepLineaLista(d,i))return false; return true; }
@@ -267,7 +299,7 @@ function _prepGuardar(d){
       d.estadoEntrega='preparado';
       const pr=_prepDe(d); pr.por=currentUser; pr.fecha=new Date().toISOString(); d.preparacion=pr;
     }
-  }else if(estadoEntrega(d)==='preparado'){ d.estadoEntrega='asignado'; }
+  }else if(estadoEntrega(d)==='preparado'&&!_prepDe(d).parcial){ d.estadoEntrega='asignado'; }
   if(typeof guardarDocumento==='function')guardarDocumento(d);
 }
 let _prepModalId=null;
@@ -276,11 +308,12 @@ function _prepModalHTML(d){
   const rows=(d.items||[]).map((it,i)=>{
     const prod=productos.find(p=>p.codigo&&it.codigo&&String(p.codigo)===String(it.codigo));
     const sinBarras=!(prod&&prod.codigoBarras);
-    const meta=_prepMeta(it), cant=_prepCant(d,i), lista=cant>=meta;
+    const meta=_prepMetaD(d,i), cant=_prepCant(d,i), lista=cant>=meta;
+    if(meta===0)return `<div style="padding:9px 12px;border:1.5px dashed var(--line);border-radius:10px;margin-bottom:8px;font-size:12.5px;color:var(--muted)">✓ ${it.cantidad}× ${it.nombre} — ya entregado antes</div>`;
     const contador=meta>1?`<span style="flex:none;font-weight:700;font-size:13px;padding:3px 10px;border-radius:20px;background:${lista?'#DCF0DC':'#FDECEA'};color:${lista?'#137333':'#B3261E'}">${cant}/${meta}</span>`:'';
     return `<label style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:8px;${lista?'background:#EEF9EE;border-color:#BFE0BF':''}">
       <input type="checkbox" ${lista?'checked':''} onchange="prepTogglear(${d.id},${i},this.checked)" style="width:20px;height:20px;flex:none">
-      <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${it.cantidad}× ${it.nombre}</div><div style="font-size:11px;color:var(--muted)">${it.codigo||''}${sinBarras?' · <span style="color:var(--warn)">sin barras (marcá a mano)</span>':''}</div></div>
+      <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${meta<_prepMeta(it)?meta+'× '+it.nombre+' <span style="font-weight:400;color:#a35a00">(faltan '+meta+' de '+it.cantidad+')</span>':it.cantidad+'× '+it.nombre}</div><div style="font-size:11px;color:var(--muted)">${it.codigo||''}${sinBarras?' · <span style="color:var(--warn)">sin barras (marcá a mano)</span>':''}</div></div>
       ${contador}
     </label>`;
   }).join('');
@@ -289,6 +322,9 @@ function _prepModalHTML(d){
       <span style="font-size:13px;color:var(--muted)"><b style="color:var(--ink)">${done}</b> / ${tot} listos</span>
     </div>
     ${rows||'<div class="empty">Esta entrega no tiene productos.</div>'}
+    ${(done<tot&&(d.items||[]).some((_,i)=>_prepCant(d,i)>0))?`<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line-strong)">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">¿No está todo en bodega? Podés llevar lo que ya marcaste; lo que falte se manda después.</div>
+      <button class="btn btn-ghost btn-sm" style="color:#a35a00;border-color:#f0d29a" onclick="prepLlevarParcial(${d.id})">📦 Llevar solo lo marcado (entrega parcial)</button></div>`:''}
     ${(done>=tot&&tot>0)?'<div class="note n-ok" style="margin-top:6px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg><span>Todo preparado. Ya podés cargar y salir en ruta.</span></div>':''}`;
 }
 function _renderPrepModal(d){ if(_prepModalId!==d.id)return; const body=document.getElementById('m-body'); if(body)body.innerHTML=_prepModalHTML(d); }
@@ -299,10 +335,28 @@ function abrirPreparacion(id){
   $('#m-save').textContent='Listo';
 }
 window.abrirPreparacion=abrirPreparacion;
+// Preparación incompleta: el repartidor lleva solo lo que marcó. Queda
+// "Preparado" con la bandera parcial; al entregar, la ventana arranca en
+// "Solo una parte" con esas cantidades.
+function prepLlevarParcial(id){
+  const d=documentos.find(x=>x.id===id); if(!d)return;
+  const lleva=(d.items||[]).map((it,i)=>{const q=_prepCant(d,i);return q>0?q+'× '+it.nombre:'';}).filter(Boolean);
+  if(!lleva.length){toast('No marcaste nada','Marcá lo que vas a llevar',true);return;}
+  confirmar('Llevar solo una parte','Vas a llevar: <b>'+escHtml(lleva.join(', '))+'</b>.<br>Lo que falte (<b>'+escHtml((d.items||[]).map((it,i)=>{const f=_prepMetaD(d,i)-_prepCant(d,i);return f>0?f+'× '+it.nombre:'';}).filter(Boolean).join(', '))+'</b>) queda pendiente y regresa a Despachos cuando entregues.','Llevar esto',()=>{
+    const pr=_prepDe(d); pr.parcial=true; pr.por=currentUser; pr.fecha=new Date().toISOString(); d.preparacion=pr;
+    d.estadoEntrega='preparado';
+    const ref=d.serie?d.serie+'-'+d.numeroDte:(typeof refPed==='function'?refPed(d):'PED-'+padn(d.numero));
+    logAudit('Preparación parcial',ref+' · lleva: '+lleva.join(', '));
+    _prepModalId=null; renderMisEntregas();
+    toast('📦 Listo para llevar','Lleva solo una parte; al entregar se registra como parcial.');
+    if(typeof guardarDocumento==='function')guardarDocumento(d);
+  });
+}
+window.prepLlevarParcial=prepLlevarParcial;
 function prepTogglear(id,idx,checked){
   const d=documentos.find(x=>x.id===id); if(!d)return;
   // El tildado manual completa (o vacía) toda la línea de un toque.
-  const pr=_prepDe(d); pr.packed[idx]=checked?_prepMeta((d.items||[])[idx]):0; d.preparacion=pr;
+  const pr=_prepDe(d); pr.packed[idx]=checked?_prepMetaD(d,idx):0; d.preparacion=pr;
   _prepGuardar(d);
   _renderPrepModal(d);
 }
@@ -316,7 +370,7 @@ function prepEscanear(id){
     if(prod)idx=(d.items||[]).findIndex(it=>String(it.codigo)===String(prod.codigo));
     if(idx<0)idx=(d.items||[]).findIndex(it=>String(it.codigo)===code); // por si el código escaneado es el código interno
     if(idx<0){ _scanFeedback('✗ No va en esta entrega','warn'); return; }
-    const nom=d.items[idx].nombre, meta=_prepMeta(d.items[idx]), cant=_prepCant(d,idx);
+    const nom=d.items[idx].nombre, meta=_prepMetaD(d,idx), cant=_prepCant(d,idx);
     if(cant>=meta){ _scanFeedback('⚠ ¡DE MÁS! '+nom+' ya estaba completo ('+meta+'/'+meta+')','alerta'); }
     else {
       const nuevo=cant+1; const pr=_prepDe(d); pr.packed[idx]=nuevo; d.preparacion=pr; _prepGuardar(d);
@@ -373,8 +427,10 @@ function confirmarNoEntregado(id){
   if(!_noEntMotivo){err.style.display='flex';errTxt.textContent='Elegí qué pasó';return;}
   if(_noEntMotivo==='Otro'&&!com){err.style.display='flex';errTxt.textContent='Contá qué pasó en el comentario';return;}
   const intento={fecha:new Date().toISOString(),piloto:currentUser,motivo:_noEntMotivo,comentario:com};
+  const _eiAnt=d.entregaInfo||{};
   const prev=(d.entregaInfo&&Array.isArray(d.entregaInfo.intentos))?d.entregaInfo.intentos:[];
   d.entregaInfo={intentos:prev.concat([intento]),noEntregado:intento};
+  if(Array.isArray(_eiAnt.parciales)&&_eiAnt.parciales.length)d.entregaInfo.parciales=_eiAnt.parciales;
   d.estadoEntrega='preparado'; d.etaEntrega=null;
   const ref=d.serie?d.serie+'-'+d.numeroDte:(typeof refPed==='function'?refPed(d):'PED-'+padn(d.numero));
   logAudit('No se pudo entregar',ref+' · '+(d.clienteComercial||d.clienteNombre||'')+' · '+_noEntMotivo+(com?' · '+com:''));
@@ -405,6 +461,22 @@ function marcarEntregado(id){
     <p style="font-size:12.5px;color:var(--muted);margin-bottom:6px">${d.clienteComercial||d.clienteNombre}</p>
     ${_esPrest?`<p style="font-size:13px;margin-bottom:14px">Nota de préstamo · equipo propiedad de la empresa. <b>No se cobra.</b> El cliente firma de recibido.</p>`:
     `<p style="font-size:13px;margin-bottom:14px">Total: <b>${money(d.totales.total)}</b>${saldo<d.totales.total?` · Saldo pendiente: <b>${money(saldo)}</b>`:''}</p>`}
+    ${(!_esPrest&&(d.items||[]).length)?`<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px dashed var(--line-strong)">
+      ${_parcialesDe(d).length?`<div class="note" style="margin:0 0 10px;background:#fff4e0;border-color:#f0d29a;color:#7a4a07"><span>Ya hubo ${_parcialesDe(d).length} entrega(s) parcial(es). Faltan: <b>${escHtml(_faltanTxt(d))}</b></span></div>`:''}
+      <label>¿Se entregó todo?</label>
+      <div class="pay-opt" id="ent-todo-opt">
+        <div class="pay-btn on" data-v="todo" onclick="_entTodo('todo')"><span class="pi">✅</span>Sí, todo</div>
+        <div class="pay-btn" data-v="parcial" onclick="_entTodo('parcial')"><span class="pi">◐</span>Solo una parte</div>
+      </div>
+      <div id="ent-parcial-det" style="display:none">
+        <div style="font-size:12px;color:var(--muted);margin:4px 0 8px">Poné cuánto entregás AHORA de cada producto. Lo que falte regresa a Despachos para mandarlo después.</div>
+        ${(d.items||[]).map((it,i)=>{const pe=_pendLinea(d,i);if(pe<=0)return '';const pre=_prepDe(d).parcial?Math.min(pe,_prepCant(d,i)):pe;return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
+          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${escHtml(it.nombre||'')}</div><div style="font-size:11px;color:var(--muted)">pendiente: ${pe}</div></div>
+          <input type="number" class="ent-pq" data-i="${i}" data-max="${pe}" min="0" max="${pe}" step="1" value="${pre}" oninput="_entParcialResumen(${d.id})" style="width:78px;text-align:center">
+        </div>`;}).join('')}
+        <div id="ent-parcial-res" style="font-size:12.5px;margin-top:8px"></div>
+      </div>
+    </div>`:''}
     <div style="${_esPrest?'display:none':''}">
     <label>¿Cómo se resolvió el pago?</label>
     <div class="pay-opt" id="pay-opt">
@@ -428,10 +500,43 @@ function marcarEntregado(id){
     <div class="row"><div><label>Observación <span style="font-weight:400;color:var(--muted-2)">(opcional)</span></label><input id="ent-obs" placeholder="Ej. dejado en recepción"></div></div>
     <div class="note n-danger" id="ent-err" style="display:none;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>`,
     ()=>confirmarEntrega(id));
-  _fotoEntrega=null;
+  _fotoEntrega=null; _entModo='todo';
   if(_esPrest)_entregaPago='prestamo'; else selPago('efectivo',saldo);
+  // Si se cargó solo una parte, la ventana arranca en "Solo una parte".
+  if(!_esPrest&&_prepDe(d).parcial)_entTodo('parcial');
   setTimeout(initFirma,50);
 }
+// ---- Entrega parcial dentro de la ventana de entrega ----
+let _entModo='todo';
+function _entTodo(v){
+  _entModo=v;
+  document.querySelectorAll('#ent-todo-opt .pay-btn').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  const det=document.getElementById('ent-parcial-det'); if(det)det.style.display=v==='parcial'?'':'none';
+  // La foto queda para la entrega final (la parcial guarda firma y cantidades).
+  const fz=document.getElementById('ent-foto-zone'); if(fz)fz.style.display=v==='parcial'?'none':'';
+  if(v==='parcial')_entParcialResumen(_curEntregaId);
+}
+window._entTodo=_entTodo;
+// Lee las cantidades de la entrega parcial: {lineas, valor, algo, completa, malo}.
+function _entParcialLeer(d){
+  const lineas={}; let valor=0, algo=false, completa=true, malo=false;
+  document.querySelectorAll('#ent-parcial-det .ent-pq').forEach(inp=>{
+    const i=Number(inp.dataset.i), max=Number(inp.dataset.max);
+    let q=Number(inp.value); if(!isFinite(q)||q<0){q=0;malo=true;} if(q>max){q=max;malo=true;}
+    if(q>0){lineas[i]=q;algo=true;valor+=_valorLinea(d,i,q);}
+    if(q<max)completa=false;
+  });
+  return {lineas,valor,algo,completa,malo};
+}
+function _entParcialResumen(id){
+  const d=documentos.find(x=>x.id===id); const box=document.getElementById('ent-parcial-res'); if(!d||!box)return;
+  const r=_entParcialLeer(d);
+  box.innerHTML=r.malo?'<span style="color:var(--danger)">Revisá las cantidades: no pueden ser más que lo pendiente.</span>'
+    :!r.algo?'<span style="color:var(--danger)">Poné al menos un producto entregado.</span>'
+    :r.completa?'<span style="color:var(--muted)">Así se entrega todo lo pendiente (no queda nada para después).</span>'
+    :`Valor de lo que entregás ahora: <b>${money(r.valor)}</b> <span style="color:var(--muted)">(referencia para el cobro)</span>`;
+}
+window._entParcialResumen=_entParcialResumen;
 // ── Foto de la entrega: se achica en el celular antes de guardarla ──
 // (una foto de teléfono pesa 3-5 MB; achicada a 1280 px en JPG queda en
 // ~150 KB, suficiente para ver la mercadería o el sello).
@@ -541,6 +646,14 @@ async function confirmarEntrega(id){
   const recibe=$('#ent-recibe')?.value.trim();
   if(!recibe){err.style.display='flex';errTxt.textContent='Indicá quién recibió';return;}
   entregaInfo.recibe=recibe;
+  // ¿Entrega parcial? Validar antes de registrar nada (cobro, firma).
+  let _parc=null;
+  if(_entModo==='parcial'&&d.tipoDoc!=='prestamo'){
+    const r=_entParcialLeer(d);
+    if(r.malo){err.style.display='flex';errTxt.textContent='Revisá las cantidades: no pueden ser más que lo pendiente';return;}
+    if(!r.algo){err.style.display='flex';errTxt.textContent='Poné al menos un producto entregado';return;}
+    if(!r.completa)_parc=r; // si entrega todo lo pendiente, es la entrega final normal
+  }
 
   if(tipo==='efectivo'||tipo==='cheque'){
     const monto=Number($('#ent-monto').value);
@@ -565,6 +678,23 @@ async function confirmarEntrega(id){
     if(!contra){err.style.display='flex';errTxt.textContent='Ingresá el número de contraseña';return;}
     entregaInfo.contrasena=contra;entregaInfo.fechaPromesa=$('#ent-fechaprom').value||null;
   }
+  // ── Entrega PARCIAL: queda registrada (con su firma) y lo pendiente vuelve
+  // a Despachos como "Sin asignar" para mandarlo después.
+  if(_parc){
+    const firmaP=_firmaCanvas.toDataURL('image/png');
+    const prevEI=d.entregaInfo||{};
+    const rec=Object.assign({},entregaInfo,{firma:firmaP,lineas:_parc.lineas,valor:Math.round(_parc.valor*100)/100});
+    d.entregaInfo={intentos:prevEI.intentos,parciales:_parcialesDe(d).concat([rec])};
+    d.estadoEntrega='sin'; d.pilotoId=null; d.ordenRuta=null; d.etaEntrega=null; d.preparacion=null;
+    if(_cobroNuevo)cobrosRuta.push(_cobroNuevo);
+    const det=Object.entries(_parc.lineas).map(([i,q])=>q+'× '+((d.items[i]||{}).nombre||'')).join(', ');
+    logAudit('Entrega parcial',docNum+' · '+(d.clienteComercial||d.clienteNombre)+' · entregó: '+det+' · faltan: '+_faltanTxt(d)+' · recibió '+recibe);
+    closeMod();renderMisEntregas();
+    toast('◐ Entrega parcial registrada','Lo pendiente regresó a Despachos para mandarlo después.');
+    if(typeof guardarDocumento==='function')guardarDocumento(d);
+    if(_cobroNuevo&&typeof guardarCobroRuta==='function')guardarCobroRuta(_cobroNuevo);
+    return;
+  }
   // Firma y foto van a la tabla aparte (no se bajan en cada login). Si esa
   // tabla todavía no existe o falla, la firma se guarda como antes dentro de
   // la entrega para no perderla (la foto, que pesa, no).
@@ -579,6 +709,12 @@ async function confirmarEntrega(id){
   if(_cobroNuevo)cobrosRuta.push(_cobroNuevo);
   // Conservar el historial de intentos fallidos (si los hubo).
   if(d.entregaInfo&&Array.isArray(d.entregaInfo.intentos)&&d.entregaInfo.intentos.length)entregaInfo.intentos=d.entregaInfo.intentos;
+  // …y de las entregas parciales anteriores.
+  if(_parcialesDe(d).length){
+    entregaInfo.parciales=_parcialesDe(d);
+    // Lo que se entregó en ESTA entrega final (lo que faltaba).
+    const fin={}; (d.items||[]).forEach((_,i)=>{const q=_pendLinea(d,i);if(q>0)fin[i]=q;}); entregaInfo.lineas=fin;
+  }
   d.estadoEntrega='entregado';
   d.entregaInfo=entregaInfo;
   const resumenPago={efectivo:'Efectivo '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),cheque:'Cheque '+money(entregaInfo.monto||0)+' · Recibo '+(entregaInfo.noRecibo||''),contrasena:'Contraseña '+entregaInfo.contrasena,credito:'A crédito',prestamo:'Instalación (equipo en préstamo)'}[tipo]+' · recibió '+recibe;

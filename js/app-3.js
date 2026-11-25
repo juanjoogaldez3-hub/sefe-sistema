@@ -518,7 +518,7 @@ async function verDoc(id){
         <span style="font-size:12px;color:var(--muted)">${esAnulada&&f.pdfAnulacionBase64?'Documento de anulación certificado por EcoFactura ante SAT':'Documento oficial certificado por EcoFactura ante SAT'} · Aut.: ${f.autorizacion}</span>
         <span style="display:flex;gap:8px;flex-wrap:wrap">${_firm?`<button class="btn btn-ghost btn-sm" onclick="descargarFacturaPDF(${f.id},true)">⬇ Sin firma</button>`:''}<button class="btn btn-primary btn-sm" onclick="descargarFacturaPDF(${f.id})">⬇ Descargar PDF${_firm?' firmado':''}</button></span>
       </div>
-      ${(f.entregaInfo&&(f.estadoEntrega==='entregado'||(f.entregaInfo.intentos&&f.entregaInfo.intentos.length)))?`<div style="background:#fff;border-radius:10px;padding:20px 24px;margin-top:14px;color:#1a1a17">${reciboEntregaHTML(f)}</div>`:''}`;
+      ${(f.entregaInfo&&(f.estadoEntrega==='entregado'||(f.entregaInfo.intentos&&f.entregaInfo.intentos.length)||(f.entregaInfo.parciales&&f.entregaInfo.parciales.length)))?`<div style="background:#fff;border-radius:10px;padding:20px 24px;margin-top:14px;color:#1a1a17">${reciboEntregaHTML(f)}</div>`:''}`;
     // Guardar referencia para imprimir/descargar
     window._pdfActual=pdfUrl;
     window._pdfNombre=nombreArch;
@@ -841,10 +841,19 @@ function _intentosEntregaHTML(ei){
   if(!its.length)return '';
   return `<div style="margin-top:12px;font-size:11.5px;color:var(--muted)"><div style="font-weight:700;color:var(--danger);margin-bottom:4px">Intentos sin entregar (${its.length})</div>${its.map(x=>`<div>✕ ${fdatehora(x.fecha)} · ${escHtml(x.piloto||'—')} · <b style="color:var(--ink)">${escHtml(x.motivo||'')}</b>${x.comentario?' — '+escHtml(x.comentario):''}</div>`).join('')}</div>`;
 }
+// Entregas parciales: qué se entregó en cada una, cuándo, quién recibió y su firma.
+function _parcialesHTML(f){
+  const ps=(f.entregaInfo&&Array.isArray(f.entregaInfo.parciales))?f.entregaInfo.parciales:[];
+  if(!ps.length)return '';
+  return `<div style="margin-top:12px;font-size:11.5px;color:var(--muted)"><div style="font-weight:700;color:#a35a00;margin-bottom:4px">Entregas parciales (${ps.length})</div>${ps.map((x,n)=>{
+    const det=Object.entries(x.lineas||{}).map(([i,q])=>q+'× '+escHtml(((f.items||[])[i]||{}).nombre||'')).join(', ');
+    return `<div style="display:flex;gap:12px;align-items:center;padding:6px 0;border-top:1px dashed var(--line)"><div style="flex:1">${n+1}. ${fdatehora(x.fecha)} · ${escHtml(x.piloto||'—')} · recibió <b style="color:var(--ink)">${escHtml(x.recibe||'—')}</b><div style="color:var(--ink)">${det}</div>${x.observacion?`<div>Obs.: ${escHtml(x.observacion)}</div>`:''}</div>${x.firma?`<img src="${x.firma}" style="max-width:110px;max-height:48px;border-bottom:1px solid var(--ink)">`:''}</div>`;}).join('')}
+    ${f.estadoEntrega!=='entregado'&&typeof _faltanTxt==='function'?`<div style="margin-top:4px;font-weight:600;color:#a35a00">Faltan: ${escHtml(_faltanTxt(f))}</div>`:''}</div>`;
+}
 function reciboEntregaHTML(f){
   const ei=f.entregaInfo;if(!ei)return '';
   // Todavía sin entregar (solo hubo intentos fallidos): mostrar solo eso.
-  if(f.estadoEntrega!=='entregado')return `<div style="font-size:10px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px">Entrega pendiente</div>${_intentosEntregaHTML(ei)}`;
+  if(f.estadoEntrega!=='entregado')return `<div style="font-size:10px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px">Entrega pendiente</div>${_parcialesHTML(f)}${_intentosEntregaHTML(ei)}`;
   // Firma/foto: de la tabla aparte (f._evid, traída al abrir) o, en entregas
   // viejas / si la tabla no estaba, guardada dentro de la entrega.
   const _ev=f._evid||{};
@@ -859,8 +868,10 @@ function reciboEntregaHTML(f){
         <div>Entregado: <b style="color:var(--ink)">${fechaEnt}</b></div>
         <div>Piloto: <b style="color:var(--ink)">${ei.piloto||'—'}</b></div>
         ${modoTxt?`<div>Pago: <b style="color:var(--ink)">${modoTxt}</b></div>`:''}
-        ${ei.recibe?`<div>Recibió: <b style="color:var(--ink)">${ei.recibe}</b></div>`:''}
+        ${ei.recibe?`<div>Recibió: <b style="color:var(--ink)">${escHtml(ei.recibe)}</b></div>`:''}
+        ${ei.lineas&&Object.keys(ei.lineas).length?`<div>En esta entrega: <b style="color:var(--ink)">${Object.entries(ei.lineas).map(([i,q])=>q+'× '+escHtml(((f.items||[])[i]||{}).nombre||'')).join(', ')}</b></div>`:''}
         ${ei.observacion?`<div>Obs.: ${escHtml(ei.observacion)}</div>`:''}
+        ${_parcialesHTML(f)}
         ${_intentosEntregaHTML(ei)}
       </div>
       ${firmaSrc?`<div style="text-align:center">
