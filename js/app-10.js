@@ -1324,9 +1324,9 @@ function openParadaRuta(pidPre){
   if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede agregar paradas',true);return;}
   openMod('➕ Agregar parada a la ruta',`
     <div class="row"><div style="flex:1"><label>Repartidor</label><select id="pr-piloto">${_optRepartidores(pidPre)}</select></div></div>
+    <div class="row"><div><label>Nombre <span style="color:var(--muted);font-weight:400">(escribí un cliente o proveedor, o un texto libre)</span></label><input id="pr-tit" autocomplete="off" placeholder="Ej. nombre del cliente o proveedor · Ir al banco · Cargar combustible"></div></div>
     <div class="row"><div><label>Motivo</label><select id="pr-motivo"><option value="">— Elegí el motivo —</option>${PARADA_MOTIVOS.map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div></div>
     <div class="row" id="pr-np-wrap" style="display:none"><div><label>Nota de préstamo <span style="color:var(--muted);font-weight:400">(opcional — el repartidor la firma al instalar)</span></label><select id="pr-np"></select></div></div>
-    <div class="row"><div><label>Nombre <span style="color:var(--muted);font-weight:400">(escribí un cliente o proveedor, o un texto libre)</span></label><input id="pr-tit" autocomplete="off" placeholder="Ej. nombre del cliente o proveedor · Ir al banco · Cargar combustible"></div></div>
     <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" placeholder="Dirección o nombre del lugar"></div></div>
     <div class="row"><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px"></div></div>
     <div class="row"><div><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-nota" placeholder="Detalle"></div></div>
