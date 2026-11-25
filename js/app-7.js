@@ -813,7 +813,9 @@ function openCambiarClave(id){
           body:JSON.stringify({authId:u.authId||null,email:u.correo,password:p1})
         });
         const data=await r.json().catch(()=>({}));
-        if(r.ok&&data.ok){ cerrarTodo(); toast('✓ Contraseña actualizada',u.nombre+' ya puede entrar con la nueva clave'); if(typeof logAudit==='function')logAudit('Cambio de contraseña','Usuario: '+u.nombre); }
+        if(r.ok&&data.ok){ cerrarTodo();
+          if(data.creado){ toast('✓ Acceso creado',u.nombre+' no tenía cuenta de acceso: se le creó y ya puede entrar con esta clave'); if(typeof logAudit==='function')logAudit('Acceso creado','Usuario: '+u.nombre+' · '+u.correo); }
+          else { toast('✓ Contraseña actualizada',u.nombre+' ya puede entrar con la nueva clave'); if(typeof logAudit==='function')logAudit('Cambio de contraseña','Usuario: '+u.nombre); } }
         else { setErr(data.error||'No se pudo cambiar la contraseña'); if(btn){btn.disabled=false;btn.textContent='Cambiar contraseña';} }
       }catch(e){ setErr('Error de conexión con el backend: '+(e.message||e)); if(btn){btn.disabled=false;btn.textContent='Cambiar contraseña';} }
     });
@@ -1057,7 +1059,7 @@ function openUsuario(id){const u=id?usuarios.find(x=>x.id===id):null;
       const nuevo={id:usrN++,...datos,activo:true,_nuevo:true};
       usuarios.push(nuevo);
       if(typeof guardarUsuario==='function')guardarUsuario(nuevo);
-      logAudit('Usuario creado',nom+' · Rol: '+ROLES[rol]?.label);toast('✓ Usuario agregado','Recordá crear su acceso en Supabase Auth');
+      logAudit('Usuario creado',nom+' · Rol: '+ROLES[rol]?.label);toast('✓ Usuario agregado','Para que pueda entrar, tocá «Clave» en su fila y asignale una contraseña (eso le crea su acceso)');
     }
     closeMod();renderUsuarios();renderUserGrid();});}
 window.openUsuario=openUsuario;
