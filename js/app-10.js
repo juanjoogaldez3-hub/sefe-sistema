@@ -2366,3 +2366,160 @@ function corteCajaHTML(entregas,pid,propia){
 }
 
 // El piloto agrega la boleta de depósito a un cobro (en su cierre, ya pasó por el banco)
+
+// =====================================================================
+//  EVIDENCIAS — todas las entregas y paradas con su prueba, en un lugar
+// =====================================================================
+// Junta, por fecha: entregas completas, entregas parciales, entregas que
+// no se pudieron hacer, paradas completadas y paradas que no se pudieron
+// hacer. Cada fila abre el detalle con firma y foto (se traen al abrir).
+let _evidFiltros=null, _evidLista=[];
+const _EVID_TIPOS={
+  entregado:['Entregada','b-ok'], parcial:['Entrega parcial','b-warn'], noentregado:['No se entregó','b-danger'],
+  parada:['Parada hecha','b-info'], paradano:['Parada no hecha','b-danger']
+};
+const _evidPago=ei=>({efectivo:'Efectivo '+money(ei.monto||0)+(ei.noRecibo?' · recibo '+ei.noRecibo:''),cheque:'Cheque '+(ei.cheque||'')+' '+money(ei.monto||0)+(ei.noRecibo?' · recibo '+ei.noRecibo:''),contrasena:'Contraseña '+(ei.contrasena||''),credito:'A crédito',prestamo:'Instalación (préstamo)'}[ei.modoPago]||(ei.modo==='masivo'?'Marcada entregada en bloque':''));
+function _evidFechaLocal(iso){ try{ return fechaLocalDe(iso); }catch(e){ return String(iso||'').slice(0,10); } }
+function _evidDefaults(){
+  const hoy=fechaHoyGT(); const d=new Date(hoy+'T12:00:00'); d.setDate(d.getDate()-6);
+  return {desde:d.toISOString().slice(0,10),hasta:hoy,piloto:'',tipo:'',q:''};
+}
+function _evidRegistros(){
+  const out=[];
+  const refDoc=d=>(d.serie&&d.numeroDte)?(d.serie+'-'+d.numeroDte):refPed(d);
+  (documentos||[]).forEach(d=>{
+    const ei=d.entregaInfo; if(!ei)return;
+    const base={kind:'doc',id:d.id,ref:refDoc(d),tipoDoc:({cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo',pedido:'Pedido'})[d.tipoDoc]||'Documento',cliente:d.clienteComercial||d.clienteNombre||'',empresa:d.empresa};
+    if(d.estadoEntrega==='entregado'&&ei.fecha){
+      out.push({...base,tipo:'entregado',fecha:ei.fecha,piloto:ei.piloto||'',quien:ei.recibe||'',detalle:[_evidPago(ei),ei.observacion?'Obs.: '+ei.observacion:''].filter(Boolean).join(' · '),
+        firma:!!(ei.evidencia||ei.firma),foto:!!ei.conFoto});
+    }
+    (Array.isArray(ei.parciales)?ei.parciales:[]).forEach((p,i)=>{
+      const det=Object.entries(p.lineas||{}).map(([k,q])=>q+'× '+(((d.items||[])[k]||{}).nombre||'')).join(', ');
+      out.push({...base,tipo:'parcial',idx:i,fecha:p.fecha,piloto:p.piloto||'',quien:p.recibe||'',detalle:['Entregó: '+det,_evidPago(p)].filter(Boolean).join(' · '),firma:!!p.firma,foto:false});
+    });
+    (Array.isArray(ei.intentos)?ei.intentos:[]).forEach((x,i)=>{
+      out.push({...base,tipo:'noentregado',idx:i,fecha:x.fecha,piloto:x.piloto||'',quien:'',detalle:x.motivo+(x.comentario?' — '+x.comentario:''),firma:false,foto:false});
+    });
+  });
+  (typeof paradasRuta!=='undefined'?paradasRuta:[]).forEach(p=>{
+    const hi=p.hechaInfo||{};
+    const nomPil=()=>{const pl=pilotos.find(q=>q.id===p.pilotoId);return (pl&&pl.nombre)||_nombreRepartidor(p.pilotoId)||'';};
+    const base={kind:'parada',id:p.id,ref:'Parada · '+(p.motivo||'Otro'),tipoDoc:'Parada',cliente:p.titulo||'',empresa:null};
+    if(p.hecha&&p.hechaFecha){
+      out.push({...base,tipo:'parada',fecha:p.hechaFecha,piloto:hi.piloto||nomPil(),quien:hi.atendio||'',detalle:hi.resultado||'(se cerró antes de que se pidiera evidencia)',firma:!!(hi.conFirma||hi.firma),foto:!!hi.conFoto});
+    }
+    (Array.isArray(hi.intentos)?hi.intentos:[]).forEach((x,i)=>{
+      out.push({...base,tipo:'paradano',idx:i,fecha:x.fecha,piloto:x.piloto||nomPil(),quien:'',detalle:x.motivo+(x.comentario?' — '+x.comentario:''),firma:false,foto:false});
+    });
+  });
+  return out.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+}
+function renderEvidencias(){
+  const box=document.getElementById('evid-body'); if(!box)return;
+  if(!_evidFiltros)_evidFiltros=_evidDefaults();
+  const f=_evidFiltros;
+  const todos=_evidRegistros();
+  const pilotosSet=[...new Set(todos.map(r=>r.piloto).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const qn=(typeof _normBusq==='function'?_normBusq(f.q):String(f.q||'').toLowerCase());
+  const lista=todos.filter(r=>{
+    const dia=_evidFechaLocal(r.fecha);
+    if(f.desde&&dia<f.desde)return false;
+    if(f.hasta&&dia>f.hasta)return false;
+    if(f.piloto&&r.piloto!==f.piloto)return false;
+    if(f.tipo==='entregas'&&r.kind!=='doc')return false;
+    if(f.tipo==='paradas'&&r.kind!=='parada')return false;
+    if(['entregado','parcial','noentregado','parada','paradano'].includes(f.tipo)&&r.tipo!==f.tipo)return false;
+    if(qn){const t=(typeof _normBusq==='function'?_normBusq:(x=>String(x).toLowerCase()))([r.ref,r.cliente,r.piloto,r.quien,r.detalle].join(' '));if(!t.includes(qn))return false;}
+    return true;
+  });
+  _evidLista=lista;
+  const cnt=t=>lista.filter(r=>r.tipo===t).length;
+  const k=[
+    {lbl:'Entregadas',val:cnt('entregado'),ic:'i-green'},
+    {lbl:'Parciales',val:cnt('parcial'),ic:'i-warn'},
+    {lbl:'No se entregó',val:cnt('noentregado'),ic:'i-warn'},
+    {lbl:'Paradas hechas',val:cnt('parada'),ic:'i-blue'},
+    {lbl:'Con firma',val:lista.filter(r=>r.firma).length,ic:'i-lime'},
+    {lbl:'Con foto',val:lista.filter(r=>r.foto).length,ic:'i-lime'},
+  ];
+  const opt=(v,l,sel)=>`<option value="${escHtml(v)}"${sel===v?' selected':''}>${escHtml(l)}</option>`;
+  box.innerHTML=`
+    <div class="panel"><div class="panel-body evid-filtros">
+      <div><label>Desde</label><input type="date" id="ev-desde" value="${f.desde}" onchange="_evidSet('desde',this.value)"></div>
+      <div><label>Hasta</label><input type="date" id="ev-hasta" value="${f.hasta}" onchange="_evidSet('hasta',this.value)"></div>
+      <div><label>Repartidor</label><select id="ev-piloto" onchange="_evidSet('piloto',this.value)">${opt('','Todos',f.piloto)}${pilotosSet.map(n=>opt(n,n,f.piloto)).join('')}</select></div>
+      <div><label>Mostrar</label><select id="ev-tipo" onchange="_evidSet('tipo',this.value)">${opt('','Todo',f.tipo)}${opt('entregas','Solo entregas',f.tipo)}${opt('paradas','Solo paradas',f.tipo)}${opt('entregado','Entregadas',f.tipo)}${opt('parcial','Entregas parciales',f.tipo)}${opt('noentregado','No se entregó',f.tipo)}${opt('parada','Paradas hechas',f.tipo)}${opt('paradano','Paradas no hechas',f.tipo)}</select></div>
+      <div class="evid-buscar"><label>Buscar</label><input id="ev-q" value="${escHtml(f.q)}" placeholder="Cliente, documento, quién recibió…" oninput="_evidBuscar(this.value)"></div>
+      <div class="evid-botones"><button class="btn btn-ghost btn-sm" onclick="_evidRango(0)">Hoy</button><button class="btn btn-ghost btn-sm" onclick="_evidRango(6)">7 días</button><button class="btn btn-ghost btn-sm" onclick="_evidRango(29)">30 días</button><button class="btn btn-primary btn-sm" onclick="exportarEvidencias()">Excel</button></div>
+    </div></div>
+    <div class="kpis evid-kpis" id="ev-kpis">${k.map(x=>`<div class="kpi"><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div></div>`).join('')}</div>
+    <div class="panel"><div class="panel-head"><h3>Registro de entregas y paradas</h3><span style="font-size:12px;color:var(--muted)">${lista.length} registro${lista.length!==1?'s':''}</span></div>
+    ${lista.length?`<div class="evid-cards">${lista.map((r,i)=>{const [tl,tc]=_EVID_TIPOS[r.tipo];return `<div class="ent-card" onclick="verEvidencia(${i})" style="cursor:pointer">
+        <div class="ent-meta" style="justify-content:space-between"><span class="badge ${tc}">${tl}</span><span>${escHtml(fdatehora(r.fecha))}</span></div>
+        <div class="ent-nombre">${escHtml(r.cliente)}${r.empresa&&typeof empTag==='function'?' '+empTag(r.empresa):''}</div>
+        <div class="ent-meta"><span>${escHtml(r.ref)}${r.kind==='doc'?' · '+escHtml(r.tipoDoc):''}</span></div>
+        <div class="ent-dir">🚚 ${escHtml(r.piloto||'—')}${r.quien?` · ${r.kind==='doc'?'recibió':'atendió'} <b>${escHtml(r.quien)}</b>`:''}</div>
+        ${r.detalle?`<div class="ent-items">${escHtml(r.detalle)}</div>`:''}
+        <div class="ent-meta" style="justify-content:space-between"><span>${r.firma?'✍️ Firma':''}${r.firma&&r.foto?' · ':''}${r.foto?'📷 Foto':''}${!r.firma&&!r.foto?'Sin firma ni foto':''}</span><span class="btn btn-ghost btn-sm">Ver</span></div>
+      </div>`;}).join('')}</div>
+    <table class="evid-tabla no-cards"><thead><tr><th>Fecha</th><th>Tipo</th><th>Cliente / documento</th><th>Repartidor · recibió</th><th>Detalle</th><th>Prueba</th><th></th></tr></thead><tbody>
+      ${lista.map((r,i)=>{const [tl,tc]=_EVID_TIPOS[r.tipo];return `<tr style="cursor:pointer" onclick="verEvidencia(${i})">
+        <td style="white-space:nowrap">${escHtml(fdatehora(r.fecha))}</td>
+        <td><span class="badge ${tc}">${tl}</span></td>
+        <td><div style="font-weight:600">${escHtml(r.cliente)}${r.empresa&&typeof empTag==='function'?' '+empTag(r.empresa):''}</div><div style="font-size:11.5px;color:var(--muted)">${escHtml(r.ref)}${r.kind==='doc'?' · '+escHtml(r.tipoDoc):''}</div></td>
+        <td><div>${escHtml(r.piloto||'—')}</div>${r.quien?`<div style="font-size:11.5px;color:var(--muted)">${r.kind==='doc'?'recibió':'atendió'}: <b style="color:var(--ink)">${escHtml(r.quien)}</b></div>`:''}</td>
+        <td class="evid-det">${escHtml(r.detalle||'')}</td>
+        <td style="white-space:nowrap">${r.firma?'<span title="Tiene firma">✍️ Firma</span>':''}${r.firma&&r.foto?' · ':''}${r.foto?'<span title="Tiene foto">📷 Foto</span>':''}${!r.firma&&!r.foto?'<span style="color:var(--muted-2)">—</span>':''}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();verEvidencia(${i})">Ver</button></td>
+      </tr>`;}).join('')}
+    </tbody></table>`:'<div class="empty">No hay entregas ni paradas en ese período con esos filtros.</div>'}</div>`;
+  if(typeof _tarjetasMovil==='function')_tarjetasMovil();
+}
+window.renderEvidencias=renderEvidencias;
+function _evidSet(k,v){ if(!_evidFiltros)_evidFiltros=_evidDefaults(); _evidFiltros[k]=v; renderEvidencias(); }
+let _evidT=null;
+function _evidBuscar(v){ if(!_evidFiltros)_evidFiltros=_evidDefaults(); _evidFiltros.q=v; clearTimeout(_evidT); _evidT=setTimeout(()=>{renderEvidencias();const i=document.getElementById('ev-q');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},250); }
+function _evidRango(dias){ if(!_evidFiltros)_evidFiltros=_evidDefaults(); const hoy=fechaHoyGT(); const d=new Date(hoy+'T12:00:00'); d.setDate(d.getDate()-dias); _evidFiltros.desde=d.toISOString().slice(0,10); _evidFiltros.hasta=hoy; renderEvidencias(); }
+Object.assign(window,{_evidSet,_evidBuscar,_evidRango});
+// Detalle de un registro, con su firma y foto.
+async function verEvidencia(i){
+  const r=_evidLista[i]; if(!r)return;
+  const [tl,tc]=_EVID_TIPOS[r.tipo];
+  const fila=(l,v)=>v?`<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)"><div style="flex:0 0 120px;color:var(--muted);font-size:12px">${l}</div><div style="flex:1;font-size:13px">${v}</div></div>`:'';
+  let cuerpo=`<div style="margin-bottom:10px"><span class="badge ${tc}">${tl}</span> <b>${escHtml(r.ref)}</b> · ${escHtml(r.cliente)}</div>`+
+    fila('Fecha',escHtml(fdatehora(r.fecha)))+fila('Repartidor',escHtml(r.piloto||'—'))+fila(r.kind==='doc'?'Recibió':'Atendió',escHtml(r.quien||''))+fila('Detalle',escHtml(r.detalle||''));
+  cuerpo+=`<div id="evd-media" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:14px"><span style="font-size:12px;color:var(--muted)">${(r.firma||r.foto)?'Cargando firma y foto…':''}</span></div>`;
+  if(r.kind==='doc')cuerpo+=`<div style="margin-top:14px"><button class="btn btn-ghost btn-sm" onclick="closeMod();verDoc(${r.id})">Abrir el documento completo</button></div>`;
+  openMod('Evidencia · '+tl,cuerpo,()=>closeMod());
+  const sv=document.getElementById('m-save'); if(sv)sv.textContent='Cerrar';
+  const media=document.getElementById('evd-media'); if(!media)return;
+  const img=(src,lbl,big)=>`<div style="text-align:center"><img src="${src}" style="${big?'max-width:280px;max-height:220px;border-radius:8px;border:1px solid var(--line)':'max-width:220px;max-height:90px;border-bottom:1.5px solid var(--ink)'}"><div style="font-size:10.5px;color:var(--muted-2);margin-top:3px">${lbl}</div></div>`;
+  let firma='',foto='',fotoBorrada=false;
+  if(r.kind==='doc'){
+    const d=documentos.find(x=>x.id===r.id); const ei=(d&&d.entregaInfo)||{};
+    if(r.tipo==='parcial'){ const p=(ei.parciales||[])[r.idx]||{}; firma=p.firma||''; }
+    else if(r.tipo==='entregado'){
+      const ev=(typeof traerEvidenciaEntrega==='function'&&d)?await traerEvidenciaEntrega(d):null;
+      firma=(ev&&ev.firma)||ei.firma||''; foto=(ev&&ev.foto)||''; fotoBorrada=!foto&&!!ei.conFoto;
+    }
+  }else if(r.tipo==='parada'){
+    const p=paradasRuta.find(x=>x.id===r.id);
+    const ev=(typeof traerEvidenciaParada==='function'&&p)?await traerEvidenciaParada(p):null;
+    firma=(ev&&ev.firma)||(p&&p.hechaInfo&&p.hechaInfo.firma)||''; foto=(ev&&ev.foto)||''; fotoBorrada=!foto&&!!(p&&p.hechaInfo&&p.hechaInfo.conFoto);
+  }
+  media.innerHTML=(firma?img(firma,'Firma',false):'')+(foto?img(foto,'Foto',true):'')+
+    (fotoBorrada?'<span style="font-size:11.5px;color:var(--muted-2);align-self:center">📷 Tuvo foto, pero ya se borró (se guardan 30 días).</span>':'')+
+    (!firma&&!foto&&!fotoBorrada?'<span style="font-size:12px;color:var(--muted-2)">Sin firma ni foto.</span>':'');
+}
+window.verEvidencia=verEvidencia;
+function exportarEvidencias(){
+  if(typeof XLSX==='undefined'){toast('No se pudo exportar','Falta la librería de Excel',true);return;}
+  if(!_evidLista.length){toast('Nada que exportar','No hay registros con esos filtros',false);return;}
+  const data=_evidLista.map(r=>({Fecha:fdatehora(r.fecha),Tipo:_EVID_TIPOS[r.tipo][0],Documento:r.ref,'Cliente / parada':r.cliente,Repartidor:r.piloto||'','Recibió / atendió':r.quien||'',Detalle:r.detalle||'',Firma:r.firma?'Sí':'No',Foto:r.foto?'Sí':'No'}));
+  const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Evidencias');
+  const f=_evidFiltros||{}; const fn='Evidencias_entregas_'+(f.desde||'')+'_a_'+(f.hasta||'')+'.xlsx';
+  if(typeof descargarXlsx==='function')descargarXlsx(XLSX,wb,fn); else XLSX.writeFile(wb,fn);
+  toast('✓ Excel descargado',fn);
+}
+window.exportarEvidencias=exportarEvidencias;

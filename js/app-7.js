@@ -847,6 +847,7 @@ const MODULOS_PERMISOS=[
   {key:'reportes',lbl:'Reportes',grp:'Módulos'},
   {key:'despachos',lbl:'Despachos (logística)',grp:'Módulos'},
   {key:'misentregas',lbl:'Mis entregas (piloto)',grp:'Módulos'},
+  {key:'evidencias',lbl:'Evidencias de entregas y paradas',grp:'Módulos'},
   {key:'controles',lbl:'Controles (ambientales, baterías, gasolina)',grp:'Módulos'},
   {key:'usuarios',lbl:'Usuarios',grp:'Módulos'},
   {key:'auditoria',lbl:'Auditoría',grp:'Módulos'},

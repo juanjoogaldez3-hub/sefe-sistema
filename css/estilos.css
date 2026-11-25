@@ -592,3 +592,25 @@
 }
 /* El aviso (toast) escondido no debe asomarse abajo de la pantalla */
 .toast:not(.show){transform:translateY(calc(100% + 60px))}
+
+/* ===== Evidencias ===== */
+.evid-filtros{display:grid;grid-template-columns:repeat(4,minmax(130px,170px)) 1fr;gap:10px;align-items:end}
+.evid-filtros label{display:block}
+.evid-filtros input,.evid-filtros select{width:100%}
+.evid-botones{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+.evid-kpis{flex-wrap:nowrap}
+.evid-kpis .kpi{flex:1 1 0;min-width:0;flex-direction:column;align-items:flex-start;gap:2px;padding:11px 14px}
+.evid-kpis .k-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.evid-tabla td{vertical-align:top}
+.evid-cards{display:none}
+.evid-tabla .evid-det{min-width:240px;max-width:420px;white-space:normal;font-size:12.5px;color:var(--muted)}
+@media(max-width:900px){.evid-filtros{grid-template-columns:1fr 1fr}.evid-buscar{grid-column:1/-1}}
+@media(max-width:600px){
+  .evid-kpis{display:grid!important;grid-template-columns:repeat(3,1fr)}
+  .evid-kpis .kpi{padding:8px 10px;border-bottom:1px solid var(--line)}
+  .evid-kpis .k-lbl{font-size:10.5px}
+  .evid-kpis .k-val{font-size:18px}
+  .evid-tabla{display:none!important}
+  .evid-cards{display:flex;flex-direction:column;gap:10px;padding:12px}
+  .evid-botones .btn{flex:1 1 auto;justify-content:center}
+}
