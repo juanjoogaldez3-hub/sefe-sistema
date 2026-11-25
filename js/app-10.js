@@ -1827,15 +1827,17 @@ function renderDespachos(){
       const p=d._parada;
       const hora=p.horaLimite?`<span style="font-size:11px;font-weight:700;color:var(--warn);white-space:nowrap">⏰ antes de ${escHtml(p.horaLimite)}</span>`:'';
       const eta=p.eta?`<span style="font-size:11px;color:var(--muted);white-space:nowrap">🕐 llega ~${escHtml(p.eta)}</span>`:'';
-      return _enc+`<tr data-desp-grupo="${p.pilotoId==null?'_':p.pilotoId}" style="background:rgba(106,63,181,.04)">
+      const _fallo=p.hechaInfo&&p.hechaInfo.noHecha;
+      const [pen,pec]=_fallo?['No se pudo hacer','b-danger']:ESTADO_ENTREGA.asignado;
+      return _enc+`<tr data-desp-grupo="${p.pilotoId==null?'_':p.pilotoId}">
         <td></td>
         <td class="num" style="font-weight:700;color:var(--green)">${p.ordenRuta!=null?'#'+p.ordenRuta:'—'}</td>
-        <td style="font-weight:600">📌 Parada<div style="margin-top:2px">${paradaMotivoTag(p)}</div></td>
+        <td style="font-weight:600">Parada<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.motivo||'Otro')}</div></td>
         <td>${escHtml(p.titulo)}${p.nota?`<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.nota)}</div>`:''}${(hora||eta)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${hora}${eta}</div>`:''}${paradaNoHechaTxt(p)}</td>
-        <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${p.direccion?escHtml(p.direccion):'—'}${p.lat==null?'<div style="font-size:10.5px;color:var(--muted-2)">sin ubicación en el mapa</div>':''}</td>
+        <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${p.direccion?escHtml(p.direccion):'—'}</td>
         <td class="num" style="color:var(--muted-2)">—</td>
         <td>${escHtml(_nomPil(p.pilotoId))}</td>
-        <td><span class="badge b-prep">Parada</span></td>
+        <td><span class="badge ${pec}">${pen}</span></td>
         <td><div class="acts">${canAsignarPiloto()?`<button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Completar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>`:''}</div></td>
       </tr>`;
     }
@@ -2169,20 +2171,24 @@ function renderMisEntregas(){
   ].sort((a,b)=>a.ord-b.ord);
   const nNav=mias.filter(d=>estadoEntrega(d)!=='entregado').length+misParadas.length;
   // Tarjeta de una PARADA manual.
+  // La parada se ve IGUAL que una entrega: misma tarjeta, mismo número,
+  // misma etiqueta de estado y mismos botones. Donde la entrega dice
+  // "Factura · Q…", la parada dice "Parada · <motivo>".
   const paradaCard=p=>{
-    const eta=p.eta?`<span style="font-size:11px;color:var(--muted)">🕐 llega ~${p.eta}</span>`:'';
-    const hora=p.horaLimite?`<span style="font-size:11px;font-weight:700;color:var(--warn)">⏰ antes de ${p.horaLimite}</span>`:'';
-    const dir=p.direccion?`<div style="font-size:12.5px;color:var(--ink);margin-bottom:3px">📍 ${escHtml(p.direccion)}</div>`:'';
-    return `<div class="ent-card ent-parada">
+    const eta=p.eta?`<span style="font-size:11px;color:var(--muted)">🕐 llega ~${escHtml(p.eta)}</span>`:'';
+    const hora=p.horaLimite?`<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:var(--warn)">⏰ antes de ${escHtml(p.horaLimite)}</span>`:'';
+    const fallo=p.hechaInfo&&p.hechaInfo.noHecha;
+    const [en,ec]=fallo?['No se pudo hacer','b-danger']:ESTADO_ENTREGA.asignado;
+    return `<div class="ent-card">
       <div class="ent-top">
-        ${p.ordenRuta!=null?`<span class="ent-num" style="background:#6A3FB5">${p.ordenRuta}</span>`:''}
-        <div class="ent-nombre">📌 ${escHtml(p.titulo)}</div>
+        ${p.ordenRuta!=null?`<span class="ent-num">${p.ordenRuta}</span>`:''}
+        <div class="ent-nombre">${escHtml(p.titulo)}</div>
       </div>
-      <div class="ent-meta">${paradaMotivoTag(p)||'<span class="badge b-prep">Parada</span>'}<span>Parada de ruta</span></div>
-      ${p.direccion?`<div class="ent-dir">📍 ${escHtml(p.direccion)}</div>`:''}
+      <div class="ent-meta"><span class="badge ${ec}">${en}</span><span>Parada · <b>${escHtml(p.motivo||'Otro')}</b></span></div>
+      <div class="ent-dir">📍 ${escHtml(p.direccion||'—')}</div>
+      ${paradaNoHechaTxt(p)}
       ${(hora||eta)?`<div class="ent-linea">${hora}${eta}</div>`:''}
       ${p.nota?`<div class="ent-items">${escHtml(p.nota)}</div>`:''}
-      ${paradaNoHechaTxt(p)}
       <div class="ent-acts"><button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Completar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="paradaNoHecha(${p.id})">✕ No se pudo hacer</button></div>
     </div>`;
   };
