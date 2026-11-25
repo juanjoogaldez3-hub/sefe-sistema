@@ -1212,8 +1212,8 @@ function _paradasPiloto(pid){ return (typeof paradasRuta!=='undefined'?paradasRu
 // Desde Despachos: ordena la ruta por CERCANÍA PURA (de la más cercana a la más
 // lejana desde la bodega). Predecible e instantáneo. Para el orden inteligente
 // con tiempos de Google y horas límite está el "Optimizar" al asignar.
-function ordenarCercaniaDespachos(){
-  const fPiloto=($('#desp-piloto')||{}).value||'';
+function ordenarCercaniaDespachos(pidArg){
+  const fPiloto=(pidArg!=null&&pidArg!=='')?String(pidArg):(($('#desp-piloto')||{}).value||'');
   if(!fPiloto){toast('Elegí un piloto','Seleccioná un piloto en el filtro para ordenar su ruta.',false);return;}
   const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
   const paradas=_paradasPiloto(fPiloto);
@@ -1639,6 +1639,10 @@ function renderDespachos(){
     {ic:'i-blue',svg:'<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/>',lbl:'Total a despachar',val:activos.length,sub:'documentos activos'},
   ];
   $('#desp-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
+  // Paradas manuales pendientes: van en la misma tabla, dentro del grupo de
+  // su piloto y en su orden de ruta (antes salían en un panel aparte).
+  const _parTabla=(!fEstado?(typeof paradasRuta!=='undefined'?paradasRuta:[]):[]).filter(p=>!p.hecha&&(!fPiloto||String(p.pilotoId||'')===fPiloto));
+  _parTabla.forEach(p=>lista.push({_parada:p,pilotoId:p.pilotoId??null,ordenRuta:p.ordenRuta,numero:0}));
   // Agrupar por piloto: primero los "Sin asignar", luego cada piloto por
   // nombre; dentro de cada grupo, por orden de ruta y luego por número.
   const _nomPil=pid=>{if(pid==null)return '';const pl=pilotos.find(p=>p.id===pid);return (pl&&pl.nombre)||_nombreRepartidor(pid)||('Piloto #'+pid);};
@@ -1656,7 +1660,7 @@ function renderDespachos(){
   const tipoCorto={cambiaria:'Factura',envio:'N. envío',prestamo:'N. préstamo'};
   // Riesgo de hora: se calcula por piloto (dentro de la ruta de cada uno).
   const _riskDesp=new Set();
-  {const porPil={};lista.forEach(d=>{const k=d.pilotoId||'_';(porPil[k]=porPil[k]||[]).push(d);});
+  {const porPil={};lista.forEach(d=>{if(d._parada)return;const k=d.pilotoId||'_';(porPil[k]=porPil[k]||[]).push(d);});
    Object.values(porPil).forEach(g=>_riesgosHora(g).forEach(id=>_riskDesp.add(id)));}
   // Encabezado de cada grupo (piloto): cantidad, total y cuántas van en ruta.
   const _grupos={};lista.forEach(d=>{const k=d.pilotoId==null?'_':String(d.pilotoId);(_grupos[k]=_grupos[k]||[]).push(d);});
@@ -1665,19 +1669,38 @@ function renderDespachos(){
     const k=d.pilotoId==null?'_':String(d.pilotoId);
     if(k===_grupoPrev)return '';
     _grupoPrev=k;
-    const g=_grupos[k], tot=g.reduce((s,x)=>s+(x.totales?.total||0),0);
+    const gAll=_grupos[k], g=gAll.filter(x=>!x._parada), nPar=gAll.length-g.length, tot=g.reduce((s,x)=>s+(x.totales?.total||0),0);
     const enR=g.filter(x=>estadoEntrega(x)==='ruta').length, entr=g.filter(x=>estadoEntrega(x)==='entregado').length;
     const sinA=d.pilotoId==null;
     return `<tr class="desp-grupo" data-grupo-key="pil:${k}"><td colspan="9" style="background:${sinA?'#fdf3d8':'var(--surface-2,#f4f7ef)'};padding:9px 14px;border-top:2px solid var(--line-strong)">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <span style="font-weight:800;font-size:13.5px">${sinA?'⏳ Sin asignar':'🚚 '+escHtml(_nomPil(d.pilotoId))}</span>
-        <span style="font-size:12px;color:var(--muted)">${g.length} entrega${g.length!==1?'s':''} · ${money(tot)}${enR?' · '+enR+' en ruta':''}${entr?' · '+entr+' entregada'+(entr!==1?'s':''):''}</span>
-        ${canAsignarPiloto()?`<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="despSelGrupo('${k}')" title="Marcar todas las entregas de este grupo">Seleccionar grupo</button>`:''}
+        <span style="font-size:12px;color:var(--muted)">${g.length} entrega${g.length!==1?'s':''}${nPar?' + '+nPar+' parada'+(nPar!==1?'s':''):''} · ${money(tot)}${enR?' · '+enR+' en ruta':''}${entr?' · '+entr+' entregada'+(entr!==1?'s':''):''}</span>
+        ${canAsignarPiloto()?`<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+          ${!sinA?`<button class="btn btn-primary btn-sm" onclick="openOrdenRuta(${d.pilotoId})" title="Poner el orden de visita de este piloto (subir/bajar)">↕ Ordenar ruta</button>
+          <button class="btn btn-ghost btn-sm" onclick="ordenarCercaniaDespachos(${d.pilotoId})" title="Numerar automáticamente de la más cercana a la más lejana (solo clientes con ubicación en el mapa)">🧭 Por cercanía</button>`:''}
+          <button class="btn btn-ghost btn-sm" onclick="despSelGrupo('${k}')" title="Marcar todas las entregas de este grupo">Seleccionar grupo</button></span>`:''}
       </div></td></tr>`;
   };
   $('#t-despachos').innerHTML=lista.map(d=>{
-    const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];
     const _enc=_encabezado(d);
+    if(d._parada){
+      const p=d._parada;
+      const hora=p.horaLimite?`<span style="font-size:11px;font-weight:700;color:var(--warn);white-space:nowrap">⏰ antes de ${escHtml(p.horaLimite)}</span>`:'';
+      const eta=p.eta?`<span style="font-size:11px;color:var(--muted);white-space:nowrap">🕐 llega ~${escHtml(p.eta)}</span>`:'';
+      return _enc+`<tr data-desp-grupo="${p.pilotoId==null?'_':p.pilotoId}" style="background:rgba(106,63,181,.04)">
+        <td></td>
+        <td class="num" style="font-weight:700;color:var(--green)">${p.ordenRuta!=null?'#'+p.ordenRuta:'—'}</td>
+        <td style="font-weight:600">📌 Parada<div style="margin-top:2px">${paradaMotivoTag(p)}</div></td>
+        <td>${escHtml(p.titulo)}${p.nota?`<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.nota)}</div>`:''}${(hora||eta)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${hora}${eta}</div>`:''}</td>
+        <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${p.direccion?escHtml(p.direccion):'—'}${p.lat==null?'<div style="font-size:10.5px;color:var(--muted-2)">sin ubicación en el mapa</div>':''}</td>
+        <td class="num" style="color:var(--muted-2)">—</td>
+        <td>${escHtml(_nomPil(p.pilotoId))}</td>
+        <td><span class="badge b-prep">Parada</span></td>
+        <td><div class="acts">${canAsignarPiloto()?`<button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Hecha</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>`:''}</div></td>
+      </tr>`;
+    }
+    const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];
     const piloto=pilotos.find(p=>p.id===d.pilotoId);
     let acts='';
     acts+=`<button class="btn btn-ghost btn-sm" onclick="verDoc(${d.id})">Ver</button>`;
@@ -1704,6 +1727,55 @@ function renderDespachos(){
   renderConciliacion();
 }
 window.renderDespachos=renderDespachos;
+// ---- Ordenar a mano la ruta de un piloto (entregas + paradas) ----
+// Lista todo lo pendiente del piloto en su orden actual (los que no tienen
+// número van al final) y se sube/baja con ▲▼. Al guardar se numera 1..n.
+let _ordRuta=null;
+function openOrdenRuta(pid){
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística ordena las rutas',true);return;}
+  const docs=docsDespachables().filter(d=>String(d.pilotoId)===String(pid)&&estadoEntrega(d)!=='entregado').map(d=>({t:'d',o:d}));
+  const pars=_paradasPiloto(pid).map(p=>({t:'p',o:p}));
+  const items=docs.concat(pars).sort((a,b)=>(a.o.ordenRuta??999)-(b.o.ordenRuta??999));
+  if(!items.length){toast('Sin pendientes','Ese piloto no tiene entregas ni paradas pendientes.',false);return;}
+  _ordRuta={pid,items};
+  openMod('↕ Ordenar ruta · '+escHtml(_nombreRepartidor(pid)||(pilotos.find(p=>p.id===pid)||{}).nombre||''),
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Subí o bajá cada parada con las flechas. El #1 es la primera visita. Al guardar, el repartidor la ve en ese orden.</p><div id="ord-lista"></div>`,
+    ()=>{
+      const sel=_ordRuta; if(!sel)return;
+      sel.items.forEach((it,i)=>{
+        const n=i+1;
+        if(it.t==='d'){it.o.ordenRuta=n;it.o.etaEntrega=null;if(typeof guardarDocumento==='function')guardarDocumento(it.o);}
+        else{it.o.ordenRuta=n;it.o.eta=null;if(typeof guardarParadaRuta==='function')guardarParadaRuta(it.o);}
+      });
+      logAudit('Ruta ordenada a mano',(_nombreRepartidor(sel.pid)||'piloto '+sel.pid)+' · '+sel.items.length+' paradas');
+      closeMod();renderDespachos();
+      toast('✓ Ruta ordenada',sel.items.length+' paradas numeradas del 1 al '+sel.items.length);
+    });
+  _ordPintar();
+}
+window.openOrdenRuta=openOrdenRuta;
+function _ordPintar(){
+  const box=document.getElementById('ord-lista'); if(!box||!_ordRuta)return;
+  const its=_ordRuta.items, n=its.length;
+  box.innerHTML=its.map((it,i)=>{
+    const o=it.o;
+    const tit=it.t==='d'?escHtml(o.clienteComercial||o.clienteNombre||''):'📌 '+escHtml(o.titulo||'');
+    const sub=it.t==='d'?escHtml(((o.serie&&o.numeroDte)?o.serie+'-'+o.numeroDte:refPed(o))+' · '+(dirEntrega(o)||'')):(paradaMotivoTag(o)+' '+escHtml(o.direccion||''));
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--line)">
+      <span style="flex:0 0 30px;font-weight:800;color:var(--green);text-align:center">#${i+1}</span>
+      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${tit}</div><div style="font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div></div>
+      <button type="button" class="btn btn-ghost btn-sm" ${i===0?'disabled':''} onclick="_ordMover(${i},-1)" title="Subir">▲</button>
+      <button type="button" class="btn btn-ghost btn-sm" ${i===n-1?'disabled':''} onclick="_ordMover(${i},1)" title="Bajar">▼</button>
+    </div>`;
+  }).join('');
+}
+function _ordMover(i,dir){
+  if(!_ordRuta)return; const its=_ordRuta.items, j=i+dir;
+  if(j<0||j>=its.length)return;
+  [its[i],its[j]]=[its[j],its[i]];
+  _ordPintar();
+}
+window._ordMover=_ordMover;
 // Marca (o desmarca, si ya estaban todas) las entregas de un grupo de piloto.
 function despSelGrupo(k){
   const chks=[...document.querySelectorAll('#t-despachos tr[data-desp-grupo="'+k+'"] .desp-chk')].filter(c=>c.closest('tr').style.display!=='none');
@@ -1716,6 +1788,9 @@ window.despSelGrupo=despSelGrupo;
 // ---- Panel de paradas manuales (banco, recolección, etc.) para logística/admin ----
 function renderParadasPanel(){
   const box=$('#desp-paradas-panel');if(!box)return;
+  // Las paradas ahora van dentro de la tabla de Despachos, en el grupo de su
+  // piloto. Este panel aparte queda apagado.
+  box.style.display='none';return;
   const fPiloto=$('#desp-piloto')?.value;
   let pend=(typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>!p.hecha);
   if(fPiloto)pend=pend.filter(p=>String(p.pilotoId||'')===fPiloto);
