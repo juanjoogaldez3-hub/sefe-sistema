@@ -1314,7 +1314,7 @@ function openParadaRuta(pidPre){
   if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede agregar paradas',true);return;}
   openMod('➕ Agregar parada a la ruta',`
     <div class="row"><div style="flex:1"><label>Repartidor</label><select id="pr-piloto">${_optRepartidores(pidPre)}</select></div></div>
-    <div class="row"><div><label>Título</label><input id="pr-tit" placeholder="Ej. Ir al banco · Recolectar en Proveedor X · Cargar combustible"></div></div>
+    <div class="row"><div><label>Nombre <span style="color:var(--muted);font-weight:400">(escribí un cliente o proveedor, o un texto libre)</span></label><input id="pr-tit" autocomplete="off" placeholder="Ej. nombre del cliente o proveedor · Ir al banco · Cargar combustible"></div></div>
     <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" placeholder="Dirección o nombre del lugar"></div></div>
     <div class="row"><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px"></div></div>
     <div class="row"><div><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-nota" placeholder="Detalle"></div></div>
@@ -1326,15 +1326,58 @@ function openParadaRuta(pidPre){
       if(!tit){toast('Ponele un título a la parada',null,true);return;}
       const dir=$('#pr-dir').value.trim();
       const nueva={pilotoId:pid,titulo:tit,nota:$('#pr-nota').value.trim(),direccion:dir,horaLimite:$('#pr-hora').value||'',hecha:false,creadaPor:currentUser,_nuevo:true};
-      if(dir){const g=await _geocodeGoogle(dir); if(g){nueva.lat=g.lat;nueva.lng=g.lng;}}
+      // Si se eligió un cliente con pin en el mapa y no se cambió la dirección,
+      // se usa su ubicación guardada (más exacta que buscar la dirección).
+      const _sel=window._prSel;
+      if(_sel&&_sel.lat!=null&&_sel.lng!=null&&dir===_sel.dir){nueva.lat=_sel.lat;nueva.lng=_sel.lng;}
+      else if(dir){const g=await _geocodeGoogle(dir); if(g){nueva.lat=g.lat;nueva.lng=g.lng;}}
       paradasRuta.push(nueva);
       if(typeof guardarParadaRuta==='function')await guardarParadaRuta(nueva);
       logAudit('Parada de ruta creada',tit+' · '+(pilotos.find(p=>p.id===pid)?.nombre||''));
       closeMod();renderDespachos();
       toast('✓ Parada agregada',tit+(nueva.lat!=null?' · ubicada en el mapa':' · sin ubicación (solo en la lista)'));
     });
+  window._prSel=null;
+  setTimeout(_wireParadaNombre,0);
 }
 window.openParadaRuta=openParadaRuta;
+// Buscador del campo "Nombre" de la parada: sugiere clientes y proveedores
+// (de las dos empresas: despachos es compartido). Al elegir un cliente llena
+// la dirección de entrega (y usa su pin del mapa si lo tiene). Los
+// proveedores no tienen dirección guardada: solo se llena el nombre.
+// Se puede seguir escribiendo texto libre (ej. "Ir al banco").
+function _wireParadaNombre(){
+  if(typeof crearAutocomplete!=='function'||!document.getElementById('pr-tit'))return;
+  const _norm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const _emp=c=>(typeof haymultiempresa==='function'&&haymultiempresa()&&typeof nombreEmpresa==='function')?' · '+nombreEmpresa(c||'SEFE'):'';
+  crearAutocomplete('pr-tit',
+    (q)=>{
+      const ql=_norm(q); if(!ql)return [];
+      const cli=(clientes||[]).filter(c=>c.activo!==false&&(_norm(c.nombre).includes(ql)||_norm(c.razonSocial).includes(ql)||_norm(c.nit).includes(ql)))
+        .map(c=>{const dir=c.direccionEntrega||c.direccion||'';return {texto:c.nombre,sub:'Cliente'+_emp(c.empresa)+(dir?' · '+dir:''),valor:{tipo:'cli',id:c.id}};});
+      const prov=(proveedores||[]).filter(p=>_norm(p.nombre).includes(ql)||_norm(p.razonSocial).includes(ql)||_norm(p.nit).includes(ql))
+        .map(p=>({texto:p.nombre,sub:'Proveedor'+_emp(p.empresa),valor:{tipo:'prov',id:p.id}}));
+      // Primero los que EMPIEZAN con lo escrito, luego el resto.
+      const emp=x=>_norm(x.texto).startsWith(ql)?0:1;
+      return cli.concat(prov).sort((a,b)=>emp(a)-emp(b));
+    },
+    (item)=>{
+      if(!item||!item.valor){window._prSel=null;return;}
+      const v=item.valor, dirEl=document.getElementById('pr-dir');
+      if(v.tipo==='cli'){
+        const c=clientes.find(x=>x.id===v.id); if(!c)return;
+        const dir=c.direccionEntrega||c.direccion||'';
+        if(dirEl&&dir)dirEl.value=dir;
+        window._prSel={dir:dirEl?dirEl.value.trim():dir,lat:c.lat!=null?Number(c.lat):null,lng:c.lng!=null?Number(c.lng):null};
+        const hl=document.getElementById('pr-hora');
+        if(hl&&!hl.value&&/^\d{1,2}:\d{2}$/.test(c.horaLimiteEntrega||''))hl.value=c.horaLimiteEntrega.padStart(5,'0');
+      }else{
+        window._prSel=null;
+        if(dirEl)dirEl.focus();
+      }
+    });
+}
+window._wireParadaNombre=_wireParadaNombre;
 // El piloto (o admin) marca una parada como hecha.
 function paradaHecha(id){
   const p=paradasRuta.find(x=>x.id===id); if(!p)return;
