@@ -310,7 +310,14 @@ function _prepModalHTML(d){
     const sinBarras=!(prod&&prod.codigoBarras);
     const meta=_prepMetaD(d,i), cant=_prepCant(d,i), lista=cant>=meta;
     if(meta===0)return `<div style="padding:9px 12px;border:1.5px dashed var(--line);border-radius:10px;margin-bottom:8px;font-size:12.5px;color:var(--muted)">✓ ${it.cantidad}× ${it.nombre} — ya entregado antes</div>`;
-    const contador=meta>1?`<span style="flex:none;font-weight:700;font-size:13px;padding:3px 10px;border-radius:20px;background:${lista?'#DCF0DC':'#FDECEA'};color:${lista?'#137333':'#B3261E'}">${cant}/${meta}</span>`:'';
+    // Más de 1 unidad: botones − / + para marcar a mano cuántas se llevan
+    // (la casilla marca o desmarca la línea completa de un toque).
+    const _stop='event.preventDefault();event.stopPropagation();';
+    const contador=meta>1?`<span style="flex:none;display:flex;align-items:center;gap:6px">
+        <button type="button" class="btn btn-ghost btn-sm" style="min-width:38px;min-height:38px;padding:0;font-size:18px;font-weight:700" ${cant<=0?'disabled':''} onclick="${_stop}prepAjustar(${d.id},${i},-1)" aria-label="Uno menos">−</button>
+        <span style="font-weight:700;font-size:13px;padding:3px 10px;border-radius:20px;min-width:52px;text-align:center;background:${lista?'#DCF0DC':(cant>0?'#FFF4E0':'#FDECEA')};color:${lista?'#137333':(cant>0?'#a35a00':'#B3261E')}">${cant}/${meta}</span>
+        <button type="button" class="btn btn-ghost btn-sm" style="min-width:38px;min-height:38px;padding:0;font-size:18px;font-weight:700" ${cant>=meta?'disabled':''} onclick="${_stop}prepAjustar(${d.id},${i},1)" aria-label="Uno más">+</button>
+      </span>`:'';
     return `<label style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:8px;${lista?'background:#EEF9EE;border-color:#BFE0BF':''}">
       <input type="checkbox" ${lista?'checked':''} onchange="prepTogglear(${d.id},${i},this.checked)" style="width:20px;height:20px;flex:none">
       <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${meta<_prepMeta(it)?meta+'× '+it.nombre+' <span style="font-weight:400;color:#a35a00">(faltan '+meta+' de '+it.cantidad+')</span>':it.cantidad+'× '+it.nombre}</div><div style="font-size:11px;color:var(--muted)">${it.codigo||''}${sinBarras?' · <span style="color:var(--warn)">sin barras (marcá a mano)</span>':''}</div></div>
@@ -361,6 +368,15 @@ function prepTogglear(id,idx,checked){
   _renderPrepModal(d);
 }
 window.prepTogglear=prepTogglear;
+// − / + : sube o baja de a una unidad lo preparado de esa línea.
+function prepAjustar(id,idx,delta){
+  const d=documentos.find(x=>x.id===id); if(!d)return;
+  const meta=_prepMetaD(d,idx); const nuevo=Math.max(0,Math.min(meta,_prepCant(d,idx)+delta));
+  const pr=_prepDe(d); pr.packed[idx]=nuevo; d.preparacion=pr;
+  _prepGuardar(d);
+  _renderPrepModal(d);
+}
+window.prepAjustar=prepAjustar;
 // Escaneo continuo: cada lectura marca el producto correspondiente de la entrega.
 function prepEscanear(id){
   const d=documentos.find(x=>x.id===id); if(!d)return;
