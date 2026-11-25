@@ -1110,14 +1110,19 @@ function _construirStops(docs,paradas){
     const c=clientes.find(x=>x.id===d.clienteId);
     const it={pt:(c&&c.lat!=null&&c.lng!=null)?{lat:Number(c.lat),lng:Number(c.lng)}:null,hlm:_horaLimMinDoc(d),
       aplicar:(n,eta)=>{d.ordenRuta=n;d.etaEntrega=eta;if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';if(typeof guardarDocumento==='function')guardarDocumento(d);}};
+    it.ord=d.ordenRuta??999;
     (it.pt?conPin:sinPin).push(it);
   });
   (paradas||[]).forEach(p=>{
     const hl=_parseMinHora(p.horaLimite);
     const it={pt:(p.lat!=null&&p.lng!=null)?{lat:Number(p.lat),lng:Number(p.lng)}:null,hlm:(hl==null?Infinity:hl),
       aplicar:(n,eta)=>{p.ordenRuta=n;p.eta=eta;if(typeof guardarParadaRuta==='function')guardarParadaRuta(p);}};
+    it.ord=p.ordenRuta??999;
     (it.pt?conPin:sinPin).push(it);
   });
+  // Los que no tienen ubicación van al final, pero respetando el orden que
+  // ya tenían (no se mezclan al azar).
+  sinPin.sort((a,b)=>(a.ord??999)-(b.ord??999));
   return {conPin,sinPin};
 }
 // Orden por CERCANÍA PURA: vecino más cercano desde la bodega, por distancia en
@@ -1218,6 +1223,18 @@ function ordenarCercaniaDespachos(pidArg){
   const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
   const paradas=_paradasPiloto(fPiloto);
   if(!lista.length&&!paradas.length){toast('Sin entregas','Ese piloto no tiene entregas ni paradas pendientes.',false);return;}
+  // ¿Cuántas tienen ubicación en el mapa? Solo esas se pueden ordenar por
+  // cercanía; si faltan, avisar antes (si no, la única con pin queda #1).
+  const _conPin=lista.filter(d=>{const c=clientes.find(x=>x.id===d.clienteId);return c&&c.lat!=null&&c.lng!=null;}).length+paradas.filter(p=>p.lat!=null&&p.lng!=null).length;
+  const _total=lista.length+paradas.length;
+  if(_conPin<_total&&!window._cercaniaConfirmada){
+    const sinU=_total-_conPin;
+    if(_conPin===0){toast('Nadie tiene ubicación','Ninguna de las '+_total+' paradas de este piloto tiene ubicación en el mapa. Usá "↕ Ordenar ruta" para ponerlas a mano.',true);return;}
+    confirmar('Ordenar por cercanía',
+      `Solo <b>${_conPin} de ${_total}</b> paradas tienen ubicación en el mapa. Esas van primero (de la más cercana a la más lejana) y las otras <b>${sinU}</b> quedan al final, en el orden que ya tenían.<br><br>Si preferís ponerlas a mano, cancelá y usá <b>↕ Ordenar ruta</b>.`,
+      'Ordenar igual',()=>{window._cercaniaConfirmada=true;try{ordenarCercaniaDespachos(fPiloto);}finally{window._cercaniaConfirmada=false;}});
+    return;
+  }
   const {n}=_ordenarCercaniaPura(lista,paradas);
   if(n){
     logAudit('Ruta ordenada por cercanía',n+' paradas');
@@ -1357,7 +1374,9 @@ function openParadaRuta(pidPre){
         return;
       }
       const dir=$('#pr-dir').value.trim();
-      const nueva={pilotoId:pid,motivo,titulo:tit,nota:$('#pr-nota').value.trim(),direccion:dir,horaLimite:$('#pr-hora').value||'',hecha:false,creadaPor:currentUser,_nuevo:true};
+      // La parada nueva entra AL FINAL de la ruta actual del piloto.
+      const _maxOrd=Math.max(0,...docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado').map(d=>d.ordenRuta||0),..._paradasPiloto(pid).map(p=>p.ordenRuta||0));
+      const nueva={pilotoId:pid,motivo,ordenRuta:_maxOrd?_maxOrd+1:null,titulo:tit,nota:$('#pr-nota').value.trim(),direccion:dir,horaLimite:$('#pr-hora').value||'',hecha:false,creadaPor:currentUser,_nuevo:true};
       // Si se eligió un cliente con pin en el mapa y no se cambió la dirección,
       // se usa su ubicación guardada (más exacta que buscar la dirección).
       const _sel=window._prSel;
