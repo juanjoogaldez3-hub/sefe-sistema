@@ -1471,17 +1471,131 @@ function _wireParadaNombre(){
 }
 window._wireParadaNombre=_wireParadaNombre;
 // El piloto (o admin) marca una parada como hecha.
-function paradaHecha(id){
-  const p=paradasRuta.find(x=>x.id===id); if(!p)return;
-  p.hecha=true; p.hechaFecha=new Date().toISOString();
-  if(typeof guardarParadaRuta==='function')guardarParadaRuta(p);
-  logAudit('Parada completada',p.titulo);
-  // Refrescar la vista que esté abierta (Mis entregas del piloto o Despachos de logística).
+// ---- Completar una parada CON evidencia ----
+// Pide resultado/comentario, quién atendió, firma (obligatoria en Recolecta,
+// Entrega e Instalación) y foto opcional. Firma y foto van a la tabla aparte
+// paradas_evidencia; el texto queda en p.hechaInfo.
+function _paradaPideFirma(p){ return ['Recolecta','Entrega','Instalación'].includes(p&&p.motivo); }
+const _PARADA_RES_PH={'Recolecta':'Ej. se recogieron 3 cajas de toalla y 1 galón','Entrega':'Ej. se entregaron 2 cajas de muestra','Instalación':'Ej. se instalaron 2 dispensadores en baños','Otro':'Ej. depósito hecho, boleta #12345'};
+function _refrescarParadas(){
   if(document.getElementById('v-misentregas')?.classList.contains('active'))renderMisEntregas();
   if(document.getElementById('v-despachos')?.classList.contains('active'))renderDespachos();
-  toast('✓ Parada hecha',p.titulo);
+}
+function paradaHecha(id){
+  const p=paradasRuta.find(x=>x.id===id); if(!p)return;
+  const firmaObl=_paradaPideFirma(p);
+  _firmaVacia=true; _fotoEntrega=null;
+  openMod('Completar parada · '+escHtml(p.titulo||''),`
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">${paradaMotivoTag(p)} ${escHtml(p.direccion||'')}</p>
+    <label>¿Qué se hizo? <span style="color:var(--danger)">*</span></label>
+    <textarea id="ph-res" rows="2" placeholder="${escHtml(_PARADA_RES_PH[p.motivo]||_PARADA_RES_PH.Otro)}"></textarea>
+    <div class="row" style="margin-top:10px"><div><label>¿Quién atendió? ${firmaObl?'<span style="color:var(--danger)">*</span>':'<span style="font-weight:400;color:var(--muted-2)">(opcional)</span>'}</label><input id="ph-atendio" placeholder="Nombre de quien atendió / firma"></div></div>
+    <label>Firma ${firmaObl?'<span style="color:var(--danger)">*</span>':'<span style="font-weight:400;color:var(--muted-2)">(opcional)</span>'}</label>
+    <div class="firma-wrap"><canvas id="firma-canvas" class="firma-canvas"></canvas>
+      <div class="firma-foot"><span>Firmá con el dedo o el mouse</span><button class="btn btn-ghost btn-sm" type="button" onclick="limpiarFirma()">Borrar</button></div></div>
+    <label style="margin-top:10px">Foto <span style="font-weight:400;color:var(--muted-2)">(opcional: lo recogido, lo instalado, la boleta… se guarda 30 días)</span></label>
+    <input type="file" id="ent-foto-file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoEntrega(this)">
+    <div id="ent-foto-zone" style="margin-bottom:6px"><button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('ent-foto-file').click()">📷 Tomar foto</button></div>
+    <div class="note n-danger" id="ph-err" style="display:none;margin:10px 0 0"><span></span></div>`,
+    ()=>confirmarParadaHecha(id));
+  const sv=document.getElementById('m-save'); if(sv)sv.textContent='✓ Completar';
+  setTimeout(()=>{ if(typeof initFirma==='function')initFirma(); },50);
 }
 window.paradaHecha=paradaHecha;
+async function confirmarParadaHecha(id){
+  const p=paradasRuta.find(x=>x.id===id); if(!p)return;
+  const err=document.getElementById('ph-err'), et=err&&err.querySelector('span');
+  const fallo=t=>{if(err){err.style.display='flex';et.textContent=t;}};
+  const res=(document.getElementById('ph-res')?.value||'').trim();
+  const atendio=(document.getElementById('ph-atendio')?.value||'').trim();
+  const firmaObl=_paradaPideFirma(p);
+  if(!res)return fallo('Contá qué se hizo en la parada');
+  if(firmaObl&&!atendio)return fallo('Indicá quién atendió');
+  if(firmaObl&&(_firmaVacia||!_firmaCanvas))return fallo('Falta la firma de quien atendió');
+  const fecha=new Date().toISOString();
+  const firma=(!_firmaVacia&&_firmaCanvas)?_firmaCanvas.toDataURL('image/png'):null;
+  const prev=p.hechaInfo||{};
+  const info={fecha,piloto:currentUser,resultado:res,atendio,conFirma:!!firma,conFoto:!!_fotoEntrega};
+  if(Array.isArray(prev.intentos)&&prev.intentos.length)info.intentos=prev.intentos;
+  if(firma||_fotoEntrega){
+    const ok=(typeof guardarEvidenciaParada==='function')?await guardarEvidenciaParada(p.id,{firma,foto:_fotoEntrega,atendio,registradoPor:currentUser,registradoEl:fecha}):false;
+    if(ok){info.evidencia=true;p._evid={firma,foto:_fotoEntrega,atendio};}
+    else{ if(firma)info.firma=firma; if(_fotoEntrega)toast('⚠ La foto no se guardó','La parada y la firma sí quedaron registradas.',true); }
+  }
+  p.hecha=true; p.hechaFecha=fecha; p.hechaInfo=info;
+  if(typeof guardarParadaRuta==='function')guardarParadaRuta(p);
+  logAudit('Parada completada',(p.motivo?p.motivo+' · ':'')+p.titulo+' · '+res+(atendio?' · atendió '+atendio:''));
+  closeMod(); _refrescarParadas();
+  toast('✓ Parada completada',p.titulo);
+}
+window.confirmarParadaHecha=confirmarParadaHecha;
+// ---- No se pudo hacer la parada ----
+const MOTIVOS_NO_PARADA=['Cerrado','No estaba la persona','No tenían lo que había que recoger','Dirección incorrecta / no se encontró','Otro'];
+let _noParMotivo='';
+function paradaNoHecha(id){
+  const p=paradasRuta.find(x=>x.id===id); if(!p)return;
+  _noParMotivo='';
+  openMod('No se pudo hacer · '+escHtml(p.titulo||''),`
+    <label>¿Qué pasó? <span style="color:var(--danger)">*</span></label>
+    <div id="np-motivos" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px">${MOTIVOS_NO_PARADA.map(m=>`<button type="button" class="btn btn-ghost btn-sm np-mot" data-m="${escHtml(m)}" onclick="_npMotivo(this)">${escHtml(m)}</button>`).join('')}</div>
+    <label>Comentario <span id="np-req" style="font-weight:400;color:var(--muted-2)">(opcional)</span></label>
+    <textarea id="np-com" rows="2" placeholder="Ej. regresar mañana en la mañana"></textarea>
+    <div class="note" style="margin:10px 0 0"><span>La parada sigue en tu ruta y en la oficina la ven marcada en rojo.</span></div>
+    <div class="note n-danger" id="np-err" style="display:none;margin:10px 0 0"><span></span></div>`,
+    ()=>{
+      const err=document.getElementById('np-err'), et=err&&err.querySelector('span');
+      const com=(document.getElementById('np-com')?.value||'').trim();
+      if(!_noParMotivo){err.style.display='flex';et.textContent='Elegí qué pasó';return;}
+      if(_noParMotivo==='Otro'&&!com){err.style.display='flex';et.textContent='Contá qué pasó en el comentario';return;}
+      const intento={fecha:new Date().toISOString(),piloto:currentUser,motivo:_noParMotivo,comentario:com};
+      const prev=(p.hechaInfo&&Array.isArray(p.hechaInfo.intentos))?p.hechaInfo.intentos:[];
+      p.hechaInfo={intentos:prev.concat([intento]),noHecha:intento};
+      if(typeof guardarParadaRuta==='function')guardarParadaRuta(p);
+      logAudit('Parada no hecha',(p.motivo?p.motivo+' · ':'')+p.titulo+' · '+_noParMotivo+(com?' · '+com:''));
+      closeMod(); _refrescarParadas();
+      toast('Registrado: no se pudo hacer',_noParMotivo);
+    });
+  const sv=document.getElementById('m-save'); if(sv)sv.textContent='Registrar';
+}
+window.paradaNoHecha=paradaNoHecha;
+function _npMotivo(btn){
+  _noParMotivo=btn.dataset.m;
+  document.querySelectorAll('#np-motivos .np-mot').forEach(b=>{const on=b===btn;b.style.background=on?'var(--danger,#c0392b)':'';b.style.color=on?'#fff':'';b.style.borderColor=on?'var(--danger,#c0392b)':'';});
+  const r=document.getElementById('np-req'); if(r){r.textContent=_noParMotivo==='Otro'?'*':'(opcional)';r.style.color=_noParMotivo==='Otro'?'var(--danger)':'var(--muted-2)';}
+  const e=document.getElementById('np-err'); if(e)e.style.display='none';
+}
+window._npMotivo=_npMotivo;
+// Aviso rojo si el último intento de la parada no se pudo hacer.
+function paradaNoHechaTxt(p){
+  const n=p&&!p.hecha&&p.hechaInfo&&p.hechaInfo.noHecha; if(!n)return '';
+  return `<div style="margin-top:3px;font-size:11.5px;font-weight:600;color:var(--danger)">✕ No se pudo hacer: ${escHtml(n.motivo||'')}${n.comentario?' — '+escHtml(n.comentario):''}<span style="font-weight:400;color:var(--muted)"> · ${escHtml(fdatehora(n.fecha))}${n.piloto?' · '+escHtml(n.piloto):''}</span></div>`;
+}
+window.paradaNoHechaTxt=paradaNoHechaTxt;
+// ---- Paradas hechas (con su evidencia), para logística ----
+function verParadasHechas(){
+  const fP=($('#desp-piloto')||{}).value||'';
+  const hace=Date.now()-7*86400000;
+  const lista=(paradasRuta||[]).filter(p=>p.hecha&&new Date(p.hechaFecha||0).getTime()>=hace&&(!fP||String(p.pilotoId)===fP))
+    .sort((a,b)=>String(b.hechaFecha).localeCompare(String(a.hechaFecha)));
+  const nomP=pid=>{const x=pilotos.find(q=>q.id===pid);return (x&&x.nombre)||_nombreRepartidor(pid)||'—';};
+  openMod('✓ Paradas hechas (últimos 7 días)',lista.length?lista.map(p=>{const i=p.hechaInfo||{};return `<div style="padding:10px 0;border-bottom:1px solid var(--line)">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>${escHtml(p.titulo)}</b>${paradaMotivoTag(p)}</div>
+      <div style="font-size:12px;color:var(--muted)">${escHtml(fdatehora(p.hechaFecha))} · ${escHtml(nomP(p.pilotoId))}${i.atendio?' · atendió <b style="color:var(--ink)">'+escHtml(i.atendio)+'</b>':''}</div>
+      ${i.resultado?`<div style="font-size:13px;margin-top:2px">${escHtml(i.resultado)}</div>`:'<div style="font-size:12px;color:var(--muted-2)">(sin evidencia: se cerró antes de que se pidiera)</div>'}
+      ${(i.conFirma||i.conFoto||i.firma)?`<div id="ph-ev-${p.id}" style="margin-top:6px"><button class="btn btn-ghost btn-sm" onclick="_verEvidParada(${p.id})">Ver ${i.conFirma||i.firma?'firma':''}${(i.conFirma||i.firma)&&i.conFoto?' y ':''}${i.conFoto?'foto':''}</button></div>`:''}
+    </div>`;}).join(''):'<div class="empty">No hay paradas hechas en los últimos 7 días.</div>',()=>closeMod());
+  const sv=document.getElementById('m-save'); if(sv)sv.textContent='Cerrar';
+}
+window.verParadasHechas=verParadasHechas;
+async function _verEvidParada(id){
+  const p=paradasRuta.find(x=>x.id===id); const box=document.getElementById('ph-ev-'+id); if(!p||!box)return;
+  box.innerHTML='<span style="font-size:12px;color:var(--muted)">Cargando…</span>';
+  const ev=(typeof traerEvidenciaParada==='function'?await traerEvidenciaParada(p):null)||{};
+  const firma=ev.firma||(p.hechaInfo&&p.hechaInfo.firma)||'';
+  box.innerHTML=(firma?`<img src="${firma}" style="max-width:170px;max-height:70px;border-bottom:1.5px solid var(--ink);margin-right:12px">`:'')+
+    (ev.foto?`<img src="${ev.foto}" style="max-width:220px;max-height:160px;border-radius:6px;border:1px solid var(--line)">`:((p.hechaInfo&&p.hechaInfo.conFoto)?'<span style="font-size:11px;color:var(--muted-2)">📷 Tuvo foto, pero ya se borró (se guardan 30 días).</span>':''))||'<span style="font-size:12px;color:var(--muted-2)">Sin firma ni foto.</span>';
+}
+window._verEvidParada=_verEvidParada;
 // Borrar una parada (admin/logística).
 function borrarParadaUI(id){
   const p=paradasRuta.find(x=>x.id===id); if(!p)return;
@@ -1717,12 +1831,12 @@ function renderDespachos(){
         <td></td>
         <td class="num" style="font-weight:700;color:var(--green)">${p.ordenRuta!=null?'#'+p.ordenRuta:'—'}</td>
         <td style="font-weight:600">📌 Parada<div style="margin-top:2px">${paradaMotivoTag(p)}</div></td>
-        <td>${escHtml(p.titulo)}${p.nota?`<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.nota)}</div>`:''}${(hora||eta)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${hora}${eta}</div>`:''}</td>
+        <td>${escHtml(p.titulo)}${p.nota?`<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.nota)}</div>`:''}${(hora||eta)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${hora}${eta}</div>`:''}${paradaNoHechaTxt(p)}</td>
         <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${p.direccion?escHtml(p.direccion):'—'}${p.lat==null?'<div style="font-size:10.5px;color:var(--muted-2)">sin ubicación en el mapa</div>':''}</td>
         <td class="num" style="color:var(--muted-2)">—</td>
         <td>${escHtml(_nomPil(p.pilotoId))}</td>
         <td><span class="badge b-prep">Parada</span></td>
-        <td><div class="acts">${canAsignarPiloto()?`<button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Hecha</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>`:''}</div></td>
+        <td><div class="acts">${canAsignarPiloto()?`<button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Completar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>`:''}</div></td>
       </tr>`;
     }
     const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];
@@ -2068,7 +2182,8 @@ function renderMisEntregas(){
       ${p.direccion?`<div class="ent-dir">📍 ${escHtml(p.direccion)}</div>`:''}
       ${(hora||eta)?`<div class="ent-linea">${hora}${eta}</div>`:''}
       ${p.nota?`<div class="ent-items">${escHtml(p.nota)}</div>`:''}
-      <div class="ent-acts"><button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Marcar hecha</button></div>
+      ${paradaNoHechaTxt(p)}
+      <div class="ent-acts"><button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Completar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="paradaNoHecha(${p.id})">✕ No se pudo hacer</button></div>
     </div>`;
   };
   $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-head"><h3>Mi ruta de hoy</h3><div style="display:flex;align-items:center;gap:10px;margin-left:auto"><span style="font-size:12px;color:var(--muted)">${combinada.length} parada${combinada.length!==1?'s':''} · ordenadas por ruta</span>${nNav?`<button class="btn btn-primary btn-sm" onclick="abrirRutaMisEntregas()" title="Abrir toda la ruta en Google Maps para navegar">🗺️ Navegar mi ruta</button>`:''}</div></div><div class="panel-body" style="display:flex;flex-direction:column;gap:11px">`+

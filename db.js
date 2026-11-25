@@ -623,7 +623,7 @@ function mapParadaRutaFromDB(p){
   return { id:p.id, pilotoId:p.piloto_id, motivo:p.motivo||'', titulo:p.titulo||'', nota:p.nota||'', direccion:p.direccion||'',
     lat:(p.lat!=null?Number(p.lat):null), lng:(p.lng!=null?Number(p.lng):null),
     horaLimite:p.hora_limite||'', ordenRuta:p.orden_ruta, hecha:p.hecha===true, hechaFecha:p.hecha_fecha,
-    creada:p.creada, creadaPor:p.creada_por, eta:p.eta||null };
+    creada:p.creada, creadaPor:p.creada_por, eta:p.eta||null, hechaInfo:p.hecha_info||null };
 }
 async function guardarParadaRuta(p){
   const row = {
@@ -636,19 +636,49 @@ async function guardarParadaRuta(p){
   // existe en la base (migración 20261125150000 sin correr), se reintenta
   // sin ella para que la parada se guarde igual.
   if (p.motivo) row.motivo = p.motivo;
-  const _sinMotivo = e => e && row.motivo!==undefined && /motivo/i.test(String(e.message||'')+String(e.details||''));
+  // Resultado / evidencia de texto (migración 20261125180000). Si la columna
+  // todavía no existe, se reintenta sin ella.
+  if (p.hechaInfo!==undefined) row.hecha_info = p.hechaInfo||null;
+  const _sinMotivo = e => {
+    if(!e) return false;
+    const t=String(e.message||'')+String(e.details||'');
+    let quitado=false;
+    if(row.hecha_info!==undefined && /hecha_info/i.test(t)){ delete row.hecha_info; quitado=true; }
+    if(row.motivo!==undefined && /motivo/i.test(t)){ delete row.motivo; quitado=true; }
+    return quitado;
+  };
   if (p._nuevo) {
     delete p._nuevo;
     let {data,error} = await sb.from('paradas_ruta').insert(row).select().single();
-    if(_sinMotivo(error)){ delete row.motivo; ({data,error} = await sb.from('paradas_ruta').insert(row).select().single()); }
+    if(_sinMotivo(error)){ ({data,error} = await sb.from('paradas_ruta').insert(row).select().single()); }
     if(error){console.error('Error guardando parada de ruta:',error); p._nuevo=true;}
     else p.id = data.id;
   } else {
     let {error} = await sb.from('paradas_ruta').update(row).eq('id', p.id);
-    if(_sinMotivo(error)){ delete row.motivo; ({error} = await sb.from('paradas_ruta').update(row).eq('id', p.id)); }
+    if(_sinMotivo(error)){ ({error} = await sb.from('paradas_ruta').update(row).eq('id', p.id)); }
     if(error)console.error('Error actualizando parada de ruta:',error);
   }
 }
+// Firma/foto de una parada hecha (tabla aparte, igual que las entregas).
+async function guardarEvidenciaParada(paradaId,ev){
+  try{
+    const row={parada_id:paradaId,firma:ev.firma||null,foto:ev.foto||null,atendio:ev.atendio||null,
+      registrado_por:ev.registradoPor||null,registrado_el:ev.registradoEl||new Date().toISOString()};
+    const {error}=await sb.from('paradas_evidencia').upsert(row,{onConflict:'parada_id'});
+    if(error){console.warn('Evidencia de parada no guardada:',error);return false;}
+    return true;
+  }catch(e){console.warn('Evidencia de parada no guardada:',e);return false;}
+}
+async function traerEvidenciaParada(p){
+  if(!p)return null;
+  if(p._evid!==undefined)return p._evid;
+  try{
+    const {data,error}=await sb.from('paradas_evidencia').select('firma,foto,atendio').eq('parada_id',p.id).maybeSingle();
+    if(error){console.warn('No se pudo leer la evidencia de la parada:',error);return null;}
+    p._evid=data||null; return p._evid;
+  }catch(e){return null;}
+}
+if(typeof window!=='undefined'){ window.guardarEvidenciaParada=guardarEvidenciaParada; window.traerEvidenciaParada=traerEvidenciaParada; }
 async function borrarParadaRuta(id){
   const {error} = await sb.from('paradas_ruta').delete().eq('id', id);
   if(error)console.error('Error borrando parada de ruta:',error);
