@@ -815,8 +815,16 @@ function empTag(codigo){
   if(!haymultiempresa()) return '';
   const e=(empresas||[]).find(x=>x.codigo===(codigo||'SEFE'));
   const nom=(e&&e.nombre)||codigo||'SEFE'; const col=(e&&e.color)||'#888';
+  // SEFE en verde y LAML (Luis Menocal) en amarillo, para distinguirlas de un
+  // vistazo en las listas. Otra empresa: pill gris con su color en el punto.
+  const t=EMP_TAG_COLORES[codigo||'SEFE'];
+  if(t) return `<span class="emp-tag" style="background:${t.bg};color:${t.fg}"><span class="emp-dot" style="background:${t.dot}"></span>${nom}</span>`;
   return `<span class="emp-tag"><span class="emp-dot" style="background:${col}"></span>${nom}</span>`;
 }
+const EMP_TAG_COLORES={
+  SEFE:{bg:'#dcefd5',fg:'#1e4d1b',dot:'#2e7d32'},  // verde
+  LAML:{bg:'#fbecb4',fg:'#5c4300',dot:'#d4a017'},  // amarillo mostaza
+};
 if(typeof window!=='undefined'){
   window.empresaActivaObj=empresaActivaObj; window.haymultiempresa=haymultiempresa;
   window.deEmpresa=deEmpresa; window.empresaParaNuevo=empresaParaNuevo;
