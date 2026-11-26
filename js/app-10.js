@@ -2186,6 +2186,7 @@ function renderMisEntregas(){
       </div>
       <div class="ent-meta"><span class="badge ${ec}">${en}</span><span>Parada · <b>${escHtml(p.motivo||'Otro')}</b></span></div>
       <div class="ent-dir">📍 ${escHtml(p.direccion||'—')}</div>
+      ${_navBtnsHTML({t:'p',o:p})}
       ${paradaNoHechaTxt(p)}
       ${(hora||eta)?`<div class="ent-linea">${hora}${eta}</div>`:''}
       ${p.nota?`<div class="ent-items">${escHtml(p.nota)}</div>`:''}
@@ -2217,6 +2218,7 @@ function renderMisEntregas(){
         </div>
         <div class="ent-meta"><span class="badge ${ec}">${en}</span><span>${docNum(d)} · ${tipoCorto[d.tipoDoc]} · <b>${money(d.totales.total)}</b></span></div>
         <div class="ent-dir">📍 ${escHtml(dirEntrega(d))}</div>
+        ${est!=='entregado'?_navBtnsHTML({t:'d',o:d}):''}
         ${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}
         ${typeof parcialTxt==='function'?parcialTxt(d):''}
         ${(()=>{const b=_horaBadge(d,_riskPil),e=_etaBadge(d);return (b||e)?`<div class="ent-linea">${b}${e}</div>`:'';})()}
@@ -2532,6 +2534,13 @@ function _ppDestino(it){
   if(it.t==='d'){ const r=_rutaParadaDe(it.o); return r?{q:r,ll:/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(r)?r:null}:null; }
   const p=it.o; if(p.lat!=null&&p.lng!=null){const ll=Number(p.lat)+','+Number(p.lng);return {q:ll,ll};}
   return p.direccion?{q:p.direccion+', Guatemala',ll:null}:null;
+}
+// Botones para ir a UNA parada: Google Maps y Waze (pin, o la dirección).
+function _navBtnsHTML(it){
+  const dest=_ppDestino(it); if(!dest)return '';
+  const g='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(dest.q);
+  const w=dest.ll?'https://waze.com/ul?ll='+dest.ll+'&navigate=yes':'https://waze.com/ul?q='+encodeURIComponent(dest.q)+'&navigate=yes';
+  return `<div class="ent-nav"><a class="btn btn-ghost btn-sm" href="${g}" target="_blank" rel="noopener">🧭 Maps</a><a class="btn btn-ghost btn-sm" href="${w}" target="_blank" rel="noopener">🚗 Waze</a>${dest.ll?'':'<span>va a la dirección escrita</span>'}</div>`;
 }
 function renderPanelPiloto(){
   const box=document.getElementById('panel-piloto'); if(!box)return;

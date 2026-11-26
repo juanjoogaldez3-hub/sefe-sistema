@@ -578,6 +578,9 @@
 .ent-ubic{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px}
 .ent-ubic span{font-size:11px;color:var(--muted-2)}
 .ent-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.ent-nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ent-nav .btn{text-decoration:none;min-height:36px;padding:0 14px}
+.ent-nav span{font-size:11px;color:var(--muted-2)}
 @media(max-width:600px){
   .ent-acts .btn{flex:1 1 auto;justify-content:center;min-height:42px}
   .ent-ubic .btn{flex:1 1 100%;justify-content:center;min-height:40px}
