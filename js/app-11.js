@@ -958,7 +958,7 @@ window.go=function(v,desdeHash){
 // ---- Navegación por dirección (hash) ----
 // Permite que el botón "atrás"/"adelante" del navegador y el recargar (F5)
 // funcionen dentro del sistema. Cada sección tiene su dirección: #inventario, #reportes, etc.
-const VISTAS_VALIDAS=['panel','pedido','cotizaciones','documentos','cobros','clientes','recordatorios','inventario','reportes','compras','nuevacompra','porpagar','bancos','talonarios','proveedores','usuarios','auditoria','despachos','misentregas','evidencias','cuadre','controles'];
+const VISTAS_VALIDAS=['panel','pedido','cotizaciones','documentos','cobros','clientes','recordatorios','inventario','reportes','compras','nuevacompra','porpagar','bancos','talonarios','proveedores','usuarios','auditoria','despachos','misentregas','evidencias','cuadre','tiendaweb','controles'];
 function irAHash(){
   // Solo navegar por hash si ya entramos al sistema (app visible)
   const app=document.getElementById('app-layout');
