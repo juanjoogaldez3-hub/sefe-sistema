@@ -849,6 +849,7 @@ const MODULOS_PERMISOS=[
   {key:'misentregas',lbl:'Mis entregas (piloto)',grp:'Módulos'},
   {key:'evidencias',lbl:'Evidencias de entregas y paradas',grp:'Módulos'},
   {key:'cuadre',lbl:'Cuadre de repartidores',grp:'Módulos'},
+  {key:'tiendaweb',lbl:'Tienda en línea (pedidos web)',grp:'Módulos'},
   {key:'controles',lbl:'Controles (ambientales, baterías, gasolina)',grp:'Módulos'},
   {key:'usuarios',lbl:'Usuarios',grp:'Módulos'},
   {key:'auditoria',lbl:'Auditoría',grp:'Módulos'},

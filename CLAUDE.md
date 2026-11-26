@@ -114,6 +114,26 @@ no existe no rompe nada) y encender la función con el SQL después.
   la `service_role` de Supabase. Usa `service_role`, así que **se salta
   RLS**.
 
+## Tienda en línea (desde el 26-11-2026)
+
+- **Página pública**: `tienda/index.html` → `sistema.se-fe.com/tienda/`. No
+  usa login del sistema ni lee tablas: todo pasa por las funciones
+  `tienda_*` de la base (`20261126120000_tienda_en_linea.sql`), que
+  calculan precios y total en la base. Del navegador sólo salen códigos y
+  cantidades.
+- **Unificada**: una ficha por código aunque el producto esté en SEFE y en
+  LAML. Precio público = el de lista más alto; cliente con acceso = su
+  precio especial / el de su empresa.
+- **Pedidos web** caen en `pedidos_web` SIN empresa. En el sistema, módulo
+  "Tienda en línea" (`js/app-14.js`): se elige qué empresa vende cada
+  línea y se crea un PED normal por empresa (reserva inventario).
+- **Nace apagada**: `ajustes.tienda.activa`. Se enciende en Tienda en
+  línea → Configuración (Admin/Gerencia).
+- **Fotos**: cubeta pública `productos` de Storage; `productos.imagen_url`.
+- **Falta (fase 2)**: cobro con tarjeta. Necesita que Juanjo contrate una
+  pasarela (ej. Recurrente, Pagalo, Cubo Pay) y pase las llaves; el cobro
+  y su confirmación (webhook) van en `sefe-backend`, no en el navegador.
+
 ## Pendientes conocidos
 
 - **Correlativos en el cliente**: `corr`, `cliN`, `compN`… se calculan
