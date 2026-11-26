@@ -25,7 +25,7 @@ const _twCod=c=>String(c==null?'':c).trim().toUpperCase();
 const _twNit=n=>String(n==null?'':n).replace(/[^0-9A-Za-z]/g,'').toUpperCase();
 const _twNum=p=>'WEB-'+String(p.id).padStart(4,'0');
 function _twCfg(){
-  const base={activa:false,mostrarAgotados:false,whatsapp:'',pedidoMinimo:0,aviso:''};
+  const base={activa:false,mostrarAgotados:false,whatsapp:'',pedidoMinimo:0,aviso:'',tema:'original'};
   const v=(typeof ajustes!=='undefined'&&ajustes&&ajustes.tienda)||{};
   return Object.assign(base,(v&&typeof v==='object')?v:{});
 }
@@ -499,6 +499,8 @@ function _twHtmlConfig(){
         <span><b>Tienda abierta al público</b><br><span style="font-size:12px;color:var(--muted)">Apagada, nadie de afuera ve productos ni precios ni puede pedir.</span></span></label>
       <label style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" id="tw-agotados" ${c.mostrarAgotados?'checked':''} ${dis} style="margin-top:3px;width:auto">
         <span><b>Mostrar también los productos agotados</b><br><span style="font-size:12px;color:var(--muted)">Salen marcados "Agotado" y no se pueden pedir. Apagado, sólo se ve lo que hay.</span></span></label>
+      <div><label>Diseño de la tienda</label><select id="tw-tema" ${dis}>${[['original','Original (igual a la tienda anterior)'],['a','A · Aire — blanco, redondeado, letra Manrope'],['b','B · Natural — fondo crema, títulos con serifa'],['c','C · Contraste — encabezado verde, botones lima']].map(([k,t])=>`<option value="${k}"${(c.tema||'original')===k?' selected':''}>${t}</option>`).join('')}</select>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">Para compararlos antes de elegir: abrí la Vista previa y usá los botones "Diseño" de arriba.</div></div>
       <div><label>WhatsApp para avisos <span style="font-weight:400;color:var(--muted-2)">(opcional, 8 dígitos)</span></label><input id="tw-wa" value="${escHtml(c.whatsapp||'')}" ${dis} placeholder="Ej. 55551234" maxlength="15">
         <div style="font-size:12px;color:var(--muted);margin-top:3px">Al terminar su pedido, el comprador ve un botón para escribirles a este número.</div></div>
       <div><label>Pedido mínimo en quetzales <span style="font-weight:400;color:var(--muted-2)">(0 = sin mínimo)</span></label><input id="tw-min" type="number" min="0" step="1" value="${Number(c.pedidoMinimo)||0}" ${dis}></div>
@@ -510,7 +512,7 @@ function _twHtmlConfig(){
 async function twGuardarConfig(){
   const antes=_twCfg();
   const nueva={activa:$('#tw-activa').checked,mostrarAgotados:$('#tw-agotados').checked,
-    whatsapp:($('#tw-wa').value||'').replace(/\D/g,''),pedidoMinimo:Math.max(0,Number($('#tw-min').value)||0),aviso:($('#tw-aviso').value||'').trim()};
+    whatsapp:($('#tw-wa').value||'').replace(/\D/g,''),pedidoMinimo:Math.max(0,Number($('#tw-min').value)||0),aviso:($('#tw-aviso').value||'').trim(),tema:$('#tw-tema').value||'original'};
   const guardar=async()=>{
     const ok=await guardarAjuste('tienda',nueva);
     if(!ok){toast('No se pudo guardar',null,true);return;}
