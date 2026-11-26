@@ -1211,8 +1211,11 @@ const _escRec=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replac
 // Recordatorios visibles para el usuario actual (admin ve todos; el resto los asignados a él o creados por él)
 function recVisibles(){
   if(currentRole==='admin'||currentRole==='gerencia')return recordatorios.slice();
-  // Las contraseñas de pago las ve TODO el mundo en el listado; el resto, solo propias/asignadas
-  return recordatorios.filter(r=>r.tipo==='contrasena'||r.asignadoA===currentUser||r.creadoPor===currentUser);
+  // Las contraseñas de pago las ve todo el mundo en el listado (menos los
+  // repartidores, que no tienen nada que ver con cobrarlas); el resto, solo
+  // propias/asignadas.
+  const verContra=currentRole!=='piloto';
+  return recordatorios.filter(r=>(verContra&&r.tipo==='contrasena')||r.asignadoA===currentUser||r.creadoPor===currentUser);
 }
 // Recordatorios que DISPARAN notificación (campana/pop-up) para el usuario actual.
 // Contraseñas de pago: notifican a admin/gerencia/cobros/contabilidad (+ creador/asignado); no a todos.

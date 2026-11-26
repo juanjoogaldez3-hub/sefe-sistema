@@ -2541,60 +2541,129 @@ function renderPanelPiloto(){
   const fechaLarga=new Date().toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'});
   const docsMios=pid==null?[]:docsDespachables().filter(d=>String(d.pilotoId)===String(pid));
   const pend=docsMios.filter(d=>estadoEntrega(d)!=='entregado');
+  const porCargar=pend.filter(d=>['sin','asignado','preparado'].includes(estadoEntrega(d))).length;
   const enRuta=pend.filter(d=>estadoEntrega(d)==='ruta').length;
   const entHoy=docsMios.filter(d=>estadoEntrega(d)==='entregado'&&fechaLocalDe(d.entregaInfo?.fecha)===hoy).length;
   const pars=pid==null?[]:_paradasPiloto(pid);
-  // Próxima parada: la de menor número de ruta (sin número, al final).
+  const parsHechasHoy=pid==null?0:(typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>String(p.pilotoId||'')===String(pid)&&p.hecha&&fechaLocalDe(p.hechaFecha)===hoy).length;
+  const listas=entHoy+parsHechasHoy, total=listas+pend.length+pars.length;
+  const pct=total?Math.round(listas*100/total):0;
+  const nomCli=d=>d.clienteComercial||d.clienteNombre||'';
+  // Toda la ruta pendiente en orden (sin número, al final).
   const todo=pend.map(d=>({t:'d',o:d})).concat(pars.map(p=>({t:'p',o:p}))).sort((a,b)=>(a.o.ordenRuta??999)-(b.o.ordenRuta??999));
   const sig=todo[0];
-  let sigHTML='<div class="empty" style="padding:18px">🎉 No tenés entregas ni paradas pendientes.</div>';
+
+  // ── Próxima parada ──
+  let sigHTML=`<div class="pp-vacio">🎉<div><b>¡Ruta terminada!</b><br>No tenés entregas ni paradas pendientes.</div></div>`;
   if(sig){
     const o=sig.o, esD=sig.t==='d';
-    const nombre=esD?(o.clienteComercial||o.clienteNombre||''):o.titulo;
+    const nombre=esD?nomCli(o):o.titulo;
     const dir=esD?dirEntrega(o):(o.direccion||'—');
     const hora=esD?_horaLimTxtDoc(o):o.horaLimite;
-    const tipo=esD?(((o.serie&&o.numeroDte)?o.serie+'-'+o.numeroDte:refPed(o))+' · '+({cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'}[o.tipoDoc]||'')+' · '+money(o.totales.total)):('Parada · '+(o.motivo||'Otro'));
+    const cli=esD?clientes.find(c=>c.id===o.clienteId):null;
+    const tel=esD?(cli?.contactoCompras?.telefono||cli?.contactoPagos?.telefono||''):(o.telefono||'');
+    const tipo=esD?(((o.serie&&o.numeroDte)?o.serie+'-'+o.numeroDte:refPed(o))+' · '+({cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'}[o.tipoDoc]||'Pedido')+' · '+money(o.totales.total)):('Parada · '+(o.motivo||'Otro'));
     const dest=_ppDestino(sig);
     const gUrl=dest?'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(dest.q):'';
     const wUrl=dest?(dest.ll?'https://waze.com/ul?ll='+dest.ll+'&navigate=yes':'https://waze.com/ul?q='+encodeURIComponent(dest.q)+'&navigate=yes'):'';
-    sigHTML=`<div class="ent-card" style="border:none;padding:4px 0 0">
-      <div class="ent-top">${o.ordenRuta!=null?`<span class="ent-num">${o.ordenRuta}</span>`:''}<div class="ent-nombre">${escHtml(nombre)}</div></div>
-      <div class="ent-meta"><span>${escHtml(tipo)}</span></div>
-      <div class="ent-dir">📍 ${escHtml(dir)}</div>
-      ${hora?`<div class="ent-linea"><span style="font-size:12px;font-weight:700;color:var(--warn)">⏰ antes de ${escHtml(hora)}</span></div>`:''}
-      <div class="ent-acts">
-        ${gUrl?`<a class="btn btn-primary btn-sm" style="text-decoration:none" href="${gUrl}" target="_blank" rel="noopener">🧭 Navegar</a><a class="btn btn-ghost btn-sm" style="text-decoration:none" href="${wUrl}" target="_blank" rel="noopener">Waze</a>`:'<span style="font-size:12px;color:var(--muted-2)">Sin dirección para navegar</span>'}
-        <button class="btn btn-ghost btn-sm" onclick="go('misentregas')">Abrir mi ruta</button>
+    sigHTML=`<div class="pp-sig">
+      <div class="pp-sig-top">${o.ordenRuta!=null?`<span class="ent-num">${o.ordenRuta}</span>`:''}<div style="min-width:0"><div class="pp-sig-nom">${escHtml(nombre)}</div><div class="pp-sig-tipo">${escHtml(tipo)}</div></div></div>
+      <div class="pp-sig-dir">📍 ${escHtml(dir)}</div>
+      ${hora?`<div class="pp-chip pp-chip-warn">⏰ Recibe antes de ${escHtml(hora)}</div>`:''}
+      ${esD&&o.preparacion&&o.preparacion.parcial?`<div class="pp-chip">📦 Llevás solo una parte</div>`:''}
+      <div class="pp-sig-acts">
+        ${gUrl?`<a class="btn btn-primary" href="${gUrl}" target="_blank" rel="noopener">🧭 Navegar</a><a class="btn btn-ghost" href="${wUrl}" target="_blank" rel="noopener">Waze</a>`:'<span class="pp-mute">Sin dirección para navegar</span>'}
+        ${tel?`<a class="btn btn-ghost" href="tel:${escHtml(String(tel).replace(/[^\d+]/g,''))}">📞 Llamar</a>`:''}
       </div></div>`;
   }
-  // Avisos
+
+  // ── Avisos ──
   const avisos=[];
-  pend.filter(d=>d.entregaInfo&&d.entregaInfo.noEntregado).forEach(d=>avisos.push(`<span style="color:var(--danger)">✕</span><span><b>${escHtml(d.clienteComercial||d.clienteNombre||'')}</b>: no se pudo entregar (${escHtml(d.entregaInfo.noEntregado.motivo||'')}). Sigue en tu ruta.</span>`));
-  pars.filter(p=>p.hechaInfo&&p.hechaInfo.noHecha).forEach(p=>avisos.push(`<span style="color:var(--danger)">✕</span><span><b>${escHtml(p.titulo)}</b>: no se pudo hacer (${escHtml(p.hechaInfo.noHecha.motivo||'')}). Sigue en tu ruta.</span>`));
-  try{ const risk=_riesgosHora(pend.slice().sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999))); pend.filter(d=>risk.has(d.id)).forEach(d=>avisos.push(`<span>⏰</span><span><b>${escHtml(d.clienteComercial||d.clienteNombre||'')}</b> recibe antes de ${escHtml(_horaLimTxtDoc(d))} y quedó tarde en tu ruta. Avisale a logística.</span>`)); }catch(e){}
-  pend.filter(d=>d.preparacion&&d.preparacion.parcial).forEach(d=>avisos.push(`<span>📦</span><span><b>${escHtml(d.clienteComercial||d.clienteNombre||'')}</b>: llevás solo una parte del pedido.</span>`));
-  // Cobrado sin depositar
-  const cob=(typeof cobrosRuta!=='undefined'?cobrosRuta:[]).filter(c=>c.piloto===currentUser&&c.estado==='cobrado');
-  const ef=cob.filter(c=>c.modo==='efectivo'), ch=cob.filter(c=>c.modo==='cheque');
-  const sum=a=>a.reduce((s,c)=>s+(Number(c.monto)||0),0);
+  pend.filter(d=>d.entregaInfo&&d.entregaInfo.noEntregado).forEach(d=>avisos.push(['✕','danger',`<b>${escHtml(nomCli(d))}</b>: no se pudo entregar (${escHtml(d.entregaInfo.noEntregado.motivo||'')}). Sigue en tu ruta.`]));
+  pars.filter(p=>p.hechaInfo&&p.hechaInfo.noHecha).forEach(p=>avisos.push(['✕','danger',`<b>${escHtml(p.titulo)}</b>: no se pudo hacer (${escHtml(p.hechaInfo.noHecha.motivo||'')}). Sigue en tu ruta.`]));
+  try{ const risk=_riesgosHora(pend.slice().sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999))); pend.filter(d=>risk.has(d.id)).forEach(d=>avisos.push(['⏰','warn',`<b>${escHtml(nomCli(d))}</b> recibe antes de ${escHtml(_horaLimTxtDoc(d))} y quedó tarde en tu ruta. Avisale a logística.`])); }catch(e){}
+  const sinDir=todo.filter(it=>!_ppDestino(it)).length;
+  if(sinDir)avisos.push(['📍','warn',`${sinDir} parada${sinDir!==1?'s':''} sin dirección ni ubicación. Cuando llegués, tocá <b>Guardar ubicación</b>.`]);
+
+  // ── La ruta en orden ──
+  const EST={sin:['Por cargar','muted'],asignado:['Por cargar','muted'],preparado:['Lista para cargar','info'],ruta:['En ruta','ok']};
+  const rutaHTML=todo.slice(0,8).map((it,i)=>{const o=it.o,esD=it.t==='d';
+    const [lbl,cls]=esD?(EST[estadoEntrega(o)]||['Pendiente','muted']):[o.motivo||'Parada','purple'];
+    const hora=esD?_horaLimTxtDoc(o):o.horaLimite;
+    return `<button class="pp-paso${i===0?' on':''}" onclick="go('misentregas')"><span class="pp-paso-n">${o.ordenRuta!=null?o.ordenRuta:'·'}</span>
+      <span class="pp-paso-t"><b>${escHtml(esD?nomCli(o):o.titulo)}</b><small>${escHtml(esD?dirEntrega(o):(o.direccion||''))}</small></span>
+      <span class="pp-paso-r"><span class="pp-tag pp-tag-${cls}">${escHtml(lbl)}</span>${hora?`<small>⏰ ${escHtml(hora)}</small>`:''}</span></button>`;}).join('');
+
+  // ── Recordatorios ──
+  const recs=(typeof recVisibles==='function'?recVisibles():[]).filter(r=>!r.hecho&&r.fechaVencimiento&&r.fechaVencimiento<=hoy).sort((a,b)=>(a.fechaVencimiento||'').localeCompare(b.fechaVencimiento||''));
+  const proxRec=(typeof recVisibles==='function'?recVisibles():[]).filter(r=>!r.hecho&&r.fechaVencimiento&&r.fechaVencimiento>hoy).length;
+  const recHTML=recs.length?recs.map(r=>`<label class="pp-rec"><input type="checkbox" onchange="_ppRecHecho(${r.id})"><span><b>${escHtml(r.titulo)}</b>${r.nota?`<small>${escHtml(r.nota)}</small>`:''}<small>${r.fechaVencimiento<hoy?`<span style="color:var(--danger);font-weight:600">Atrasado · ${escHtml(fdate(r.fechaVencimiento+'T12:00:00'))}</span>`:'Para hoy'}${r.creadoPor&&r.creadoPor!==currentUser?' · de '+escHtml(r.creadoPor):''}</small></span></label>`).join('')
+    :`<div class="pp-mute">No tenés recordatorios para hoy.${proxRec?` Tenés ${proxRec} próximo${proxRec!==1?'s':''}.`:''}</div>`;
+
+  // ── Cuadre del día: lo que tiene que entregar en bodega ──
+  const its=(pid!=null&&typeof _cuadreItems==='function')?_cuadreItems(pid,hoy):[];
+  const ef=its.filter(x=>x.grupo==='efectivo'&&x.fisico&&!x.recibido), ch=its.filter(x=>x.grupo==='cheque'&&!x.recibido);
+  const sum=a=>a.reduce((s,x)=>s+(x.monto||0),0);
+  const docsC=its.filter(x=>!['efectivo','cheque'].includes(x.grupo));
+  const recib=its.filter(x=>x.recibido).length;
+  const cerr=_ppCuadre&&_ppCuadre.dia===hoy?_ppCuadre.row:null;
+  const ICO={efectivo:'💵',cheque:'🏦',contrasena:'📄',firmada:'✍️',regresa:'↩️',recolecta:'📦'};
+  const cuadreHTML=!its.length?'<div class="pp-mute">Hoy todavía no tenés nada que entregar en el cuadre.</div>':`
+    ${cerr?`<div class="pp-cuadre-ok">✓ Cuadre cerrado por <b>${escHtml(cerr.cerrado_por||'')}</b>${Number(cerr.diferencia)?` · <span style="color:var(--danger)">${Number(cerr.diferencia)>0?'sobraron':'faltaron'} ${money(Math.abs(cerr.diferencia))}</span>`:' · cuadró'}</div>`:''}
+    <div class="pp-dinero">
+      <div><small>Efectivo en mano</small><b>${money(sum(ef))}</b><small>${ef.length} cobro${ef.length!==1?'s':''}</small></div>
+      <div><small>Cheques</small><b>${money(sum(ch))}</b><small>${ch.length} cheque${ch.length!==1?'s':''}</small></div>
+    </div>
+    ${docsC.length?`<div class="pp-cq">${docsC.map(x=>`<div class="pp-cq-i${x.recibido?' ok':''}"><span>${x.recibido?'✓':ICO[x.grupo]||'•'}</span><span>${escHtml(x.titulo)}<small>${escHtml(x.sub||'')}</small></span></div>`).join('')}</div>`:''}
+    <div class="pp-cq-pie">${recib} de ${its.length} recibido${its.length!==1?'s':''} por logística</div>`;
+
   box.innerHTML=`
-    <div class="resumen-dia">
-      <div class="rd-hi">${saludo}, ${escHtml(String(currentUser||'').split(' ')[0])}</div>
+    <div class="resumen-dia pp-hero">
+      <div class="rd-hi">${saludo}, ${escHtml(String(currentUser||'').split(' ')[0])} 👋</div>
       <div class="rd-fecha">${escHtml(fechaLarga.charAt(0).toUpperCase()+fechaLarga.slice(1))} · tu ruta de hoy</div>
+      <div class="pp-prog"><div class="pp-prog-txt"><b>${listas}</b> de ${total} listas${total&&listas===total?' · ¡terminaste! 🎉':''}</div><div class="pp-prog-bar"><span style="width:${pct}%"></span></div></div>
       <div class="rd-grid">
-        <div class="rd-item"><div class="rd-lbl">Por entregar</div><div class="rd-val">${pend.length}</div><div class="rd-sub">entregas</div></div>
-        <div class="rd-item"><div class="rd-lbl">En ruta</div><div class="rd-val">${enRuta}</div><div class="rd-sub">cargadas</div></div>
-        <div class="rd-item"><div class="rd-lbl">Entregadas hoy</div><div class="rd-val">${entHoy}</div><div class="rd-sub">completadas</div></div>
+        <div class="rd-item"><div class="rd-lbl">Por cargar</div><div class="rd-val">${porCargar}</div><div class="rd-sub">en bodega</div></div>
+        <div class="rd-item"><div class="rd-lbl">En ruta</div><div class="rd-val">${enRuta}</div><div class="rd-sub">en el carro</div></div>
+        <div class="rd-item"><div class="rd-lbl">Entregadas</div><div class="rd-val">${entHoy}</div><div class="rd-sub">hoy</div></div>
         <div class="rd-item"><div class="rd-lbl">Paradas</div><div class="rd-val">${pars.length}</div><div class="rd-sub">pendientes</div></div>
       </div>
     </div>
-    <div class="panel"><div class="panel-head"><h3>➡️ Tu próxima parada</h3>${todo.length>1?`<span style="font-size:12px;color:var(--muted)">y ${todo.length-1} más</span>`:''}</div><div class="panel-body">${sigHTML}</div></div>
-    ${avisos.length?`<div class="panel"><div class="panel-head"><h3>⚠️ Avisos</h3></div><div class="panel-body">${avisos.map(a=>`<div class="pp-aviso">${a}</div>`).join('')}</div></div>`:''}
-    <div class="panel"><div class="panel-head"><h3>💵 Cobrado sin depositar</h3><button class="btn btn-ghost btn-sm" onclick="go('misentregas')">Ver mi corte</button></div><div class="panel-body">
-      ${cob.length?`<div class="pp-cobro"><span>Efectivo (${ef.length})</span><b>${money(sum(ef))}</b></div><div class="pp-cobro"><span>Cheques (${ch.length})</span><b>${money(sum(ch))}</b></div><div class="pp-cobro" style="border:none"><span>Total</span><b>${money(sum(cob))}</b></div>`:'<div style="font-size:13px;color:var(--muted)">No tenés cobros pendientes de depositar.</div>'}
-    </div></div>
-    <button class="btn btn-primary" style="justify-content:center;min-height:48px" onclick="go('misentregas')">🚚 Abrir mi ruta completa</button>`;
+    <div class="pp-cols">
+      <div class="pp-col">
+        <div class="panel"><div class="panel-head"><h3>➡️ Tu próxima parada</h3>${todo.length>1?`<span class="pp-mute">y ${todo.length-1} más</span>`:''}</div><div class="panel-body">${sigHTML}</div></div>
+        ${avisos.length?`<div class="panel pp-avisos"><div class="panel-head"><h3>⚠️ Avisos</h3><span class="badge b-warn">${avisos.length}</span></div><div class="panel-body">${avisos.map(([i,c,t])=>`<div class="pp-aviso"><span style="color:var(--${c})">${i}</span><span>${t}</span></div>`).join('')}</div></div>`:''}
+        ${todo.length>1?`<div class="panel"><div class="panel-head"><h3>🗺️ Tu ruta en orden</h3><span class="pp-mute">${todo.length} pendiente${todo.length!==1?'s':''}</span></div><div class="panel-body pp-ruta">${rutaHTML}${todo.length>8?`<div class="pp-mute" style="padding:6px 2px">y ${todo.length-8} más…</div>`:''}</div></div>`:''}
+      </div>
+      <div class="pp-col">
+        <div class="panel"><div class="panel-head"><h3>📌 Tus recordatorios</h3>${typeof tienePermiso==='function'&&tienePermiso('recordatorios')?`<button class="btn btn-ghost btn-sm" onclick="go('recordatorios')">Ver todos</button>`:''}</div><div class="panel-body">${recHTML}</div></div>
+        <div class="panel"><div class="panel-head"><h3>🧾 Tu cuadre de hoy</h3><button class="btn btn-ghost btn-sm" onclick="go('misentregas')">Ver mi corte</button></div><div class="panel-body">${cuadreHTML}</div></div>
+      </div>
+    </div>
+    <button class="btn btn-primary pp-abrir" onclick="go('misentregas')">🚚 Abrir mi ruta completa</button>`;
+  _ppCargarCuadre(pid,hoy);
 }
+// Estado del cierre del cuadre de hoy (se consulta como mucho cada minuto).
+let _ppCuadre=null;
+async function _ppCargarCuadre(pid,dia){
+  if(pid==null||typeof sb==='undefined')return;
+  if(_ppCuadre&&_ppCuadre.dia===dia&&Date.now()-_ppCuadre.t<60000)return;
+  const antes=JSON.stringify(_ppCuadre&&_ppCuadre.dia===dia?_ppCuadre.row:null);
+  _ppCuadre={dia,t:Date.now(),row:_ppCuadre&&_ppCuadre.dia===dia?_ppCuadre.row:null};
+  try{
+    const {data,error}=await sb.from('cuadres_ruta').select('cerrado_por,cerrado_el,diferencia').eq('piloto_id',Number(pid)).eq('fecha',dia).maybeSingle();
+    if(error)return;
+    _ppCuadre.row=data||null;
+    if(JSON.stringify(_ppCuadre.row)!==antes&&document.querySelector('#v-panel.modo-piloto.active'))renderPanelPiloto();
+  }catch(e){}
+}
+function _ppRecHecho(id){
+  if(typeof window.toggleHechoRecordatorio==='function')window.toggleHechoRecordatorio(id);
+  const r=recordatorios.find(x=>x.id===id);
+  if(r&&r.hecho)toast('✓ Recordatorio hecho',r.titulo);
+  renderPanelPiloto();
+}
+window._ppRecHecho=_ppRecHecho;
 window.renderPanelPiloto=renderPanelPiloto;
 
 // =====================================================================
