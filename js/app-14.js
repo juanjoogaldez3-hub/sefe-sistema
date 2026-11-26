@@ -15,7 +15,7 @@
 // ============================================================
 
 let _twTab='pedidos', _twPedidos=null, _twSinTabla=false, _twFiltro='nuevo';
-let _twExtra=null;            // {idProducto:{img,oculto}}
+let _twExtra=null;            // {idProducto:{img,oculto,desc}}
 let _twAccesos=null;          // {clienteId:{creado}}
 let _twProdQ='', _twCliQ='', _twProdSolo='todos';
 let _twNuevosAntes=null;
@@ -46,9 +46,9 @@ async function _twCargarPedidos(){
 async function _twCargarExtra(){
   _twExtra={};
   try{
-    const filas=(typeof fetchAll==='function')?await fetchAll('productos','id','id,imagen_url,tienda_oculto'):[];
-    (filas||[]).forEach(r=>{_twExtra[r.id]={img:r.imagen_url||'',oculto:r.tienda_oculto===true};});
-  }catch(e){console.warn('Tienda: no se pudieron leer fotos/visibilidad',e);}
+    const filas=(typeof fetchAll==='function')?await fetchAll('productos','id','id,imagen_url,tienda_oculto,tienda_descripcion'):[];
+    (filas||[]).forEach(r=>{_twExtra[r.id]={img:r.imagen_url||'',oculto:r.tienda_oculto===true,desc:String(r.tienda_descripcion||'').trim()};});
+  }catch(e){console.warn('Tienda: no se pudieron leer fotos/visibilidad/descripciones',e);}
 }
 async function _twCargarAccesos(){
   _twAccesos={};
@@ -299,10 +299,11 @@ function _twFichas(){
     if(p.activo===false||!_twCod(p.codigo)||!(Number(p.precio)>0))return;
     if(String(p.categoria||'').toLowerCase()==='servicios')return;
     const k=_twCod(p.codigo), x=_twExtra[p.id]||{};
-    const f=m[k]||(m[k]={cod:k,nombre:p.nombre,marca:p.marca||'',ids:[],emps:[],img:'',oculto:false,disp:0,precio:0});
+    const f=m[k]||(m[k]={cod:k,nombre:p.nombre,marca:p.marca||'',ids:[],emps:[],img:'',desc:'',oculto:false,disp:0,precio:0});
     if((p.empresa||'SEFE')==='SEFE')f.nombre=p.nombre;
     f.ids.push(p.id);f.emps.push(p.empresa||'SEFE');
     if(x.img&&x.img>f.img)f.img=x.img;
+    if(!f.desc&&x.desc&&String(x.desc).trim())f.desc=String(x.desc).trim();
     if(x.oculto)f.oculto=true;
     f.disp=Math.max(f.disp,_twDisp(p));f.precio=Math.max(f.precio,Number(p.precio)||0);
   });
@@ -313,28 +314,30 @@ function _twHtmlProductos(){
   const q=_twProdQ.trim().toLowerCase();
   let l=todas.filter(f=>!q||(f.nombre+' '+f.cod+' '+f.marca).toLowerCase().includes(q));
   if(_twProdSolo==='sinfoto')l=l.filter(f=>!f.img&&!f.oculto);
+  else if(_twProdSolo==='sindesc')l=l.filter(f=>!f.desc&&!f.oculto);
   else if(_twProdSolo==='ocultos')l=l.filter(f=>f.oculto);
   else if(_twProdSolo==='constock')l=l.filter(f=>f.disp>0&&!f.oculto);
-  const conFoto=todas.filter(f=>f.img).length, ocultos=todas.filter(f=>f.oculto).length;
+  const conFoto=todas.filter(f=>f.img).length, ocultos=todas.filter(f=>f.oculto).length, conDesc=todas.filter(f=>f.desc).length;
   const puede=_twPuede();
   const filas=l.slice(0,120).map(f=>`<tr>
       <td style="width:58px">${f.img?`<img src="${escHtml(f.img)}" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid var(--line,#e5e5e5)">`:'<div style="width:48px;height:48px;border-radius:6px;background:var(--bg,#f2f2f2);display:grid;place-items:center;font-size:10px;color:var(--muted)">sin foto</div>'}</td>
-      <td>${escHtml(f.nombre)}<br><span style="font-size:11.5px;color:var(--muted)">${escHtml(f.cod)} · ${escHtml(f.emps.join(' + '))} · ${f.disp>0?'hay '+f.disp:'<b>agotado</b>'}</span></td>
+      <td>${escHtml(f.nombre)}<br><span style="font-size:11.5px;color:var(--muted)">${escHtml(f.cod)} · ${escHtml(f.emps.join(' + '))} · ${f.disp>0?'hay '+f.disp:'<b>agotado</b>'} · ${f.desc?'<span style="color:var(--ok,#2e7d32)">con descripción</span>':'sin descripción'}</span></td>
       <td class="num" style="text-align:right">${money(f.precio)}</td>
       <td style="text-align:right;white-space:nowrap">${puede?`
         <button class="btn" style="font-size:12px" onclick="twFoto('${escHtml(f.cod)}')">${f.img?'Cambiar foto':'Subir foto'}</button>
+        <button class="btn" style="font-size:12px" onclick="twDesc('${escHtml(f.cod)}')">${f.desc?'Editar descripción':'Descripción'}</button>
         <button class="btn" style="font-size:12px" onclick="twOcultar('${escHtml(f.cod)}',${f.oculto?'false':'true'})">${f.oculto?'Mostrar en tienda':'Ocultar'}</button>`:''}
         ${f.oculto?'<span class="badge b-danger">Oculto</span>':''}</td></tr>`).join('');
-  const sel=[['todos','Todos'],['constock','Con existencias'],['sinfoto','Sin foto'],['ocultos','Ocultos']];
+  const sel=[['todos','Todos'],['constock','Con existencias'],['sinfoto','Sin foto'],['sindesc','Sin descripción'],['ocultos','Ocultos']];
   return `<div class="panel"><div class="panel-head" style="flex-wrap:wrap;gap:8px"><h3>Lo que se ve en la tienda</h3>
-      <span style="font-size:12px;color:var(--muted)">${todas.length} productos · ${conFoto} con foto · ${ocultos} ocultos</span></div>
+      <span style="font-size:12px;color:var(--muted)">${todas.length} productos · ${conFoto} con foto · ${conDesc} con descripción · ${ocultos} ocultos</span></div>
     <div class="panel-body">
-      <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px">La tienda muestra una ficha por código (aunque el producto esté en las dos empresas), con el precio de lista más alto. La foto y "Ocultar" se aplican al código completo. Fotos: JPG o PNG, se achican solas.</p>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px">La tienda muestra una ficha por código (aunque el producto esté en las dos empresas), con el precio de lista más alto. La foto, la descripción y "Ocultar" se aplican al código completo. Fotos: JPG o PNG, se achican solas.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         <input id="tw-prodq" placeholder="Buscar producto, código o marca…" value="${escHtml(_twProdQ)}" oninput="twProdBuscar(this.value)" style="flex:1;min-width:200px">
         ${sel.map(([k,t])=>`<button class="btn${_twProdSolo===k?' btn-primary':''}" style="font-size:12px" onclick="twProdSolo('${k}')">${t}</button>`).join('')}
       </div>
-      ${puede?`<div class="note" style="margin:0 0 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:200px">¿Sin fotos? Se pueden traer las de la tienda anterior (solucionesefectivasgt.com), emparejando por nombre.</span><button class="btn" onclick="twTraerFotos()">Traer fotos de la tienda anterior</button></div>`:''}
+      ${puede?`<div class="note" style="margin:0 0 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:200px">¿Sin fotos o sin descripciones? Se pueden traer las de la tienda anterior (solucionesefectivasgt.com), emparejando por nombre. Sólo se completa lo que falta.</span><button class="btn" onclick="twTraerFotos()">Traer fotos y descripciones de la tienda anterior</button></div>`:''}
       <input type="file" id="tw-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="_twFotoElegida(this)">
       <div style="overflow-x:auto"><table><thead><tr><th></th><th>Producto</th><th style="text-align:right">Precio público</th><th></th></tr></thead><tbody>${filas||'<tr><td colspan="4"><div class="empty">Sin resultados.</div></td></tr>'}</tbody></table></div>
       ${l.length>120?`<div style="font-size:12px;color:var(--muted);margin-top:8px">Mostrando 120 de ${l.length}. Usá el buscador para llegar al resto.</div>`:''}
@@ -387,47 +390,111 @@ async function _twFotoElegida(input){
   }catch(e){toast('No se pudo subir la foto',(e&&e.message)||'',true);}
 }
 
-// ── Fotos de la tienda anterior ─────────────────────────────
-// tienda/fotos-anteriores.json trae [nombre, urlFoto] de los productos de
-// solucionesefectivasgt.com. Se emparejan por nombre con las fichas que
-// todavía no tienen foto; primero se muestra cuántas y cuáles, y recién
-// al confirmar se guardan. Las fotos siguen alojadas en la tienda anterior.
-function _twNorm(s){return String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]+/g,' ').trim();}
-function _twEmparejar(fichas,fotos){
-  const exacto={}, lista=fotos.map(([n,img])=>{const k=_twNorm(n);exacto[k]=img;return {k,t:new Set(k.split(' ')),img,n};});
+// ── Descripción del producto (a mano) ───────────────────────
+// La tienda pública la muestra en la página de cada producto. Formato:
+// 1.ª línea = resumen; cada línea = un párrafo; "## Título" = subtítulo;
+// "• texto" = viñeta; "@pdf Etiqueta|https://…pdf" = enlace a hoja técnica.
+const _TW_DESC_MAX=4000;
+// Deja el texto listo para guardar: sin espacios sobrantes, "- " y "* " al
+// inicio de línea pasan a "• ", sin renglones vacíos de más y con tope de largo.
+function _twLimpiarDesc(texto){
+  return String(texto==null?'':texto).replace(/\r\n?/g,'\n').split('\n')
+    .map(l=>l.replace(/[ \t ]+/g,' ').trim().replace(/^[-*•]\s+/,'• '))
+    .join('\n').replace(/\n{3,}/g,'\n\n').trim().slice(0,_TW_DESC_MAX).trim();
+}
+function twDesc(cod){
+  if(!_twPuede()){toast('Sin permiso','Tu usuario es de sólo lectura.',true);return;}
+  const f=_twFichas().find(x=>x.cod===cod); if(!f)return;
+  const ej='Toalla de manos en rollo, hoja doble.\n## Características\n• Rollo de 240 metros\n• 6 rollos por caja\n@pdf Hoja técnica|https://ejemplo.com/hoja.pdf';
+  openMod('Descripción de '+f.nombre,`<p style="font-size:12.5px;color:var(--muted);line-height:1.5;margin:0 0 8px">Es lo que se lee en la página del producto en la tienda. Se aplica al código <b>${escHtml(f.cod)}</b> completo (${escHtml(f.emps.join(' + '))}).</p>
+    <textarea id="tw-desc" rows="14" maxlength="${_TW_DESC_MAX}" style="width:100%;min-height:260px;font-family:inherit;font-size:13px;line-height:1.5;resize:vertical" oninput="_twDescCuenta()">${escHtml(f.desc||'')}</textarea>
+    <div id="tw-desc-n" style="font-size:11.5px;color:var(--muted);text-align:right;margin:2px 0 8px">${(f.desc||'').length} de ${_TW_DESC_MAX}</div>
+    <div class="note" style="font-size:12px;line-height:1.55;margin:0"><b>Cómo se escribe:</b> la primera línea es el resumen; cada línea es un párrafo; <code>## Título</code> hace un subtítulo; <code>• texto</code> (o <code>- texto</code>) hace una viñeta; <code>@pdf Etiqueta|https://…pdf</code> agrega un enlace a la hoja técnica. Dejalo vacío para quitar la descripción.
+      <pre style="margin:6px 0 0;font-size:11.5px;white-space:pre-wrap;color:var(--muted)">${escHtml(ej)}</pre></div>`,async()=>{
+    const el=document.getElementById('tw-desc'); if(!el)return;
+    const txt=_twLimpiarDesc(el.value), ids=_twIdsDe(cod); if(!ids.length)return;
+    const {error}=await sb.from('productos').update({tienda_descripcion:txt||null}).in('id',ids);
+    if(error){toast('No se pudo guardar',error.message,true);return;}
+    ids.forEach(id=>{(_twExtra[id]=_twExtra[id]||{}).desc=txt;});
+    closeMod();logAudit(txt?'Tienda: descripción de producto':'Tienda: descripción quitada',cod);
+    toast(txt?'✓ Descripción guardada':'✓ Descripción quitada');renderTiendaWeb();
+  });
+  $('#m-save').textContent='Guardar descripción';
+}
+function _twDescCuenta(){const t=document.getElementById('tw-desc'),n=document.getElementById('tw-desc-n');if(t&&n)n.textContent=t.value.length+' de '+_TW_DESC_MAX;}
+
+// ── Fotos y descripciones de la tienda anterior ─────────────
+// tienda/fichas-anteriores.json trae [nombre, urlFoto, descripcion] de los
+// productos de solucionesefectivasgt.com (foto o descripción pueden venir
+// vacías). Se emparejan por nombre con las fichas a las que les falta foto
+// O descripción, y a cada una se le completa SÓLO lo que le falta (nunca se
+// pisa lo que ya tiene). Primero se muestra cuántas y cuáles, y recién al
+// confirmar se guardan. Las fotos siguen alojadas en la tienda anterior.
+function _twNorm(s){return String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]+/g,' ').trim();}
+// Devuelve [{f, img, desc, de, seguro}]: img/desc son lo que hay que
+// completar en la ficha f ('' = no se toca ese campo).
+function _twEmparejar(fichas,anteriores){
+  const exacto={}, lista=[];
+  (Array.isArray(anteriores)?anteriores:[]).forEach(r=>{
+    if(!Array.isArray(r))return;
+    const n=String(r[0]||''), k=_twNorm(n); if(!k)return;
+    const img=String(r[1]||'').trim(), desc=_twLimpiarDesc(r[2]);
+    if(!img&&!desc)return;
+    // Si el mismo nombre viene repetido, se juntan sus datos (gana el primero no vacío).
+    let x=exacto[k];
+    if(x){if(!x.img)x.img=img;if(!x.desc)x.desc=desc;}
+    else{x=exacto[k]={k,t:new Set(k.split(' ')),img,desc,n};lista.push(x);}
+  });
   const res=[];
   fichas.forEach(f=>{
-    if(f.img)return;
+    const faltaImg=!f.img, faltaDesc=!String(f.desc||'').trim();
+    if(!faltaImg&&!faltaDesc)return;
     const k=_twNorm(f.nombre); if(!k)return;
-    if(exacto[k]){res.push({f,img:exacto[k],de:f.nombre,seguro:true});return;}
-    const t=new Set(k.split(' ')); if(t.size<3)return;
-    let mejor=null, pm=0;
-    lista.forEach(x=>{let c=0;t.forEach(w=>{if(x.t.has(w))c++;});const p=c/(t.size+x.t.size-c);if(p>pm){pm=p;mejor=x;}});
-    if(mejor&&pm>=0.8)res.push({f,img:mejor.img,de:mejor.n,seguro:false});
+    let x=exacto[k], seguro=true;
+    if(!x){
+      const t=new Set(k.split(' ')); if(t.size<3)return;
+      let mejor=null, pm=0;
+      lista.forEach(y=>{let c=0;t.forEach(w=>{if(y.t.has(w))c++;});const p=c/(t.size+y.t.size-c);if(p>pm){pm=p;mejor=y;}});
+      if(!mejor||pm<0.8)return;
+      x=mejor;seguro=false;
+    }
+    const img=faltaImg?x.img:'', desc=faltaDesc?x.desc:'';
+    if(!img&&!desc)return;
+    res.push({f,img,desc,de:seguro?f.nombre:x.n,seguro});
   });
   return res;
 }
 async function twTraerFotos(){
   if(!_twPuede())return;
-  let fotos=[];
-  try{const r=await fetch(_twUrl()+'fotos-anteriores.json',{cache:'no-store'});fotos=await r.json();}catch(e){toast('No se pudo leer la lista de fotos',null,true);return;}
-  const pares=_twEmparejar(_twFichas(),fotos);
-  if(!pares.length){toast('No hay fotos nuevas para traer','Los productos sin foto no coinciden por nombre con la tienda anterior.');return;}
+  let ant=[];
+  try{const r=await fetch(_twUrl()+'fichas-anteriores.json',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);ant=await r.json();if(!Array.isArray(ant))throw new Error('formato');}
+  catch(e){toast('No se pudo leer la lista de la tienda anterior',null,true);return;}
+  const pares=_twEmparejar(_twFichas(),ant);
+  if(!pares.length){toast('No hay nada nuevo para traer','Los productos sin foto o sin descripción no coinciden por nombre con la tienda anterior.');return;}
   const dudosos=pares.filter(x=>!x.seguro);
-  openMod('Traer fotos de la tienda anterior',`<p style="font-size:13px;color:var(--muted);line-height:1.5">Se encontró foto para <b>${pares.length}</b> producto(s) sin foto: ${pares.length-dudosos.length} con el mismo nombre y ${dudosos.length} con nombre parecido. Después podés cambiar cualquiera con "Cambiar foto".</p>
+  const cuenta=l=>({img:l.filter(x=>x.img).length,desc:l.filter(x=>x.desc).length});
+  const tot=cuenta(pares);
+  const que=x=>[x.img?'foto':'',x.desc?'descripción':''].filter(Boolean).join(' y ');
+  openMod('Traer fotos y descripciones de la tienda anterior',`<p style="font-size:13px;color:var(--muted);line-height:1.5">Se encontraron datos para <b>${pares.length}</b> producto(s): <b>${tot.img}</b> reciben foto y <b>${tot.desc}</b> reciben descripción. ${pares.length-dudosos.length} coinciden con el mismo nombre y ${dudosos.length} con nombre parecido. Sólo se completa lo que falta: no se cambia ninguna foto ni descripción que ya esté. Después podés corregir cualquiera con "Cambiar foto" o "Editar descripción".</p>
     ${dudosos.length?`<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="tw-dudosos" checked style="width:auto"> Incluir también los de nombre parecido:</label>
-    <div style="max-height:220px;overflow:auto;font-size:12px;border:1px solid var(--line,#e5e5e5);border-radius:8px;padding:8px">${dudosos.map(x=>`<div style="margin-bottom:6px"><b>${escHtml(x.f.nombre)}</b><br><span style="color:var(--muted)">← ${escHtml(x.de)}</span></div>`).join('')}</div>`:''}`,async()=>{
+    <div style="max-height:220px;overflow:auto;font-size:12px;border:1px solid var(--line,#e5e5e5);border-radius:8px;padding:8px">${dudosos.map(x=>`<div style="margin-bottom:6px"><b>${escHtml(x.f.nombre)}</b> <span style="color:var(--muted)">(${que(x)})</span><br><span style="color:var(--muted)">← ${escHtml(x.de)}</span></div>`).join('')}</div>`:''}`,async()=>{
     const inc=!document.getElementById('tw-dudosos')||document.getElementById('tw-dudosos').checked;
     const usar=pares.filter(x=>x.seguro||inc);
-    let ok=0;
+    let ok=0, nImg=0, nDesc=0;
     for(const x of usar){
-      const {error}=await sb.from('productos').update({imagen_url:x.img}).in('id',x.f.ids);
-      if(!error){ok++;x.f.ids.forEach(id=>{(_twExtra[id]=_twExtra[id]||{}).img=x.img;});}
+      const cambio={};
+      if(x.img)cambio.imagen_url=x.img;
+      if(x.desc)cambio.tienda_descripcion=x.desc;
+      const {error}=await sb.from('productos').update(cambio).in('id',x.f.ids);
+      if(error)continue;
+      ok++;if(x.img)nImg++;if(x.desc)nDesc++;
+      x.f.ids.forEach(id=>{const e=_twExtra[id]=_twExtra[id]||{};if(x.img)e.img=x.img;if(x.desc)e.desc=x.desc;});
     }
-    closeMod();logAudit('Tienda: fotos de la tienda anterior',ok+' productos');
-    toast('✓ Fotos traídas',ok+' de '+usar.length+' productos');renderTiendaWeb();
+    const det=nImg+' fotos y '+nDesc+' descripciones';
+    closeMod();logAudit('Tienda: fotos y descripciones de la tienda anterior',ok+' productos ('+det+')');
+    toast(ok===usar.length?'✓ Datos traídos':'Se trajo una parte',det+' en '+ok+' de '+usar.length+' productos',ok!==usar.length);renderTiendaWeb();
   });
-  $('#m-save').textContent='Traer fotos';
+  $('#m-save').textContent='Traer fotos y descripciones';
 }
 
 // ── Acceso de clientes ──────────────────────────────────────
@@ -526,7 +593,7 @@ async function twGuardarConfig(){
 
 if(typeof window!=='undefined'){
   Object.assign(window,{renderTiendaWeb,twTab,twCopiarLink,twAbrirTienda,twFiltro,twRecargar,twConvertir,twRechazar,_twTodoA,_twResumen,
-    twProdBuscar,twProdSolo,twOcultar,twFoto,_twFotoElegida,twTraerFotos,twCliBuscar,twDarClave,twQuitarClave,twGuardarConfig,_twContarNuevos});
+    twProdBuscar,twProdSolo,twOcultar,twFoto,_twFotoElegida,twTraerFotos,twDesc,_twDescCuenta,twCliBuscar,twDarClave,twQuitarClave,twGuardarConfig,_twContarNuevos});
   // Revisa cada 2 minutos si entró un pedido nuevo (consulta liviana: sólo cuenta).
   setTimeout(_twContarNuevos,8000);
   setInterval(_twContarNuevos,120000);

@@ -130,6 +130,17 @@ no existe no rompe nada) y encender la función con el SQL después.
 - **Nace apagada**: `ajustes.tienda.activa`. Se enciende en Tienda en
   línea → Configuración (Admin/Gerencia).
 - **Fotos**: cubeta pública `productos` de Storage; `productos.imagen_url`.
+- **Diseños**: original / a / b / c (`ajustes.tienda.tema`, CSS en
+  `html[data-tema=…]`). En la vista previa hay botones para compararlos.
+- **Página por producto**: `tienda/#p=CODIGO`. La descripción vive en
+  `productos.tienda_descripcion` y se pide al abrir con
+  `tienda_producto(codigo)` (no viaja en el catálogo). Formato de texto:
+  1ª línea = resumen; `## Título`; `• viñeta`; `@pdf Etiqueta|URL`.
+- **Datos de la tienda anterior** (solucionesefectivasgt.com):
+  `tienda/fichas-anteriores.json` (`[nombre, foto, descripción]`, lo arma
+  `scripts/build-fichas-tienda.js`). Se importan desde Tienda en línea →
+  Productos y fotos, emparejando por nombre; las fotos quedan enlazadas a
+  esa web (no copiadas).
 - **Falta (fase 2)**: cobro con tarjeta. Necesita que Juanjo contrate una
   pasarela (ej. Recurrente, Pagalo, Cubo Pay) y pase las llaves; el cobro
   y su confirmación (webhook) van en `sefe-backend`, no en el navegador.

@@ -122,6 +122,54 @@ header.top{background:#fff;position:sticky;top:0;z-index:20;box-shadow:0 1px 0 v
 .cant input{width:44px;border:0;text-align:center;font-weight:700;height:33px;-moz-appearance:textfield;flex:1;min-width:0}
 .cant input::-webkit-outer-spin-button,.cant input::-webkit-inner-spin-button{-webkit-appearance:none}
 .vacio{text-align:center;color:var(--gris);padding:60px 16px}
+.prod h3 a,.prod a.img{text-decoration:none}
+.prod h3 a:hover{text-decoration:underline}
+
+/* Página de producto (#p=CODIGO): migas, foto, datos, descripción y relacionados */
+.pd{padding-top:16px;padding-bottom:10px}
+.migas{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;font-size:13px;color:var(--gris);padding:4px 0 18px}
+.migas a{color:var(--v);text-decoration:none}
+.migas a:hover{text-decoration:underline}
+.migas .sep{color:#bbb}
+.migas [aria-current]{min-width:0;overflow-wrap:anywhere}
+.pd-dos{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:44px;align-items:start}
+.pd-foto{aspect-ratio:1/1;background:var(--suave);border:1px solid var(--linea);display:grid;place-items:center;position:relative;overflow:hidden}
+.pd-foto img{width:100%;height:100%;object-fit:contain;background:#fff}
+.pd-foto .ph{font-weight:900;font-size:76px;color:#c6cfbd;letter-spacing:.04em}
+.pd-foto .ago{position:absolute;top:14px;left:0;background:#444;color:#fff;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:4px 12px}
+.pd-info{display:flex;flex-direction:column;gap:8px;min-width:0;padding-top:6px}
+.pd-info .mar{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#999}
+.pd h1{font-size:25px;font-weight:400;line-height:1.25;color:var(--v);text-transform:uppercase;overflow-wrap:anywhere}
+.pd h1:focus{outline:none}
+.pd .cod{font-size:12.5px;color:#999}
+.pd-res{margin:6px 0 0;font-size:16px;line-height:1.55;color:#444;overflow-wrap:anywhere}
+.pd .pd-info .precio{font-size:29px;line-height:1.2;margin-top:10px}
+.pd .pd-info .precio small{font-size:14px;margin-left:6px}
+.pd-disp{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--v6)}
+.pd-disp::before{content:"";flex:none;width:9px;height:9px;border-radius:50%;background:var(--lima)}
+.pd-disp.no{color:var(--gris)}
+.pd-disp.no::before{background:#b5b5b5}
+.pd-compra{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:10px}
+.pd-compra .bt{padding:13px 26px;font-size:13.5px}
+.pd-compra .cant button{width:46px;height:44px}
+.pd-compra .cant input{width:58px;height:44px;flex:none}
+.pd-desc{padding-top:38px}
+.pd-carga{color:var(--gris);font-size:13.5px;margin:0;padding-top:30px}
+.pd-txt{max-width:760px;overflow-wrap:anywhere}
+.pd-txt p{margin:0 0 12px}
+.pd-txt h3{font-size:16px;font-weight:700;margin:22px 0 8px;color:var(--v)}
+.pd-txt h3:first-child{margin-top:0}
+.pd-txt ul{margin:0 0 14px;padding-left:20px}
+.pd-txt li{margin-bottom:5px}
+.pd-txt li::marker{color:var(--lima-o)}
+.pd-pdfs{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 14px}
+.pd-pdfs a{display:inline-flex;align-items:center;gap:8px;text-decoration:none;max-width:100%}
+.pd-pdfs a:hover{background:var(--suave);border-color:var(--v)}
+.pd-pdfs svg{flex:none;width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2}
+.pd-no{padding:70px 16px 90px}
+.pd-no h1{margin-bottom:10px}
+.pd-no p{margin:0 0 20px}
+.pd-no .bt{display:inline-block;text-decoration:none}
 .mas{display:flex;justify-content:center;padding:26px 0 10px}
 
 /* Marcas */
@@ -195,6 +243,7 @@ header.top{background:#fff;position:sticky;top:0;z-index:20;box-shadow:0 1px 0 v
   .grid{grid-template-columns:repeat(3,1fr)}
   .menu{display:none}
   .marcas{grid-template-columns:repeat(4,1fr)}
+  .pd-dos{gap:26px}
 }
 @media (max-width:640px){
   .top .fila{flex-wrap:wrap;gap:8px 12px;padding:8px 0 10px;min-height:0}
@@ -211,6 +260,12 @@ header.top{background:#fff;position:sticky;top:0;z-index:20;box-shadow:0 1px 0 v
   .pie-cols{grid-template-columns:1fr}
   .dos{grid-template-columns:1fr}
   .banner img{aspect-ratio:1500/700}
+  .pd-dos{grid-template-columns:minmax(0,1fr);gap:16px}
+  .pd h1{font-size:21px}
+  .pd .pd-info .precio{font-size:25px}
+  .pd-foto .ph{font-size:56px}
+  .pd-compra .bt{flex:1 1 auto}
+  .pd-desc{padding-top:28px}
 }
 
 /* ════════ DISEÑOS ALTERNATIVOS ════════
@@ -230,6 +285,11 @@ html[data-tema] .cuenta::before{display:none}
 html[data-tema] .banner{max-width:1048px;border-radius:22px;margin:18px auto 0}
 html[data-tema] .prod .img img{mix-blend-mode:multiply}
 html[data-tema] .prod .img{background:#fff}
+html[data-tema] .pd h1{text-transform:lowercase;color:var(--tinta)}
+html[data-tema] .pd h1::first-letter{text-transform:uppercase}
+html[data-tema] .pd-foto{background:#fff}
+html[data-tema] .pd-res{color:var(--gris)}
+html[data-tema] .pd-compra .bt{font-size:15px}
 
 /* A · "Aire": blanco, mucho espacio, letra Manrope, formas redondeadas */
 html[data-tema=a]{--v:#1d3f1c;--v6:#2c5e2a;--suave:#f3f5ef;--tinta:#14201a;--gris:#66705f;--linea:#e7eae2}
@@ -249,6 +309,11 @@ html[data-tema=a] .prod .img{border-radius:18px;border:1px solid var(--linea)}
 html[data-tema=a] .prod .mar{color:var(--lima-o);font-weight:700}
 html[data-tema=a] .prod h3{color:var(--tinta);font-weight:600;font-size:14.5px}
 html[data-tema=a] .precio{font-size:18px;font-weight:800}
+html[data-tema=a] .pd-foto{border-radius:24px}
+html[data-tema=a] .pd-info .mar{color:var(--lima-o);font-weight:700}
+html[data-tema=a] .pd h1{font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+html[data-tema=a] .pd .pd-info .precio{font-weight:800}
+html[data-tema=a] .pd-txt h3{font-weight:800;font-size:17px;color:var(--tinta)}
 html[data-tema=a] .contacto{border-radius:20px}
 html[data-tema=a] .pie-v{border-radius:28px 28px 0 0}
 html[data-tema=a] .dlg{border-radius:20px}
@@ -279,6 +344,12 @@ html[data-tema=b] .bt{border-radius:8px}
 html[data-tema=b] .prod .pie .bt:not(:disabled){background:#fff;color:var(--v);border:1.5px solid var(--v)}
 html[data-tema=b] .prod .pie .bt:not(:disabled):hover{background:var(--v);color:#fff}
 html[data-tema=b] .cant{border-radius:8px;border-color:var(--v)}
+html[data-tema=b] .pd-foto{border-radius:14px}
+html[data-tema=b] .pd h1,html[data-tema=b] .pd-txt h3{font-family:Fraunces,Georgia,serif}
+html[data-tema=b] .pd h1{font-size:34px;font-weight:600;line-height:1.15;color:var(--v)}
+html[data-tema=b] .pd .pd-info .precio{font-size:31px}
+html[data-tema=b] .pd-txt h3{font-size:19px;font-weight:600}
+html[data-tema=b] .bt.sec{border-color:#cfc9b6}
 html[data-tema=b] .marcas button{background:#fff;border:1px solid var(--linea);border-radius:12px}
 html[data-tema=b] .contacto,html[data-tema=b] .dlg{border-radius:14px}
 
@@ -316,6 +387,12 @@ html[data-tema=c] .precio{font-size:19px;font-weight:700;color:var(--v)}
 html[data-tema=c] .bt{font-weight:600}
 html[data-tema=c] .prod .pie .bt:not(:disabled),html[data-tema=c] .bt.ancho:not(:disabled),html[data-tema=c] #p-enviar{background:var(--lima);color:var(--v)}
 html[data-tema=c] .prod .pie .bt:not(:disabled):hover{background:#a3bf2a}
+html[data-tema=c] .pd-foto{border-radius:16px}
+html[data-tema=c] .pd-info .mar{color:var(--lima-o);font-weight:600}
+html[data-tema=c] .pd h1{font-size:32px;font-weight:700;letter-spacing:-.02em;line-height:1.15;color:var(--v)}
+html[data-tema=c] .pd-compra .bt:not(:disabled):not(.sec){background:var(--lima);color:var(--v)}
+html[data-tema=c] .pd-compra .bt:not(:disabled):not(.sec):hover{background:#a3bf2a}
+html[data-tema=c] .pd-txt h3{font-weight:600;font-size:17px}
 html[data-tema=c] .contacto{border-radius:16px}
 html[data-tema=c] .dlg{border-radius:16px}
 html[data-tema=c] .campo input,html[data-tema=c] .campo textarea,html[data-tema=c] .pago{border-radius:10px}
@@ -324,6 +401,8 @@ html[data-tema=c] .campo input,html[data-tema=c] .campo textarea,html[data-tema=
   html[data-tema] .banner{border-radius:0;margin-top:0}
   html[data-tema=a] .nosotros{border-radius:0}
   html[data-tema=a] .sec-t h2,html[data-tema=c] .sec-t h2,html[data-tema=b] .sec-t h2{font-size:22px}
+  html[data-tema=a] .pd h1,html[data-tema=b] .pd h1,html[data-tema=c] .pd h1{font-size:25px}
+  html[data-tema=a] .pd-foto{border-radius:18px}
 }
 .temas{display:inline-flex;gap:6px;margin-left:10px;vertical-align:middle}
 .temas button{border:1px solid #d9a9a4;background:#fff;border-radius:999px;padding:2px 10px;font-size:12.5px}
@@ -362,6 +441,8 @@ html[data-tema=c] .campo input,html[data-tema=c] .campo textarea,html[data-tema=
     <p>Muy pronto vas a poder hacer tus pedidos en línea. Gracias por tu paciencia.</p>
   </div>
   <div id="tienda" hidden>
+    <!-- Página de un producto (#p=CODIGO): reemplaza a la portada y al catálogo -->
+    <div id="producto" class="wrap pd" hidden></div>
     <!-- Portada: sólo se ve cuando no se está buscando ni filtrando -->
     <div id="portada">
       <div class="banner" id="banner" aria-roledescription="carrusel" aria-label="Promociones">
@@ -515,7 +596,8 @@ function aviso(txt){
 function cargar(){
   return rpc('tienda_catalogo',{p_token:token||null}).then(function(d){
     $('cargando').hidden=true;
-    if(!d || !d.activa){ $('cerrada').hidden=false; $('tienda').hidden=true; return; }
+    if(!d || !d.activa){ listo=false; document.title=tituloBase; $('cerrada').hidden=false; $('tienda').hidden=true; return; }
+    var yaListo=listo; listo=true;
     productos=d.productos||[]; porCod={};
     productos.forEach(function(p){ p._b=sinTildes(p.n+' '+(p.m||'')+' '+p.c+' '+(p.g||'')); porCod[p.c]=p; });
     cliente=d.cliente||null;
@@ -530,7 +612,7 @@ function cargar(){
     pintarDestacados();
     limpiarCarro();
     $('cerrada').hidden=true; $('tienda').hidden=false;
-    pintarCats(); pintar(); pintarContador();
+    pintarCats(); ruta(yaListo?window.scrollY:0); pintarContador(); // ruta() pinta catálogo o producto según la URL
   }).catch(function(){
     $('cargando').innerHTML='No se pudo cargar la tienda. Revisá tu conexión y <a href="">volvé a intentar</a>.';
   });
@@ -568,25 +650,31 @@ function filtrados(){
   return l;
 }
 
-function botonera(p){
+// `largo` = la de la página de producto ("Agregar al carrito" + "Ver carrito").
+function botonera(p,largo){
   var n=carro[p.c]||0;
   if(p.x<=0) return '<button class="bt" disabled type="button">Agotado</button>';
-  if(!n) return '<button class="bt" data-mas="'+esc(p.c)+'" type="button">Agregar</button>';
+  if(!n) return '<button class="bt" data-mas="'+esc(p.c)+'" type="button">'+(largo?'Agregar al carrito':'Agregar')+'</button>';
   return '<div class="cant"><button data-menos="'+esc(p.c)+'" type="button" aria-label="Quitar uno">−</button>'+
          '<input data-cant="'+esc(p.c)+'" type="number" inputmode="numeric" min="0" max="'+Math.floor(p.x)+'" value="'+n+'" aria-label="Cantidad">'+
-         '<button data-mas="'+esc(p.c)+'" type="button" aria-label="Agregar uno">+</button></div>';
+         '<button data-mas="'+esc(p.c)+'" type="button" aria-label="Agregar uno">+</button></div>'+
+         (largo?'<button class="bt sec" data-abrir="carro" type="button">Ver carrito</button>':'');
 }
 
+function iniciales(p){ return esc(String(p.m||p.n||'').replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g,'').slice(0,2).toUpperCase()); }
+function hrefProd(p){ return '#p='+encodeURIComponent(p.c); }
+
+// La foto y el nombre abren la página del producto. La foto queda fuera del
+// orden de tabulación para no repetir el mismo enlace dos veces por tarjeta.
 function tarjeta(p){
-  var img=urlSegura(p.i);
-  var ini=esc(String(p.m||p.n||'').replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g,'').slice(0,2).toUpperCase());
+  var img=urlSegura(p.i), href=esc(hrefProd(p));
   return '<article class="prod">'+
-    '<div class="img">'+(img?'<img loading="lazy" alt="" src="'+esc(img)+'">':'<span class="ph">'+ini+'</span>')+
-      (p.x<=0?'<span class="ago">Agotado</span>':'')+'</div>'+
+    '<a class="img" href="'+href+'" tabindex="-1" aria-hidden="true">'+(img?'<img loading="lazy" alt="" src="'+esc(img)+'">':'<span class="ph">'+iniciales(p)+'</span>')+
+      (p.x<=0?'<span class="ago">Agotado</span>':'')+'</a>'+
     '<div class="cuerpo">'+
       ((p.g||p.m)?'<div class="mar">'+esc(p.g||p.m)+'</div>':'')+
-      '<h3>'+esc(p.n)+'</h3>'+
-      '<div class="cod">Cód. '+esc(p.c)+(p.d?' · '+esc(p.d):'')+'</div>'+
+      '<h3><a href="'+href+'">'+esc(p.n)+'</a></h3>'+
+      '<div class="cod">Cód. '+esc(p.c)+'</div>'+
       '<div class="pie"><div class="precio">'+q(p.p)+'<small>/ '+esc(String(p.u||'unidad').toLowerCase())+'</small></div>'+
       '<div data-bot="'+esc(p.c)+'">'+botonera(p)+'</div></div>'+
     '</div></article>';
@@ -601,13 +689,149 @@ function pintarDestacados(){
 function pintar(){
   var l=filtrados();
   var filtrando=!!(filtro.q.trim()||filtro.cat||filtro.marca);
-  $('portada').hidden=filtrando;
+  $('portada').hidden=filtrando||prodCod!==null;
+  $('catalogo').hidden=prodCod!==null;
   $('cat-titulo').textContent=filtro.q.trim()?'Resultados de la búsqueda':filtro.marca?'Marca: '+titulo(filtro.marca):filtro.cat?titulo(filtro.cat):'Nuestros productos';
   $('cuantos').innerHTML=l.length+(l.length===1?' producto':' productos')+(cliente?' · con tus precios de cliente':'')+(filtrando?' <button class="quita" type="button" data-ir="inicio">× Quitar filtro</button>':'');
   $('grid').innerHTML=l.slice(0,mostrados).map(tarjeta).join('');
   $('sin').hidden=l.length>0;
   $('bt-mas').hidden=l.length<=mostrados;
 }
+
+// ── Página de producto ──────────────────────────────────────
+// Ruta por hash: #p=CODIGO. `prodCod` es el código abierto (null = catálogo).
+// La descripción no viene en el catálogo: se pide al abrir y queda en `descs`.
+var prodCod=null, listo=false, tituloBase=document.title, descs={}, scrolls={}, claveRuta='';
+try{ history.scrollRestoration='manual'; }catch(e){} // el scroll lo guardamos y reponemos acá
+function codRuta(){
+  var m=/^#p=([^&]*)/.exec(location.hash||''); if(!m) return null;
+  try{ return decodeURIComponent(m[1]); }catch(e){ return m[1]; }
+}
+function claveDe(c){ return c===null?'':'p='+c; }
+function saltar(y){ try{ window.scrollTo({top:y||0,left:0,behavior:'instant'}); }catch(e){ window.scrollTo(0,y||0); } }
+
+// Pinta lo que diga la URL (catálogo o producto) y deja el scroll en `y`.
+function ruta(y){
+  if(!listo) return;
+  prodCod=codRuta(); claveRuta=claveDe(prodCod);
+  $('producto').hidden=prodCod===null;
+  pintar();
+  if(prodCod===null){ $('producto').innerHTML=''; document.title=tituloBase; }
+  else pintarProd();
+  saltar(y);
+}
+// Abrir un producto desde un enlace: guarda dónde iba la persona y sube arriba.
+function irProd(hash){
+  scrolls[claveRuta]=window.scrollY;
+  if(location.hash!==hash) history.pushState(null,'',hash);
+  ruta(0);
+  var h=$('producto').querySelector('h1'); if(h) try{ h.focus({preventScroll:true}); }catch(e){}
+}
+// Volver al catálogo sin usar "atrás" (menú, migas, buscador).
+function salirProd(){
+  if(prodCod===null) return;
+  scrolls[claveRuta]=window.scrollY;
+  history.pushState(null,'',location.pathname+location.search);
+  ruta(0);
+}
+
+function pintarProd(){
+  if(prodCod===null) return;
+  var p=porCod[prodCod], caja=$('producto');
+  if(!p){
+    document.title=tituloBase;
+    caja.innerHTML='<div class="vacio pd-no"><h1 tabindex="-1">Ese producto ya no está disponible</h1><p>Puede que se haya agotado o que el enlace esté mal escrito.</p>'+
+      '<a class="bt" href="./" data-ir="catalogo">Ver el catálogo</a></div>';
+    return;
+  }
+  document.title=p.n;
+  var img=urlSegura(p.i), hay=p.x>0, sep='<span class="sep" aria-hidden="true">›</span>';
+  var rel=p.g?productos.filter(function(o){return o.g===p.g&&o.c!==p.c&&o.x>0;}).slice(0,5):[];
+  caja.innerHTML=
+    '<nav class="migas" aria-label="Estás en"><a href="./" data-ir="inicio">Inicio</a>'+sep+
+      (p.g?'<a href="#catalogo" data-ir-cat="'+esc(p.g)+'">'+esc(titulo(p.g))+'</a>'+sep:'')+
+      '<span aria-current="page">'+esc(titulo(p.n))+'</span></nav>'+
+    '<div class="pd-dos">'+
+      '<div class="pd-foto">'+(img?'<img alt="'+esc(p.n)+'" src="'+esc(img)+'">':'<span class="ph">'+iniciales(p)+'</span>')+
+        (hay?'':'<span class="ago">Agotado</span>')+'</div>'+
+      '<div class="pd-info">'+
+        ((p.g||p.m)?'<div class="mar">'+esc([p.g,p.m].filter(Boolean).join(' · '))+'</div>':'')+
+        '<h1 tabindex="-1">'+esc(p.n)+'</h1>'+
+        '<div class="cod">Cód. '+esc(p.c)+'</div>'+
+        '<p class="pd-res" id="pd-res" hidden></p>'+
+        '<div class="precio">'+q(p.p)+'<small>/ '+esc(String(p.u||'unidad').toLowerCase())+'</small></div>'+
+        '<div class="pd-disp'+(hay?'':' no')+'">'+(hay?'Disponible':'Agotado')+'</div>'+
+        '<div class="pd-compra" data-pd data-bot="'+esc(p.c)+'">'+botonera(p,true)+'</div>'+
+        '<div class="nota">Precio con IVA incluido'+(cliente?' · tu precio de cliente':'')+'. El envío te lo confirmamos al recibir tu pedido.</div>'+
+      '</div>'+
+    '</div>'+
+    '<div id="pd-desc"></div>'+
+    (rel.length?'<section class="sec"><div class="sec-t"><h2>Productos relacionados</h2><a href="#catalogo" data-ir-cat="'+esc(p.g)+'">Ver todos ›</a></div>'+
+      '<div class="grid">'+rel.map(tarjeta).join('')+'</div></section>':'');
+  pedirDesc(p);
+}
+
+// Descripción: se pide una vez por producto. Si no hay o falla, no se muestra nada.
+function pedirDesc(p){
+  if(Object.prototype.hasOwnProperty.call(descs,p.c)){ pintarDesc(descs[p.c]); return; }
+  $('pd-desc').innerHTML='<p class="pd-carga" role="status">Cargando descripción…</p>';
+  rpc('tienda_producto',{p_codigo:p.c}).then(function(r){
+    if(!r||!r.ok) throw new Error('sin datos');
+    descs[p.c]=typeof r.d==='string'?r.d:'';
+    if(prodCod===p.c) pintarDesc(descs[p.c]);
+  }).catch(function(){ if(prodCod===p.c) pintarDesc(''); });
+}
+function pintarDesc(txt){
+  var res=$('pd-res'), caja=$('pd-desc'); if(!res||!caja) return;
+  var d=partirDesc(txt);
+  res.textContent=d.res; res.hidden=!d.res;
+  caja.innerHTML=d.cuerpo?'<section class="sec pd-desc"><div class="sec-t"><h2>Descripción</h2></div><div class="pd-txt">'+d.cuerpo+'</div></section>':'';
+}
+// Mini-formato de la descripción, una cosa por línea:
+//   texto → párrafo (la primera línea es el resumen) · "## Título" → subtítulo
+//   "• texto" → ítem de lista · "@pdf Etiqueta|URL" → enlace a la hoja técnica
+// Todo pasa por esc(): de la base nunca se inserta HTML.
+function partirDesc(txt){
+  var ls=String(txt||'').split(/\r?\n/), res='', h='', lista=false, pdfs=false, vistas=0, i, l, k, url, et;
+  function cerrarGrupo(){ if(lista){ h+='</ul>'; lista=false; } if(pdfs){ h+='</div>'; pdfs=false; } }
+  for(i=0;i<ls.length;i++){
+    l=ls[i].trim(); if(!l) continue;
+    vistas++;
+    if(/^@pdf(\s|$)/i.test(l)){
+      k=l.lastIndexOf('|'); url=k<0?'':l.slice(k+1).trim(); et=k<0?'':l.slice(4,k).trim();
+      if(!/^https:\/\/[^\s"'<>\\]+\.pdf$/i.test(url)) continue; // sólo PDF por https; si no, se ignora la línea
+      if(lista) cerrarGrupo();
+      if(!pdfs){ h+='<div class="pd-pdfs">'; pdfs=true; }
+      h+='<a class="bt sec" target="_blank" rel="noopener" href="'+esc(url)+'"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>'+
+         '<span>Hoja técnica'+(et?': '+esc(et):'')+'</span></a>';
+      continue;
+    }
+    if(l.charAt(0)==='•'){
+      l=l.slice(1).trim(); if(!l) continue;
+      if(pdfs) cerrarGrupo();
+      if(!lista){ h+='<ul>'; lista=true; }
+      h+='<li>'+esc(l)+'</li>';
+      continue;
+    }
+    cerrarGrupo();
+    if(/^##/.test(l)){ l=l.replace(/^#+\s*/,''); if(l) h+='<h3>'+esc(l)+'</h3>'; continue; }
+    if(vistas===1) res=l; else h+='<p>'+esc(l)+'</p>';
+  }
+  cerrarGrupo();
+  return {res:res,cuerpo:h};
+}
+// Atrás / adelante del navegador (o alguien que edita el #hash a mano).
+window.addEventListener('popstate',function(){
+  if(!listo) return;
+  var c=codRuta(), antes=prodCod;
+  if(claveDe(c)===claveRuta) return;
+  scrolls[claveRuta]=window.scrollY;
+  ruta(scrolls[claveDe(c)]||0);
+  if(c===null && antes!==null){ // de vuelta en el catálogo: el foco regresa a la tarjeta de donde se salió
+    var as=$('grid').querySelectorAll('h3 a'), hr='#p='+encodeURIComponent(antes);
+    for(var i=0;i<as.length;i++) if(as[i].getAttribute('href')===hr){ try{ as[i].focus({preventScroll:true}); }catch(e){} break; }
+  }
+});
 
 // ── Carrito ─────────────────────────────────────────────────
 function poner(c,n){
@@ -618,7 +842,11 @@ function poner(c,n){
   if(n<=0) delete carro[c]; else carro[c]=n;
   guardar(K_CARRO,JSON.stringify(carro));
   var huecos=document.querySelectorAll('[data-bot="'+(window.CSS&&CSS.escape?CSS.escape(c):c)+'"]');
-  for(var i=0;i<huecos.length;i++) huecos[i].innerHTML=botonera(p);
+  for(var i=0;i<huecos.length;i++){
+    var conFoco=huecos[i].contains(document.activeElement);
+    huecos[i].innerHTML=botonera(p,huecos[i].hasAttribute('data-pd'));
+    if(conFoco){ var f=huecos[i].querySelector('[data-mas]'); if(f) f.focus(); } // que el teclado no pierda el lugar
+  }
   pintarContador();
   if(panelAbierto==='carro') pintarCarro();
 }
@@ -692,7 +920,7 @@ function enviarPedido(){
   var cuerpo=Object.assign({},b,{items:lineas().map(function(l){return {c:l.p.c,q:l.n};})});
   rpc('tienda_crear_pedido',{p_pedido:cuerpo,p_token:token||null}).then(function(r){
     if(!r||!r.ok){ abrirSinFoco(htmlPedido((r&&r.error)||'No se pudo enviar el pedido.')); cargarSilencioso(); return; }
-    carro={}; guardar(K_CARRO,'{}'); borrador={}; pintarContador(); pintar(); pintarDestacados();
+    carro={}; guardar(K_CARRO,'{}'); borrador={}; pintarContador(); pintar(); pintarDestacados(); pintarProd();
     var wa=String(r.whatsapp||'').replace(/\D/g,'');
     var txt=encodeURIComponent('Hola, acabo de hacer el pedido '+r.numero+' en la tienda en línea.');
     abrirSinFoco('<div class="dlg centro-t" role="dialog" aria-modal="true" aria-label="Pedido enviado">'+
@@ -710,7 +938,7 @@ function cargarSilencioso(){
     if(!d||!d.activa) return;
     productos=d.productos||[]; porCod={};
     productos.forEach(function(p){ p._b=sinTildes(p.n+' '+(p.m||'')+' '+p.c+' '+(p.g||'')); porCod[p.c]=p; });
-    limpiarCarro(); pintar(); pintarDestacados(); pintarContador();
+    limpiarCarro(); pintar(); pintarDestacados(); pintarContador(); pintarProd();
   }).catch(function(){});
 }
 
@@ -744,7 +972,7 @@ function salir(){
 
 // ── Eventos ─────────────────────────────────────────────────
 var tq=null;
-$('q').addEventListener('input',function(e){ clearTimeout(tq); tq=setTimeout(function(){ filtro.q=e.target.value; mostrados=40; pintar(); },140); });
+$('q').addEventListener('input',function(e){ clearTimeout(tq); tq=setTimeout(function(){ filtro.q=e.target.value; mostrados=40; if(prodCod!==null) salirProd(); else pintar(); },140); });
 $('orden').addEventListener('change',function(e){ filtro.orden=e.target.value; pintar(); });
 $('bt-mas').addEventListener('click',function(){ mostrados+=40; pintar(); });
 $('cats').addEventListener('click',function(e){ var b=e.target.closest('[data-cat]'); if(!b) return; filtro.cat=b.getAttribute('data-cat'); mostrados=40; pintarCats(); pintar(); });
@@ -753,6 +981,7 @@ $('bt-cuenta').addEventListener('click',function(){ abrir(htmlCuenta(),true,'cue
 
 // Navegación de la página (Inicio / Catálogo / Contacto) y marcas.
 function irA(donde){
+  if(donde!=='contacto') salirProd(); // el pie se ve también desde un producto
   if(donde==='inicio'){ filtro.q='';filtro.cat='';filtro.marca='';$('q').value='';mostrados=40;pintarCats();pintar();window.scrollTo(0,0);return; }
   var el=$(donde); if(el) el.scrollIntoView();
 }
@@ -770,6 +999,11 @@ $('banner').addEventListener('mouseleave',bannerAuto);
 document.addEventListener('click',function(e){
   var t=e.target, b;
   if((b=t.closest('[data-tema-ver]'))){ temaPrueba=b.getAttribute('data-tema-ver'); try{sessionStorage.setItem('sefe_tienda_tema',temaPrueba);}catch(e){} ponerTema(temaPrueba); return; }
+  if((b=t.closest('a[href^="#p="]'))){ // tarjeta → página del producto (ctrl/⌘+clic sigue abriendo otra pestaña)
+    if(e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey) return;
+    e.preventDefault(); irProd(b.getAttribute('href')); return;
+  }
+  if((b=t.closest('[data-ir-cat]'))){ e.preventDefault(); filtro.cat=b.getAttribute('data-ir-cat'); filtro.q=''; filtro.marca=''; $('q').value=''; mostrados=40; pintarCats(); if(prodCod!==null) salirProd(); else pintar(); return; }
   if((b=t.closest('[data-ir]'))){ e.preventDefault(); irA(b.getAttribute('data-ir')); return; }
   if((b=t.closest('[data-banner]'))){ banner(Number(b.getAttribute('data-banner'))); bannerAuto(); return; }
   if((b=t.closest('[data-marca]'))){ filtro.marca=sinTildes(b.getAttribute('data-marca')); filtro.cat=''; mostrados=40; pintarCats(); pintar(); irA('catalogo'); return; }
