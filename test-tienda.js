@@ -31,7 +31,7 @@ const ctx={console,setTimeout:()=>0,setInterval:()=>0,URL,Object,Array,Math,Numb
   ajustes:{},
 };
 ctx.window=ctx; vm.createContext(ctx);
-vm.runInContext(src+'\n;globalThis.T={_twSugerida,_twClienteEn,_twFichas,_twDisp,_twModo,_twCfg,_twUrl,_twClaveNueva:_twClaveNueva.toString(),setExtra:x=>{_twExtra=x}};',ctx);
+vm.runInContext(src+'\n;globalThis.T={_twEmparejar,_twSugerida,_twClienteEn,_twFichas,_twDisp,_twModo,_twCfg,_twUrl,_twClaveNueva:_twClaveNueva.toString(),setExtra:x=>{_twExtra=x}};',ctx);
 const T=ctx.T;
 
 console.log('\n═══ Empresa sugerida por línea ═══');
@@ -60,6 +60,14 @@ ok('existencias = la empresa que más tiene',tk.disp===50);
 ok('la foto de cualquiera de los dos vale para la ficha',tk.img==='https://x/y.jpg');
 ok('servicios e inactivos no salen',!fichas.some(x=>x.cod==='SV1'||x.cod==='OFF'));
 ok('oculto se respeta',fichas.find(x=>x.cod==='CJ1').oculto===true);
+
+console.log('\n═══ Fotos de la tienda anterior ═══');
+const pares=T._twEmparejar([{nombre:'Tork, Toalla de manos universal 6x240mts',img:'',ids:[1]},{nombre:'ELITE PAPEL HIGIENICO JUMBO ROLL 400 MTS',img:'',ids:[2]},{nombre:'YA TIENE',img:'https://x',ids:[3]},{nombre:'JABON AZUL',img:'',ids:[4]}],
+  [['TORK, TOALLA DE MANOS UNIVERSAL 6X240MTS','https://a/1.png'],['ELITE, PAPEL HIGIÉNICO JUMBO ROLL 400 MTS HS','https://a/2.png'],['YA TIENE','https://a/3.png'],['JABON VERDE','https://a/4.png']]);
+ok('mismo nombre (sin importar mayúsculas ni comas) → seguro',pares.some(x=>x.f.ids[0]===1&&x.seguro&&x.img==='https://a/1.png'));
+ok('nombre parecido → se ofrece como dudoso',pares.some(x=>x.f.ids[0]===2&&!x.seguro));
+ok('el que ya tiene foto no se toca',!pares.some(x=>x.f.ids[0]===3));
+ok('nombres cortos distintos no se empatan',!pares.some(x=>x.f.ids[0]===4));
 
 console.log('\n═══ Configuración y enlace ═══');
 ok('sin ajuste guardado, la tienda está apagada',T._twCfg().activa===false);
