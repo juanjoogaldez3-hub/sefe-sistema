@@ -334,6 +334,7 @@ function _twHtmlProductos(){
         <input id="tw-prodq" placeholder="Buscar producto, código o marca…" value="${escHtml(_twProdQ)}" oninput="twProdBuscar(this.value)" style="flex:1;min-width:200px">
         ${sel.map(([k,t])=>`<button class="btn${_twProdSolo===k?' btn-primary':''}" style="font-size:12px" onclick="twProdSolo('${k}')">${t}</button>`).join('')}
       </div>
+      ${puede?`<div class="note" style="margin:0 0 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:200px">¿Sin fotos? Se pueden traer las de la tienda anterior (solucionesefectivasgt.com), emparejando por nombre.</span><button class="btn" onclick="twTraerFotos()">Traer fotos de la tienda anterior</button></div>`:''}
       <input type="file" id="tw-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="_twFotoElegida(this)">
       <div style="overflow-x:auto"><table><thead><tr><th></th><th>Producto</th><th style="text-align:right">Precio público</th><th></th></tr></thead><tbody>${filas||'<tr><td colspan="4"><div class="empty">Sin resultados.</div></td></tr>'}</tbody></table></div>
       ${l.length>120?`<div style="font-size:12px;color:var(--muted);margin-top:8px">Mostrando 120 de ${l.length}. Usá el buscador para llegar al resto.</div>`:''}
@@ -384,6 +385,49 @@ async function _twFotoElegida(input){
     logAudit('Tienda: foto de producto',cod);
     toast('✓ Foto guardada');renderTiendaWeb();
   }catch(e){toast('No se pudo subir la foto',(e&&e.message)||'',true);}
+}
+
+// ── Fotos de la tienda anterior ─────────────────────────────
+// tienda/fotos-anteriores.json trae [nombre, urlFoto] de los productos de
+// solucionesefectivasgt.com. Se emparejan por nombre con las fichas que
+// todavía no tienen foto; primero se muestra cuántas y cuáles, y recién
+// al confirmar se guardan. Las fotos siguen alojadas en la tienda anterior.
+function _twNorm(s){return String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]+/g,' ').trim();}
+function _twEmparejar(fichas,fotos){
+  const exacto={}, lista=fotos.map(([n,img])=>{const k=_twNorm(n);exacto[k]=img;return {k,t:new Set(k.split(' ')),img,n};});
+  const res=[];
+  fichas.forEach(f=>{
+    if(f.img)return;
+    const k=_twNorm(f.nombre); if(!k)return;
+    if(exacto[k]){res.push({f,img:exacto[k],de:f.nombre,seguro:true});return;}
+    const t=new Set(k.split(' ')); if(t.size<3)return;
+    let mejor=null, pm=0;
+    lista.forEach(x=>{let c=0;t.forEach(w=>{if(x.t.has(w))c++;});const p=c/(t.size+x.t.size-c);if(p>pm){pm=p;mejor=x;}});
+    if(mejor&&pm>=0.8)res.push({f,img:mejor.img,de:mejor.n,seguro:false});
+  });
+  return res;
+}
+async function twTraerFotos(){
+  if(!_twPuede())return;
+  let fotos=[];
+  try{const r=await fetch(_twUrl()+'fotos-anteriores.json',{cache:'no-store'});fotos=await r.json();}catch(e){toast('No se pudo leer la lista de fotos',null,true);return;}
+  const pares=_twEmparejar(_twFichas(),fotos);
+  if(!pares.length){toast('No hay fotos nuevas para traer','Los productos sin foto no coinciden por nombre con la tienda anterior.');return;}
+  const dudosos=pares.filter(x=>!x.seguro);
+  openMod('Traer fotos de la tienda anterior',`<p style="font-size:13px;color:var(--muted);line-height:1.5">Se encontró foto para <b>${pares.length}</b> producto(s) sin foto: ${pares.length-dudosos.length} con el mismo nombre y ${dudosos.length} con nombre parecido. Después podés cambiar cualquiera con "Cambiar foto".</p>
+    ${dudosos.length?`<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="tw-dudosos" checked style="width:auto"> Incluir también los de nombre parecido:</label>
+    <div style="max-height:220px;overflow:auto;font-size:12px;border:1px solid var(--line,#e5e5e5);border-radius:8px;padding:8px">${dudosos.map(x=>`<div style="margin-bottom:6px"><b>${escHtml(x.f.nombre)}</b><br><span style="color:var(--muted)">← ${escHtml(x.de)}</span></div>`).join('')}</div>`:''}`,async()=>{
+    const inc=!document.getElementById('tw-dudosos')||document.getElementById('tw-dudosos').checked;
+    const usar=pares.filter(x=>x.seguro||inc);
+    let ok=0;
+    for(const x of usar){
+      const {error}=await sb.from('productos').update({imagen_url:x.img}).in('id',x.f.ids);
+      if(!error){ok++;x.f.ids.forEach(id=>{(_twExtra[id]=_twExtra[id]||{}).img=x.img;});}
+    }
+    closeMod();logAudit('Tienda: fotos de la tienda anterior',ok+' productos');
+    toast('✓ Fotos traídas',ok+' de '+usar.length+' productos');renderTiendaWeb();
+  });
+  $('#m-save').textContent='Traer fotos';
 }
 
 // ── Acceso de clientes ──────────────────────────────────────
@@ -480,7 +524,7 @@ async function twGuardarConfig(){
 
 if(typeof window!=='undefined'){
   Object.assign(window,{renderTiendaWeb,twTab,twCopiarLink,twAbrirTienda,twFiltro,twRecargar,twConvertir,twRechazar,_twTodoA,_twResumen,
-    twProdBuscar,twProdSolo,twOcultar,twFoto,_twFotoElegida,twCliBuscar,twDarClave,twQuitarClave,twGuardarConfig,_twContarNuevos});
+    twProdBuscar,twProdSolo,twOcultar,twFoto,_twFotoElegida,twTraerFotos,twCliBuscar,twDarClave,twQuitarClave,twGuardarConfig,_twContarNuevos});
   // Revisa cada 2 minutos si entró un pedido nuevo (consulta liviana: sólo cuenta).
   setTimeout(_twContarNuevos,8000);
   setInterval(_twContarNuevos,120000);
