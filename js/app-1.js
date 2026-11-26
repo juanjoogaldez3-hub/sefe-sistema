@@ -1051,8 +1051,8 @@ const FISCAL={cambiaria:1};
 // Cotizaciones y Recordatorios se sacan del menú por pedido; se reactivan quitándolos de acá.
 const MODULOS_DESACTIVADOS=[];
 // Módulos en fase de prueba: sólo el Administrador los ve, aunque el rol los tenga en sus vistas.
-// (Despachos se está afinando; se abre a Logística/Gerencia quitándolo de esta lista.)
-const MODULOS_SOLO_ADMIN=['despachos'];
+// (Despachos ya salió de prueba el 26-11-2026: lo ve cada rol que lo tenga en sus permisos.)
+const MODULOS_SOLO_ADMIN=[];
 
 // ============================================================
 //  MÓDULOS (paquete base + opcionales por cliente)
