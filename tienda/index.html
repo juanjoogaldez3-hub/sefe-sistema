@@ -57,8 +57,8 @@ header.top{background:#fff;position:sticky;top:0;z-index:20;box-shadow:0 1px 0 v
 .banner{position:relative;overflow:hidden;background:var(--suave);max-width:1260px;margin:0 auto}
 .banner .pista{display:flex;transition:transform .6s ease}
 @media (prefers-reduced-motion:reduce){.banner .pista{transition:none}}
-.banner a{flex:0 0 100%;display:block;line-height:0}
-.banner img{width:100%;aspect-ratio:1500/600;object-fit:cover}
+.banner a{flex:0 0 100%;min-width:0;display:block;line-height:0}
+.banner img{display:block;width:100%;height:auto;aspect-ratio:1500/600;object-fit:cover}
 .banner .puntos{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;gap:8px}
 .banner .puntos button{width:34px;height:4px;border:0;border-radius:2px;background:rgba(255,255,255,.55);padding:0}
 .banner .puntos button.on{background:#fff}
@@ -212,6 +212,122 @@ header.top{background:#fff;position:sticky;top:0;z-index:20;box-shadow:0 1px 0 v
   .dos{grid-template-columns:1fr}
   .banner img{aspect-ratio:1500/700}
 }
+
+/* ════════ DISEÑOS ALTERNATIVOS ════════
+   El diseño se elige en el sistema (Tienda en línea → Configuración) y
+   llega en el catálogo como `tema`. "original" = igual a la tienda anterior.
+   Todos conservan logo, banners y textos; cambian letra, colores y formas. */
+html[data-tema] .prod h3,html[data-tema] .linea .nom{text-transform:lowercase}
+html[data-tema] .prod h3::first-letter,html[data-tema] .linea .nom::first-letter{text-transform:uppercase}
+html[data-tema] .menu a,html[data-tema] .bt-top,html[data-tema] .bt,html[data-tema] .sec-t h2,html[data-tema] .panel .cab h2{text-transform:none;letter-spacing:0}
+html[data-tema] .sec-t{border:0;margin-bottom:20px;align-items:center}
+html[data-tema] .sec-t h2{border:0;padding:0;margin:0;color:var(--tinta)}
+html[data-tema] .menu a{font-size:14.5px;font-weight:600}
+html[data-tema] .bt-top{font-size:14.5px;font-weight:600}
+html[data-tema] .bt{font-size:14px;padding:10px 18px}
+html[data-tema] .cuenta{border:0;background:var(--v);color:#fff;border-radius:999px;min-width:26px;height:26px}
+html[data-tema] .cuenta::before{display:none}
+html[data-tema] .banner{max-width:1048px;border-radius:22px;margin:18px auto 0}
+html[data-tema] .prod .img img{mix-blend-mode:multiply}
+html[data-tema] .prod .img{background:#fff}
+
+/* A · "Aire": blanco, mucho espacio, letra Manrope, formas redondeadas */
+html[data-tema=a]{--v:#1d3f1c;--v6:#2c5e2a;--suave:#f3f5ef;--tinta:#14201a;--gris:#66705f;--linea:#e7eae2}
+html[data-tema=a] body{font-family:Manrope,system-ui,sans-serif}
+html[data-tema=a] header.top{box-shadow:0 1px 0 var(--linea)}
+html[data-tema=a] .buscar input{background:var(--suave);border-color:transparent;padding:12px 16px 12px 40px}
+html[data-tema=a] .benef{gap:14px;text-align:left;padding:22px 16px 10px}
+html[data-tema=a] .benef>div{border:0;background:var(--suave);border-radius:20px;padding:22px}
+html[data-tema=a] .benef h3{font-weight:800;font-size:17px}
+html[data-tema=a] .nosotros{max-width:1048px;margin:24px auto 0;border-radius:22px;padding:48px 24px}
+html[data-tema=a] .nosotros h2{font-size:26px;font-weight:800;letter-spacing:-.01em}
+html[data-tema=a] .sec-t h2{font-size:26px;font-weight:800;letter-spacing:-.02em}
+html[data-tema=a] .chip{border:0;background:var(--suave);padding:9px 16px;font-weight:600}
+html[data-tema=a] .chip.on{background:var(--v)}
+html[data-tema=a] .grid{gap:28px 20px}
+html[data-tema=a] .prod .img{border-radius:18px;border:1px solid var(--linea)}
+html[data-tema=a] .prod .mar{color:var(--lima-o);font-weight:700}
+html[data-tema=a] .prod h3{color:var(--tinta);font-weight:600;font-size:14.5px}
+html[data-tema=a] .precio{font-size:18px;font-weight:800}
+html[data-tema=a] .contacto{border-radius:20px}
+html[data-tema=a] .pie-v{border-radius:28px 28px 0 0}
+html[data-tema=a] .dlg{border-radius:20px}
+html[data-tema=a] .campo input,html[data-tema=a] .campo textarea,html[data-tema=a] .pago{border-radius:12px}
+
+/* B · "Natural": fondo crema, títulos con serifa (Fraunces), tarjetas blancas */
+html[data-tema=b]{--v:#17351a;--v6:#24502a;--fondo:#f8f6ef;--suave:#efece1;--tinta:#1c241c;--gris:#6c6f62;--linea:#e2ddce;--lima:#9fb53a}
+html[data-tema=b] body{font-family:"DM Sans",system-ui,sans-serif}
+html[data-tema=b] header.top{background:var(--fondo);box-shadow:0 1px 0 var(--linea)}
+html[data-tema=b] .buscar input{background:#fff;border-color:var(--linea);border-radius:10px}
+html[data-tema=b] .sec-t h2,html[data-tema=b] .nosotros h2,html[data-tema=b] .benef h3,html[data-tema=b] .contacto h3,html[data-tema=b] .dlg h2,html[data-tema=b] .numero{font-family:Fraunces,Georgia,serif}
+html[data-tema=b] .sec-t h2{font-size:30px;font-weight:600;color:var(--v)}
+html[data-tema=b] .benef{padding:26px 16px 20px}
+html[data-tema=b] .benef>div{border-color:var(--linea)}
+html[data-tema=b] .benef h3{font-size:20px;font-weight:600;color:var(--v)}
+html[data-tema=b] .nosotros{background:var(--suave);color:var(--tinta);padding:54px 0}
+html[data-tema=b] .nosotros h2{font-size:32px;font-weight:600;letter-spacing:0;color:var(--v)}
+html[data-tema=b] .nosotros p{color:#4a4f43;font-size:16px}
+html[data-tema=b] .chip{background:transparent;border-color:#cfc9b6;border-radius:8px}
+html[data-tema=b] .chip.on{background:var(--v);border-color:var(--v)}
+html[data-tema=b] .grid{gap:18px}
+html[data-tema=b] .prod{background:#fff;border-radius:14px;padding:10px;border:1px solid var(--linea)}
+html[data-tema=b] .prod .img{border-radius:8px}
+html[data-tema=b] .prod .cuerpo{padding:10px 4px 4px}
+html[data-tema=b] .prod h3{color:var(--tinta);font-weight:500;font-size:14.5px}
+html[data-tema=b] .precio{font-family:Fraunces,Georgia,serif;font-size:19px;font-weight:600;color:var(--v)}
+html[data-tema=b] .bt{border-radius:8px}
+html[data-tema=b] .prod .pie .bt:not(:disabled){background:#fff;color:var(--v);border:1.5px solid var(--v)}
+html[data-tema=b] .prod .pie .bt:not(:disabled):hover{background:var(--v);color:#fff}
+html[data-tema=b] .cant{border-radius:8px;border-color:var(--v)}
+html[data-tema=b] .marcas button{background:#fff;border:1px solid var(--linea);border-radius:12px}
+html[data-tema=b] .contacto,html[data-tema=b] .dlg{border-radius:14px}
+
+/* C · "Contraste": encabezado verde, letra Outfit, botones lima, tarjetas con borde */
+html[data-tema=c]{--v:#163a17;--v6:#215324;--suave:#f4f7ea;--tinta:#111a12;--gris:#5f6b5c;--linea:#dfe5d6;--lima:#b4d037;--lima-o:#7f9a26}
+html[data-tema=c] body{font-family:Outfit,system-ui,sans-serif;font-size:15.5px}
+html[data-tema=c] header.top{background:var(--v);box-shadow:none}
+html[data-tema=c] .marca img{content:url(img/logo-blanco.png)}
+html[data-tema=c] .menu a,html[data-tema=c] .bt-top{color:#e6eedf}
+html[data-tema=c] .menu a:hover,html[data-tema=c] .bt-top:hover{color:#fff}
+html[data-tema=c] .buscar input{background:rgba(255,255,255,.12);border-color:transparent;color:#fff}
+html[data-tema=c] .buscar input::placeholder{color:#c9d6c4}
+html[data-tema=c] .buscar input:focus{background:#fff;color:var(--tinta)}
+html[data-tema=c] .buscar svg{stroke:#c9d6c4}
+html[data-tema=c] .cuenta{background:var(--lima);color:var(--v)}
+html[data-tema=c] .benef{background:var(--suave);border-radius:18px;margin-top:20px;padding:8px 0}
+html[data-tema=c] .benef>div{display:grid;grid-template-columns:44px 1fr;gap:0 14px;text-align:left;padding:18px 22px}
+html[data-tema=c] .benef img{grid-row:1/4}
+html[data-tema=c] .benef h3{margin:0 0 4px;font-weight:600;font-size:17px}
+html[data-tema=c] .benef p{grid-column:2}
+html[data-tema=c] .nosotros{background:#fff;color:var(--tinta);padding:44px 0 10px}
+html[data-tema=c] .nosotros h2{font-size:34px;font-weight:700;letter-spacing:-.02em;color:var(--v)}
+html[data-tema=c] .nosotros p{color:var(--gris);font-size:16.5px}
+html[data-tema=c] .sec-t h2{font-size:28px;font-weight:700;letter-spacing:-.02em}
+html[data-tema=c] .sec-t h2::after{content:"";display:block;width:44px;height:4px;border-radius:2px;background:var(--lima);margin-top:6px}
+html[data-tema=c] .chip{border-color:var(--v);color:var(--v);font-weight:500}
+html[data-tema=c] .chip.on{color:#fff}
+html[data-tema=c] .grid{gap:16px}
+html[data-tema=c] .prod{border:1px solid var(--linea);border-radius:14px;overflow:hidden;transition:box-shadow .2s,transform .2s}
+html[data-tema=c] .prod:hover{box-shadow:0 10px 26px rgba(22,58,23,.13);transform:translateY(-2px)}
+html[data-tema=c] .prod .cuerpo{padding:12px}
+html[data-tema=c] .prod .mar{color:var(--lima-o);font-weight:600}
+html[data-tema=c] .prod h3{color:var(--tinta);font-weight:500;font-size:14.5px}
+html[data-tema=c] .precio{font-size:19px;font-weight:700;color:var(--v)}
+html[data-tema=c] .bt{font-weight:600}
+html[data-tema=c] .prod .pie .bt:not(:disabled),html[data-tema=c] .bt.ancho:not(:disabled),html[data-tema=c] #p-enviar{background:var(--lima);color:var(--v)}
+html[data-tema=c] .prod .pie .bt:not(:disabled):hover{background:#a3bf2a}
+html[data-tema=c] .contacto{border-radius:16px}
+html[data-tema=c] .dlg{border-radius:16px}
+html[data-tema=c] .campo input,html[data-tema=c] .campo textarea,html[data-tema=c] .pago{border-radius:10px}
+@media (prefers-reduced-motion:reduce){html[data-tema=c] .prod{transition:none}}
+@media (max-width:640px){
+  html[data-tema] .banner{border-radius:0;margin-top:0}
+  html[data-tema=a] .nosotros{border-radius:0}
+  html[data-tema=a] .sec-t h2,html[data-tema=c] .sec-t h2,html[data-tema=b] .sec-t h2{font-size:22px}
+}
+.temas{display:inline-flex;gap:6px;margin-left:10px;vertical-align:middle}
+.temas button{border:1px solid #d9a9a4;background:#fff;border-radius:999px;padding:2px 10px;font-size:12.5px}
+.temas button.on{background:#7a1b14;border-color:#7a1b14;color:#fff}
 </style>
 </head>
 <body>
@@ -234,7 +350,8 @@ header.top{background:#fff;position:sticky;top:0;z-index:20;box-shadow:0 1px 0 v
     </div>
   </div>
 </header>
-<div class="franja previa" id="franja-previa" hidden>Vista previa: la tienda todavía está <b>apagada</b> para el público. Sólo vos la ves.</div>
+<div class="franja previa" id="franja-previa" hidden>Vista previa: la tienda todavía está <b>apagada</b> para el público. Sólo vos la ves. <span class="temas" id="temas">Diseño:
+  <button type="button" data-tema-ver="original">Original</button><button type="button" data-tema-ver="a">A · Aire</button><button type="button" data-tema-ver="b">B · Natural</button><button type="button" data-tema-ver="c">C · Contraste</button></span></div>
 <div class="franja" id="franja-aviso" hidden></div>
 
 <main>
@@ -358,6 +475,23 @@ function rpc(fn, args){
   });
 }
 
+// ── Diseño (tema) ───────────────────────────────────────────
+// Lo manda el catálogo (lo que se eligió en Configuración). En vista previa
+// se puede probar otro con los botones "Diseño"; queda sólo en esa pestaña.
+var FUENTES={a:'Manrope:wght@400;600;700;800',b:'DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,500;9..144,600',c:'Outfit:wght@400;500;600;700'};
+var temaActual='original';
+function ponerTema(t){
+  if(!FUENTES[t]) t='original';
+  temaActual=t;
+  if(t==='original') document.documentElement.removeAttribute('data-tema');
+  else{
+    document.documentElement.setAttribute('data-tema',t);
+    if(!document.getElementById('fuente-'+t)){ var l=document.createElement('link'); l.id='fuente-'+t; l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family='+FUENTES[t]+'&display=swap'; document.head.appendChild(l); }
+  }
+  var bs=document.querySelectorAll('[data-tema-ver]'); for(var i=0;i<bs.length;i++) bs[i].className=(bs[i].getAttribute('data-tema-ver')===t?'on':'');
+}
+var temaPrueba=null; try{ temaPrueba=sessionStorage.getItem('sefe_tienda_tema'); }catch(e){}
+
 // ── Estado ──────────────────────────────────────────────────
 var productos=[], porCod={}, cliente=null, info={pedidoMinimo:0,whatsapp:''};
 var carro={};           // {codigo: cantidad}
@@ -388,6 +522,7 @@ function cargar(){
     if(token && !cliente){ token=null; guardar(K_TOKEN,null); } // la sesión venció
     info={pedidoMinimo:Number(d.pedidoMinimo)||0, whatsapp:d.whatsapp||''};
     $('franja-previa').hidden=!d.previa;
+    ponerTema((d.previa&&temaPrueba)||d.tema||'original');
     if(d.aviso){ $('franja-aviso').textContent=d.aviso; $('franja-aviso').hidden=false; }
     $('cuenta-txt').textContent=cliente?cliente.nombre.split(' ').slice(0,2).join(' '):'Soy cliente';
     var wa=String(info.whatsapp||'').replace(/\D/g,'');
@@ -634,6 +769,7 @@ $('banner').addEventListener('mouseleave',bannerAuto);
 
 document.addEventListener('click',function(e){
   var t=e.target, b;
+  if((b=t.closest('[data-tema-ver]'))){ temaPrueba=b.getAttribute('data-tema-ver'); try{sessionStorage.setItem('sefe_tienda_tema',temaPrueba);}catch(e){} ponerTema(temaPrueba); return; }
   if((b=t.closest('[data-ir]'))){ e.preventDefault(); irA(b.getAttribute('data-ir')); return; }
   if((b=t.closest('[data-banner]'))){ banner(Number(b.getAttribute('data-banner'))); bannerAuto(); return; }
   if((b=t.closest('[data-marca]'))){ filtro.marca=sinTildes(b.getAttribute('data-marca')); filtro.cat=''; mostrados=40; pintarCats(); pintar(); irA('catalogo'); return; }
