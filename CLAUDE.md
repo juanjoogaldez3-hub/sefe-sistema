@@ -167,8 +167,9 @@ no existe no rompe nada) y encender la función con el SQL después.
   `https://api.heigit.org/openrouteservice/v2/matrix/driving-car` (misma
   `ORS_API_KEY`, en `js/app-1.js`). El buscador de direcciones gratis de ORS
   (`api.heigit.org/pelias/v1`) ubica mal en Guatemala, así que no se usa:
-  las paradas toman el pin del cliente; el mapa de Mis entregas es
-  OpenStreetMap. Navegar en Google Maps/Waze sí (son enlaces, no cobran).
+  las paradas toman el pin del cliente. El MAPA de Mis entregas sí es de
+  Google (Juanjo lo prefiere): 10,000 cargas gratis/mes y sólo carga al tocar
+  "Ver mapa", así que no cobra. Navegar en Google Maps/Waze sí (son enlaces).
   Todavía usan Google (fuera de rutas): el buscador de direcciones del
   formulario de cliente (Places) y los mapas de la ficha del cliente.
 

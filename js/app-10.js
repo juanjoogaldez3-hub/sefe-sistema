@@ -2409,8 +2409,10 @@ function _pilRenderMapa(mias,paradas){
 async function _pilInitMapa(pts){
   const cont=document.getElementById('pil-mapa'); if(!cont||!pts||!pts.length)return;
   try{
-    // Siempre OpenStreetMap (gratis); el mapa de Google cobra por cada carga.
-    if(false){
+    // Mapa de Google: tiene 10,000 cargas gratis al mes y sólo se carga al
+    // tocar "Ver mapa", así que en la práctica no cobra (Juanjo prefiere este;
+    // 27-11-2026). Si Google no carga, cae a OpenStreetMap.
+    if(typeof GOOGLE_MAPS_KEY!=='undefined'&&GOOGLE_MAPS_KEY&&typeof _cargarGoogleMaps==='function'&&!(typeof _gmapsAuthFail!=='undefined'&&_gmapsAuthFail)){
       const gm=await _cargarGoogleMaps(); if(!document.getElementById('pil-mapa'))return;
       const map=new gm.Map(cont,{center:{lat:pts[0].lat,lng:pts[0].lng},zoom:12,mapTypeControl:false,streetViewControl:false});
       const bounds=new gm.LatLngBounds();
