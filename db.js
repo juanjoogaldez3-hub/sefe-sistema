@@ -50,7 +50,7 @@ async function fetchAll(tabla, ordenCampo, cols){
 // del peso de la base. No se necesitan para ver listas, cobros ni dashboard;
 // sólo al abrir o imprimir UNA factura. Por eso la carga inicial los omite
 // (bajaba 24 MB en cada login) y se traen a pedido con asegurarPdfDoc().
-const DOC_COLS_SIN_BLOBS='id,numero,tipo_doc,cliente_id,cliente_nombre,cliente_comercial,cliente_nit,vendedor_id,vendedor_nombre,sub_vendedor_nombre,items,totales,estado,estado_pago,inventario_rebajado,autorizacion,serie,numero_dte,orden_compra,observaciones,nota_interna,dias_credito,vencimiento,exenta,escenario_exenta,piloto_id,orden_ruta,estado_entrega,entrega_info,para_despacho,preparacion,eta_entrega,anulado,motivo_anulacion,fecha_certificacion,factura_origen_id,nit_facturado,nombre_facturado,sede,creada,costo_historico,empresa';
+const DOC_COLS_SIN_BLOBS='id,numero,tipo_doc,cliente_id,cliente_nombre,cliente_comercial,cliente_nit,vendedor_id,vendedor_nombre,sub_vendedor_nombre,items,totales,estado,estado_pago,inventario_rebajado,autorizacion,serie,numero_dte,orden_compra,observaciones,nota_interna,dias_credito,vencimiento,exenta,escenario_exenta,piloto_id,orden_ruta,estado_entrega,entrega_info,para_despacho,preparacion,eta_entrega,anulado,motivo_anulacion,fecha_certificacion,factura_origen_id,nit_facturado,nombre_facturado,sede,creada,costo_historico,empresa,fecha_entrega,nota_entrega';
 
 // Trae el PDF/XML de UNA factura sólo cuando se necesita (verla, imprimirla,
 // descargarla) y lo deja cacheado en el objeto en memoria. Si ya está, no
@@ -355,7 +355,7 @@ function mapDocumentoFromDB(d, todosAbonos){
     diasCredito:d.dias_credito, vencimiento:d.vencimiento,
     exenta:d.exenta, escenarioExenta:d.escenario_exenta,
     pilotoId:d.piloto_id, ordenRuta:d.orden_ruta, estadoEntrega:d.estado_entrega,
-    entregaInfo:d.entrega_info, paraDespacho:d.para_despacho===true, preparacion:d.preparacion||null, etaEntrega:d.eta_entrega||null, anulado:d.anulado, motivoAnulacion:d.motivo_anulacion,
+    entregaInfo:d.entrega_info, fechaEntrega:d.fecha_entrega||null, notaEntrega:d.nota_entrega||'', paraDespacho:d.para_despacho===true, preparacion:d.preparacion||null, etaEntrega:d.eta_entrega||null, anulado:d.anulado, motivoAnulacion:d.motivo_anulacion,
     pdfBase64:d.pdf_base64, xmlBase64:d.xml_base64, fechaCertificacion:d.fecha_certificacion,
     facturaOrigenId:d.factura_origen_id, nitFacturado:d.nit_facturado, nombreFacturado:d.nombre_facturado,
     sede:d.sede, costoHistorico:(d.costo_historico!=null?Number(d.costo_historico):undefined),
@@ -580,7 +580,7 @@ async function guardarDocumento(d){
     dias_credito:d.diasCredito, vencimiento:d.vencimiento,
     exenta:d.exenta, escenario_exenta:d.escenarioExenta,
     piloto_id:d.pilotoId, orden_ruta:d.ordenRuta, estado_entrega:d.estadoEntrega,
-    entrega_info:d.entregaInfo, para_despacho:d.paraDespacho===true, preparacion:d.preparacion||null, eta_entrega:d.etaEntrega||null, anulado:d.anulado, motivo_anulacion:d.motivoAnulacion,
+    entrega_info:d.entregaInfo, fecha_entrega:d.fechaEntrega||null, nota_entrega:d.notaEntrega||null, para_despacho:d.paraDespacho===true, preparacion:d.preparacion||null, eta_entrega:d.etaEntrega||null, anulado:d.anulado, motivo_anulacion:d.motivoAnulacion,
     pdf_base64:d.pdfBase64, xml_base64:d.xmlBase64, fecha_certificacion:d.fechaCertificacion,
     factura_origen_id:d.facturaOrigenId||null, nit_facturado:d.nitFacturado||null, nombre_facturado:d.nombreFacturado||null,
     sede:d.sede||null,
@@ -623,14 +623,14 @@ function mapParadaRutaFromDB(p){
   return { id:p.id, pilotoId:p.piloto_id, motivo:p.motivo||'', titulo:p.titulo||'', nota:p.nota||'', direccion:p.direccion||'',
     lat:(p.lat!=null?Number(p.lat):null), lng:(p.lng!=null?Number(p.lng):null),
     horaLimite:p.hora_limite||'', ordenRuta:p.orden_ruta, hecha:p.hecha===true, hechaFecha:p.hecha_fecha,
-    creada:p.creada, creadaPor:p.creada_por, eta:p.eta||null, hechaInfo:p.hecha_info||null };
+    creada:p.creada, creadaPor:p.creada_por, eta:p.eta||null, hechaInfo:p.hecha_info||null, fecha:p.fecha||null };
 }
 async function guardarParadaRuta(p){
   const row = {
     piloto_id:p.pilotoId||null, titulo:p.titulo||'', nota:p.nota||null, direccion:p.direccion||null,
     lat:(p.lat!=null?p.lat:null), lng:(p.lng!=null?p.lng:null), hora_limite:p.horaLimite||null,
     orden_ruta:(p.ordenRuta!=null?p.ordenRuta:null), hecha:p.hecha===true, hecha_fecha:p.hechaFecha||null,
-    creada_por:p.creadaPor||null
+    creada_por:p.creadaPor||null, fecha:p.fecha||null
   };
   // Motivo (Recolecta/Entrega/Instalación/Otro). Si la columna todavía no
   // existe en la base (migración 20261125150000 sin correr), se reintenta

@@ -918,6 +918,23 @@ function badgeEntregaHTML(d){
   return `<div><span class="badge ${cls}" style="${st}">${txt}${quien&&est!=='sin'?' · '+escHtml(quien):''}</span></div>`;
 }
 window.badgeEntregaHTML=badgeEntregaHTML;
+// ── Fecha programada (entregas y paradas) y nota para el repartidor ──
+// Sin fecha = "para hoy / ya" (como funcionaba siempre).
+function _fechaProg(x){ const f=x&&(x.fechaEntrega||x.fecha); return f?String(f).slice(0,10):null; }
+// ¿Va en la ruta de HOY? Sin fecha, la de hoy o una atrasada (pendiente).
+function _delDia(x){ const f=_fechaProg(x); return !f||f<=fechaHoyGT(); }
+function _fmtFechaProg(f){ if(!f)return ''; const dia=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][new Date(f+'T12:00:00').getDay()]; return dia+' '+f.slice(8,10)+'-'+f.slice(5,7)+'-'+f.slice(0,4); }
+// Etiqueta de fecha: Hoy / día programado / ⚠ Atrasada (si ya pasó sin hacerse).
+function fechaProgHTML(x,hecha){
+  const f=_fechaProg(x); if(!f)return '';
+  const hoy=fechaHoyGT(), st='font-size:10px;margin-top:3px;display:inline-block;white-space:nowrap';
+  if(!hecha&&f<hoy)return `<div><span class="badge b-danger" style="${st}">⚠ Atrasada · ${_fmtFechaProg(f)}</span></div>`;
+  if(f===hoy)return `<div><span class="badge b-ok" style="${st}">📅 Hoy</span></div>`;
+  return `<div><span class="badge b-info" style="${st}">📅 ${_fmtFechaProg(f)}</span></div>`;
+}
+// Nota para el repartidor, en ROJO para que se vea (pedido de logística).
+function notaRojaHTML(t){ return t?`<div style="font-size:11.5px;font-weight:700;color:var(--danger);margin-top:3px;white-space:normal">📝 ${escHtml(t)}</div>`:''; }
+window.fechaProgHTML=fechaProgHTML; window.notaRojaHTML=notaRojaHTML; window._delDia=_delDia;
 // Comprobante de entrega (quién llevó, cuándo, quién recibió, cómo pagó,
 // firma y foto). La firma/foto se trae de la tabla aparte al abrir.
 async function verComprobanteEntrega(id){
@@ -969,7 +986,7 @@ window.abrirRutaMaps=abrirRutaMaps;
 function abrirRutaDespachos(){
   const fPiloto=($('#desp-piloto')||{}).value||'';
   if(!fPiloto){toast('Elegí un piloto','Seleccioná un piloto en el filtro para navegar su ruta.',false);return;}
-  const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
+  const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado'&&_delDia(d));
   const paradas=(typeof _paradasPiloto==='function')?_paradasPiloto(fPiloto):[];
   if(!lista.length&&!paradas.length){toast('Sin entregas','Ese piloto no tiene entregas ni paradas pendientes.',false);return;}
   _abrirRutaPiloto(lista,paradas);
@@ -1215,14 +1232,16 @@ async function _ordenarPorCercania(docs,paradas){
   return {n:N, motor, tarde};
 }
 // Paradas manuales pendientes de un piloto.
-function _paradasPiloto(pid){ return (typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>String(p.pilotoId||'')===String(pid)&&!p.hecha); }
+// Sólo las del día (sin fecha, hoy o atrasadas): las programadas para otro día
+// no entran al orden, la navegación ni a Mis entregas hasta que llegue su día.
+function _paradasPiloto(pid){ return (typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>String(p.pilotoId||'')===String(pid)&&!p.hecha&&_delDia(p)); }
 // Desde Despachos: ordena la ruta por CERCANÍA PURA (de la más cercana a la más
 // lejana desde la bodega). Predecible e instantáneo. Para el orden inteligente
 // con tiempos de Google y horas límite está el "Optimizar" al asignar.
 function ordenarCercaniaDespachos(pidArg){
   const fPiloto=(pidArg!=null&&pidArg!=='')?String(pidArg):(($('#desp-piloto')||{}).value||'');
   if(!fPiloto){toast('Elegí un piloto','Seleccioná un piloto en el filtro para ordenar su ruta.',false);return;}
-  const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado');
+  const lista=docsDespachables().filter(d=>String(d.pilotoId||'')===fPiloto&&estadoEntrega(d)!=='entregado'&&_delDia(d));
   const paradas=_paradasPiloto(fPiloto);
   if(!lista.length&&!paradas.length){toast('Sin entregas','Ese piloto no tiene entregas ni paradas pendientes.',false);return;}
   // ¿Cuántas tienen ubicación en el mapa? Solo esas se pueden ordenar por
@@ -1249,7 +1268,7 @@ window.ordenarCercaniaDespachos=ordenarCercaniaDespachos;
 function abrirRutaMisEntregas(){
   const pid=_pidMisEntregas();
   if(pid==null){toast('Elegí un piloto','Seleccioná un piloto para navegar su ruta.',false);return;}
-  const mias=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
+  const mias=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado'&&_delDia(d));
   _abrirRutaPiloto(mias,_paradasPiloto(pid));
 }
 window.abrirRutaMisEntregas=abrirRutaMisEntregas;
@@ -1390,8 +1409,8 @@ function openParadaRuta(pidPre){
     <div class="row"><div><label>Motivo</label><select id="pr-motivo"><option value="">— Elegí el motivo —</option>${PARADA_MOTIVOS.map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div></div>
     <div class="row" id="pr-np-wrap" style="display:none"><div><label><span id="pr-np-lbl">Documento</span> <span id="pr-np-sub" style="color:var(--muted);font-weight:400"></span></label><select id="pr-np"></select></div></div>
     <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" placeholder="Dirección o nombre del lugar"></div></div>
-    <div class="row"><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px"></div></div>
-    <div class="row"><div><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-nota" placeholder="Detalle"></div></div>
+    <div class="row"><div><label>Fecha</label><input id="pr-fecha" type="date" value="${fechaHoyGT()}" style="max-width:190px"></div><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px"></div></div>
+    <div class="row"><div><label>Nota <span style="color:var(--muted);font-weight:400">(opcional · sale en rojo)</span></label><input id="pr-nota" placeholder="Detalle"></div></div>
     <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La parada entra a la ruta del piloto. Si le ponés dirección, también entra al mapa, la navegación y el orden por cercanía/horarios.</span></div>`,
     async ()=>{
       const pid=$('#pr-piloto').value?Number($('#pr-piloto').value):null;
@@ -1409,6 +1428,8 @@ function openParadaRuta(pidPre){
         const d=documentos.find(x=>x.id===docId);
         if(!d){toast('No encontré el documento',null,true);return;}
         d.paraDespacho=true; d.pilotoId=pid;
+        d.fechaEntrega=$('#pr-fecha').value||null;
+        const _nt=($('#pr-nota').value||'').trim(); if(_nt)d.notaEntrega=_nt;
         if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';
         if(typeof guardarDocumento==='function')await guardarDocumento(d);
         const pil=_nombreRepartidor(pid)||'';
@@ -1420,8 +1441,8 @@ function openParadaRuta(pidPre){
       }
       const dir=$('#pr-dir').value.trim();
       // La parada nueva entra AL FINAL de la ruta actual del piloto.
-      const _maxOrd=Math.max(0,...docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado').map(d=>d.ordenRuta||0),..._paradasPiloto(pid).map(p=>p.ordenRuta||0));
-      const nueva={pilotoId:pid,motivo,ordenRuta:_maxOrd?_maxOrd+1:null,titulo:tit,nota:$('#pr-nota').value.trim(),direccion:dir,horaLimite:$('#pr-hora').value||'',hecha:false,creadaPor:currentUser,_nuevo:true};
+      const _maxOrd=Math.max(0,...docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado'&&_delDia(d)).map(d=>d.ordenRuta||0),..._paradasPiloto(pid).map(p=>p.ordenRuta||0));
+      const nueva={pilotoId:pid,motivo,ordenRuta:_maxOrd?_maxOrd+1:null,titulo:tit,nota:$('#pr-nota').value.trim(),direccion:dir,horaLimite:$('#pr-hora').value||'',fecha:$('#pr-fecha').value||null,hecha:false,creadaPor:currentUser,_nuevo:true};
       // Si se eligió un cliente con pin en el mapa y no se cambió la dirección,
       // se usa su ubicación guardada (más exacta que buscar la dirección).
       const _sel=window._prSel;
@@ -1454,8 +1475,8 @@ function openEditarParada(id){
     <div class="row"><div><label>Nombre <span style="color:var(--muted);font-weight:400">(cliente, proveedor o texto libre)</span></label><input id="pr-tit" autocomplete="off" value="${esc(p.titulo)}"></div></div>
     <div class="row"><div><label>Motivo</label><select id="pr-motivo"><option value="">— Elegí el motivo —</option>${motivos.map(m=>`<option value="${esc(m)}"${p.motivo===m?' selected':''}>${esc(m)}</option>`).join('')}</select></div></div>
     <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" value="${esc(p.direccion)}" placeholder="Dirección o nombre del lugar"></div></div>
-    <div class="row"><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px" value="${esc(p.horaLimite)}"></div></div>
-    <div class="row"><div><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-nota" value="${esc(p.nota)}" placeholder="Detalle"></div></div>
+    <div class="row"><div><label>Fecha</label><input id="pr-fecha" type="date" value="${esc(_fechaProg(p)||fechaHoyGT())}" style="max-width:190px"></div><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px" value="${esc(p.horaLimite)}"></div></div>
+    <div class="row"><div><label>Nota <span style="color:var(--muted);font-weight:400">(opcional · sale en rojo)</span></label><input id="pr-nota" value="${esc(p.nota)}" placeholder="Detalle"></div></div>
     <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Si cambiás el repartidor, la parada pasa al final de su ruta. Para cambiar el orden usá "↕ Ordenar ruta".</span></div>`,
     async ()=>{
       const pid=$('#pr-piloto').value?Number($('#pr-piloto').value):null;
@@ -1473,10 +1494,12 @@ function openEditarParada(id){
       const hora=$('#pr-hora').value||'', nota=$('#pr-nota').value.trim();
       if(hora!==(p.horaLimite||''))cambios.push('hora límite');
       if(nota!==(p.nota||''))cambios.push('nota');
+      const fecha=$('#pr-fecha').value||null;
+      if((fecha||'')!==(_fechaProg(p)||''))cambios.push('fecha: '+(_fmtFechaProg(fecha)||'sin fecha'));
       if(!cambios.length){closeMod();return;}
       // Otro repartidor → al final de SU ruta
       if(pid!==p.pilotoId){
-        const _max=Math.max(0,...docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado').map(d=>d.ordenRuta||0),..._paradasPiloto(pid).filter(x=>x.id!==p.id).map(x=>x.ordenRuta||0));
+        const _max=Math.max(0,...docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado'&&_delDia(d)).map(d=>d.ordenRuta||0),..._paradasPiloto(pid).filter(x=>x.id!==p.id).map(x=>x.ordenRuta||0));
         p.ordenRuta=_max?_max+1:null; p.eta=null;
       }
       // Dirección nueva → volver a ubicar (cliente elegido con pin, o buscarla)
@@ -1485,7 +1508,7 @@ function openEditarParada(id){
         const _sel=window._prSel;
         if(_sel&&_sel.lat!=null&&_sel.lng!=null&&dir===_sel.dir){p.lat=_sel.lat;p.lng=_sel.lng;}
       }
-      Object.assign(p,{pilotoId:pid,titulo:tit,motivo,direccion:dir,horaLimite:hora,nota});
+      Object.assign(p,{pilotoId:pid,titulo:tit,motivo,direccion:dir,horaLimite:hora,nota,fecha});
       const ok=(typeof guardarParadaRuta==='function')?await guardarParadaRuta(p):true;
       if(ok===false){
         Object.keys(p).forEach(k=>{if(!(k in antes))delete p[k];}); Object.assign(p,antes); // deshacer en pantalla
@@ -1721,7 +1744,7 @@ function asignarMasivo(){
   if(!docs.length){toast('Nada seleccionado','Marcá una o más entregas en la lista',false);return;}
   const hayBodega=(typeof SEFE_BODEGA!=='undefined'&&SEFE_BODEGA&&SEFE_BODEGA.lat!=null);
   openMod('Asignar '+docs.length+' entrega'+(docs.length!==1?'s':''),`
-    <div class="row"><div style="flex:1"><label>Repartidor</label><select id="am-piloto">${_optRepartidores('')}</select></div></div>
+    <div class="row"><div style="flex:1"><label>Repartidor</label><select id="am-piloto">${_optRepartidores('')}</select></div><div><label>Fecha de entrega</label><input id="am-fecha" type="date" value="${fechaHoyGT()}"></div></div>
     <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:10px;cursor:pointer${hayBodega?'':';opacity:.5'}"><input type="checkbox" id="am-cercania" ${hayBodega?'checked':'disabled'} style="width:auto"> 🧭 Optimizar con tiempos reales de Google y horas límite</label>
     <div class="note n-ok" style="margin-top:10px;margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Se asignan las ${docs.length} entregas a ese piloto. Al optimizar, el sistema arma <b>toda su ruta</b> con los tiempos reales de Google, calcula la <b>hora de llegada</b> a cada parada y respeta las <b>horas límite</b>. Igual podés reordenar a mano.</span></div>`,
     ()=>{
@@ -1729,13 +1752,14 @@ function asignarMasivo(){
       if(!pid){toast('Seleccioná un piloto',null,true);return;}
       const porCercania=hayBodega&&$('#am-cercania').checked;
       const pil=pilotos.find(p=>p.id===pid);
-      docs.forEach(d=>{d.pilotoId=pid;if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';if(typeof guardarDocumento==='function')guardarDocumento(d);});
+      const _fAm=$('#am-fecha').value||null;
+      docs.forEach(d=>{d.pilotoId=pid;d.fechaEntrega=_fAm;if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';if(typeof guardarDocumento==='function')guardarDocumento(d);});
       logAudit('Entregas asignadas (masivo)',docs.length+' entregas · Piloto: '+(pil?.nombre||'—')+(porCercania?' · por cercanía':''));
       _despSel.clear();closeMod();renderDespachos();
       toast('✓ '+docs.length+' entregas asignadas',(pil?.nombre||'')+(porCercania?' · ordenando ruta…':''));
       if(porCercania){
         // Reordena TODA la ruta pendiente de ese piloto (async: Google + respaldo).
-        const rutaPiloto=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
+        const rutaPiloto=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado'&&_delDia(d));
         _ordenarPorCercania(rutaPiloto,_paradasPiloto(pid)).then(({n,motor,tarde})=>{
           if(n){
             renderDespachos();
@@ -1842,7 +1866,7 @@ function asignarGrupoZona(idx){
   const pil=pilotos.find(p=>p.id===pid);
   g.docs.forEach(d=>{d.pilotoId=pid;if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';if(typeof guardarDocumento==='function')guardarDocumento(d);});
   // Ordena por cercanía toda la ruta pendiente de ese piloto (incluye sus paradas).
-  const rutaPil=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado');
+  const rutaPil=docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado'&&_delDia(d));
   _ordenarCercaniaPura(rutaPil,_paradasPiloto(pid));
   logAudit('Grupo de ruta asignado',g.docs.length+' entregas · Piloto: '+(pil?.nombre||'—'));
   const card=$('#agr-g'+idx);
@@ -1945,7 +1969,7 @@ function renderDespachos(){
         <td></td>
         <td class="num" style="font-weight:700;color:var(--green)">${p.ordenRuta!=null?'#'+p.ordenRuta:'—'}</td>
         <td style="font-weight:600">Parada<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.motivo||'Otro')}</div></td>
-        <td>${escHtml(p.titulo)}${p.nota?`<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.nota)}</div>`:''}${(hora||eta)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${hora}${eta}</div>`:''}${paradaNoHechaTxt(p)}</td>
+        <td>${escHtml(p.titulo)}${fechaProgHTML(p,false)}${notaRojaHTML(p.nota)}${(hora||eta)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${hora}${eta}</div>`:''}${paradaNoHechaTxt(p)}</td>
         <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${p.direccion?escHtml(p.direccion):'—'}</td>
         <td class="num" style="color:var(--muted-2)">—</td>
         <td>${escHtml(_nomPil(p.pilotoId))}</td>
@@ -1971,7 +1995,7 @@ function renderDespachos(){
       <td style="text-align:center">${chk}</td>
       <td class="num" style="font-weight:700;color:var(--green)">${d.ordenRuta!=null?'#'+d.ordenRuta:'—'}</td>
       <td style="font-weight:600">${docNum(d)}<div style="font-size:10.5px;color:var(--muted)">${tipoCorto[d.tipoDoc]}</div>${empTag(d.empresa)}</td>
-      <td>${d.clienteComercial||d.clienteNombre}${(()=>{const b=_horaBadge(d,_riskDesp),e=_etaBadge(d);return (b||e)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${b}${e}</div>`:'';})()}${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}${typeof parcialTxt==='function'?parcialTxt(d):''}</td>
+      <td>${d.clienteComercial||d.clienteNombre}${fechaProgHTML(d,est==='entregado')}${notaRojaHTML(d.notaEntrega)}${(()=>{const b=_horaBadge(d,_riskDesp),e=_etaBadge(d);return (b||e)?`<div style="margin-top:2px;display:flex;flex-direction:column;gap:1px">${b}${e}</div>`:'';})()}${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}${typeof parcialTxt==='function'?parcialTxt(d):''}</td>
       <td style="color:var(--muted);font-size:12px;max-width:170px;white-space:normal">${dirEntrega(d)}</td>
       <td class="num" style="font-weight:600">${money(d.totales.total)}</td>
       <td>${piloto?piloto.nombre:'<span style="color:var(--muted-2)">—</span>'}</td>
@@ -1992,7 +2016,7 @@ window.renderDespachos=renderDespachos;
 let _ordRuta=null;
 function openOrdenRuta(pid){
   if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística ordena las rutas',true);return;}
-  const docs=docsDespachables().filter(d=>String(d.pilotoId)===String(pid)&&estadoEntrega(d)!=='entregado').map(d=>({t:'d',o:d}));
+  const docs=docsDespachables().filter(d=>String(d.pilotoId)===String(pid)&&estadoEntrega(d)!=='entregado'&&_delDia(d)).map(d=>({t:'d',o:d}));
   const pars=_paradasPiloto(pid).map(p=>({t:'p',o:p}));
   const items=docs.concat(pars).sort((a,b)=>(a.o.ordenRuta??999)-(b.o.ordenRuta??999));
   if(!items.length){toast('Sin pendientes','Ese piloto no tiene entregas ni paradas pendientes.',false);return;}
@@ -2196,11 +2220,14 @@ function asignarDespacho(id){
     <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${d.clienteComercial||d.clienteNombre} · ${money(d.totales.total)}<br><span style="font-size:11.5px">📍 ${dirEntrega(d)}</span></p>
     <div class="row"><div><label>Repartidor</label><select id="dsp-piloto">${_optRepartidores(d.pilotoId)}</select></div>
       <div><label>Orden en la ruta</label><input id="dsp-orden" type="number" min="1" value="${d.ordenRuta||''}" placeholder="1, 2, 3…"></div></div>
+    <div class="row"><div><label>Fecha de entrega</label><input id="dsp-fecha" type="date" value="${_fechaProg(d)||fechaHoyGT()}" style="max-width:190px"></div></div>
+    <div class="row"><div><label>Nota para el repartidor <span style="color:var(--muted);font-weight:400">(opcional · sale en rojo)</span></label><input id="dsp-nota" value="${escHtml(d.notaEntrega||'')}" placeholder="Ej. cobrar cheque · entregar en bodega trasera"></div></div>
     <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>El piloto verá este documento en "Mis entregas". El número de ruta define el orden de visita.</span></div>`,
     ()=>{
       const pid=$('#dsp-piloto').value?Number($('#dsp-piloto').value):null;
       if(!pid){toast('Seleccioná un piloto',null,true);return;}
       d.pilotoId=pid;d.ordenRuta=$('#dsp-orden').value?Number($('#dsp-orden').value):null;
+      d.fechaEntrega=$('#dsp-fecha').value||null; d.notaEntrega=($('#dsp-nota').value||'').trim();
       if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';
       const pil=pilotos.find(p=>p.id===pid);
       logAudit('Entrega asignada',docNum+' · '+(d.clienteComercial||d.clienteNombre)+' · Piloto: '+(pil?.nombre||'—')+(d.ordenRuta?' · Ruta #'+d.ordenRuta:''));
@@ -2259,8 +2286,10 @@ function renderMisEntregas(){
   // se listan: con todas las facturas yendo a despacho, la ruta se llenaría
   // de tarjetas viejas en pocos días.
   const _hoyME=fechaHoyGT();
-  const mias=docsDespachables().filter(d=>String(d.pilotoId)===String(pid)&&(estadoEntrega(d)!=='entregado'||fechaLocalDe(d.entregaInfo?.fecha)===_hoyME));
-  const misParadas=(typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>String(p.pilotoId||'')===String(pid)&&!p.hecha);
+  // Lo programado para otro día no aparece hasta que llegue su día (lo
+  // atrasado sí, marcado en rojo, para que no se pierda).
+  const mias=docsDespachables().filter(d=>String(d.pilotoId)===String(pid)&&(estadoEntrega(d)!=='entregado'?_delDia(d):fechaLocalDe(d.entregaInfo?.fecha)===_hoyME));
+  const misParadas=(typeof paradasRuta!=='undefined'?paradasRuta:[]).filter(p=>String(p.pilotoId||'')===String(pid)&&!p.hecha&&_delDia(p));
   // KPIs del piloto
   const pendientes=mias.filter(d=>estadoEntrega(d)!=='entregado').length;
   const enRuta=mias.filter(d=>estadoEntrega(d)==='ruta').length;
@@ -2307,7 +2336,7 @@ function renderMisEntregas(){
       ${_navBtnsHTML({t:'p',o:p})}
       ${paradaNoHechaTxt(p)}
       ${(hora||eta)?`<div class="ent-linea">${hora}${eta}</div>`:''}
-      ${p.nota?`<div class="ent-items">${escHtml(p.nota)}</div>`:''}
+      ${(_fechaProg(p)&&_fechaProg(p)<fechaHoyGT())?fechaProgHTML(p,false):''}${notaRojaHTML(p.nota)}
       <div class="ent-acts"><button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Completar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="paradaNoHecha(${p.id})">✕ No se pudo hacer</button></div>
     </div>`;
   };
@@ -2336,6 +2365,7 @@ function renderMisEntregas(){
         </div>
         <div class="ent-meta"><span class="badge ${ec}">${en}</span><span>${docNum(d)} · ${tipoCorto[d.tipoDoc]} · <b>${money(d.totales.total)}</b></span></div>
         <div class="ent-dir">📍 ${escHtml(dirEntrega(d))}</div>
+        ${est!=='entregado'&&_fechaProg(d)&&_fechaProg(d)<fechaHoyGT()?fechaProgHTML(d,false):''}${notaRojaHTML(d.notaEntrega)}
         ${est!=='entregado'?_navBtnsHTML({t:'d',o:d}):''}
         ${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}
         ${typeof parcialTxt==='function'?parcialTxt(d):''}
@@ -2671,7 +2701,7 @@ function renderPanelPiloto(){
   const h=new Date().getHours(); const saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
   const fechaLarga=new Date().toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'});
   const docsMios=pid==null?[]:docsDespachables().filter(d=>String(d.pilotoId)===String(pid));
-  const pend=docsMios.filter(d=>estadoEntrega(d)!=='entregado');
+  const pend=docsMios.filter(d=>estadoEntrega(d)!=='entregado'&&_delDia(d)); // lo programado para otro día no cuenta hoy
   const porCargar=pend.filter(d=>['sin','asignado','preparado'].includes(estadoEntrega(d))).length;
   const enRuta=pend.filter(d=>estadoEntrega(d)==='ruta').length;
   const entHoy=docsMios.filter(d=>estadoEntrega(d)==='entregado'&&fechaLocalDe(d.entregaInfo?.fecha)===hoy).length;
