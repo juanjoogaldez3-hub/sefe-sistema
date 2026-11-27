@@ -119,14 +119,34 @@ async function facturarPedidoExento(id,dias,escenario){
   }finally{_felUnlock();}
 }
 window.facturarPedidoExento=facturarPedidoExento;
+// Generar NE (nota de envío) o NP (nota de préstamo) desde un pedido.
+// Igual que al facturar, pregunta si va a domicilio (casilla marcada por
+// defecto): si queda marcada, la nota entra a Despachos como "Sin asignar".
 function generarNota(id,type){
   const f=documentos.find(d=>d.id===id);
   if(!f)return;
-  Object.assign(f,{tipoDoc:type,estado:'pendiente'});
-  renderDocs();
-  toast('✓ '+(TIPO_LBL[type]||['Documento'])[0]+' generada',refPed(f));
-  logAudit((TIPO_LBL[type]||['Documento'])[0]+' generada',refPed(f)+' · '+(f.clienteComercial||f.clienteNombre));
-  if(typeof guardarDocumento==='function')guardarDocumento(f);
+  const lbl=(TIPO_LBL[type]||['Documento'])[0];
+  openMod('Generar '+lbl.toLowerCase(),
+    `<p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Se generará la ${lbl.toLowerCase()} de <b style="color:var(--ink)">${refPed(f)}</b> · ${f.clienteComercial||f.clienteNombre||''} por <b style="color:var(--ink)">${money(f.totales.total)}</b>.</p>
+     <label style="display:flex;align-items:center;gap:9px;margin-top:14px;padding:11px 13px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:13px">
+       <input type="checkbox" id="nota-despacho" checked style="width:17px;height:17px;flex:none">
+       <span>🚚 <b>Entregar a domicilio</b> — mandar esta nota a Despachos<span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">Desmarcalo si el cliente se lleva el producto en mostrador.</span></span>
+     </label>`,
+    ()=>{
+      const _nd=document.getElementById('nota-despacho');
+      const aDesp=_nd?_nd.checked:false;
+      Object.assign(f,{tipoDoc:type,estado:'pendiente'});
+      if(aDesp){
+        // Entra limpia a Despachos, "Sin asignar"
+        f.paraDespacho=true; f.estadoEntrega='sin'; f.pilotoId=null; f.ordenRuta=null; f.entregaInfo=null;
+      }else f.paraDespacho=false;
+      closeMod();
+      renderDocs();
+      toast('✓ '+lbl+' generada',refPed(f)+(aDesp?' · 🚚 enviada a Despachos':''));
+      logAudit(lbl+' generada',refPed(f)+' · '+(f.clienteComercial||f.clienteNombre)+(aDesp?' · a Despachos':''));
+      if(typeof guardarDocumento==='function')guardarDocumento(f);
+    });
+  $('#m-save').textContent='Generar '+lbl.toLowerCase();
 }
 window.generarNota=generarNota;
 function cancelarPedido(id){
