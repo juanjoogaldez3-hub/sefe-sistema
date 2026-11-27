@@ -2866,9 +2866,9 @@ async function _ppCargarCuadre(pid,dia){
   const antes=JSON.stringify(_ppCuadre&&_ppCuadre.dia===dia?_ppCuadre.row:null);
   _ppCuadre={dia,t:Date.now(),row:_ppCuadre&&_ppCuadre.dia===dia?_ppCuadre.row:null};
   try{
-    const {data,error}=await sb.from('cuadres_ruta').select('cerrado_por,cerrado_el,diferencia').eq('piloto_id',Number(pid)).eq('fecha',dia).maybeSingle();
+    const {data,error}=await sb.from('cuadres_ruta').select('cerrado_por,cerrado_el,diferencia,resumen').eq('piloto_id',Number(pid)).eq('fecha',dia).maybeSingle();
     if(error)return;
-    _ppCuadre.row=data||null;
+    _ppCuadre.row=(data&&!_cuadreReabierto(data))?data:null; // reabierto = vuelve a estar abierto
     if(JSON.stringify(_ppCuadre.row)!==antes&&document.querySelector('#v-panel.modo-piloto.active'))renderPanelPiloto();
   }catch(e){}
 }
@@ -2950,8 +2950,8 @@ async function renderCuadre(){
   // Repartidores con algo que cuadrar ese día (o con un cuadre ya cerrado).
   const reps=(typeof repartidores==='function'?repartidores():[]).map(r=>({id:r.pilotoId!=null?r.pilotoId:r.id,nombre:r.nombre}));
   (pilotos||[]).forEach(p=>{if(!reps.some(r=>String(r.id)===String(p.id)))reps.push({id:p.id,nombre:p.nombre});});
-  const filas=reps.map(r=>{const it=_cuadreItems(r.id,dia);return {...r,items:it,pend:it.filter(x=>!x.recibido).length,cerrado:_cuadresDia[String(r.id)]};})
-    .filter(r=>r.items.length||r.cerrado).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+  const filas=reps.map(r=>{const it=_cuadreItems(r.id,dia);const row=_cuadresDia[String(r.id)]||null;return {...r,items:it,pend:it.filter(x=>!x.recibido).length,row,cerrado:(row&&!_cuadreReabierto(row))?row:null};})
+    .filter(r=>r.items.length||r.row).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
   if(_cuadrePid&&!filas.some(r=>String(r.id)===String(_cuadrePid)))_cuadrePid='';
   if(!_cuadrePid&&filas.length)_cuadrePid=String(filas[0].id);
   const sel=filas.find(r=>String(r.id)===String(_cuadrePid));
@@ -2973,7 +2973,9 @@ async function renderCuadre(){
     const pend=its.filter(x=>!x.recibido).length;
     detalle=`<div class="panel-head"><h3>${escHtml(sel.nombre)} · ${fdate(dia+'T12:00:00')}</h3><span style="font-size:12px;color:var(--muted)">${its.length} cosa${its.length!==1?'s':''} · cobrado ${money(totCob)}</span></div>
       <div class="panel-body">
-        ${cerr?`<div class="note n-ok" style="margin:0 0 12px"><span>✓ Cuadre cerrado por <b>${escHtml(cerr.cerrado_por||'')}</b> el ${escHtml(fdatehora(cerr.cerrado_el))}${cerr.efectivo_contado!=null?` · efectivo contado ${money(cerr.efectivo_contado)}`:''}${Number(cerr.diferencia)?` · <b style="color:var(--danger)">${Number(cerr.diferencia)>0?'sobraron':'faltaron'} ${money(Math.abs(cerr.diferencia))}</b>`:' · cuadró'}${cerr.nota?' · '+escHtml(cerr.nota):''}</span></div>`:''}
+        ${cerr?`<div class="note n-ok" style="margin:0 0 12px"><span>✓ Cuadre cerrado por <b>${escHtml(cerr.cerrado_por||'')}</b> el ${escHtml(fdatehora(cerr.cerrado_el))}${cerr.efectivo_contado!=null?` · efectivo contado ${money(cerr.efectivo_contado)}`:''}${Number(cerr.diferencia)?` · <b style="color:var(--danger)">${Number(cerr.diferencia)>0?'sobraron':'faltaron'} ${money(Math.abs(cerr.diferencia))}</b>`:' · cuadró'}${cerr.nota?' · '+escHtml(cerr.nota):''}${(()=>{const ra=(cerr.resumen&&Array.isArray(cerr.resumen.reaperturas))?cerr.resumen.reaperturas:[];if(!ra.length)return '';const u=ra[ra.length-1];return `<br><span style="font-size:12px">↺ Se reabrió ${ra.length===1?'1 vez':ra.length+' veces'} · la última, ${escHtml(u.por||'')}: ${escHtml(u.motivo||'')}${u.antes&&Number(u.antes.diferencia)?` (antes ${Number(u.antes.diferencia)>0?'sobraban':'faltaban'} ${money(Math.abs(u.antes.diferencia))})`:''}</span>`;})()}</span></div>`:''}
+        ${cerr&&puede?`<div style="margin:-4px 0 12px"><button class="btn btn-ghost btn-sm" onclick="reabrirCuadre('${sel.id}')" title="Volver a abrir el cuadre para corregir lo marcado o el efectivo contado">↺ Reabrir cuadre</button></div>`:''}
+        ${(!cerr&&sel.row&&_cuadreReabierto(sel.row))?(()=>{const ra=sel.row.resumen.reabierto;return `<div class="note n-warn" style="margin:0 0 12px"><span>↺ Cuadre <b>reabierto</b> por <b>${escHtml(ra.por||'')}</b> el ${escHtml(fdatehora(ra.fecha))} · motivo: ${escHtml(ra.motivo||'')}<br><span style="font-size:12px">Antes lo había cerrado ${escHtml(ra.antes?.cerrado_por||'')}${ra.antes&&Number(ra.antes.diferencia)?` (${Number(ra.antes.diferencia)>0?'sobraron':'faltaron'} ${money(Math.abs(ra.antes.diferencia))})`:' (cuadró)'}. Corregí lo que haga falta y cerralo de nuevo.</span></span></div>`;})():''}
         ${grupos||'<div class="empty">Nada que entregar.</div>'}
         ${(!cerr&&puede&&its.length)?`<div class="cq-cierre">
           <div><label>Efectivo que entrega (contado)</label><input type="number" step="0.01" id="cq-contado" value="${esperadoEf.toFixed(2)}" oninput="_cuadreDif(${esperadoEf})"><div style="font-size:11.5px;color:var(--muted);margin-top:3px">Efectivo en mano (sin boleta): <b>${money(esperadoEf)}</b> · <span id="cq-dif"></span></div></div>
@@ -3035,7 +3037,9 @@ async function cerrarCuadre(pid){
   const nota=(document.getElementById('cq-nota')?.value||'').trim();
   const pend=its.filter(x=>!x.recibido);
   const hacer=async()=>{
-    const row={piloto_id:Number(pid),piloto_nombre:nombre,fecha:dia,resumen:{items:its.map(x=>({grupo:x.grupo,titulo:x.titulo,monto:x.monto||0,recibido:!!x.recibido}))},
+    const _prevRow=_cuadresDia[String(pid)];
+    const _hist=(_prevRow&&_prevRow.resumen&&Array.isArray(_prevRow.resumen.reaperturas))?_prevRow.resumen.reaperturas:[];
+    const row={piloto_id:Number(pid),piloto_nombre:nombre,fecha:dia,resumen:Object.assign({items:its.map(x=>({grupo:x.grupo,titulo:x.titulo,monto:x.monto||0,recibido:!!x.recibido}))},_hist.length?{reaperturas:_hist}:{}),
       efectivo_esperado:esperado,efectivo_contado:contado,diferencia:dif,nota:nota||null,cerrado_por:currentUser,cerrado_el:new Date().toISOString()};
     let ok=false;
     try{const {error}=await sb.from('cuadres_ruta').upsert(row,{onConflict:'piloto_id,fecha'});ok=!error;if(error)console.warn('Cuadre no guardado:',error);}catch(e){console.warn(e);}
@@ -3050,3 +3054,40 @@ async function cerrarCuadre(pid){
   }else hacer();
 }
 window.cerrarCuadre=cerrarCuadre;
+// ── Reabrir un cuadre cerrado ──
+// La fila del cierre NO se borra: se marca resumen.reabierto (quién, cuándo,
+// motivo y cómo estaba el cierre anterior) y se suma a resumen.reaperturas,
+// así queda el historial. Mientras está reabierto se puede volver a marcar /
+// desmarcar y cerrar de nuevo (el nuevo cierre conserva las reaperturas).
+function _cuadreReabierto(row){return !!(row&&row.resumen&&row.resumen.reabierto);}
+window._cuadreReabierto=_cuadreReabierto;
+function reabrirCuadre(pid){
+  if(!(canAsignarPiloto()||currentRole==='admin')){toast('Sin permiso','Solo logística maneja el cuadre',true);return;}
+  const row=_cuadresDia[String(pid)]; if(!row||_cuadreReabierto(row))return;
+  const nombre=row.piloto_nombre||_nombreRepartidor(pid)||'';
+  openMod('Reabrir cuadre · '+nombre,`
+    <p style="font-size:13px;margin-bottom:10px">El cuadre del <b>${fdate(row.fecha+'T12:00:00')}</b> lo cerró <b>${escHtml(row.cerrado_por||'')}</b>${Number(row.diferencia)?` · <b style="color:var(--danger)">${Number(row.diferencia)>0?'sobraron':'faltaron'} ${money(Math.abs(row.diferencia))}</b>`:' · cuadró'}.</p>
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Al reabrirlo se puede corregir lo marcado y el efectivo contado, y después se cierra de nuevo. El cierre anterior queda en el historial.</p>
+    <label>¿Por qué se reabre? <span style="color:var(--danger)">*</span></label>
+    <input id="cq-reab-motivo" placeholder="Ej. el piloto trajo los Q620 que faltaban">
+    <div class="note n-danger" id="cq-reab-err" style="display:none;margin:10px 0 0"><span>Escribí el motivo</span></div>`,
+    async()=>{
+      const motivo=(document.getElementById('cq-reab-motivo')?.value||'').trim();
+      if(!motivo){document.getElementById('cq-reab-err').style.display='flex';return;}
+      const ahora=new Date().toISOString();
+      const antes={cerrado_por:row.cerrado_por,cerrado_el:row.cerrado_el,efectivo_contado:row.efectivo_contado,diferencia:row.diferencia,nota:row.nota};
+      const ra={por:currentUser,fecha:ahora,motivo,antes};
+      const res=Object.assign({},row.resumen||{});
+      res.reabierto=ra; res.reaperturas=(Array.isArray(res.reaperturas)?res.reaperturas:[]).concat([ra]);
+      let ok=false;
+      try{const {data,error}=await sb.from('cuadres_ruta').update({resumen:res}).eq('id',row.id).select('id');ok=!error&&Array.isArray(data)&&data.length>0;if(error)console.warn('Cuadre no reabierto:',error);}catch(e){console.warn(e);}
+      if(!ok){toast('No se pudo reabrir','Revisá la conexión e intentá de nuevo',true);return;}
+      row.resumen=res;
+      logAudit('Cuadre reabierto',nombre+' · '+fdate(row.fecha+'T12:00:00')+' · '+motivo+' · antes cerrado por '+(row.cerrado_por||'')+(Number(row.diferencia)?' · '+(Number(row.diferencia)>0?'sobraron ':'faltaron ')+money(Math.abs(row.diferencia)):' · cuadró'));
+      closeMod(); if(_ppCuadre)_ppCuadre.t=0;
+      toast('↺ Cuadre reabierto',nombre+' · ya se puede corregir y cerrar de nuevo');
+      renderCuadre();
+    });
+  const sv=document.getElementById('m-save'); if(sv)sv.textContent='↺ Reabrir';
+}
+window.reabrirCuadre=reabrirCuadre;
