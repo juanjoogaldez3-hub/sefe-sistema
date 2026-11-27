@@ -1285,6 +1285,8 @@ function _despActualizarBulk(){
   const bd=document.getElementById('desp-bulk-desasig');
   if(bd){const asig=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&d.pilotoId!=null).length;bd.style.display=asig?'':'none';bd.textContent='Quitar asignación ('+asig+')';}
   // Botón "Marcar entregadas": aparece si alguna de las marcadas todavía no está entregada.
+  const bf=document.getElementById('desp-bulk-fecha');
+  if(bf){const np=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&estadoEntrega(d)!=='entregado').length;bf.style.display=np?'':'none';bf.textContent='📅 Programar fecha ('+np+')';}
   const bq=document.getElementById('desp-bulk-quitar');
   if(bq){const sinA=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&estadoEntrega(d)==='sin').length;bq.style.display=sinA?'':'none';bq.textContent='✕ Quitar de Despachos ('+sinA+')';}
   const be=document.getElementById('desp-bulk-entregar');
@@ -1337,6 +1339,42 @@ function quitarDespachoMasivo(){
   });
 }
 window.quitarDespachoMasivo=quitarDespachoMasivo;
+// Programar el DÍA de entrega sin asignar repartidor todavía (p. ej. facturas
+// que se van a entregar la otra semana). El repartidor la ve recién ese día.
+function _mananaGT(){const d=new Date(fechaHoyGT()+'T12:00:00');d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);}
+function _modalFechaDespacho(titulo,sub,fIni,notaIni,conNota,alGuardar){
+  openMod(titulo,`
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">${sub}</p>
+    <div class="row"><div><label>Fecha de entrega</label><input id="pf-fecha" type="date" value="${fIni}" style="max-width:200px"></div></div>
+    ${conNota?`<div class="row"><div><label>Nota para el repartidor <span style="color:var(--muted);font-weight:400">(opcional · sale en rojo)</span></label><input id="pf-nota" value="${escHtml(notaIni||'')}" placeholder="Ej. cobrar cheque · entregar en bodega trasera"></div></div>`:''}
+    <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Queda en Despachos con su fecha. El repartidor la ve en "Mis entregas" recién ese día. Para quitar la fecha (entregar ya), dejala vacía.</span></div>`,
+    ()=>{const f=$('#pf-fecha').value||null; alGuardar(f,conNota?(($('#pf-nota').value||'').trim()):null);});
+}
+function programarFechaDespacho(id){
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística programa entregas',true);return;}
+  const d=documentos.find(x=>x.id===id); if(!d)return;
+  const ref=d.serie?d.serie+'-'+d.numeroDte:refPed(d);
+  _modalFechaDespacho('📅 Programar entrega · '+ref,escHtml(d.clienteComercial||d.clienteNombre||'')+' · '+money(d.totales.total),_fechaProg(d)||_mananaGT(),d.notaEntrega,true,(f,nota)=>{
+    d.fechaEntrega=f; d.notaEntrega=nota||'';
+    if(typeof guardarDocumento==='function')guardarDocumento(d);
+    logAudit('Entrega programada',ref+' · '+(d.clienteComercial||d.clienteNombre||'')+' · '+(f?_fmtFechaProg(f):'sin fecha (ya)'));
+    closeMod();renderDespachos();
+    toast('📅 Entrega programada',ref+' · '+(f?_fmtFechaProg(f):'para ya'));
+  });
+}
+window.programarFechaDespacho=programarFechaDespacho;
+function programarFechaMasivo(){
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística programa entregas',true);return;}
+  const sel=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&estadoEntrega(d)!=='entregado');
+  if(!sel.length){toast('Nada que programar','Marcá con el check las entregas.',false);return;}
+  _modalFechaDespacho('📅 Programar '+sel.length+' entrega'+(sel.length!==1?'s':''),'Se pone la misma fecha a las '+sel.length+' seleccionadas (no cambia el repartidor).',_mananaGT(),'',false,(f)=>{
+    sel.forEach(d=>{d.fechaEntrega=f;if(typeof guardarDocumento==='function')guardarDocumento(d);});
+    logAudit('Entregas programadas (masivo)',sel.length+' entregas · '+(f?_fmtFechaProg(f):'sin fecha (ya)'));
+    _despSel.clear();closeMod();renderDespachos();
+    toast('📅 '+sel.length+' programada'+(sel.length!==1?'s':''),f?_fmtFechaProg(f):'para ya');
+  });
+}
+window.programarFechaMasivo=programarFechaMasivo;
 // Marcar como ENTREGADAS las entregas marcadas — salen de Despachos. Limpieza
 // masiva: NO registra pagos ni pide firma (los saldos quedan igual); para eso
 // está el "Marcar entregado" individual de Mis entregas.
@@ -1924,6 +1962,11 @@ function renderDespachos(){
     if(ga!==gb)return ga-gb;
     const na=_nomPil(a.pilotoId), nb=_nomPil(b.pilotoId);
     if(na!==nb)return na.localeCompare(nb,'es');
+    // Sin asignar: primero lo más próximo a entregar (sin fecha = hoy).
+    if(a.pilotoId==null&&b.pilotoId==null){
+      const fa=_fechaProg(a._parada||a)||fechaHoyGT(), fb=_fechaProg(b._parada||b)||fechaHoyGT();
+      if(fa!==fb)return fa<fb?-1:1;
+    }
     const ra=a.ordenRuta??999,rb=b.ordenRuta??999;
     if(ra!==rb)return ra-rb;
     return (a.numeroDte||a.numero||0)-(b.numeroDte||b.numero||0);
@@ -1982,6 +2025,7 @@ function renderDespachos(){
     // Todo en un solo menú "Acciones ▾" (antes eran 3-4 botones por fila).
     const _it=[];
     if(est!=='entregado'&&canAsignarPiloto())_it.push(`<button class="act-primary" onclick="asignarDespacho(${d.id})">${d.pilotoId?'Reasignar':'Asignar'}</button>`);
+    if(est!=='entregado'&&canAsignarPiloto())_it.push(`<button onclick="programarFechaDespacho(${d.id})">📅 ${_fechaProg(d)?'Cambiar fecha':'Programar fecha'}</button>`);
     _it.push(`<button onclick="verDoc(${d.id})">Ver documento</button>`);
     if(canAsignarPiloto()&&est!=='sin')_it.push(`<button onclick="regresarEntrega(${d.id})">↩ Regresar a Asignado</button>`);
     const _peligro=[];
