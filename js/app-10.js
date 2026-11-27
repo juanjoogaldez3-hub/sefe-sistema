@@ -1038,7 +1038,9 @@ async function _matrizTiemposORS(puntos){
   if(typeof ORS_API_KEY==='undefined'||!ORS_API_KEY)return null;
   const locations=puntos.map(p=>[Number(p.lng),Number(p.lat)]); // ORS usa [lng,lat]
   try{
-    const res=await fetch('https://api.openrouteservice.org/v2/matrix/driving-car',{
+    // api.openrouteservice.org dejó de existir el 24-11-2026 (responde 410):
+    // ahora vive en api.heigit.org. Misma llave.
+    const res=await fetch('https://api.heigit.org/openrouteservice/v2/matrix/driving-car',{
       method:'POST',
       headers:{'Authorization':ORS_API_KEY,'Content-Type':'application/json'},
       body:JSON.stringify({locations,metrics:['duration']})
@@ -1168,9 +1170,9 @@ async function _ordenarPorCercania(docs,paradas){
   }
   const N=conPin.length;
   const puntos=[{lat:bod.lat,lng:bod.lng},...conPin.map(x=>x.pt)]; // 0 = bodega
-  // Motor de tiempos: ORS (gratis) primero, luego Google, y por último línea recta.
+  // Motor de tiempos: ORS (gratis, calles reales) y, si falla, línea recta.
+  // Google Distance Matrix ya NO se usa (cobra): decisión de Juanjo 27-11-2026.
   let M=await _matrizTiemposORS(puntos), motor='ors';
-  if(!M){ M=await _matrizTiemposGoogle(puntos); motor='google'; }
   if(!M){ M=_matrizTiemposRecta(puntos); motor='recta'; }
   const salida=_parseMinHora((typeof SEFE_REPARTO!=='undefined'&&SEFE_REPARTO.salida))||510;
   const serv=(typeof SEFE_REPARTO!=='undefined'&&SEFE_REPARTO.minPorEntrega)||20;
@@ -1354,7 +1356,10 @@ function desasignarDespacho(id){
 window.desasignarDespacho=desasignarDespacho;
 
 // ================= PARADAS MANUALES DE RUTA (banco, recolección, etc.) =================
-// Geocodifica una dirección con Google (mejor esfuerzo) → {lat,lng} o null.
+// YA NO SE USA (27-11-2026): ubicar direcciones con Google cobra, y el
+// buscador gratis de OpenRouteService ubica mal en Guatemala (p. ej. "Zona 10"
+// → zona 4). Una parada sólo toma el pin del cliente elegido; si no, queda
+// sin ubicación (sale en la lista, no en el mapa). Se deja por referencia.
 async function _geocodeGoogle(dir){
   if(!dir)return null;
   if(typeof _cargarGoogleMaps!=='function')return null;
@@ -1421,7 +1426,6 @@ function openParadaRuta(pidPre){
       // se usa su ubicación guardada (más exacta que buscar la dirección).
       const _sel=window._prSel;
       if(_sel&&_sel.lat!=null&&_sel.lng!=null&&dir===_sel.dir){nueva.lat=_sel.lat;nueva.lng=_sel.lng;}
-      else if(dir){const g=await _geocodeGoogle(dir); if(g){nueva.lat=g.lat;nueva.lng=g.lng;}}
       paradasRuta.push(nueva);
       if(typeof guardarParadaRuta==='function')await guardarParadaRuta(nueva);
       logAudit('Parada de ruta creada',motivo+' · '+tit+' · '+(pilotos.find(p=>p.id===pid)?.nombre||''));
@@ -1480,7 +1484,6 @@ function openEditarParada(id){
         p.lat=null;p.lng=null;p.eta=null;
         const _sel=window._prSel;
         if(_sel&&_sel.lat!=null&&_sel.lng!=null&&dir===_sel.dir){p.lat=_sel.lat;p.lng=_sel.lng;}
-        else if(dir){const g=await _geocodeGoogle(dir); if(g){p.lat=g.lat;p.lng=g.lng;}}
       }
       Object.assign(p,{pilotoId:pid,titulo:tit,motivo,direccion:dir,horaLimite:hora,nota});
       const ok=(typeof guardarParadaRuta==='function')?await guardarParadaRuta(p):true;
@@ -2380,6 +2383,7 @@ function _entGuardarUbic(cliId){
 window._entGuardarUbic=_entGuardarUbic;
 // Dirección escrita a partir de coordenadas (Google, mejor esfuerzo) o null.
 async function _dirDeCoordenadas(lat,lng){
+  return null; // Sin Google (cobra): se guarda el punto exacto, no la dirección escrita.
   try{
     if(typeof _cargarGoogleMaps!=='function'||(typeof _gmapsAuthFail!=='undefined'&&_gmapsAuthFail))return null;
     const gm=await _cargarGoogleMaps(); if(!gm||!gm.Geocoder)return null;
@@ -2405,7 +2409,8 @@ function _pilRenderMapa(mias,paradas){
 async function _pilInitMapa(pts){
   const cont=document.getElementById('pil-mapa'); if(!cont||!pts||!pts.length)return;
   try{
-    if(typeof GOOGLE_MAPS_KEY!=='undefined'&&GOOGLE_MAPS_KEY&&typeof _cargarGoogleMaps==='function'&&!(typeof _gmapsAuthFail!=='undefined'&&_gmapsAuthFail)){
+    // Siempre OpenStreetMap (gratis); el mapa de Google cobra por cada carga.
+    if(false){
       const gm=await _cargarGoogleMaps(); if(!document.getElementById('pil-mapa'))return;
       const map=new gm.Map(cont,{center:{lat:pts[0].lat,lng:pts[0].lng},zoom:12,mapTypeControl:false,streetViewControl:false});
       const bounds=new gm.LatLngBounds();
