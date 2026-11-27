@@ -1600,11 +1600,15 @@ window._verEvidParada=_verEvidParada;
 function borrarParadaUI(id){
   const p=paradasRuta.find(x=>x.id===id); if(!p)return;
   if(!canAsignarPiloto()){toast('Sin permiso',null,true);return;}
-  confirmar('Borrar parada','Se elimina la parada «'+p.titulo+'» de la ruta.','Borrar',()=>{
+  confirmar('Borrar parada','Se elimina la parada «'+p.titulo+'» de la ruta.','Borrar',async()=>{
+    // Primero se borra en la base y se ESPERA la respuesta: sólo si de verdad
+    // se borró se quita de la pantalla (antes se quitaba igual y "volvía").
+    const ok=(typeof borrarParadaRuta==='function')?await borrarParadaRuta(id):true;
+    if(!ok){toast('No se pudo borrar la parada','La base no lo permitió (tu usuario no tiene permiso para borrar paradas) o se cortó la conexión. La parada sigue en la ruta.',true);return;}
     paradasRuta=paradasRuta.filter(x=>x.id!==id);
-    if(typeof borrarParadaRuta==='function')borrarParadaRuta(id);
     logAudit('Parada de ruta borrada',p.titulo);
     renderDespachos();
+    if(typeof renderMisEntregas==='function'){try{renderMisEntregas();}catch(e){}}
     toast('Parada borrada',p.titulo);
   });
 }
