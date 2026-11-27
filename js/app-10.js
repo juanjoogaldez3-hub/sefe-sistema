@@ -1264,6 +1264,8 @@ function _despActualizarBulk(){
   const bd=document.getElementById('desp-bulk-desasig');
   if(bd){const asig=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&d.pilotoId!=null).length;bd.style.display=asig?'':'none';bd.textContent='Quitar asignación ('+asig+')';}
   // Botón "Marcar entregadas": aparece si alguna de las marcadas todavía no está entregada.
+  const bq=document.getElementById('desp-bulk-quitar');
+  if(bq){const sinA=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&estadoEntrega(d)==='sin').length;bq.style.display=sinA?'':'none';bq.textContent='✕ Quitar de Despachos ('+sinA+')';}
   const be=document.getElementById('desp-bulk-entregar');
   if(be){const pend=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&estadoEntrega(d)!=='entregado').length;be.style.display=pend?'':'none';be.textContent='✓ Marcar entregadas ('+pend+')';}
 }
@@ -1280,6 +1282,40 @@ function desasignarMasivo(){
   });
 }
 window.desasignarMasivo=desasignarMasivo;
+// Sacar de Despachos (la factura NO va a domicilio: mostrador, la recoge el
+// cliente, otro transporte…). No se borra ni se anula: sólo deja de ser
+// "para despacho". Se puede volver a mandar desde Documentos → Acciones →
+// "Enviar a despacho". Sólo las que todavía no salieron (sin piloto o sin
+// avance): una asignada primero se desasigna.
+function _quitarDespachoDoc(d){
+  d.paraDespacho=false; d.estadoEntrega='sin'; d.pilotoId=null; d.ordenRuta=null; d.etaEntrega=null;
+  if(typeof guardarDocumento==='function')guardarDocumento(d);
+}
+function quitarDeDespacho(id){
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede sacar documentos de Despachos',true);return;}
+  const d=documentos.find(x=>x.id===id); if(!d)return;
+  const ref=d.serie?d.serie+'-'+d.numeroDte:refPed(d);
+  confirmar('Quitar de Despachos','<b>'+ref+'</b> · '+(d.clienteComercial||d.clienteNombre)+'<br>No va a domicilio: sale de Despachos. <b>No se borra ni se anula</b> la factura. Si te equivocaste, la volvés a mandar desde Documentos → Acciones → "Enviar a despacho".','Quitar',()=>{
+    _quitarDespachoDoc(d);
+    _despSel.delete(id);
+    logAudit('Quitada de Despachos',ref+' · '+(d.clienteComercial||d.clienteNombre));
+    renderDespachos();
+    toast('Quitada de Despachos',ref);
+  });
+}
+window.quitarDeDespacho=quitarDeDespacho;
+function quitarDespachoMasivo(){
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede sacar documentos de Despachos',true);return;}
+  const sel=[..._despSel].map(id=>documentos.find(d=>d.id===id)).filter(d=>d&&estadoEntrega(d)==='sin');
+  if(!sel.length){toast('Nada que quitar','Marcá documentos "Sin asignar". Los asignados primero se desasignan.',false);return;}
+  confirmar('Quitar de Despachos','Vas a sacar <b>'+sel.length+'</b> documento(s) de Despachos (no van a domicilio). <b>No se borran ni se anulan.</b> Se pueden volver a mandar desde Documentos → Acciones → "Enviar a despacho".','Quitar '+sel.length,()=>{
+    sel.forEach(d=>{_quitarDespachoDoc(d);_despSel.delete(d.id);});
+    logAudit('Quitadas de Despachos (masivo)',sel.length+' documentos: '+sel.map(d=>d.serie?d.serie+'-'+d.numeroDte:refPed(d)).join(', '));
+    renderDespachos();
+    toast('✓ '+sel.length+' quitada'+(sel.length!==1?'s':'')+' de Despachos','Siguen como facturas normales.');
+  });
+}
+window.quitarDespachoMasivo=quitarDespachoMasivo;
 // Marcar como ENTREGADAS las entregas marcadas — salen de Despachos. Limpieza
 // masiva: NO registra pagos ni pide firma (los saldos quedan igual); para eso
 // está el "Marcar entregado" individual de Mis entregas.
@@ -1851,6 +1887,8 @@ function renderDespachos(){
     acts+=`<button class="btn btn-ghost btn-sm" onclick="verDoc(${d.id})">Ver</button>`;
     if(canAsignarPiloto()&&est!=='sin')acts+=`<button class="btn btn-ghost btn-sm" onclick="regresarEntrega(${d.id})" title="Regresar a Asignado y reiniciar el avance">↩ Regresar</button>`;
     if(canAsignarPiloto()&&d.pilotoId!=null)acts+=`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="desasignarDespacho(${d.id})" title="Quitar el piloto y la ruta (vuelve a Sin asignar)">✕ Desasignar</button>`;
+    // Sacarla de Despachos (no va a domicilio): no se borra ni se anula.
+    if(canAsignarPiloto()&&est==='sin')acts+=`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="quitarDeDespacho(${d.id})" title="No va a domicilio: sacarla de Despachos (no se borra ni se anula)">✕ Quitar</button>`;
     if(est!=='entregado')acts=`<button class="btn btn-primary btn-sm" onclick="asignarDespacho(${d.id})">${d.pilotoId?'Reasignar':'Asignar'}</button>`+acts;
     const chk=(canAsignarPiloto()&&est!=='entregado')?`<input type="checkbox" class="desp-chk" data-id="${d.id}" ${_despSel.has(d.id)?'checked':''} onclick="despToggleSel(${d.id},this.checked)">`:'';
     return _enc+`<tr data-desp-grupo="${d.pilotoId==null?'_':d.pilotoId}">
