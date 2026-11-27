@@ -679,9 +679,14 @@ async function traerEvidenciaParada(p){
   }catch(e){return null;}
 }
 if(typeof window!=='undefined'){ window.guardarEvidenciaParada=guardarEvidenciaParada; window.traerEvidenciaParada=traerEvidenciaParada; }
+// Devuelve true sólo si la base REALMENTE borró la fila. Ojo: cuando la
+// regla de seguridad (RLS) no deja borrar, la base no da error: simplemente
+// borra 0 filas. Antes eso pasaba en silencio y la parada "volvía" al recargar.
 async function borrarParadaRuta(id){
-  const {error} = await sb.from('paradas_ruta').delete().eq('id', id);
-  if(error)console.error('Error borrando parada de ruta:',error);
+  const {data,error} = await sb.from('paradas_ruta').delete().eq('id', id).select('id');
+  if(error){console.error('Error borrando parada de ruta:',error);return false;}
+  if(!data||!data.length){console.warn('La base no borró la parada '+id+' (sin permiso o ya no existía).');return false;}
+  return true;
 }
 // ── Prueba de entrega: firma y foto en la tabla APARTE entregas_evidencia ──
 // (no dentro de documentos.entrega_info, que se baja en cada login). Una
