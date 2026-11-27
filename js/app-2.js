@@ -292,6 +292,13 @@ function renderPanel(){
     if(ambVenc.length)alertas.push({tipo:'danger',msg:`${ambVenc.length} ambiental${ambVenc.length!==1?'es':''} con recarga vencida: ${_listaCorta(ambVenc.map(s=>nomCliAmb(s.clienteId)),3)}`,view:'controles'});
     else if(ambPronto.length)alertas.push({tipo:'warn',msg:`${ambPronto.length} ambiental${ambPronto.length!==1?'es':''} por recargar en los próximos 7 días`,view:'controles'});
   }
+  // Repartidores que deben cosas del cuadre de días anteriores (logística / admin)
+  if(typeof cuadreDeuda==='function'&&(currentRole==='admin'||(typeof canAsignarPiloto==='function'&&canAsignarPiloto()))){
+    const _ids=new Set();(pilotos||[]).forEach(p=>_ids.add(String(p.id)));(typeof usuarios!=='undefined'?usuarios:[]).forEach(u=>{if(u.pilotoId!=null)_ids.add(String(u.pilotoId));});
+    [..._ids].forEach(pid=>{const dd=cuadreDeuda(pid);if(!dd)return;
+      const nom=(typeof _nombreRepartidor==='function'&&_nombreRepartidor(pid))||'Repartidor';
+      alertas.unshift({tipo:'danger',msg:`${escHtml(nom)} debe entregar en bodega: ${escHtml(cuadreDeudaTxt(dd))} · desde el ${fdate(dd.desde+'T12:00:00')} (${dd.dias===1?'hace 1 día':'hace '+dd.dias+' días'})`,view:'cuadre'});});
+  }
   $('#panel-alertas').innerHTML=alertas.map(a=>`<div class="alert-bar alert-${a.tipo}" onclick="go('${a.view}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${a.tipo==='info'?'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>':'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>'}</svg><span class="alert-msg" title="${escHtml(a.msg)}">${a.msg}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-left:auto;opacity:.5;flex-shrink:0"><path d="M9 18l6-6-6-6"/></svg></div>`).join('');
 
   // ── Panel 1: Documentos / Cobros vencidos ────────────────

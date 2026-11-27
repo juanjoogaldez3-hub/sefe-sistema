@@ -925,10 +925,20 @@ function _fechaProg(x){ const f=x&&(x.fechaEntrega||x.fecha); return f?String(f)
 function _delDia(x){ const f=_fechaProg(x); return !f||f<=fechaHoyGT(); }
 function _fmtFechaProg(f){ if(!f)return ''; const dia=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][new Date(f+'T12:00:00').getDay()]; return dia+' '+f.slice(8,10)+'-'+f.slice(5,7)+'-'+f.slice(0,4); }
 // Etiqueta de fecha: Hoy / día programado / ⚠ Atrasada (si ya pasó sin hacerse).
+// Día en que la entrega / parada TOCABA: la fecha programada o, si no tiene,
+// el día en que se creó (factura: el de certificación). Pedido de logística:
+// lo que no se hizo ese día sale al día siguiente resaltado en ROJO.
+function _fechaDebida(x){
+  const f=_fechaProg(x); if(f)return f;
+  const c=x&&(x.fechaCertificacion||x.creada); return c?fechaLocalDe(c):null;
+}
+function _diasAtrasada(x){ const f=_fechaDebida(x), hoy=fechaHoyGT(); return (f&&f<hoy)?Math.round((new Date(hoy+'T12:00:00')-new Date(f+'T12:00:00'))/864e5):0; }
+window._diasAtrasada=_diasAtrasada;
 function fechaProgHTML(x,hecha){
-  const f=_fechaProg(x); if(!f)return '';
   const hoy=fechaHoyGT(), st='font-size:10px;margin-top:3px;display:inline-block;white-space:nowrap';
-  if(!hecha&&f<hoy)return `<div><span class="badge b-danger" style="${st}">⚠ Atrasada · ${_fmtFechaProg(f)}</span></div>`;
+  const at=hecha?0:_diasAtrasada(x);
+  if(at)return `<div><span class="badge b-danger" style="${st}">⚠ Atrasada · ${at===1?'1 día':at+' días'} · tocaba ${_fmtFechaProg(_fechaDebida(x))}</span></div>`;
+  const f=_fechaProg(x); if(!f)return '';
   if(f===hoy)return `<div><span class="badge b-ok" style="${st}">📅 Hoy</span></div>`;
   return `<div><span class="badge b-info" style="${st}">📅 ${_fmtFechaProg(f)}</span></div>`;
 }
@@ -2008,7 +2018,7 @@ function renderDespachos(){
       const eta=p.eta?`<span style="font-size:11px;color:var(--muted);white-space:nowrap">🕐 llega ~${escHtml(p.eta)}</span>`:'';
       const _fallo=p.hechaInfo&&p.hechaInfo.noHecha;
       const [pen,pec]=_fallo?['No se pudo hacer','b-danger']:ESTADO_ENTREGA.asignado;
-      return _enc+`<tr data-desp-grupo="${p.pilotoId==null?'_':p.pilotoId}">
+      return _enc+`<tr data-desp-grupo="${p.pilotoId==null?'_':p.pilotoId}"${_diasAtrasada(p)?' class="fila-atrasada"':''}>
         <td></td>
         <td class="num" style="font-weight:700;color:var(--green)">${p.ordenRuta!=null?'#'+p.ordenRuta:'—'}</td>
         <td style="font-weight:600">Parada<div style="font-size:10.5px;color:var(--muted)">${escHtml(p.motivo||'Otro')}</div></td>
@@ -2035,7 +2045,7 @@ function renderDespachos(){
     if(_peligro.length)_it.push('<div class="act-sep"></div>',..._peligro);
     const acts=_menuAccDesp('dropdsp-'+d.id,_it);
     const chk=(canAsignarPiloto()&&est!=='entregado')?`<input type="checkbox" class="desp-chk" data-id="${d.id}" ${_despSel.has(d.id)?'checked':''} onclick="despToggleSel(${d.id},this.checked)">`:'';
-    return _enc+`<tr data-desp-grupo="${d.pilotoId==null?'_':d.pilotoId}">
+    return _enc+`<tr data-desp-grupo="${d.pilotoId==null?'_':d.pilotoId}"${est!=='entregado'&&_diasAtrasada(d)?' class="fila-atrasada"':''}>
       <td style="text-align:center">${chk}</td>
       <td class="num" style="font-weight:700;color:var(--green)">${d.ordenRuta!=null?'#'+d.ordenRuta:'—'}</td>
       <td style="font-weight:600">${docNum(d)}<div style="font-size:10.5px;color:var(--muted)">${tipoCorto[d.tipoDoc]}</div>${empTag(d.empresa)}</td>
@@ -2360,7 +2370,7 @@ function renderMisEntregas(){
   const tipoCorto={cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'};
   if(!mias.length&&!misParadas.length){
     // Aunque no queden entregas, el corte del día sigue: ahí se anota la boleta.
-    $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-body"><div class="empty">${esPil?'No tenés entregas asignadas en este momento.':'Este piloto no tiene entregas asignadas.'}</div></div></div>`+corteCajaHTML(mias,pid,esPil);
+    $('#pil-lista').innerHTML=cuadreDeudaAvisoHTML(pid,esPil)+`<div class="panel"><div class="panel-body"><div class="empty">${esPil?'No tenés entregas asignadas en este momento.':'Este piloto no tiene entregas asignadas.'}</div></div></div>`+corteCajaHTML(mias,pid,esPil);
     return;
   }
   // Lista unificada: entregas + paradas manuales, ordenadas por nº de ruta.
@@ -2378,7 +2388,7 @@ function renderMisEntregas(){
     const hora=p.horaLimite?`<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:var(--warn)">⏰ antes de ${escHtml(p.horaLimite)}</span>`:'';
     const fallo=p.hechaInfo&&p.hechaInfo.noHecha;
     const [en,ec]=fallo?['No se pudo hacer','b-danger']:ESTADO_ENTREGA.asignado;
-    return `<div class="ent-card">
+    return `<div class="ent-card${_diasAtrasada(p)?' ent-atrasada':''}">
       <div class="ent-top">
         ${p.ordenRuta!=null?`<span class="ent-num">${p.ordenRuta}</span>`:''}
         <div class="ent-nombre">${escHtml(p.titulo)}</div>
@@ -2388,11 +2398,11 @@ function renderMisEntregas(){
       ${_navBtnsHTML({t:'p',o:p})}
       ${paradaNoHechaTxt(p)}
       ${(hora||eta)?`<div class="ent-linea">${hora}${eta}</div>`:''}
-      ${(_fechaProg(p)&&_fechaProg(p)<fechaHoyGT())?fechaProgHTML(p,false):''}${notaRojaHTML(p.nota)}
+      ${_diasAtrasada(p)?fechaProgHTML(p,false):''}${notaRojaHTML(p.nota)}
       <div class="ent-acts"><button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Completar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="paradaNoHecha(${p.id})">✕ No se pudo hacer</button></div>
     </div>`;
   };
-  $('#pil-lista').innerHTML=`<div class="panel"><div class="panel-head"><h3>Mi ruta de hoy</h3><div style="display:flex;align-items:center;gap:10px;margin-left:auto"><span style="font-size:12px;color:var(--muted)">${combinada.length} parada${combinada.length!==1?'s':''} · ordenadas por ruta</span>${nNav?`<button class="btn btn-primary btn-sm" onclick="abrirRutaMisEntregas()" title="Abrir toda la ruta en Google Maps para navegar">🗺️ Navegar mi ruta</button>`:''}</div></div><div class="panel-body" style="display:flex;flex-direction:column;gap:11px">`+
+  $('#pil-lista').innerHTML=cuadreDeudaAvisoHTML(pid,esPil)+`<div class="panel"><div class="panel-head"><h3>Mi ruta de hoy</h3><div style="display:flex;align-items:center;gap:10px;margin-left:auto"><span style="font-size:12px;color:var(--muted)">${combinada.length} parada${combinada.length!==1?'s':''} · ordenadas por ruta</span>${nNav?`<button class="btn btn-primary btn-sm" onclick="abrirRutaMisEntregas()" title="Abrir toda la ruta en Google Maps para navegar">🗺️ Navegar mi ruta</button>`:''}</div></div><div class="panel-body" style="display:flex;flex-direction:column;gap:11px">`+
     combinada.map(it=>{
       if(it.tipo==='p')return paradaCard(it.p);
       const d=it.d;
@@ -2412,14 +2422,14 @@ function renderMisEntregas(){
       else if(est==='entregado')btn=`<span class="badge b-ok">✓ Entregado a ${d.entregaInfo?.recibe||'—'}</span>`;
       // Tarjeta pensada para el celular: el nombre del cliente arriba a todo
       // el ancho; estado y documento abajo; botones (incluido Ver doc) al pie.
-      return `<div class="ent-card${est==='entregado'?' ent-hecha':''}">
+      return `<div class="ent-card${est==='entregado'?' ent-hecha':''}${est!=='entregado'&&_diasAtrasada(d)?' ent-atrasada':''}">
         <div class="ent-top">
           ${d.ordenRuta!=null?`<span class="ent-num">${d.ordenRuta}</span>`:''}
           <div class="ent-nombre">${escHtml(d.clienteComercial||d.clienteNombre||'')}</div>
         </div>
         <div class="ent-meta"><span class="badge ${ec}">${en}</span><span>${docNum(d)} · ${tipoCorto[d.tipoDoc]} · <b>${money(d.totales.total)}</b></span>${est!=='entregado'&&(_nPend[d.clienteId]||0)>=2?`<span class="badge b-info" title="Este cliente tiene varios documentos en la ruta">🔗 ${_nPend[d.clienteId]} de este cliente</span>`:''}</div>
         <div class="ent-dir">📍 ${escHtml(dirEntrega(d))}</div>
-        ${est!=='entregado'&&_fechaProg(d)&&_fechaProg(d)<fechaHoyGT()?fechaProgHTML(d,false):''}${notaRojaHTML(d.notaEntrega)}
+        ${est!=='entregado'&&_diasAtrasada(d)?fechaProgHTML(d,false):''}${notaRojaHTML(d.notaEntrega)}
         ${est!=='entregado'?_navBtnsHTML({t:'d',o:d}):''}
         ${typeof noEntregadoTxt==='function'?noEntregadoTxt(d):''}
         ${typeof parcialTxt==='function'?parcialTxt(d):''}
@@ -2794,6 +2804,7 @@ function renderPanelPiloto(){
 
   // ── Avisos ──
   const avisos=[];
+  {const dd=pid!=null?cuadreDeuda(pid):null; if(dd)avisos.push(['💰','danger',`<b>Pendiente de entregar en bodega</b> desde el ${fdate(dd.desde+'T12:00:00')} (${_haceDias(dd.dias)}): ${escHtml(cuadreDeudaTxt(dd))}. Entregalo a logística.`]);}
   pend.filter(d=>d.entregaInfo&&d.entregaInfo.noEntregado).forEach(d=>avisos.push(['✕','danger',`<b>${escHtml(nomCli(d))}</b>: no se pudo entregar (${escHtml(d.entregaInfo.noEntregado.motivo||'')}). Sigue en tu ruta.`]));
   pars.filter(p=>p.hechaInfo&&p.hechaInfo.noHecha).forEach(p=>avisos.push(['✕','danger',`<b>${escHtml(p.titulo)}</b>: no se pudo hacer (${escHtml(p.hechaInfo.noHecha.motivo||'')}). Sigue en tu ruta.`]));
   try{ const risk=_riesgosHora(pend.slice().sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999))); pend.filter(d=>risk.has(d.id)).forEach(d=>avisos.push(['⏰','warn',`<b>${escHtml(nomCli(d))}</b> recibe antes de ${escHtml(_horaLimTxtDoc(d))} y quedó tarde en tu ruta. Avisale a logística.`])); }catch(e){}
@@ -2898,10 +2909,18 @@ function _cuadreNombres(pid){
   return s;
 }
 // Lista de cosas que el repartidor pid tiene que entregar el día `dia`.
+// Lo NO recibido de días anteriores se arrastra al cuadre de los días
+// siguientes (con su fecha y días de atraso) hasta que logística lo marque.
+// Arranca el 26-11-2026 (primer cuadre cerrado): lo de antes no se arrastra.
+const CUADRE_ARRASTRE_DESDE='2026-11-26';
+function _diasEntre(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/864e5);}
 function _cuadreItems(pid,dia){
   const nombres=_cuadreNombres(pid); const items=[];
   const refDoc=d=>(d.serie&&d.numeroDte)?(d.serie+'-'+d.numeroDte):refPed(d);
   const enDia=f=>f&&fechaLocalDe(f)===dia;
+  // ¿Es de un día anterior y sigue pendiente (o se recibió justo ese día)?
+  const arrastra=(f,rec)=>{if(!f)return false;const x=fechaLocalDe(f);return x<dia&&x>=CUADRE_ARRASTRE_DESDE&&(!rec||enDia(rec.fecha));};
+  const delTxt=f=>{const x=fechaLocalDe(f);return x<dia?' · del '+fdate(x+'T12:00:00'):'';};
   // Dinero: cobros del día + los de antes que siguen sin entregar/depositar.
   (cobrosRuta||[]).filter(c=>nombres.has(c.piloto)&&(enDia(c.fecha)||enDia(c.recibidoFecha)||['cobrado','depositado'].includes(c.estado))).forEach(c=>{
     const ok=['recibido','procesado'].includes(c.estado);
@@ -2909,29 +2928,60 @@ function _cuadreItems(pid,dia){
       titulo:(c.modo==='cheque'?'Cheque '+(c.cheque||'')+(c.banco?' ('+c.banco+')':''):'Efectivo')+' · '+c.docNum,
       sub:c.cliente+' · recibo '+(c.noRecibo||'—')+(c.noBoleta?' · boleta '+c.noBoleta:' · sin boleta')+(!enDia(c.fecha)?' · del '+fdate(c.fecha):''),
       estado:{cobrado:'Por depositar',depositado:'Depositado (con boleta)',recibido:'Recibido',procesado:'Procesado por contabilidad'}[c.estado]||c.estado,
-      recibido:ok,bloqueado:c.estado==='procesado',fisico:c.modo!=='cheque'&&!c.noBoleta});
+      recibido:ok,bloqueado:c.estado==='procesado',fisico:c.modo!=='cheque'&&!c.noBoleta,enMano:!c.noBoleta,desde:fechaLocalDe(c.fecha)});
   });
   (documentos||[]).forEach(d=>{
     const ei=d.entregaInfo; if(!ei)return;
     const cli=d.clienteComercial||d.clienteNombre||'';
-    if(d.estadoEntrega==='entregado'&&enDia(ei.fecha)&&nombres.has(ei.piloto)){
+    if(d.estadoEntrega==='entregado'&&(enDia(ei.fecha)||arrastra(ei.fecha,ei.cuadreRec))&&nombres.has(ei.piloto)){
       const g={contrasena:'contrasena',credito:'firmada',prestamo:'firmada'}[ei.modoPago];
-      if(g)items.push({grupo:g,key:'d'+d.id,docId:d.id,where:'final',titulo:(g==='contrasena'?'Contraseña '+(ei.contrasena||''):(ei.modoPago==='prestamo'?'Nota de préstamo firmada':'Factura firmada (crédito)'))+' · '+refDoc(d),sub:cli+(ei.recibe?' · recibió '+ei.recibe:''),recibido:!!ei.cuadreRec});
+      if(g)items.push({grupo:g,key:'d'+d.id,docId:d.id,where:'final',titulo:(g==='contrasena'?'Contraseña '+(ei.contrasena||''):(ei.modoPago==='prestamo'?'Nota de préstamo firmada':'Factura firmada (crédito)'))+' · '+refDoc(d),sub:cli+(ei.recibe?' · recibió '+ei.recibe:'')+delTxt(ei.fecha),recibido:!!ei.cuadreRec,desde:fechaLocalDe(ei.fecha)});
     }
     (Array.isArray(ei.parciales)?ei.parciales:[]).forEach((p,i)=>{
-      if(enDia(p.fecha)&&nombres.has(p.piloto))items.push({grupo:'firmada',key:'p'+d.id+'_'+i,docId:d.id,where:'parcial',idx:i,titulo:'Copia firmada (entrega parcial) · '+refDoc(d),sub:cli+(p.recibe?' · recibió '+p.recibe:''),recibido:!!p.cuadreRec});
+      if((enDia(p.fecha)||arrastra(p.fecha,p.cuadreRec))&&nombres.has(p.piloto))items.push({grupo:'firmada',key:'p'+d.id+'_'+i,docId:d.id,where:'parcial',idx:i,titulo:'Copia firmada (entrega parcial) · '+refDoc(d),sub:cli+(p.recibe?' · recibió '+p.recibe:'')+delTxt(p.fecha),recibido:!!p.cuadreRec,desde:fechaLocalDe(p.fecha)});
     });
     (Array.isArray(ei.intentos)?ei.intentos:[]).forEach((x,i)=>{
-      if(enDia(x.fecha)&&nombres.has(x.piloto))items.push({grupo:'regresa',key:'i'+d.id+'_'+i,docId:d.id,where:'intento',idx:i,titulo:'Regresa sin entregar · '+refDoc(d),sub:cli+' · '+(x.motivo||'')+(x.comentario?' — '+x.comentario:''),recibido:!!x.cuadreRec});
+      if((enDia(x.fecha)||arrastra(x.fecha,x.cuadreRec))&&nombres.has(x.piloto))items.push({grupo:'regresa',key:'i'+d.id+'_'+i,docId:d.id,where:'intento',idx:i,titulo:'Regresa sin entregar · '+refDoc(d),sub:cli+' · '+(x.motivo||'')+(x.comentario?' — '+x.comentario:'')+delTxt(x.fecha),recibido:!!x.cuadreRec,desde:fechaLocalDe(x.fecha)});
     });
   });
   (typeof paradasRuta!=='undefined'?paradasRuta:[]).forEach(p=>{
     const hi=p.hechaInfo||{};
-    if(p.hecha&&p.motivo==='Recolecta'&&String(p.pilotoId)===String(pid)&&enDia(p.hechaFecha))
-      items.push({grupo:'recolecta',key:'r'+p.id,paradaId:p.id,titulo:'Lo recogido · '+p.titulo,sub:hi.resultado||'',recibido:!!hi.cuadreRec});
+    if(p.hecha&&p.motivo==='Recolecta'&&String(p.pilotoId)===String(pid)&&(enDia(p.hechaFecha)||arrastra(p.hechaFecha,hi.cuadreRec)))
+      items.push({grupo:'recolecta',key:'r'+p.id,paradaId:p.id,titulo:'Lo recogido · '+p.titulo,sub:(hi.resultado||'')+delTxt(p.hechaFecha),recibido:!!hi.cuadreRec,desde:fechaLocalDe(p.hechaFecha)});
   });
+  items.forEach(x=>{x.atraso=(!x.recibido&&x.desde&&x.desde<dia)?_diasEntre(x.desde,dia):0;});
   return items;
 }
+// Lo que un repartidor DEBE entregar en bodega de días anteriores (hoy).
+// {n, dinero (efectivo/cheques sin boleta), docs, desde, dias, items}
+function cuadreDeuda(pid){
+  const hoy=fechaHoyGT();
+  const its=_cuadreItems(pid,hoy).filter(x=>x.atraso>0);
+  if(!its.length)return null;
+  const desde=its.map(x=>x.desde).sort()[0];
+  const dinero=its.filter(x=>(x.grupo==='efectivo'||x.grupo==='cheque')&&x.enMano).reduce((s,x)=>s+(x.monto||0),0);
+  return {n:its.length,dinero:Math.round(dinero*100)/100,docs:its.filter(x=>x.grupo!=='efectivo'&&x.grupo!=='cheque').length,
+    cobrosConBoleta:its.filter(x=>(x.grupo==='efectivo'||x.grupo==='cheque')&&!x.enMano).length,desde,dias:_diasEntre(desde,hoy),items:its};
+}
+window.cuadreDeuda=cuadreDeuda;
+function _haceDias(n){return n===1?'hace 1 día':'hace '+n+' días';}
+// Texto corto de la deuda: "Q620 en efectivo/cheques · 2 documentos · 1 cobro sin confirmar"
+function cuadreDeudaTxt(dd){
+  const p=[];
+  if(dd.dinero)p.push(money(dd.dinero)+' en efectivo/cheques');
+  if(dd.docs)p.push(dd.docs+' documento'+(dd.docs!==1?'s':'')+' (contraseñas, firmados…)');
+  if(dd.cobrosConBoleta)p.push(dd.cobrosConBoleta+' cobro'+(dd.cobrosConBoleta!==1?'s':'')+' con boleta sin confirmar');
+  return p.join(' · ');
+}
+window.cuadreDeudaTxt=cuadreDeudaTxt;
+// Aviso rojo para el repartidor (Mis entregas y su panel). '' si no debe nada.
+function cuadreDeudaAvisoHTML(pid,propia){
+  const dd=pid!=null?cuadreDeuda(pid):null; if(!dd)return '';
+  const lista=dd.items.slice(0,6).map(x=>`<li>${escHtml(x.titulo)} <span style="opacity:.8">· del ${fdate(x.desde+'T12:00:00')}</span>${x.monto?' · <b>'+money(x.monto)+'</b>':''}</li>`).join('')+(dd.items.length>6?`<li>… y ${dd.items.length-6} más</li>`:'');
+  return `<div class="note n-danger" style="margin-bottom:14px;align-items:flex-start"><span><b>${propia?'Tenés pendiente de entregar en bodega':'Pendiente de entregar en bodega'}</b> desde el ${fdate(dd.desde+'T12:00:00')} (${_haceDias(dd.dias)}): ${escHtml(cuadreDeudaTxt(dd))}.
+    <ul style="margin:6px 0 0 16px;padding:0;font-size:12.5px">${lista}</ul></span></div>`;
+}
+window.cuadreDeudaAvisoHTML=cuadreDeudaAvisoHTML;
 const _CUADRE_GRUPOS=[['efectivo','💵 Efectivo'],['cheque','🏦 Cheques'],['contrasena','📄 Contraseñas de pago'],['firmada','✍️ Documentos firmados'],['regresa','↩️ Regresa sin entregar'],['recolecta','📦 Recolectas (lo recogido)']];
 async function _cuadreCargar(dia){
   if(_cuadresCargados===dia)return;
@@ -2956,7 +3006,7 @@ async function renderCuadre(){
   if(!_cuadrePid&&filas.length)_cuadrePid=String(filas[0].id);
   const sel=filas.find(r=>String(r.id)===String(_cuadrePid));
   const tarjeta=r=>`<button class="cq-rep${String(r.id)===String(_cuadrePid)?' on':''}" onclick="_cuadreVer('${r.id}')">
-      <b>${escHtml(r.nombre)}</b><span>${r.cerrado?'<span class="badge b-ok">✓ Cuadrado</span>':(r.pend?`<span class="badge b-warn">${r.pend} pendiente${r.pend!==1?'s':''}</span>`:'<span class="badge b-info">Listo para cerrar</span>')}</span></button>`;
+      <b>${escHtml(r.nombre)}</b>${(()=>{const at=r.items.filter(x=>x.atraso>0);if(!at.length)return '';const mx=Math.max(...at.map(x=>x.atraso));return `<span class="badge b-danger" style="margin:3px 0">⚠ ${at.length} atrasado${at.length!==1?'s':''} · ${_haceDias(mx)}</span>`;})()}<span>${r.cerrado?'<span class="badge b-ok">✓ Cuadrado</span>':(r.pend?`<span class="badge b-warn">${r.pend} pendiente${r.pend!==1?'s':''}</span>`:'<span class="badge b-info">Listo para cerrar</span>')}</span></button>`;
   let detalle='<div class="empty">No hay nada que cuadrar ese día.</div>';
   if(sel){
     const its=sel.items;
@@ -2966,9 +3016,9 @@ async function renderCuadre(){
     const puede=canAsignarPiloto()||currentRole==='admin';
     const grupos=_CUADRE_GRUPOS.map(([g,lbl])=>{const xs=its.filter(x=>x.grupo===g); if(!xs.length)return '';
       const sub=(g==='efectivo'||g==='cheque')?' · '+money(xs.reduce((s,x)=>s+x.monto,0)):'';
-      return `<div class="cq-grupo"><div class="cq-gh">${lbl} <span>${xs.length}${sub}</span></div>${xs.map(x=>`<label class="cq-item${x.recibido?' ok':''}">
+      return `<div class="cq-grupo"><div class="cq-gh">${lbl} <span>${xs.length}${sub}</span></div>${xs.map(x=>`<label class="cq-item${x.recibido?' ok':''}${x.atraso?' cq-atras':''}">
         <input type="checkbox" ${x.recibido?'checked':''} ${(!puede||cerr||x.bloqueado)?'disabled':''} onchange="_cuadreMarcar('${x.key}',this.checked)">
-        <div style="flex:1;min-width:0"><div class="cq-t">${escHtml(x.titulo)}</div><div class="cq-s">${escHtml(x.sub||'')}${x.estado?' · <b>'+escHtml(x.estado)+'</b>':''}</div></div>
+        <div style="flex:1;min-width:0"><div class="cq-t">${escHtml(x.titulo)}</div><div class="cq-s">${escHtml(x.sub||'')}${x.estado?' · <b>'+escHtml(x.estado)+'</b>':''}${x.atraso?` · <b style="color:var(--danger)">⚠ atrasado, ${_haceDias(x.atraso)}</b>`:''}</div></div>
         ${x.monto?`<b class="num">${money(x.monto)}</b>`:''}</label>`).join('')}</div>`;}).join('');
     const pend=its.filter(x=>!x.recibido).length;
     detalle=`<div class="panel-head"><h3>${escHtml(sel.nombre)} · ${fdate(dia+'T12:00:00')}</h3><span style="font-size:12px;color:var(--muted)">${its.length} cosa${its.length!==1?'s':''} · cobrado ${money(totCob)}</span></div>

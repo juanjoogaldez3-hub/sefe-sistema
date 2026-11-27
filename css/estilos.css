@@ -758,3 +758,10 @@
   .pc-top>div:first-child{width:100%}
 }
 @media(max-width:520px){.pc-kpis{grid-template-columns:1fr 1fr}.pc-kpi b{font-size:17px}}
+
+/* Entregas / paradas atrasadas (no se hicieron el día que tocaba) y lo
+   pendiente de días anteriores en el cuadre: resaltado en rojo */
+tr.fila-atrasada>td{background:color-mix(in srgb,var(--danger) 7%,transparent)}
+tr.fila-atrasada>td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+.ent-card.ent-atrasada{border-color:color-mix(in srgb,var(--danger) 55%,transparent);background:color-mix(in srgb,var(--danger) 5%,var(--surface,#fff));box-shadow:inset 4px 0 0 var(--danger)}
+.cq-item.cq-atras:not(.ok){border-color:color-mix(in srgb,var(--danger) 50%,transparent);background:color-mix(in srgb,var(--danger) 6%,transparent)}
