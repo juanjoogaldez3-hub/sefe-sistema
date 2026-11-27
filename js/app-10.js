@@ -1435,6 +1435,69 @@ function openParadaRuta(pidPre){
     if(mot)mot.addEventListener('change',_prDocsAdjuntos);
   },0);
 }
+// ── Editar una parada pendiente (mismos campos que al agregarla) ──
+// Si se cambia el repartidor, la parada pasa AL FINAL de la ruta del nuevo.
+// Si se cambia la dirección, se vuelve a ubicar en el mapa. Sólo se cambia
+// en pantalla cuando la base confirma que guardó.
+function openEditarParada(id){
+  if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede editar paradas',true);return;}
+  const p=(paradasRuta||[]).find(x=>x.id===id); if(!p)return;
+  if(p.hecha){toast('Ya está completada','Las paradas hechas no se editan.',true);return;}
+  const esc=v=>escHtml(v==null?'':String(v));
+  const motivos=PARADA_MOTIVOS.includes(p.motivo)||!p.motivo?PARADA_MOTIVOS:PARADA_MOTIVOS.concat([p.motivo]);
+  openMod('✎ Editar parada',`
+    <div class="row"><div style="flex:1"><label>Repartidor</label><select id="pr-piloto">${_optRepartidores(p.pilotoId)}</select></div></div>
+    <div class="row"><div><label>Nombre <span style="color:var(--muted);font-weight:400">(cliente, proveedor o texto libre)</span></label><input id="pr-tit" autocomplete="off" value="${esc(p.titulo)}"></div></div>
+    <div class="row"><div><label>Motivo</label><select id="pr-motivo"><option value="">— Elegí el motivo —</option>${motivos.map(m=>`<option value="${esc(m)}"${p.motivo===m?' selected':''}>${esc(m)}</option>`).join('')}</select></div></div>
+    <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" value="${esc(p.direccion)}" placeholder="Dirección o nombre del lugar"></div></div>
+    <div class="row"><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px" value="${esc(p.horaLimite)}"></div></div>
+    <div class="row"><div><label>Nota <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-nota" value="${esc(p.nota)}" placeholder="Detalle"></div></div>
+    <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Si cambiás el repartidor, la parada pasa al final de su ruta. Para cambiar el orden usá "↕ Ordenar ruta".</span></div>`,
+    async ()=>{
+      const pid=$('#pr-piloto').value?Number($('#pr-piloto').value):null;
+      const tit=$('#pr-tit').value.trim(), motivo=$('#pr-motivo').value;
+      if(!pid){toast('Elegí un repartidor',null,true);return;}
+      if(!motivo){toast('Elegí el motivo de la parada',null,true);return;}
+      if(!tit){toast('Ponele un nombre a la parada',null,true);return;}
+      const dir=$('#pr-dir').value.trim();
+      const antes={...p};
+      const cambios=[];
+      if(pid!==p.pilotoId)cambios.push('repartidor: '+(_nombreRepartidor(p.pilotoId)||'—')+' → '+(_nombreRepartidor(pid)||'—'));
+      if(tit!==p.titulo)cambios.push('nombre: '+p.titulo+' → '+tit);
+      if(motivo!==(p.motivo||''))cambios.push('motivo: '+(p.motivo||'—')+' → '+motivo);
+      if(dir!==(p.direccion||''))cambios.push('dirección');
+      const hora=$('#pr-hora').value||'', nota=$('#pr-nota').value.trim();
+      if(hora!==(p.horaLimite||''))cambios.push('hora límite');
+      if(nota!==(p.nota||''))cambios.push('nota');
+      if(!cambios.length){closeMod();return;}
+      // Otro repartidor → al final de SU ruta
+      if(pid!==p.pilotoId){
+        const _max=Math.max(0,...docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado').map(d=>d.ordenRuta||0),..._paradasPiloto(pid).filter(x=>x.id!==p.id).map(x=>x.ordenRuta||0));
+        p.ordenRuta=_max?_max+1:null; p.eta=null;
+      }
+      // Dirección nueva → volver a ubicar (cliente elegido con pin, o buscarla)
+      if(dir!==(p.direccion||'')){
+        p.lat=null;p.lng=null;p.eta=null;
+        const _sel=window._prSel;
+        if(_sel&&_sel.lat!=null&&_sel.lng!=null&&dir===_sel.dir){p.lat=_sel.lat;p.lng=_sel.lng;}
+        else if(dir){const g=await _geocodeGoogle(dir); if(g){p.lat=g.lat;p.lng=g.lng;}}
+      }
+      Object.assign(p,{pilotoId:pid,titulo:tit,motivo,direccion:dir,horaLimite:hora,nota});
+      const ok=(typeof guardarParadaRuta==='function')?await guardarParadaRuta(p):true;
+      if(ok===false){
+        Object.keys(p).forEach(k=>{if(!(k in antes))delete p[k];}); Object.assign(p,antes); // deshacer en pantalla
+        toast('No se pudo guardar la parada','La base no lo permitió o se cortó la conexión. No se cambió nada.',true);
+        return;
+      }
+      logAudit('Parada de ruta editada',tit+' · '+cambios.join(' · '));
+      closeMod();renderDespachos();
+      if(typeof renderMisEntregas==='function'){try{renderMisEntregas();}catch(e){}}
+      toast('✓ Parada actualizada',tit);
+    });
+  window._prSel=null;
+  setTimeout(()=>{_wireParadaNombre();},0);
+}
+window.openEditarParada=openEditarParada;
 // Documento que se puede adjuntar a la parada según el motivo:
 //  · Entrega     → facturas (certificadas) y notas de envío pendientes, sin
 //                  entregar y de los últimos 60 días.
@@ -1878,7 +1941,7 @@ function renderDespachos(){
         <td class="num" style="color:var(--muted-2)">—</td>
         <td>${escHtml(_nomPil(p.pilotoId))}</td>
         <td><span class="badge ${pec}">${pen}</span></td>
-        <td><div class="acts">${canAsignarPiloto()?`<button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Completar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>`:''}</div></td>
+        <td><div class="acts">${canAsignarPiloto()?`<button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Completar</button><button class="btn btn-ghost btn-sm" onclick="openEditarParada(${p.id})">✎ Editar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>`:''}</div></td>
       </tr>`;
     }
     const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];

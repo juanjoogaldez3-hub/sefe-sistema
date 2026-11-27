@@ -647,16 +647,20 @@ async function guardarParadaRuta(p){
     if(row.motivo!==undefined && /motivo/i.test(t)){ delete row.motivo; quitado=true; }
     return quitado;
   };
+  // Devuelve true sólo si la base de verdad guardó (al editar, una regla de
+  // seguridad que no deja escribir devuelve 0 filas SIN error).
   if (p._nuevo) {
     delete p._nuevo;
     let {data,error} = await sb.from('paradas_ruta').insert(row).select().single();
     if(_sinMotivo(error)){ ({data,error} = await sb.from('paradas_ruta').insert(row).select().single()); }
-    if(error){console.error('Error guardando parada de ruta:',error); p._nuevo=true;}
-    else p.id = data.id;
+    if(error){console.error('Error guardando parada de ruta:',error); p._nuevo=true; return false;}
+    p.id = data.id; return true;
   } else {
-    let {error} = await sb.from('paradas_ruta').update(row).eq('id', p.id);
-    if(_sinMotivo(error)){ ({error} = await sb.from('paradas_ruta').update(row).eq('id', p.id)); }
-    if(error)console.error('Error actualizando parada de ruta:',error);
+    let {data,error} = await sb.from('paradas_ruta').update(row).eq('id', p.id).select('id');
+    if(_sinMotivo(error)){ ({data,error} = await sb.from('paradas_ruta').update(row).eq('id', p.id).select('id')); }
+    if(error){console.error('Error actualizando parada de ruta:',error); return false;}
+    if(!data||!data.length){console.warn('La base no actualizó la parada '+p.id+' (sin permiso o ya no existe).'); return false;}
+    return true;
   }
 }
 // Firma/foto de una parada hecha (tabla aparte, igual que las entregas).
