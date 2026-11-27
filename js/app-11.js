@@ -742,6 +742,172 @@ async function confirmarEntrega(id){
 }
 window.confirmarEntrega=confirmarEntrega;
 
+// ══════════ ENTREGAR JUNTAS (varios documentos del mismo cliente) ══════════
+// Cuando en la ruta hay 2+ documentos del mismo cliente "en ruta" (facturas,
+// NE o NP), el repartidor los entrega en UNA sola ventana: el cliente firma
+// una vez, se pone una vez quién recibe (y la foto, si se quiere), y esa
+// prueba de entrega queda en CADA documento (cada factura sale firmada).
+// El cobro se registra por documento (cada uno tiene su saldo) con un mismo
+// No. de recibo; en el cierre del día va una sola boleta.
+// Para separar uno (no se entrega, o va parcial) se desmarca y se entrega solo.
+let _grpIds=[], _grpPagoTipo='efectivo';
+function _grpDocsCliente(cliId){
+  const pid=(typeof _pidMisEntregas==='function')?_pidMisEntregas():null;
+  return docsDespachables().filter(d=>d.clienteId===cliId&&String(d.pilotoId)===String(pid)&&estadoEntrega(d)==='ruta'&&(typeof _delDia!=='function'||_delDia(d)))
+    .sort((a,b)=>(a.ordenRuta??999)-(b.ordenRuta??999)||a.id-b.id);
+}
+window._grpDocsCliente=_grpDocsCliente;
+const _grpRef=d=>d.serie?d.serie+'-'+d.numeroDte:(typeof refPed==='function'?refPed(d):'PED-'+padn(d.numero));
+const _grpTipo={cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'};
+function _grpSel(){return _grpIds.map(id=>documentos.find(d=>d.id===id)).filter(Boolean).filter(d=>{const c=document.querySelector('.grp-chk[data-id="'+d.id+'"]');return !c||c.checked;});}
+function marcarEntregadoGrupo(cliId){
+  const docs=_grpDocsCliente(cliId);
+  if(docs.length<2){ if(docs[0])marcarEntregado(docs[0].id); return; }
+  _grpIds=docs.map(d=>d.id); _firmaVacia=true; _fotoEntrega=null; _curEntregaId=null;
+  const nom=docs[0].clienteComercial||docs[0].clienteNombre||'';
+  openMod('Entregar juntas · '+docs.length+' documentos',`
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">${escHtml(nom)}</p>
+    <div style="border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:6px">
+      ${docs.map(d=>{const pr=d.tipoDoc==='prestamo';return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px">
+        <input type="checkbox" class="grp-chk" data-id="${d.id}" checked onchange="_grpRefrescar()" style="width:17px;height:17px;flex:none">
+        <span style="flex:1;min-width:0"><b>${escHtml(_grpRef(d))}</b> · ${_grpTipo[d.tipoDoc]||''}${typeof _parcialesDe==='function'&&_parcialesDe(d).length?' · <span style="color:var(--warn)">faltaba una parte</span>':''}</span>
+        <span class="num" style="font-weight:600">${pr?'no se cobra':money(arInfo(d).saldo)}</span></label>`;}).join('')}
+    </div>
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">¿Alguno no se entrega o va solo una parte? Desmarcalo y entregalo aparte desde su tarjeta.</div>
+    <div id="grp-pago-wrap">
+      <label>¿Cómo se resolvió el pago?</label>
+      <div class="pay-opt" id="grp-pay-opt">
+        <div class="pay-btn on" data-pago="efectivo" onclick="_grpPago('efectivo')"><span class="pi">💵</span>Efectivo</div>
+        <div class="pay-btn" data-pago="cheque" onclick="_grpPago('cheque')"><span class="pi">🏦</span>Cheque</div>
+        <div class="pay-btn" data-pago="contrasena" onclick="_grpPago('contrasena')"><span class="pi">📄</span>Contraseña de pago</div>
+        <div class="pay-btn" data-pago="credito" onclick="_grpPago('credito')"><span class="pi">✍️</span>Queda a crédito</div>
+      </div>
+      <div id="grp-pay-det"></div>
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line-strong)">
+      <div style="font-size:10.5px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Prueba de entrega · una firma para todos</div>
+      <label>Firma de quien recibe <span style="color:var(--danger)">*</span></label>
+      <div class="firma-wrap"><canvas id="firma-canvas" class="firma-canvas"></canvas>
+        <div class="firma-foot"><span>Firmá con el dedo o el mouse</span><button class="btn btn-ghost btn-sm" type="button" onclick="limpiarFirma()">Borrar</button></div></div>
+      <div class="row" style="margin-top:11px"><div><label>¿Quién recibió? <span style="color:var(--danger)">*</span></label><input id="ent-recibe" placeholder="Nombre de quien firma"></div></div>
+      <label>Foto <span style="font-weight:400;color:var(--muted-2)">(opcional · se guarda 30 días)</span></label>
+      <input type="file" id="ent-foto-file" accept="image/*" capture="environment" style="display:none" onchange="cargarFotoEntrega(this)">
+      <div id="ent-foto-zone" style="margin-bottom:12px"><button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('ent-foto-file').click()">📷 Tomar foto</button></div>
+    </div>
+    <div class="row"><div><label>Observación <span style="font-weight:400;color:var(--muted-2)">(opcional)</span></label><input id="ent-obs" placeholder="Ej. dejado en recepción"></div></div>
+    <div class="note n-danger" id="ent-err" style="display:none;margin-bottom:0"><span></span></div>`,
+    ()=>confirmarEntregaGrupo());
+  const sv=document.getElementById('m-save'); if(sv)sv.textContent='✓ Confirmar entrega';
+  _grpPago('efectivo');
+  setTimeout(initFirma,50);
+}
+window.marcarEntregadoGrupo=marcarEntregadoGrupo;
+// Los que se cobran (facturas y NE); las NP no se cobran.
+function _grpCobrables(){return _grpSel().filter(d=>d.tipoDoc!=='prestamo');}
+function _grpPago(tipo){
+  // Conservar lo ya escrito al cambiar de forma de pago
+  const prev={}; document.querySelectorAll('.grp-monto').forEach(i=>prev[i.dataset.id]=i.value);
+  const rec=document.getElementById('ent-recibo-num')?.value||'';
+  _grpPagoTipo=tipo;
+  document.querySelectorAll('#grp-pay-opt .pay-btn').forEach(b=>b.classList.toggle('on',b.dataset.pago===tipo));
+  const det=document.getElementById('grp-pay-det'); if(!det)return;
+  const cob=_grpCobrables();
+  if(tipo==='efectivo'||tipo==='cheque'){
+    det.innerHTML=`${cob.map(d=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="flex:1;font-size:12.5px">${escHtml(_grpRef(d))} <span style="color:var(--muted)">· saldo ${money(arInfo(d).saldo)}</span></span>
+        <input type="number" step="0.01" class="grp-monto" data-id="${d.id}" value="${prev[d.id]!=null?prev[d.id]:arInfo(d).saldo.toFixed(2)}" oninput="_grpTotal()" style="width:120px;text-align:right"></div>`).join('')}
+      <div style="text-align:right;font-size:13px;margin:4px 0 10px">Total ${tipo==='cheque'?'del cheque':'recibido'}: <b id="grp-total" class="num"></b></div>
+      <div class="row"><div><label>No. de recibo <span style="font-weight:400;color:var(--muted-2)">(uno para todas)</span></label><input id="ent-recibo-num" value="${escHtml(rec)}" placeholder="Recibo entregado al cliente"></div></div>
+      ${tipo==='cheque'?`<div class="row"><div><label>No. de cheque</label><input id="ent-cheque" placeholder="No. cheque"></div><div><label>Banco</label><input id="ent-banco" placeholder="Banco emisor"></div></div>`:''}
+      <div style="font-size:11.5px;color:var(--muted)">Si alguna queda a crédito, poné 0 en su monto.</div>`;
+    _grpTotal();
+  }else if(tipo==='contrasena'){
+    det.innerHTML=`<div class="row"><div><label>No. de contraseña de pago</label><input id="ent-contra" placeholder="No. de contraseña"></div></div>
+      <div class="row"><div><label>Fecha prometida de pago <span style="font-weight:400;color:var(--muted-2)">(opcional)</span></label><input id="ent-fechaprom" type="date"></div></div>
+      <div style="font-size:11.5px;color:var(--muted)">La misma contraseña queda en todas las facturas.</div>`;
+  }else det.innerHTML=`<div class="note" style="background:#E6EEF6;color:var(--blue);border-color:rgba(68,96,132,.2);margin-bottom:0"><span>Todas quedan a crédito. La firma de abajo queda como comprobante de recepción en cada una.</span></div>`;
+}
+window._grpPago=_grpPago;
+function _grpTotal(){
+  const t=[...document.querySelectorAll('.grp-monto')].reduce((s,i)=>s+(Number(i.value)||0),0);
+  const el=document.getElementById('grp-total'); if(el)el.textContent=money(Math.round(t*100)/100);
+}
+window._grpTotal=_grpTotal;
+function _grpRefrescar(){
+  const w=document.getElementById('grp-pago-wrap');
+  if(w)w.style.display=_grpCobrables().length?'':'none';
+  _grpPago(_grpPagoTipo);
+  const sv=document.getElementById('m-save'); const n=_grpSel().length;
+  if(sv)sv.textContent=n?'✓ Confirmar entrega ('+n+')':'Marcá al menos uno';
+}
+window._grpRefrescar=_grpRefrescar;
+async function confirmarEntregaGrupo(){
+  const err=$('#ent-err'), errTxt=err.querySelector('span');
+  const fallo=t=>{err.style.display='flex';errTxt.textContent=t;};
+  const docs=_grpSel();
+  if(!docs.length)return fallo('Marcá al menos un documento');
+  if(_firmaVacia||!_firmaCanvas)return fallo('Falta la firma de quien recibe');
+  const recibe=$('#ent-recibe')?.value.trim();
+  if(!recibe)return fallo('Indicá quién recibió');
+  const obs=$('#ent-obs')?.value.trim()||'';
+  const fecha=new Date().toISOString();
+  const cob=docs.filter(d=>d.tipoDoc!=='prestamo');
+  const tipo=cob.length?_grpPagoTipo:'prestamo';
+  let recibo='',cheque='',banco='',contra='',fprom=null; const montos={};
+  if(tipo==='efectivo'||tipo==='cheque'){
+    let tot=0;
+    for(const d of cob){
+      const v=Number(document.querySelector('.grp-monto[data-id="'+d.id+'"]')?.value);
+      if(!(v>=0))return fallo('Revisá el monto de '+_grpRef(d));
+      if(v>arInfo(d).saldo+0.01)return fallo('El monto de '+_grpRef(d)+' es mayor que su saldo ('+money(arInfo(d).saldo)+')');
+      montos[d.id]=Math.round(v*100)/100; tot+=v;
+    }
+    if(!(tot>0))return fallo('Ingresá el monto');
+    recibo=$('#ent-recibo-num').value.trim();
+    if(!recibo)return fallo('Ingresá el No. de recibo');
+    if(tipo==='cheque'){cheque=$('#ent-cheque').value.trim();banco=$('#ent-banco').value.trim();if(!cheque)return fallo('Ingresá el número de cheque');}
+  }else if(tipo==='contrasena'){
+    contra=$('#ent-contra').value.trim(); if(!contra)return fallo('Ingresá el número de contraseña');
+    fprom=$('#ent-fechaprom').value||null;
+  }
+  const firma=_firmaCanvas.toDataURL('image/png');
+  const foto=_fotoEntrega;
+  const refs=docs.map(_grpRef);
+  const cobros=[]; let fotoFallo=false;
+  for(const d of docs){
+    const esPr=d.tipoDoc==='prestamo';
+    let modo=esPr?'prestamo':tipo;
+    const ei={fecha,piloto:currentUser,observacion:obs,modoPago:modo,recibe,grupo:refs};
+    if(!esPr&&(tipo==='efectivo'||tipo==='cheque')){
+      const m=montos[d.id]||0;
+      if(m>0){
+        ei.monto=m; ei.noRecibo=recibo; if(tipo==='cheque'){ei.cheque=cheque;ei.banco=banco;}
+        cobros.push({id:cobroRutaN++,docId:d.id,docNum:_grpRef(d),cliente:d.clienteComercial||d.clienteNombre,
+          monto:m,modo:tipo,noBoleta:'',noRecibo:recibo,cheque,banco,piloto:currentUser,fecha,estado:'cobrado',empresa:d.empresa||empresaParaNuevo(),_nuevo:true});
+      }else ei.modoPago='credito'; // monto 0 → esa queda a crédito
+    }else if(!esPr&&tipo==='contrasena'){ei.contrasena=contra;ei.fechaPromesa=fprom;}
+    const _ev={firma,foto,recibe,registradoPor:currentUser,registradoEl:fecha};
+    const ok=(typeof guardarEvidenciaEntrega==='function')?await guardarEvidenciaEntrega(d.id,_ev):false;
+    if(ok){ei.evidencia=true;ei.conFoto=!!foto;d._evid={firma,foto,recibe};}
+    else{ei.firma=firma; if(foto)fotoFallo=true;}
+    if(d.entregaInfo&&Array.isArray(d.entregaInfo.intentos)&&d.entregaInfo.intentos.length)ei.intentos=d.entregaInfo.intentos;
+    if(_parcialesDe(d).length){
+      ei.parciales=_parcialesDe(d);
+      const fin={}; (d.items||[]).forEach((_,i)=>{const q=_pendLinea(d,i);if(q>0)fin[i]=q;}); ei.lineas=fin;
+    }
+    d.estadoEntrega='entregado'; d.entregaInfo=ei;
+  }
+  cobros.forEach(c=>cobrosRuta.push(c));
+  const totCob=cobros.reduce((s,c)=>s+c.monto,0);
+  const resumen={efectivo:'Efectivo '+money(totCob)+' · Recibo '+recibo,cheque:'Cheque '+money(totCob)+' · Recibo '+recibo,contrasena:'Contraseña '+contra,credito:'A crédito',prestamo:'Instalación (equipo en préstamo)'}[tipo]+' · recibió '+recibe;
+  logAudit('Entrega confirmada (juntas)',refs.join(', ')+' · '+(docs[0].clienteComercial||docs[0].clienteNombre)+' · '+resumen);
+  closeMod(); renderMisEntregas();
+  toast('✓ '+docs.length+' entregas confirmadas',resumen);
+  if(fotoFallo)toast('⚠ La foto no se guardó','Las entregas y la firma sí quedaron registradas.',true);
+  for(const d of docs) if(typeof guardarDocumento==='function')guardarDocumento(d);
+  for(const c of cobros) if(typeof guardarCobroRuta==='function')guardarCobroRuta(c);
+}
+window.confirmarEntregaGrupo=confirmarEntregaGrupo;
+
 let auditLog=[];
 let auditSeq=0;
 // Hash simple (djb2) para encadenar registros — si se altera uno, la cadena se rompe

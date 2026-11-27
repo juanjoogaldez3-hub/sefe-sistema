@@ -1972,7 +1972,7 @@ function renderDespachos(){
     return (a.numeroDte||a.numero||0)-(b.numeroDte||b.numero||0);
   });
   $('#desp-empty').style.display=lista.length?'none':'block';
-  const docNum=d=>d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
+  const docNum=d=>d.serie?d.serie+'-'+d.numeroDte:refPed(d); // NP-/NE-/PED-
   const tipoCorto={cambiaria:'Factura',envio:'N. envío',prestamo:'N. préstamo'};
   // Riesgo de hora: se calcula por piloto (dentro de la ruta de cada uno).
   const _riskDesp=new Set();
@@ -2346,9 +2346,17 @@ function renderMisEntregas(){
   $('#pil-kpis').innerHTML=k.map(x=>`<div class="kpi"><div class="ic ${x.ic}"><svg viewBox="0 0 24 24" stroke="currentColor">${x.svg}</svg></div><div class="k-lbl">${x.lbl}</div><div class="k-val num">${x.val}</div><div class="k-sub">${x.sub}</div></div>`).join('');
   // Ordenar por ruta
   mias.sort((a,b)=>{const ra=a.ordenRuta??999,rb=b.ordenRuta??999;return ra-rb;});
+  // Documentos del MISMO cliente van juntos (detrás del primero de ese
+  // cliente), para entregarlos en una sola pasada / una sola firma.
+  {const _pri={};mias.forEach((d,i)=>{if(d.clienteId!=null&&_pri[d.clienteId]==null)_pri[d.clienteId]=i;});
+   const _pos=new Map(mias.map((d,i)=>[d,i]));
+   mias.sort((a,b)=>{const ga=a.clienteId!=null?_pri[a.clienteId]:_pos.get(a),gb=b.clienteId!=null?_pri[b.clienteId]:_pos.get(b);return ga-gb||_pos.get(a)-_pos.get(b);});}
+  // Cuántos documentos pendientes / en ruta tiene cada cliente
+  const _nPend={},_nRuta={};
+  mias.forEach(d=>{if(d.clienteId==null)return;const e=estadoEntrega(d);if(e!=='entregado')_nPend[d.clienteId]=(_nPend[d.clienteId]||0)+1;if(e==='ruta'&&_delDia(d))_nRuta[d.clienteId]=(_nRuta[d.clienteId]||0)+1;});
   const _riskPil=_riesgosHora(mias);
   _pilRenderMapa(mias,misParadas);
-  const docNum=d=>d.serie?d.serie+'-'+d.numeroDte:'PED-'+padn(d.numero);
+  const docNum=d=>d.serie?d.serie+'-'+d.numeroDte:refPed(d); // NP-/NE-/PED-
   const tipoCorto={cambiaria:'Factura',envio:'Nota de envío',prestamo:'Nota de préstamo'};
   if(!mias.length&&!misParadas.length){
     // Aunque no queden entregas, el corte del día sigue: ahí se anota la boleta.
@@ -2357,9 +2365,9 @@ function renderMisEntregas(){
   }
   // Lista unificada: entregas + paradas manuales, ordenadas por nº de ruta.
   const combinada=[
-    ...mias.map(d=>({ord:d.ordenRuta??999,tipo:'e',d})),
+    ...mias.map((d,i)=>({ord:mias[0]&&d.clienteId!=null?(mias.find(x=>x.clienteId===d.clienteId).ordenRuta??999):(d.ordenRuta??999),sub:i,tipo:'e',d})),
     ...misParadas.map(p=>({ord:p.ordenRuta??999,tipo:'p',p}))
-  ].sort((a,b)=>a.ord-b.ord);
+  ].sort((a,b)=>a.ord-b.ord||(a.tipo===b.tipo&&a.tipo==='e'?a.sub-b.sub:0));
   const nNav=mias.filter(d=>estadoEntrega(d)!=='entregado').length+misParadas.length;
   // Tarjeta de una PARADA manual.
   // La parada se ve IGUAL que una entrega: misma tarjeta, mismo número,
@@ -2398,7 +2406,9 @@ function renderMisEntregas(){
       let btn='';
       if(est==='asignado'){const _dn=_prepPacked(d),_tt=_prepTotal(d);btn=`<button class="btn btn-primary btn-sm" onclick="abrirPreparacion(${d.id})">📦 Preparar${_tt?` (${_dn}/${_tt})`:''}</button>`;}
       else if(est==='preparado')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEnRuta(${d.id})">📦 Cargado, voy en ruta</button>`;
-      else if(est==='ruta')btn=`<button class="btn btn-primary btn-sm" onclick="marcarEntregado(${d.id})">✓ Marcar entregado</button> <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="noEntregado(${d.id})">✕ No se pudo entregar</button>`;
+      else if(est==='ruta'){const _ng=_nRuta[d.clienteId]||0;btn=_ng>=2
+        ? `<button class="btn btn-primary btn-sm" onclick="marcarEntregadoGrupo(${d.clienteId})">✓ Entregar las ${_ng} juntas</button> <button class="btn btn-ghost btn-sm" onclick="marcarEntregado(${d.id})">Solo esta</button> <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="noEntregado(${d.id})">✕ No se pudo entregar</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="marcarEntregado(${d.id})">✓ Marcar entregado</button> <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="noEntregado(${d.id})">✕ No se pudo entregar</button>`;}
       else if(est==='entregado')btn=`<span class="badge b-ok">✓ Entregado a ${d.entregaInfo?.recibe||'—'}</span>`;
       // Tarjeta pensada para el celular: el nombre del cliente arriba a todo
       // el ancho; estado y documento abajo; botones (incluido Ver doc) al pie.
@@ -2407,7 +2417,7 @@ function renderMisEntregas(){
           ${d.ordenRuta!=null?`<span class="ent-num">${d.ordenRuta}</span>`:''}
           <div class="ent-nombre">${escHtml(d.clienteComercial||d.clienteNombre||'')}</div>
         </div>
-        <div class="ent-meta"><span class="badge ${ec}">${en}</span><span>${docNum(d)} · ${tipoCorto[d.tipoDoc]} · <b>${money(d.totales.total)}</b></span></div>
+        <div class="ent-meta"><span class="badge ${ec}">${en}</span><span>${docNum(d)} · ${tipoCorto[d.tipoDoc]} · <b>${money(d.totales.total)}</b></span>${est!=='entregado'&&(_nPend[d.clienteId]||0)>=2?`<span class="badge b-info" title="Este cliente tiene varios documentos en la ruta">🔗 ${_nPend[d.clienteId]} de este cliente</span>`:''}</div>
         <div class="ent-dir">📍 ${escHtml(dirEntrega(d))}</div>
         ${est!=='entregado'&&_fechaProg(d)&&_fechaProg(d)<fechaHoyGT()?fechaProgHTML(d,false):''}${notaRojaHTML(d.notaEntrega)}
         ${est!=='entregado'?_navBtnsHTML({t:'d',o:d}):''}
