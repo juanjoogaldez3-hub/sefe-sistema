@@ -159,19 +159,18 @@ no existe no rompe nada) y encender la función con el SQL después.
   última fila, y los documentos sin los PDF/XML). Lo que queda para más
   adelante es no bajar *todos* los documentos/abonos/movimientos cuando
   el negocio crezca mucho (paginar o cargar bajo demanda). No urge.
-- **Optimizador con OpenRouteService (gratis) — CÓDIGO LISTO, falta la key**:
-  el "Optimizar" de Despachos ya usa ORS primero (gratis, calles reales),
-  con Google de respaldo y línea recta como último recurso.
-  `_matrizTiemposORS(puntos)` en `js/app-10.js` pega a
-  `https://api.openrouteservice.org/v2/matrix/driving-car` (locations en
-  `[lng,lat]`, `metrics:['duration']`) y está cableado primero en
-  `_ordenarPorCercania`. **Solo falta que Juanjo saque la API key gratis en
-  openrouteservice.org y se pegue en `ORS_API_KEY` (js/app-1.js).** Con la
-  key vacía el sistema usa Google (tier Essentials: 10.000 elementos
-  gratis/mes, $5/1.000 después; prueba de $300 de Google hasta 10 dic 2026).
-  Los botones "Ordenar por cercanía" y "Armar por zona" siguen gratis.
-  Opcional pendiente: botón "Abrir en Waze" por entrega (navegación, gratis;
-  Waze NO tiene API de matriz, solo navegación).
+- **Rutas SIN Google de pago (decisión de Juanjo, 27-11-2026)**: el
+  "Optimizar"/"Por cercanía" de Despachos usa OpenRouteService (gratis,
+  calles reales) y, si falla, línea recta. **Nunca Google** (Distance Matrix,
+  Geocoder ni el mapa JS de Google: cobran). OJO: ORS se mudó —
+  `api.openrouteservice.org` da 410 desde el 24-11-2026; la URL buena es
+  `https://api.heigit.org/openrouteservice/v2/matrix/driving-car` (misma
+  `ORS_API_KEY`, en `js/app-1.js`). El buscador de direcciones gratis de ORS
+  (`api.heigit.org/pelias/v1`) ubica mal en Guatemala, así que no se usa:
+  las paradas toman el pin del cliente; el mapa de Mis entregas es
+  OpenStreetMap. Navegar en Google Maps/Waze sí (son enlaces, no cobran).
+  Todavía usan Google (fuera de rutas): el buscador de direcciones del
+  formulario de cliente (Places) y los mapas de la ficha del cliente.
 
 ## Idioma
 
