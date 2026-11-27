@@ -1452,18 +1452,18 @@ window.paradaMotivoTag=paradaMotivoTag;
 function openParadaRuta(pidPre){
   if(!canAsignarPiloto()){toast('Sin permiso','Solo Logística puede agregar paradas',true);return;}
   openMod('➕ Agregar parada a la ruta',`
-    <div class="row"><div style="flex:1"><label>Repartidor</label><select id="pr-piloto">${_optRepartidores(pidPre)}</select></div></div>
+    <div class="row"><div style="flex:1"><label>Repartidor</label><select id="pr-piloto">${_optRepartidores(pidPre).replace('— Elegí repartidor —','— Sin asignar (se decide después) —')}</select></div></div>
     <div class="row"><div><label>Nombre <span style="color:var(--muted);font-weight:400">(escribí un cliente o proveedor, o un texto libre)</span></label><input id="pr-tit" autocomplete="off" placeholder="Ej. nombre del cliente o proveedor · Ir al banco · Cargar combustible"></div></div>
     <div class="row"><div><label>Motivo</label><select id="pr-motivo"><option value="">— Elegí el motivo —</option>${PARADA_MOTIVOS.map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div></div>
     <div class="row" id="pr-np-wrap" style="display:none"><div><label><span id="pr-np-lbl">Documento</span> <span id="pr-np-sub" style="color:var(--muted);font-weight:400"></span></label><select id="pr-np"></select></div></div>
     <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" placeholder="Dirección o nombre del lugar"></div></div>
     <div class="row"><div><label>Fecha</label><input id="pr-fecha" type="date" value="${fechaHoyGT()}" style="max-width:190px"></div><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px"></div></div>
     <div class="row"><div><label>Nota <span style="color:var(--muted);font-weight:400">(opcional · sale en rojo)</span></label><input id="pr-nota" placeholder="Detalle"></div></div>
-    <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La parada entra a la ruta del piloto. Si le ponés dirección, también entra al mapa, la navegación y el orden por cercanía/horarios.</span></div>`,
+    <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>La parada entra a la ruta del repartidor. Si todavía no sabés quién va, dejala <b>sin asignar</b>: queda en «Sin asignar» de Despachos y la asignás después (Acciones ▾ → Asignar). Con dirección entra al mapa, la navegación y el orden por cercanía.</span></div>`,
     async ()=>{
       const pid=$('#pr-piloto').value?Number($('#pr-piloto').value):null;
       const tit=$('#pr-tit').value.trim();
-      if(!pid){toast('Elegí un piloto',null,true);return;}
+      // Sin repartidor = queda en "Sin asignar" de Despachos (se asigna después)
       const motivo=$('#pr-motivo').value;
       if(!motivo){toast('Elegí el motivo de la parada','Recolecta, Entrega, Instalación u Otro',true);return;}
       if(!tit){toast('Ponele un nombre a la parada',null,true);return;}
@@ -1478,9 +1478,10 @@ function openParadaRuta(pidPre){
         d.paraDespacho=true; d.pilotoId=pid;
         d.fechaEntrega=$('#pr-fecha').value||null;
         const _nt=($('#pr-nota').value||'').trim(); if(_nt)d.notaEntrega=_nt;
-        if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';
+        if(pid==null){if(estadoEntrega(d)!=='entregado'){d.estadoEntrega='sin';d.ordenRuta=null;}}
+        else if(estadoEntrega(d)==='sin')d.estadoEntrega='asignado';
         if(typeof guardarDocumento==='function')await guardarDocumento(d);
-        const pil=_nombreRepartidor(pid)||'';
+        const pil=pid==null?'Sin asignar':(_nombreRepartidor(pid)||'');
         const ref=_prRefDoc(d), tipo=_prTipoDoc(d);
         logAudit(motivo==='Instalación'?'Instalación asignada':'Entrega asignada',ref+' · '+(d.clienteComercial||d.clienteNombre||'')+' · '+pil);
         closeMod();renderDespachos();
@@ -1489,7 +1490,7 @@ function openParadaRuta(pidPre){
       }
       const dir=$('#pr-dir').value.trim();
       // La parada nueva entra AL FINAL de la ruta actual del piloto.
-      const _maxOrd=Math.max(0,...docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado'&&_delDia(d)).map(d=>d.ordenRuta||0),..._paradasPiloto(pid).map(p=>p.ordenRuta||0));
+      const _maxOrd=pid==null?0:Math.max(0,...docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado'&&_delDia(d)).map(d=>d.ordenRuta||0),..._paradasPiloto(pid).map(p=>p.ordenRuta||0));
       const nueva={pilotoId:pid,motivo,ordenRuta:_maxOrd?_maxOrd+1:null,titulo:tit,nota:$('#pr-nota').value.trim(),direccion:dir,horaLimite:$('#pr-hora').value||'',fecha:$('#pr-fecha').value||null,hecha:false,creadaPor:currentUser,_nuevo:true};
       // Si se eligió un cliente con pin en el mapa y no se cambió la dirección,
       // se usa su ubicación guardada (más exacta que buscar la dirección).
@@ -1497,9 +1498,9 @@ function openParadaRuta(pidPre){
       if(_sel&&_sel.lat!=null&&_sel.lng!=null&&dir===_sel.dir){nueva.lat=_sel.lat;nueva.lng=_sel.lng;}
       paradasRuta.push(nueva);
       if(typeof guardarParadaRuta==='function')await guardarParadaRuta(nueva);
-      logAudit('Parada de ruta creada',motivo+' · '+tit+' · '+(pilotos.find(p=>p.id===pid)?.nombre||''));
+      logAudit('Parada de ruta creada',motivo+' · '+tit+' · '+(pid==null?'sin asignar':(_nombreRepartidor(pid)||'')));
       closeMod();renderDespachos();
-      toast('✓ Parada agregada',tit+(nueva.lat!=null?' · ubicada en el mapa':' · sin ubicación (solo en la lista)'));
+      toast('✓ Parada agregada',tit+(pid==null?' · en «Sin asignar», asignala cuando sepas quién va':'')+(nueva.lat!=null?' · ubicada en el mapa':' · sin ubicación (solo en la lista)'));
     });
   window._prSel=null;
   setTimeout(()=>{
@@ -1519,17 +1520,16 @@ function openEditarParada(id){
   const esc=v=>escHtml(v==null?'':String(v));
   const motivos=PARADA_MOTIVOS.includes(p.motivo)||!p.motivo?PARADA_MOTIVOS:PARADA_MOTIVOS.concat([p.motivo]);
   openMod('✎ Editar parada',`
-    <div class="row"><div style="flex:1"><label>Repartidor</label><select id="pr-piloto">${_optRepartidores(p.pilotoId)}</select></div></div>
+    <div class="row"><div style="flex:1"><label>Repartidor</label><select id="pr-piloto">${_optRepartidores(p.pilotoId).replace('— Elegí repartidor —','— Sin asignar (se decide después) —')}</select></div></div>
     <div class="row"><div><label>Nombre <span style="color:var(--muted);font-weight:400">(cliente, proveedor o texto libre)</span></label><input id="pr-tit" autocomplete="off" value="${esc(p.titulo)}"></div></div>
     <div class="row"><div><label>Motivo</label><select id="pr-motivo"><option value="">— Elegí el motivo —</option>${motivos.map(m=>`<option value="${esc(m)}"${p.motivo===m?' selected':''}>${esc(m)}</option>`).join('')}</select></div></div>
     <div class="row"><div><label>Dirección <span style="color:var(--muted);font-weight:400">(opcional — para ubicarla en el mapa y la ruta)</span></label><input id="pr-dir" value="${esc(p.direccion)}" placeholder="Dirección o nombre del lugar"></div></div>
     <div class="row"><div><label>Fecha</label><input id="pr-fecha" type="date" value="${esc(_fechaProg(p)||fechaHoyGT())}" style="max-width:190px"></div><div><label>Hora límite <span style="color:var(--muted);font-weight:400">(opcional)</span></label><input id="pr-hora" type="time" style="max-width:160px" value="${esc(p.horaLimite)}"></div></div>
     <div class="row"><div><label>Nota <span style="color:var(--muted);font-weight:400">(opcional · sale en rojo)</span></label><input id="pr-nota" value="${esc(p.nota)}" placeholder="Detalle"></div></div>
-    <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Si cambiás el repartidor, la parada pasa al final de su ruta. Para cambiar el orden usá "↕ Ordenar ruta".</span></div>`,
+    <div class="note n-ok" style="margin-bottom:0"><svg viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Si cambiás el repartidor, la parada pasa al final de su ruta (o a «Sin asignar» si lo dejás vacío). Para cambiar el orden usá "↕ Ordenar ruta".</span></div>`,
     async ()=>{
       const pid=$('#pr-piloto').value?Number($('#pr-piloto').value):null;
       const tit=$('#pr-tit').value.trim(), motivo=$('#pr-motivo').value;
-      if(!pid){toast('Elegí un repartidor',null,true);return;}
       if(!motivo){toast('Elegí el motivo de la parada',null,true);return;}
       if(!tit){toast('Ponele un nombre a la parada',null,true);return;}
       const dir=$('#pr-dir').value.trim();
@@ -1547,7 +1547,7 @@ function openEditarParada(id){
       if(!cambios.length){closeMod();return;}
       // Otro repartidor → al final de SU ruta
       if(pid!==p.pilotoId){
-        const _max=Math.max(0,...docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado'&&_delDia(d)).map(d=>d.ordenRuta||0),..._paradasPiloto(pid).filter(x=>x.id!==p.id).map(x=>x.ordenRuta||0));
+        const _max=pid==null?0:Math.max(0,...docsDespachables().filter(d=>d.pilotoId===pid&&estadoEntrega(d)!=='entregado'&&_delDia(d)).map(d=>d.ordenRuta||0),..._paradasPiloto(pid).filter(x=>x.id!==p.id).map(x=>x.ordenRuta||0));
         p.ordenRuta=_max?_max+1:null; p.eta=null;
       }
       // Dirección nueva → volver a ubicar (cliente elegido con pin, o buscarla)
@@ -2017,7 +2017,7 @@ function renderDespachos(){
       const hora=p.horaLimite?`<span style="font-size:11px;font-weight:700;color:var(--warn);white-space:nowrap">⏰ antes de ${escHtml(p.horaLimite)}</span>`:'';
       const eta=p.eta?`<span style="font-size:11px;color:var(--muted);white-space:nowrap">🕐 llega ~${escHtml(p.eta)}</span>`:'';
       const _fallo=p.hechaInfo&&p.hechaInfo.noHecha;
-      const [pen,pec]=_fallo?['No se pudo hacer','b-danger']:ESTADO_ENTREGA.asignado;
+      const [pen,pec]=_fallo?['No se pudo hacer','b-danger']:(p.pilotoId==null?ESTADO_ENTREGA.sin:ESTADO_ENTREGA.asignado);
       return _enc+`<tr data-desp-grupo="${p.pilotoId==null?'_':p.pilotoId}"${_diasAtrasada(p)?' class="fila-atrasada"':''}>
         <td></td>
         <td class="num" style="font-weight:700;color:var(--green)">${p.ordenRuta!=null?'#'+p.ordenRuta:'—'}</td>
@@ -2027,7 +2027,7 @@ function renderDespachos(){
         <td class="num" style="color:var(--muted-2)">—</td>
         <td>${escHtml(_nomPil(p.pilotoId))}</td>
         <td><span class="badge ${pec}">${pen}</span></td>
-        <td>${canAsignarPiloto()?_menuAccDesp('dropdsp-par-'+p.id,[`<button class="act-primary" onclick="paradaHecha(${p.id})">✓ Completar</button>`,`<button onclick="openEditarParada(${p.id})">✎ Editar</button>`,'<div class="act-sep"></div>',`<button class="act-danger" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>`]):''}</td>
+        <td>${canAsignarPiloto()?_menuAccDesp('dropdsp-par-'+p.id,[...(p.pilotoId==null?[`<button class="act-primary" onclick="openEditarParada(${p.id})">👤 Asignar repartidor</button>`]:[]),`<button${p.pilotoId==null?'':' class="act-primary"'} onclick="paradaHecha(${p.id})">✓ Completar</button>`,`<button onclick="openEditarParada(${p.id})">✎ Editar</button>`,'<div class="act-sep"></div>',`<button class="act-danger" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>`]):''}</td>
       </tr>`;
     }
     const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];
