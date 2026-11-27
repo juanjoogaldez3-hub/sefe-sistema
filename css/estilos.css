@@ -160,6 +160,7 @@
   .acts-btn svg{width:13px;height:13px;opacity:.5}
   .acts-drop{position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:1.5px solid var(--line-strong);border-radius:var(--r);box-shadow:0 4px 16px rgba(0,0,0,.1);min-width:190px;z-index:50;display:none;flex-direction:column;padding:4px}
   .acts-drop.open{display:flex}
+  .acts-drop.arriba{top:auto;bottom:calc(100% + 4px)}
   .acts-drop button{text-align:left;padding:8px 12px;font-size:13px;font-weight:500;border-radius:6px;color:var(--ink);background:transparent;white-space:nowrap;transition:.1s}
   .acts-drop button:hover{background:var(--surface-2)}
   .acts-drop button.act-primary{color:var(--green);font-weight:600}

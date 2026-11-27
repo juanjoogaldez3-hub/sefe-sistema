@@ -1849,6 +1849,12 @@ function asignarGrupoZona(idx){
 }
 window.asignarGrupoZona=asignarGrupoZona;
 
+// Menú "Acciones ▾" de una fila de Despachos (un solo botón por fila, como
+// en Documentos). id propio por fila para no chocar con otros menús.
+function _menuAccDesp(id,items){
+  if(!items.length)return '';
+  return `<div class="acts"><button class="acts-btn" onclick="toggleDrop('${id}',event)">Acciones<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button><div class="acts-drop" id="${id}">${items.join('')}</div></div>`;
+}
 function renderDespachos(){
   // poblar selector de pilotos
   const selPil=$('#desp-piloto');
@@ -1941,18 +1947,22 @@ function renderDespachos(){
         <td class="num" style="color:var(--muted-2)">—</td>
         <td>${escHtml(_nomPil(p.pilotoId))}</td>
         <td><span class="badge ${pec}">${pen}</span></td>
-        <td><div class="acts">${canAsignarPiloto()?`<button class="btn btn-primary btn-sm" onclick="paradaHecha(${p.id})">✓ Completar</button><button class="btn btn-ghost btn-sm" onclick="openEditarParada(${p.id})">✎ Editar</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>`:''}</div></td>
+        <td>${canAsignarPiloto()?_menuAccDesp('dropdsp-par-'+p.id,[`<button class="act-primary" onclick="paradaHecha(${p.id})">✓ Completar</button>`,`<button onclick="openEditarParada(${p.id})">✎ Editar</button>`,'<div class="act-sep"></div>',`<button class="act-danger" onclick="borrarParadaUI(${p.id})">✕ Borrar</button>`]):''}</td>
       </tr>`;
     }
     const est=estadoEntrega(d);const [en,ec]=ESTADO_ENTREGA[est];
     const piloto=pilotos.find(p=>p.id===d.pilotoId);
-    let acts='';
-    acts+=`<button class="btn btn-ghost btn-sm" onclick="verDoc(${d.id})">Ver</button>`;
-    if(canAsignarPiloto()&&est!=='sin')acts+=`<button class="btn btn-ghost btn-sm" onclick="regresarEntrega(${d.id})" title="Regresar a Asignado y reiniciar el avance">↩ Regresar</button>`;
-    if(canAsignarPiloto()&&d.pilotoId!=null)acts+=`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="desasignarDespacho(${d.id})" title="Quitar el piloto y la ruta (vuelve a Sin asignar)">✕ Desasignar</button>`;
+    // Todo en un solo menú "Acciones ▾" (antes eran 3-4 botones por fila).
+    const _it=[];
+    if(est!=='entregado'&&canAsignarPiloto())_it.push(`<button class="act-primary" onclick="asignarDespacho(${d.id})">${d.pilotoId?'Reasignar':'Asignar'}</button>`);
+    _it.push(`<button onclick="verDoc(${d.id})">Ver documento</button>`);
+    if(canAsignarPiloto()&&est!=='sin')_it.push(`<button onclick="regresarEntrega(${d.id})">↩ Regresar a Asignado</button>`);
+    const _peligro=[];
+    if(canAsignarPiloto()&&d.pilotoId!=null)_peligro.push(`<button class="act-danger" onclick="desasignarDespacho(${d.id})">✕ Desasignar</button>`);
     // Sacarla de Despachos (no va a domicilio): no se borra ni se anula.
-    if(canAsignarPiloto()&&est==='sin')acts+=`<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="quitarDeDespacho(${d.id})" title="No va a domicilio: sacarla de Despachos (no se borra ni se anula)">✕ Quitar</button>`;
-    if(est!=='entregado')acts=`<button class="btn btn-primary btn-sm" onclick="asignarDespacho(${d.id})">${d.pilotoId?'Reasignar':'Asignar'}</button>`+acts;
+    if(canAsignarPiloto()&&est==='sin')_peligro.push(`<button class="act-danger" onclick="quitarDeDespacho(${d.id})">✕ Quitar de Despachos</button>`);
+    if(_peligro.length)_it.push('<div class="act-sep"></div>',..._peligro);
+    const acts=_menuAccDesp('dropdsp-'+d.id,_it);
     const chk=(canAsignarPiloto()&&est!=='entregado')?`<input type="checkbox" class="desp-chk" data-id="${d.id}" ${_despSel.has(d.id)?'checked':''} onclick="despToggleSel(${d.id},this.checked)">`:'';
     return _enc+`<tr data-desp-grupo="${d.pilotoId==null?'_':d.pilotoId}">
       <td style="text-align:center">${chk}</td>
@@ -1963,7 +1973,7 @@ function renderDespachos(){
       <td class="num" style="font-weight:600">${money(d.totales.total)}</td>
       <td>${piloto?piloto.nombre:'<span style="color:var(--muted-2)">—</span>'}</td>
       <td><span class="badge ${ec}">${en}</span></td>
-      <td><div class="acts">${acts}</div></td>
+      <td>${acts}</td>
     </tr>`;
   }).join('');
   enhanceTable('t-despachos');

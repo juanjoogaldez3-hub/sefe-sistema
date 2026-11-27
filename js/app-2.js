@@ -1120,7 +1120,13 @@ function toggleDrop(id,e){
   const drop=document.getElementById(id);if(!drop)return;
   const isOpen=drop.classList.contains('open');
   document.querySelectorAll('.acts-drop.open').forEach(d=>d.classList.remove('open'));
-  if(!isOpen)drop.classList.add('open');
+  if(!isOpen){
+    drop.classList.remove('arriba');
+    drop.classList.add('open');
+    // Si no cabe hacia abajo (últimas filas de la tabla), se abre hacia arriba.
+    const r=drop.getBoundingClientRect();
+    if(r.bottom>window.innerHeight-8&&r.top-r.height-40>0)drop.classList.add('arriba');
+  }
 }
 window.toggleDrop=toggleDrop;
 // Botón "Acciones" de una factura (Cobros y ficha del cliente): Ver y
