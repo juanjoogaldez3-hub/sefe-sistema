@@ -7,7 +7,7 @@
 --
 -- QUÉ ES: todo lo que necesita la base de un cliente nuevo, en
 -- una sola pegada. Tablas, seguridad (RLS capa 1 y 2), índices y
--- secuencias. Reemplaza correr las 46 migraciones una por una.
+-- secuencias. Reemplaza correr las 47 migraciones una por una.
 --
 -- CÓMO SE USA (una sola vez, en la base NUEVA y VACÍA del cliente):
 --   1. Crear el proyecto en Supabase (queda vacío).
@@ -16,7 +16,7 @@
 --   4. Al final deben verse las tablas creadas, sin errores.
 --
 -- Es idempotente: si se corre de más, no rompe nada.
--- Incluye 46 migraciones, en este orden:
+-- Incluye 47 migraciones, en este orden:
 --   01. 20260101000000_baseline_esquema.sql
 --   02. 20260805000000_base_historico.sql
 --   03. 20260812024415_realtime.sql
@@ -63,6 +63,7 @@
 --   44. 20261126120000_tienda_en_linea.sql
 --   45. 20261126180000_tienda_tema.sql
 --   46. 20261126200000_tienda_producto.sql
+--   47. 20261127160000_paradas_borrar_logistica.sql
 -- ============================================================
 
 
@@ -3730,4 +3731,48 @@ begin
     'cliente', v_cliente,
     'productos', v_prods);
 end $$;
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  20261127160000_paradas_borrar_logistica.sql             ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- ============================================================
+-- SEFE · Paradas de ruta: que las pueda borrar quien arma las rutas
+-- ============================================================
+-- Problema (27-11-2026): Christian (Facturador / Logística) borraba
+-- paradas en Despachos y "volvían a aparecer". La regla de seguridad de
+-- paradas_ruta sólo dejaba BORRAR al administrador; la base no daba error,
+-- simplemente borraba 0 filas, y al recargar la parada seguía ahí.
+--
+-- Ahora pueden borrar paradas los mismos que las arman: el administrador
+-- y los roles con el permiso "Asignar y conciliar despachos"
+-- (roles.asignar_piloto), siempre que no sean de sólo lectura. Es el mismo
+-- criterio que usa la pantalla (canAsignarPiloto en js/app-1.js).
+--
+-- Al borrar una parada, su firma/foto (paradas_evidencia) se borra sola
+-- por la llave foránea con ON DELETE CASCADE.
+--
+-- Seguro de correr de más: 'create or replace' / 'drop policy if exists'.
+-- ============================================================
+
+create or replace function public.sefe_puede_asignar_ruta()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.sefe_es_admin()
+      or ( not public.sefe_solo_lectura()
+           and coalesce((select r.asignar_piloto from public.roles r where r.rol = public.sefe_rol()), false) )
+$$;
+
+drop policy if exists sefe_borrar on public.paradas_ruta;
+create policy sefe_borrar on public.paradas_ruta for delete to authenticated
+  using ((select public.sefe_puede_asignar_ruta()));
+
+-- VERIFICACIÓN:
+--   select policyname, cmd, qual from pg_policies where tablename = 'paradas_ruta' and cmd = 'DELETE';
+--   select rol, asignar_piloto from roles order by rol;
 
